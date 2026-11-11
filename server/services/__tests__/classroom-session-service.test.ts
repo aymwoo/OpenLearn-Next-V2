@@ -112,7 +112,7 @@ describe('ClassroomSessionService', () => {
       'INSERT OR REPLACE INTO classroom_quick_polls (id, session_id, lesson_id, question_type, options_json, created_at) VALUES (?, ?, ?, ?, ?, ?)',
     );
     insertPoll.run('poll-css427-1', sessionA, lessonA, 'ABCD', '["A","B"]', now);
-    insertPoll.run('poll-css427-2', sessionA, lessonA, 'ABCD', '["A","B"]', now);
+    insertPoll.run('poll-css427-2', sessionA, lessonA, 'ABCD', '["A","B"]', now + 1);
 
     db.prepare(
       'INSERT OR REPLACE INTO classroom_exit_tickets (id, session_id, lesson_id, student_id, created_at) VALUES (?, ?, ?, ?, ?)',
@@ -124,6 +124,12 @@ describe('ClassroomSessionService', () => {
     for (let i = 0; i < 3; i++) {
       insertFeed.run('feed-css427-' + i, sessionA, lessonA, 'info', '测试动态', now + i);
     }
+
+    db.prepare('INSERT OR REPLACE INTO class_students (class_id, student_id, joined_at) VALUES (?, ?, ?)').run(
+      classA,
+      'stu-css427',
+      now,
+    );
   });
 
   it('归一化分页参数：all 视为 1000，普通值限制在 1..100', () => {
@@ -227,6 +233,34 @@ describe('ClassroomSessionService', () => {
     expect(page1.items).toHaveLength(1);
     expect(page1.total).toBe(2);
     expect(page1.totalPages).toBe(2);
+  });
+
+  it('getSessionDetail 返回会话现场、活动投票（含票数与选项解析）与抢答器', () => {
+    const detail = service.getSessionDetail(lessonA);
+    expect(detail.session?.id).toBe(sessionA);
+    expect(detail.activePoll?.id).toBe('poll-css427-2');
+    expect(detail.activePoll?.options).toEqual(['A', 'B']);
+    expect(detail.activePoll?.totalVotes).toBe(0);
+    expect(detail.activeBuzzer).toBeNull();
+
+    expect(service.getSessionDetail('les-css427-missing')).toEqual({
+      session: null,
+      activePoll: null,
+      activeBuzzer: null,
+    });
+  });
+
+  it('getStudentActiveSession 取非归档会话，并补齐课节/班级展示名', () => {
+    const active = service.getStudentActiveSession('stu-css427');
+    expect(active).not.toBeNull();
+    expect(active!.sessionId).toBe(sessionA);
+    expect(active!.lessonId).toBe(lessonA);
+    expect(active!.lessonTitle).toBe('服务层测试 A 课节');
+    expect(active!.className).toBe('服务层测试 A 班');
+    expect(active!.stage).toBe('IN_CLASS_TEACHING');
+    expect(active!.startedAt).toBe(now - 1000);
+
+    expect(service.getStudentActiveSession('stu-css427-not-enrolled')).toBeNull();
   });
 
   it('活跃会话排除归档阶段，并遵守归属裁剪', () => {

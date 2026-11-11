@@ -26,7 +26,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Refactor / Performance
 
-- **课堂会话只读查询收敛到 `ClassroomSessionService`（Issue #427，第一阶段）**：把 `GET /api/classroom/sessions` 与 `GET /api/classroom/active-sessions` 的归属裁剪、三表 JOIN 与互动计数聚合合并到 `server/services/classroom-session-service.ts`，两条路径共用 `buildSessionOwnershipClause()`，消除重复 SQL；教学模式常量与 id 规范移入 `server/services/teaching-modes.ts`。写路径（创建/归档/阶段流转/投票生命周期）仍由 `ClassroomRuntimeService` 承载，后续分批迁移。
+- **课堂会话只读查询收敛到 `ClassroomSessionService`（Issue #427，第一阶段）**：把 `GET /api/classroom/sessions` 与 `GET /api/classroom/active-sessions` 的归属裁剪、三表 JOIN 与互动计数聚合合并到 `server/services/classroom-session-service.ts`，两条路径共用 `buildSessionOwnershipClause()`，消除重复 SQL；同一阶段还把会话详情（`getSessionDetail()`）与学生端当前课堂（`getStudentActiveSession()`）的取数收进服务层。教学模式常量与 id 规范移入 `server/services/teaching-modes.ts`。写路径（创建/归档/阶段流转/投票生命周期）仍由 `ClassroomRuntimeService` 承载，后续分批迁移。
 - **课堂高频聚合与多表慢查只读内存缓存 (TTL Read Cache，Issue #409)**：
   - **通用 TTL 只读缓存引擎 (`server/utils/ttl-cache.ts`)**：实现高效内存级缓存 `TtlReadCache<T>`，支持毫秒级 TTL 自动过期、LRU / FIFO 容量上限淘汰守护（默认 2048 条目）、精确失效、前缀批量失效 (`invalidatePrefix`) 与命中率指标观测 (`getStats()`)；
   - **学情诊断榜单与错题归集只读缓存 (`server/services/diagnostic-service.ts`)**：为随堂测验卓越榜单 (`getTopPerformers`)、课前诊断与错题卡点 (`getPreClassDiagnostic`、`getLessonMistakes`)、作答统计与逐生详情引入 3 秒 TTL 内存缓存；当学生提交新答卷 (`submitQuiz`) 或模拟作答 (`simulateQuizResponses`) 时主动失效对应课节命名空间，实现强读写一致性与零穿透；
