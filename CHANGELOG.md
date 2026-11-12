@@ -26,6 +26,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Refactor / Performance
 
+- **服务端课堂主路由超大文件解耦与子路由外移（Issue #434 阶段三，PR #477）**：
+  - 从 `server/routes/classroom.ts` (原 3209 行) 中拆出两个高内聚资产与配置 CRUD 子路由模块：`server/routes/classroom-teaching-modes.ts` 与 `server/routes/classroom-preset-polls.ts`；
+  - 主路由保持向下无感挂载与类型兼容导出，单文件净减 339 行代码（降至 2870 行，成功突破进入 3000 行大关以内）；
+  - 顺手清理冗余类型注解，全库 ESLint 告警上限进一步收紧至 5839 条。
 - **课堂授课大视图结构拆分与大纲侧栏子组件解耦（Issue #434 阶段二，PR #475）**：
   - 将 `src/components/LiveClassroomView.tsx` 嵌套的教学环节进度表与白板大纲抽屉侧栏抽离为独立子组件 `src/features/classroom/ClassroomTimelineSidebar.tsx`；
   - 提取共享 `stripHtml` 纯函数并配齐 7 项核心交互单测，清理 18 个未引用的图标与冗余函数，单文件净减 360 行代码；
