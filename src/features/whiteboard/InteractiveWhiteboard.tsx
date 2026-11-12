@@ -53,14 +53,6 @@ import {
 } from './utils/auto-tiling';
 import { parseElementData } from './utils/element-cache';
 import { computeContentBounds, resolveCanvasSize, toCanvasPoint } from './utils/canvas-bounds';
-import {
-  belongsToPage,
-  filterCurrentPageElements,
-  createPageItem,
-  renamePageItem,
-  duplicatePageItem,
-  movePageItem,
-} from './utils/pagination-utils';
 import { whiteboardViewStore, useWhiteboardViewStore } from '../../store/whiteboardViewStore';
 import { usePluginHostStore } from '../../plugin-host/plugin-host-store';
 import { ExtensionPointRenderer } from '../../plugin-host/extension-point-renderer';
@@ -87,6 +79,9 @@ import { WhiteboardTilingOverlay } from './components/WhiteboardTilingOverlay';
 import { useAutoTilingState, getDefaultElementSize } from './hooks/useAutoTilingState';
 import { CoursewareEntrySelectorModal } from './components/CoursewareEntrySelectorModal';
 import { CoursewarePropertiesModal } from './components/CoursewarePropertiesModal';
+import { useQuizIngest } from './hooks/useQuizIngest';
+import { useWhiteboardPages } from './hooks/useWhiteboardPages';
+import { useWhiteboardDrop } from './hooks/useWhiteboardDrop';
 import { fullscreenRendererRegistry } from './fullscreen/FullscreenRendererRegistry';
 import { QuizFullscreenView } from './fullscreen/QuizFullscreenView';
 import { WhiteboardEventPanel, useWhiteboardEventListener } from './events';
@@ -344,34 +339,57 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
     );
     const [highlighterColor, setHighlighterColor] = useState('#facc15');
 
-    const [pages, setPages] = useState<WhiteboardPageItem[]>(() => {
-      const metaEl = (Array.isArray(elements) ? elements : []).find((el) => el.type === 'page_meta');
-      if (metaEl) {
-        const parsed = parseElementData(metaEl);
-        if (Array.isArray(parsed?.pages) && parsed.pages.length > 0) {
-          return parsed.pages;
-        }
-      }
-      return DEFAULT_WHITEBOARD_PAGES;
-    });
+    const containerRef = useRef<HTMLDivElement>(null);
+    const [isSyncing, setIsSyncing] = useState(false);
+    const socketRef = useRef<any>(null);
 
-    const [currentPage, setCurrentPage] = useState<number>(() => {
-      const target = Number(initialPage);
-      if (Number.isFinite(target) && target >= 0) {
-        return target;
-      }
-      // 如果没有指定 initialPage，但指定了 activeSegmentId，优先选用属于该环节的首个页面，避免首帧跳页闪烁
-      if (activeSegmentId) {
-        const metaEl = (Array.isArray(elements) ? elements : []).find((el) => el.type === 'page_meta');
-        const parsed = metaEl ? parseElementData(metaEl) : null;
-        const candidatePages =
-          Array.isArray(parsed?.pages) && parsed.pages.length > 0 ? parsed.pages : DEFAULT_WHITEBOARD_PAGES;
-        const targetIdx = candidatePages.findIndex((p: WhiteboardPageItem) => p.segmentId === activeSegmentId);
-        if (targetIdx !== -1) {
-          return targetIdx;
-        }
-      }
-      return 0;
+    const [dialog, setDialog] = useState<{
+      type: 'confirm' | 'prompt' | 'alert';
+      title: string;
+      message: string;
+      placeholder?: string;
+      onConfirm?: (inputValue?: string) => void | Promise<void>;
+    } | null>(null);
+    const [dialogInput, setDialogInput] = useState('');
+
+    const {
+      pages,
+      setPages,
+      currentPage,
+      setCurrentPage,
+      showPageDrawer,
+      setShowPageDrawer,
+      editingPageIdx,
+      setEditingPageIdx,
+      editingPageTitle,
+      setEditingPageTitle,
+      activeMenuPageIdx,
+      setActiveMenuPageIdx,
+      belongsToCurrentPage,
+      currentPageElements,
+      getCurrentPageElements,
+      persistPageChange,
+      savePagesConfig,
+      handleSwitchPage,
+      handleAddPage,
+      handleRenamePage,
+      handleDuplicatePage,
+      handleDeletePage,
+      handleMovePage,
+      programmaticPageSwitchRef,
+    } = useWhiteboardPages({
+      elements,
+      safeElements,
+      initialPage,
+      activeSegmentId,
+      lessonId,
+      userRole,
+      socketRef,
+      onElementAdd,
+      onElementUpdate,
+      onElementDelete,
+      onPagesStateChange,
+      setDialog,
     });
 
     const [showGrid, setShowGrid] = useState(true);
@@ -400,100 +418,6 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
       tileSplitPreferenceRef.current = tileSplitPreference;
     }, [tileSplitPreference]);
 
-    const [isDragOverBoard, setIsDragOverBoard] = useState(false);
-    const [showPageDrawer, setShowPageDrawer] = useState(false);
-    const [editingPageIdx, setEditingPageIdx] = useState<number | null>(null);
-    const [editingPageTitle, setEditingPageTitle] = useState('');
-    const [activeMenuPageIdx, setActiveMenuPageIdx] = useState<number | null>(null);
-
-    // 同步给外部监听者（如备课组件边栏的大纲）
-    const lastReportedPagesStateRef = useRef<{ pages: WhiteboardPageItem[]; currentPage: number } | null>(null);
-    useEffect(() => {
-      if (
-        lastReportedPagesStateRef.current?.currentPage === currentPage &&
-        lastReportedPagesStateRef.current?.pages === pages
-      ) {
-        return;
-      }
-      lastReportedPagesStateRef.current = { pages, currentPage };
-      onPagesStateChange?.({ pages, currentPage });
-    }, [pages, currentPage, onPagesStateChange]);
-
-    // Sync pages config from safeElements (type === 'page_meta')
-    useEffect(() => {
-      const metaEl = safeElements.find((el) => el.type === 'page_meta');
-      if (metaEl) {
-        const parsed = parseElementData(metaEl);
-        if (Array.isArray(parsed?.pages) && parsed.pages.length > 0) {
-          setPages(parsed.pages);
-        }
-      }
-    }, [safeElements]);
-
-    // 会话恢复：若 initialPage 为异步拉取（初始为 undefined），在恢复值到达后只跳转一次
-    const initialPageAppliedRef = useRef(Number.isFinite(Number(initialPage)) && Number(initialPage) >= 0);
-    useEffect(() => {
-      if (initialPageAppliedRef.current) return;
-      if (!Array.isArray(pages) || pages.length === 0) return;
-      if (initialPage === undefined || initialPage === null) return;
-      const target = Number(initialPage);
-      if (Number.isFinite(target) && target > 0 && target < pages.length) {
-        setCurrentPage(target);
-      }
-      initialPageAppliedRef.current = true;
-    }, [pages, initialPage]);
-
-    const belongsToCurrentPage = useCallback(
-      (el: WhiteboardElement): boolean => belongsToPage(el, currentPage, pages),
-      [pages, currentPage],
-    );
-
-    /** 当前页 + 当前环节下应渲染的元素（画布渲染用） */
-    const currentPageElements = useMemo(
-      (): WhiteboardElement[] =>
-        filterCurrentPageElements(safeElements, currentPage, pages, activeSegmentId) as WhiteboardElement[],
-      [safeElements, currentPage, pages, activeSegmentId],
-    );
-    const getCurrentPageElements = useCallback((): WhiteboardElement[] => currentPageElements, [currentPageElements]);
-
-    // 会话保存：教师切页时防抖回写（课堂会话恢复用）。学生端不发（视图跟随广播）。
-    const viewStateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-    const lastPersistedPageRef = useRef<number | null>(null);
-
-    useEffect(() => {
-      lastPersistedPageRef.current = null;
-      return () => {
-        if (viewStateTimerRef.current) {
-          clearTimeout(viewStateTimerRef.current);
-          viewStateTimerRef.current = null;
-        }
-      };
-    }, [lessonId]);
-
-    const persistPageChange = useCallback(
-      (page: number) => {
-        if (userRole !== 'teacher' || !lessonId) return;
-        if (lastPersistedPageRef.current === page) return;
-        if (viewStateTimerRef.current) clearTimeout(viewStateTimerRef.current);
-        viewStateTimerRef.current = setTimeout(() => {
-          fetch(`/api/classroom/sessions/${encodeURIComponent(lessonId)}/view-state`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ currentPage: page }),
-          })
-            .then((res) => {
-              if (res.ok) {
-                lastPersistedPageRef.current = page;
-              } else if (res.status === 429) {
-                console.warn('[InteractiveWhiteboard] view-state rate-limited (HTTP 429), skipping transient update.');
-              }
-            })
-            .catch(() => {});
-        }, 500);
-      },
-      [userRole, lessonId],
-    );
-
     // 只读模式（全班专注锁定）：清除选中态与临时绘制，避免出现可编辑的浮动工具栏
     useEffect(() => {
       if (readOnly) {
@@ -506,162 +430,6 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
       }
     }, [readOnly]);
 
-    const savePagesConfig = (newPages: WhiteboardPageItem[]) => {
-      const metaEl = safeElements.find((el) => el.type === 'page_meta');
-      if (metaEl && onElementUpdate) {
-        onElementUpdate(metaEl.id, { pages: newPages });
-      } else if (onElementAdd) {
-        onElementAdd('page_meta', { pages: newPages });
-      }
-      if (socketRef.current) {
-        socketRef.current.emit('whiteboard-update', {
-          roomId: lessonId,
-          type: 'page-meta-update',
-          payload: { pages: newPages },
-        });
-      }
-    };
-
-    const programmaticPageSwitchRef = useRef(false);
-    const handleSwitchPage = (idx: number) => {
-      programmaticPageSwitchRef.current = true;
-      setCurrentPage(idx);
-      setActiveMenuPageIdx(null);
-      if (socketRef.current) {
-        socketRef.current.emit('whiteboard-update', {
-          roomId: lessonId,
-          type: 'page-change',
-          payload: { page: idx },
-        });
-      }
-      // 会话保存：防抖回写当前页（教师离开后重进可恢复）
-      persistPageChange(idx);
-    };
-
-    const handleAddPage = (customTitle?: string) => {
-      const { newPages, newIndex } = createPageItem(pages, customTitle, Date.now(), activeSegmentId);
-      setPages(newPages);
-      setCurrentPage(newIndex);
-      savePagesConfig(newPages);
-      if (socketRef.current) {
-        socketRef.current.emit('whiteboard-update', {
-          roomId: lessonId,
-          type: 'page-change',
-          payload: { page: newIndex },
-        });
-      }
-    };
-
-    const handleRenamePage = (idx: number, newTitle: string) => {
-      if (!newTitle.trim()) {
-        setEditingPageIdx(null);
-        return;
-      }
-      const nextPages = renamePageItem(pages, idx, newTitle);
-      setPages(nextPages);
-      savePagesConfig(nextPages);
-      setEditingPageIdx(null);
-      setEditingPageTitle('');
-    };
-
-    const handleDuplicatePage = (idx: number) => {
-      const targetPage = pages[idx];
-      if (!targetPage) return;
-      const dupResult = duplicatePageItem(pages, idx);
-      if (!dupResult) return;
-      const { newPages, newIndex, newPage } = dupResult;
-
-      setPages(newPages);
-      setCurrentPage(newIndex);
-      savePagesConfig(newPages);
-
-      const pageElements = safeElements.filter(
-        (el) =>
-          el.type !== 'page_meta' &&
-          (() => {
-            try {
-              const d = JSON.parse(el.data);
-              return (d.page ?? 0) === idx || d.pageId === targetPage.id;
-            } catch {
-              return idx === 0;
-            }
-          })(),
-      );
-
-      pageElements.forEach((el) => {
-        try {
-          const d = JSON.parse(el.data);
-          if (onElementAdd) {
-            onElementAdd(el.type, {
-              ...d,
-              page: newIndex,
-              pageId: newPage.id,
-              x: (d.x ?? 100) + 20,
-              y: (d.y ?? 100) + 20,
-            });
-          }
-        } catch (e) {
-          console.error('Failed duplicating page element:', e);
-        }
-      });
-    };
-
-    const handleDeletePage = (idx: number) => {
-      if (pages.length <= 1) {
-        setDialog({ title: '无法删除', message: '至少需要保留一个白板页面！', type: 'alert', onConfirm: () => {} });
-        return;
-      }
-
-      const pageToDelete = pages[idx];
-      const pageElements = safeElements.filter(
-        (el) =>
-          el.type !== 'page_meta' &&
-          (() => {
-            try {
-              const d = JSON.parse(el.data);
-              return (d.page ?? 0) === idx || d.pageId === pageToDelete.id;
-            } catch {
-              return idx === 0;
-            }
-          })(),
-      );
-
-      const performDelete = () => {
-        if (onElementDelete) {
-          pageElements.forEach((el) => onElementDelete(el.id));
-        }
-        const nextPages = pages.filter((_, i) => i !== idx).map((p, i) => ({ ...p, order: i }));
-        setPages(nextPages);
-        const nextCurrentPage = Math.min(currentPage, nextPages.length - 1);
-        setCurrentPage(nextCurrentPage);
-        savePagesConfig(nextPages);
-      };
-
-      if (pageElements.length > 0) {
-        setDialog({
-          title: '确认删除白板页面',
-          message: `页面 [${pageToDelete.title}] 包含 ${pageElements.length} 个组件，删除页面将同时清理该页面的组件，是否确定删除？`,
-          type: 'confirm',
-          onConfirm: performDelete,
-        });
-      } else {
-        performDelete();
-      }
-    };
-
-    const handleMovePage = (idx: number, direction: 'left' | 'right') => {
-      const moveResult = movePageItem(pages, idx, direction);
-      if (!moveResult) return;
-      const { newPages, targetIndex } = moveResult;
-      setPages(newPages);
-
-      if (currentPage === idx) {
-        setCurrentPage(targetIndex);
-      } else if (currentPage === targetIndex) {
-        setCurrentPage(idx);
-      }
-      savePagesConfig(newPages);
-    };
     // currentDrawing holds the shape currently being drawn, so elements is source of truth for others.
     const [currentDrawing, setCurrentDrawing] = useState<any>(null);
     const [isDrawing, setIsDrawing] = useState(false);
@@ -669,41 +437,8 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
     const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
     /** 画布承载容器的**内容框**尺寸（已扣边框与滚动条占位）—— 画布逻辑尺寸的基准。 */
     const [canvasBox, setCanvasBox] = useState({ width: 0, height: 0 });
-    const containerRef = useRef<HTMLDivElement>(null);
-    const [isSyncing, setIsSyncing] = useState(false);
-    const socketRef = useRef<any>(null);
     const [remoteDrawings, setRemoteDrawings] = useState<Record<string, any>>({});
-    // Quiz: elementId -> option student selected (not yet submitted)
-    const [quizSelection, setQuizSelection] = useState<Record<string, string>>({});
-    // Quiz submission result: elementId -> submitted answer + score
-    const [quizAnswers, setQuizAnswers] = useState<
-      Record<string, { option: string; score?: number; isCorrect?: boolean }>
-    >({});
-    const [quizSubmitting, setQuizSubmitting] = useState<Record<string, boolean>>({});
-    // DATA-INT-02: 白板测验「N 人已交」计数 —— 以 lesson_quiz_submissions 关系表为
-    // 权威数据源：挂载时从 /quiz-counts 拉初始值，quiz.answered 事件实时递增。
-    // 服务端 quiz-submit 已不再写 element.data JSON（并发读改写会互相覆盖丢成绩）。
-    const [quizCounts, setQuizCounts] = useState<Record<string, number>>({});
-    useEffect(() => {
-      if (!lessonId) return;
-      let cancelled = false;
-      fetch(`/api/lessons/${encodeURIComponent(lessonId)}/quiz-counts`)
-        .then((r) => (r.ok ? r.json() : null))
-        .then((j) => {
-          if (!j?.quizzes || cancelled) return;
-          const map: Record<string, number> = {};
-          for (const q of j.quizzes) map[q.elementId] = q.submissionCount;
-          setQuizCounts(map);
-        })
-        .catch(() => {});
-      return () => {
-        cancelled = true;
-      };
-    }, [lessonId]);
-    useWhiteboardEventListener({ types: ['quiz.answered'] }, (e) => {
-      if (!e.elementId || e.lessonId !== lessonId) return;
-      setQuizCounts((prev) => ({ ...prev, [e.elementId as string]: (prev[e.elementId as string] ?? 0) + 1 }));
-    });
+    const { quizCounts, setQuizCounts } = useQuizIngest({ lessonId });
     // Fullscreen: when set, only this element is rendered full-viewport
     const [fullscreenElementId, setFullscreenElementId] = useState<string | null>(null);
     // 整个浏览器全屏（脱离白板 + 原生全屏）的本地状态
@@ -1068,14 +803,6 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
     } | null>(null);
 
     const idleTimerRef = useRef<any>(null);
-    const [dialog, setDialog] = useState<{
-      type: 'confirm' | 'prompt' | 'alert';
-      title: string;
-      message: string;
-      placeholder?: string;
-      onConfirm?: (inputValue?: string) => void | Promise<void>;
-    } | null>(null);
-    const [dialogInput, setDialogInput] = useState('');
     /** 学生端「提交作业」弹窗当前打开的作业实体 id */
     const [assignmentDialogId, setAssignmentDialogId] = useState<string | null>(null);
     const [editingProperties, setEditingProperties] = useState<any>(null);
@@ -3865,112 +3592,24 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
       return null;
     };
 
-    const handleWhiteboardDragOver = (e: React.DragEvent) => {
-      e.preventDefault();
-      e.dataTransfer.dropEffect = 'copy';
-      if (!isDragOverBoard) setIsDragOverBoard(true);
-    };
-
-    const handleWhiteboardDragEnter = (e: React.DragEvent) => {
-      e.preventDefault();
-      e.dataTransfer.dropEffect = 'copy';
-      setIsDragOverBoard(true);
-    };
-
-    const handleWhiteboardDragLeave = (e: React.DragEvent) => {
-      e.preventDefault();
-      // Only reset if leaving container
-      if (!e.currentTarget.contains(e.relatedTarget as Node)) {
-        setIsDragOverBoard(false);
-      }
-    };
-
-    // 组装元素 data：合并内容字段与定位字段，并补齐各类型的默认值
-    const buildElementData = (
-      type: string,
-      content: Record<string, any>,
-      x: number,
-      y: number,
-    ): Record<string, any> => {
-      const base = { x, y, page: currentPage, segmentId: activeSegmentId };
-      const pluginConfig = paletteItemRegistry.get(type);
-      const pluginDefaults = pluginConfig?.defaultData || {};
-      const extRenderer = whiteboardRenderers?.find((ext) => {
-        const et = ext as any;
-        return (
-          et.targetType === type ||
-          ext.id === type ||
-          ext.route === type ||
-          `${ext.pluginId}/${ext.id}` === type ||
-          et.slotProps?.elementType === type ||
-          et.slotProps?.targetType === type
-        );
-      });
-      const rendererDefaults = (extRenderer?.slotProps as any)?.defaultData || {};
-      switch (type) {
-        case 'code-sandbox':
-          return { ...base, code: content.code ?? "console.log('Hello Sandbox!');" };
-        case 'math-graph':
-          return { ...base, equation: content.equation ?? 'Math.sin(x)' };
-        case 'presentation':
-          return {
-            ...base,
-            markdown: content.markdown ?? '# Title Slide\n---\n## Slide 2',
-            width: 600,
-            height: 400,
-            slideX: 0,
-            slideY: 0,
-          };
-        case 'quiz':
-          return {
-            ...base,
-            question: content.question ?? 'New Quiz',
-            options: Array.isArray(content.options) ? content.options : ['A', 'B', 'C', 'D'],
-          };
-        case 'html-applet':
-          return {
-            ...base,
-            title: content.title ?? '',
-            code: content.code ?? '',
-            coursewareUuid: content.coursewareUuid ?? undefined,
-            resourceId: content.resourceId ?? undefined,
-          };
-        case 'assignment':
-          return { ...base, title: content.title ?? 'New Assignment', description: content.description ?? '' };
-        case 'hello-world':
-          return base;
-        case 'rollcall':
-          return { ...base, allStudents: [] };
-        default:
-          return { ...base, ...pluginDefaults, ...rendererDefaults, ...content };
-      }
-    };
-
-    // 命令式接口：在画板中央插入元素（供备课画板点击添加）
-    const addElementAtCenter = async (type: string, contentData: Record<string, any>) => {
-      if (!containerRef.current) return;
-      const rect = containerRef.current.getBoundingClientRect();
-      // 画布容器可能是滚动容器 —— 「可视区中心」在画布坐标系里要加上滚动偏移
-      const x = Math.round(rect.width / 2 + containerRef.current.scrollLeft);
-      const y = Math.round(rect.height / 2 + containerRef.current.scrollTop);
-      setIsSyncing(true);
-      try {
-        await onElementAdd(type, buildElementData(type, contentData, x, y));
-        frontendEventBus.publish({
-          id: uuidv7(),
-          type: 'whiteboard.element_updated',
-          source: 'whiteboard',
-          payload: { lessonId },
-          timestamp: Date.now(),
-          correlationId: lessonId,
-        });
-        if (onRefresh) onRefresh();
-      } catch (err) {
-        console.error('addElementAtCenter error', err);
-      } finally {
-        setIsSyncing(false);
-      }
-    };
+    const {
+      isDragOverBoard,
+      setIsDragOverBoard,
+      handleWhiteboardDragOver,
+      handleWhiteboardDragEnter,
+      handleWhiteboardDragLeave,
+      addElementAtCenter,
+      handleWhiteboardDrop,
+    } = useWhiteboardDrop({
+      lessonId,
+      currentPage,
+      activeSegmentId,
+      whiteboardRenderers,
+      containerRef,
+      setIsSyncing,
+      onElementAdd,
+      onRefresh,
+    });
 
     const handleMoveElementToPage = useCallback(
       async (elementId: string, targetPageIndex: number) => {
@@ -4118,56 +3757,6 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
       moveElementToPage: handleMoveElementToPage,
       moveElementToSegment: handleMoveElementToSegment,
     }));
-
-    const handleWhiteboardDrop = async (e: React.DragEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-      try {
-        let payloadStr = e.dataTransfer.getData('application/json');
-        if (!payloadStr) payloadStr = e.dataTransfer.getData('text/plain');
-        if (!payloadStr) payloadStr = e.dataTransfer.getData('text');
-        if (!payloadStr) payloadStr = e.dataTransfer.getData('Text');
-
-        if (!payloadStr) return;
-
-        let payload;
-        try {
-          payload = JSON.parse(payloadStr);
-        } catch (err) {
-          console.error('Failed to parse drop JSON payload:', err);
-          return;
-        }
-
-        if (typeof payload !== 'object' || !payload) return;
-
-        if (!containerRef.current) {
-          console.warn('containerRef.current is not loaded on drop');
-          return;
-        }
-        const stageBox = containerRef.current.getBoundingClientRect();
-        // 画布容器可能是滚动容器 —— 落点必须换算到画布坐标系（加回滚动偏移）
-        let dropX = e.clientX - stageBox.left + containerRef.current.scrollLeft;
-        let dropY = e.clientY - stageBox.top + containerRef.current.scrollTop;
-
-        setIsSyncing(true);
-        try {
-          await onElementAdd(payload.type, buildElementData(payload.type, payload, dropX, dropY));
-          frontendEventBus.publish({
-            id: uuidv7(),
-            type: 'whiteboard.element_updated',
-            source: 'whiteboard',
-            payload: { lessonId },
-            timestamp: Date.now(),
-            correlationId: lessonId,
-          });
-          if (onRefresh) onRefresh();
-        } finally {
-          setIsSyncing(false);
-        }
-      } catch (err) {
-        console.error('Drop error', err);
-      }
-    };
 
     return (
       <div className="flex-1 flex flex-row min-h-0 overflow-hidden bg-app">
