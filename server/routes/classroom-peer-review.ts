@@ -31,11 +31,16 @@ import { requireAuth, getActorId } from '../middleware/auth.js';
 import { sendSafeError } from '../utils/error-handler.js';
 import { authorizeClassroomControl, authorizeClassroomRead } from '../services/class-access.js';
 import type { AccessSession } from '../services/class-access.js';
-import {
-  getUnifiedShowcaseWorks,
-  getUnifiedShowcaseWorksResult,
-  type ShowcaseWork,
-} from '../services/showcase-work-service.js';
+import { getUnifiedShowcaseWorks, getUnifiedShowcaseWorksResult } from '../services/showcase-work-service.js';
+
+interface PeerReviewSession {
+  userId?: string;
+  role?: string;
+}
+
+function getSession(req: Request): PeerReviewSession | undefined {
+  return (req as unknown as { session?: PeerReviewSession }).session;
+}
 
 /** 统一的 id 生成（与仓库既有风格一致：时间戳 + 随机后缀） */
 function makeId(prefix: string): string {
@@ -44,14 +49,14 @@ function makeId(prefix: string): string {
 
 /** 取当前登录用户的「学生身份 id」（用于学生端自助操作） */
 function currentStudentId(req: Request): string | null {
-  const session = (req as any).session;
+  const session = getSession(req);
   if (!session) return null;
   // 学生账号的 userId 即学生 id；教师/管理员不做学生自助操作
-  return session.role === 'student' ? session.userId : null;
+  return session.role === 'student' ? (session.userId ?? null) : null;
 }
 
 function isPrivileged(req: Request): boolean {
-  const role = (req as any).session?.role;
+  const role = getSession(req)?.role;
   return role === 'teacher' || role === 'administrator' || role === 'admin';
 }
 
@@ -86,7 +91,7 @@ function requirePeerReviewAccess(req: Request, res: Response, mode: 'read' | 'co
 
 /** 校验并按 (session, lesson) 取出课堂会话；不存在返回 null */
 function resolveSession(lessonId: string): { id: string; lessonId: string; classId: string | null } | null {
-  const db = kernelContainer.db as any;
+  const db = kernelContainer.db;
   const row = db
     .prepare(
       'SELECT id, lesson_id, class_id FROM classroom_sessions WHERE lesson_id = ? ORDER BY created_at DESC LIMIT 1',
@@ -104,10 +109,11 @@ const DEFAULT_RUBRIC = [
 ];
 
 function ensureRubric(sessionId: string, lessonId: string): void {
-  const db = kernelContainer.db as any;
-  const count = (
-    db.prepare('SELECT COUNT(*) as c FROM classroom_peer_rubric_dimensions WHERE session_id = ?').get(sessionId) as any
-  )?.c as number;
+  const db = kernelContainer.db;
+  const countRow = db
+    .prepare('SELECT COUNT(*) as c FROM classroom_peer_rubric_dimensions WHERE session_id = ?')
+    .get(sessionId) as { c: number } | undefined;
+  const count = countRow?.c ?? 0;
   if (count > 0) return;
   const now = Date.now();
   const insert = db.prepare(
@@ -127,6 +133,66 @@ const BADGE_META: Record<string, { title: string; emoji: string; tagColor: strin
   best_solution: { title: '【最佳解法】徽章', emoji: '⚡', tagColor: 'text-[#c0c1ff]' },
 };
 
+interface PeerTaskRow {
+  id: string;
+  reviewer_id: string;
+  reviewer_name: string | null;
+  target_student_id: string;
+  target_student_name: string | null;
+  target_attempt_id: string | null;
+  target_work_title: string | null;
+  tier: string | null;
+  status: string | null;
+  score: number | null;
+  comment: string | null;
+}
+
+interface PeerBadgeRow {
+  id: string;
+  sender_name: string | null;
+  receiver_name: string | null;
+  badge_key: string;
+  created_at: number;
+}
+
+interface PeerNomRow {
+  nominated_student_id: string;
+  nominated_student_name: string | null;
+  votes: number | string;
+  honor_key: string | null;
+}
+
+interface DanmakuRow {
+  id: string;
+  sender_name: string | null;
+  text: string;
+  type: string | null;
+  voice_duration_seconds: number | null;
+  top_percent: number | null;
+}
+
+interface RubricDefRow {
+  id: string;
+  label: string;
+  color_class: string | null;
+  bar_color_class: string | null;
+  max_score: number | null;
+}
+
+interface PeerReviewRow {
+  score: number | null;
+  max_score: number | null;
+  dimension_scores_json: string | null;
+}
+
+interface PeerReviewTaskRecord {
+  id: string;
+  reviewer_id: string;
+  reviewer_name: string;
+  target_student_id: string;
+  target_attempt_id: string | null;
+}
+
 export function registerClassroomPeerReviewRoutes(app: Express): void {
   ensureRoutes(app);
 }
@@ -138,13 +204,13 @@ function ensureRoutes(app: Express): void {
     requireAuth('teacher', 'administrator', 'student'),
     async (req: Request, res: Response) => {
       try {
-        const db = kernelContainer.db as any;
+        const db = kernelContainer.db;
         const { lessonId } = req.params;
         if (!requirePeerReviewAccess(req, res, 'read')) return;
         const session = resolveSession(lessonId);
         const works = getUnifiedShowcaseWorks(db, lessonId, session?.id, session?.classId);
         return res.json({ success: true, works });
-      } catch (e: any) {
+      } catch (e: unknown) {
         sendSafeError(res, e);
       }
     },
@@ -156,7 +222,7 @@ function ensureRoutes(app: Express): void {
     requireAuth('teacher', 'administrator'),
     async (req: Request, res: Response) => {
       try {
-        const db = kernelContainer.db as any;
+        const db = kernelContainer.db;
         const { lessonId } = req.params;
         if (!requirePeerReviewAccess(req, res, 'control')) return;
         const perStudent = Math.min(5, Math.max(1, Number(req.body?.perStudent) || 2));
@@ -222,7 +288,7 @@ function ensureRoutes(app: Express): void {
         }
 
         return res.json({ success: true, sessionId: session.id, scope, works: tiers.length, tasks: created });
-      } catch (e: any) {
+      } catch (e: unknown) {
         sendSafeError(res, e);
       }
     },
@@ -234,7 +300,7 @@ function ensureRoutes(app: Express): void {
     requireAuth('teacher', 'administrator', 'student'),
     async (req: Request, res: Response) => {
       try {
-        const db = kernelContainer.db as any;
+        const db = kernelContainer.db;
         const { lessonId } = req.params;
         if (!requirePeerReviewAccess(req, res, 'read')) return;
         const session = resolveSession(lessonId);
@@ -255,7 +321,7 @@ function ensureRoutes(app: Express): void {
               WHERE t.session_id = ?
               ORDER BY t.reviewer_name, t.created_at`,
           )
-          .all(session.id) as any[];
+          .all(session.id) as PeerTaskRow[];
 
         const matchingItems = tasks.map((t, idx) => ({
           id: t.id,
@@ -280,7 +346,7 @@ function ensureRoutes(app: Express): void {
               WHERE b.session_id = ?
               ORDER BY b.created_at DESC LIMIT 30`,
           )
-          .all(session.id) as any[];
+          .all(session.id) as PeerBadgeRow[];
         const badges = badgeRows.map((b) => {
           const meta = BADGE_META[b.badge_key] ?? { title: b.badge_key, emoji: '🏅', tagColor: 'text-[#c0c1ff]' };
           return {
@@ -304,7 +370,7 @@ function ensureRoutes(app: Express): void {
               ORDER BY votes DESC, n.nominated_student_name
               LIMIT 5`,
           )
-          .all(session.id) as any[];
+          .all(session.id) as PeerNomRow[];
 
         const HONOR_LABEL: Record<string, string> = {
           best_open_source: '最佳开源作者',
@@ -323,7 +389,7 @@ function ensureRoutes(app: Express): void {
           name: r.nominated_student_name || r.nominated_student_id,
           votes: Number(r.votes) || 0,
           workTitle: '',
-          honorTitle: HONOR_LABEL[r.honor_key] ?? '互评提名',
+          honorTitle: HONOR_LABEL[r.honor_key ?? ''] ?? '互评提名',
           rankBadgeClass: RANK_BADGE[idx] ?? RANK_BADGE[4],
           tagBadgeClass: 'bg-[#ca8100]/20 text-[#ffb95f]',
         }));
@@ -334,7 +400,7 @@ function ensureRoutes(app: Express): void {
             `SELECT id, sender_name, text, type, voice_duration_seconds, top_percent
                FROM classroom_danmaku WHERE session_id = ? ORDER BY created_at ASC LIMIT 60`,
           )
-          .all(session.id) as any[];
+          .all(session.id) as DanmakuRow[];
         const danmaku = danmakuRows.map((d) => ({
           id: d.id,
           sender: d.sender_name || '匿名',
@@ -350,17 +416,17 @@ function ensureRoutes(app: Express): void {
             `SELECT id, label, color_class, bar_color_class, max_score
                FROM classroom_peer_rubric_dimensions WHERE session_id = ? ORDER BY sort_order`,
           )
-          .all(session.id) as any[];
+          .all(session.id) as RubricDefRow[];
         const reviews = db
           .prepare('SELECT score, max_score, dimension_scores_json FROM classroom_peer_reviews WHERE session_id = ?')
-          .all(session.id) as any[];
+          .all(session.id) as PeerReviewRow[];
         const dimensions = rubricDefs.map((d) => {
           let sum = 0;
           let n = 0;
           for (const r of reviews) {
-            let parsed: Record<string, number> = {};
+            let parsed: Record<string, number>;
             try {
-              parsed = JSON.parse(r.dimension_scores_json || '{}');
+              parsed = JSON.parse(r.dimension_scores_json || '{}') as Record<string, number>;
             } catch {
               parsed = {};
             }
@@ -376,15 +442,16 @@ function ensureRoutes(app: Express): void {
             label: d.label,
             percentage,
             colorClass: d.color_class ?? 'text-[#c0c1ff]',
-            barColorClass: d.bar_color_class ?? 'bg-[#8083ff]',
+            bar_color_class: d.bar_color_class ?? 'bg-[#8083ff]',
             hasData: n > 0,
           };
         });
 
         // 2.6 反应计数（真实互评条数与徽章数）
-        const totalBadges = (
-          db.prepare('SELECT COUNT(*) as c FROM classroom_peer_badges WHERE session_id = ?').get(session.id) as any
-        )?.c as number;
+        const totalBadgesRow = db
+          .prepare('SELECT COUNT(*) as c FROM classroom_peer_badges WHERE session_id = ?')
+          .get(session.id) as { c: number } | undefined;
+        const totalBadges = totalBadgesRow?.c ?? 0;
         const reactions = [
           { id: 'reviews', emoji: '❤️', label: '互评条数', count: reviews.length, colorClass: 'text-[#c0c1ff]' },
           { id: 'badges', emoji: '💡', label: '微勋章', count: Number(totalBadges) || 0, colorClass: 'text-[#ffb95f]' },
@@ -416,7 +483,7 @@ function ensureRoutes(app: Express): void {
           studentsWithWork: new Set(tasks.map((t) => t.reviewer_id)).size,
           showcaseWorks,
         });
-      } catch (e: any) {
+      } catch (e: unknown) {
         sendSafeError(res, e);
       }
     },
@@ -428,16 +495,16 @@ function ensureRoutes(app: Express): void {
     requireAuth('student', 'teacher', 'administrator'),
     async (req: Request, res: Response) => {
       try {
-        const db = kernelContainer.db as any;
+        const db = kernelContainer.db;
         const { lessonId, taskId } = req.params;
         if (!requirePeerReviewAccess(req, res, 'read')) return;
-        const { score, comment, dimensionScores } = req.body ?? {};
+        const { score, comment, dimensionScores } = (req.body as Record<string, unknown> | undefined) ?? {};
         const session = resolveSession(lessonId);
         if (!session) return res.status(404).json({ success: false, error: 'No classroom session' });
 
         const task = db
           .prepare('SELECT * FROM classroom_peer_review_tasks WHERE id = ? AND session_id = ?')
-          .get(taskId, session.id) as any;
+          .get(taskId, session.id) as PeerReviewTaskRecord | undefined;
         if (!task) return res.status(404).json({ success: false, error: 'Task not found' });
 
         // 防代评：学生只能提交自己的任务；教师/管理员例外
@@ -464,7 +531,7 @@ function ensureRoutes(app: Express): void {
             `UPDATE classroom_peer_reviews
                 SET score = ?, comment = ?, dimension_scores_json = ?, updated_at = ?
               WHERE id = ?`,
-          ).run(numericScore, comment ?? '', JSON.stringify(dimensionScores ?? {}), now, existing.id);
+          ).run(numericScore, (comment as string) ?? '', JSON.stringify(dimensionScores ?? {}), now, existing.id);
         } else {
           db.prepare(
             `INSERT INTO classroom_peer_reviews
@@ -480,7 +547,7 @@ function ensureRoutes(app: Express): void {
             task.target_student_id,
             task.target_attempt_id,
             numericScore,
-            comment ?? '',
+            (comment as string) ?? '',
             JSON.stringify(dimensionScores ?? {}),
             now,
             now,
@@ -493,7 +560,7 @@ function ensureRoutes(app: Express): void {
         );
 
         return res.json({ success: true, taskId, score: numericScore });
-      } catch (e: any) {
+      } catch (e: unknown) {
         sendSafeError(res, e);
       }
     },
@@ -505,10 +572,10 @@ function ensureRoutes(app: Express): void {
     requireAuth('student', 'teacher', 'administrator'),
     async (req: Request, res: Response) => {
       try {
-        const db = kernelContainer.db as any;
+        const db = kernelContainer.db;
         const { lessonId } = req.params;
         if (!requirePeerReviewAccess(req, res, 'read')) return;
-        const { receiverId, badgeKey } = req.body ?? {};
+        const { receiverId, badgeKey } = (req.body as Record<string, string> | undefined) ?? {};
         const session = resolveSession(lessonId);
         if (!session) return res.status(404).json({ success: false, error: 'No classroom session' });
         if (!receiverId || !badgeKey) {
@@ -520,9 +587,11 @@ function ensureRoutes(app: Express): void {
 
         const senderId = currentStudentId(req) ?? getActorId(req);
         const senderName =
-          (db.prepare('SELECT name FROM students WHERE id = ?').get(senderId) as any)?.name ?? senderId;
+          (db.prepare('SELECT name FROM students WHERE id = ?').get(senderId) as { name?: string } | undefined)?.name ??
+          senderId;
         const receiverName =
-          (db.prepare('SELECT name FROM students WHERE id = ?').get(receiverId) as any)?.name ?? receiverId;
+          (db.prepare('SELECT name FROM students WHERE id = ?').get(receiverId) as { name?: string } | undefined)
+            ?.name ?? receiverId;
 
         db.prepare(
           `INSERT OR IGNORE INTO classroom_peer_badges
@@ -541,7 +610,7 @@ function ensureRoutes(app: Express): void {
         );
 
         return res.json({ success: true });
-      } catch (e: any) {
+      } catch (e: unknown) {
         sendSafeError(res, e);
       }
     },
@@ -553,10 +622,10 @@ function ensureRoutes(app: Express): void {
     requireAuth('student', 'teacher', 'administrator'),
     async (req: Request, res: Response) => {
       try {
-        const db = kernelContainer.db as any;
+        const db = kernelContainer.db;
         const { lessonId } = req.params;
         if (!requirePeerReviewAccess(req, res, 'read')) return;
-        const { nominatedStudentId, honorKey } = req.body ?? {};
+        const { nominatedStudentId, honorKey } = (req.body as Record<string, string> | undefined) ?? {};
         const session = resolveSession(lessonId);
         if (!session) return res.status(404).json({ success: false, error: 'No classroom session' });
         if (!nominatedStudentId) {
@@ -568,8 +637,10 @@ function ensureRoutes(app: Express): void {
           return res.status(400).json({ success: false, error: 'Cannot nominate yourself' });
         }
         const name =
-          (db.prepare('SELECT name FROM students WHERE id = ?').get(nominatedStudentId) as any)?.name ??
-          nominatedStudentId;
+          (
+            db.prepare('SELECT name FROM students WHERE id = ?').get(nominatedStudentId) as
+              { name?: string } | undefined
+          )?.name ?? nominatedStudentId;
 
         db.prepare(
           `INSERT OR IGNORE INTO classroom_peer_nominations
@@ -578,7 +649,7 @@ function ensureRoutes(app: Express): void {
         ).run(makeId('cpn'), session.id, lessonId, nominatorId, nominatedStudentId, name, honorKey ?? null, Date.now());
 
         return res.json({ success: true });
-      } catch (e: any) {
+      } catch (e: unknown) {
         sendSafeError(res, e);
       }
     },
@@ -590,10 +661,10 @@ function ensureRoutes(app: Express): void {
     requireAuth('student', 'teacher', 'administrator'),
     async (req: Request, res: Response) => {
       try {
-        const db = kernelContainer.db as any;
+        const db = kernelContainer.db;
         const { lessonId } = req.params;
         if (!requirePeerReviewAccess(req, res, 'read')) return;
-        const { text, type, voiceDuration } = req.body ?? {};
+        const { text, type, voiceDuration } = (req.body as Record<string, unknown> | undefined) ?? {};
         const session = resolveSession(lessonId);
         if (!session) return res.status(404).json({ success: false, error: 'No classroom session' });
 
@@ -602,7 +673,8 @@ function ensureRoutes(app: Express): void {
 
         const senderId = currentStudentId(req) ?? getActorId(req);
         const senderName =
-          (db.prepare('SELECT name FROM students WHERE id = ?').get(senderId) as any)?.name ?? senderId;
+          (db.prepare('SELECT name FROM students WHERE id = ?').get(senderId) as { name?: string } | undefined)?.name ??
+          senderId;
         const isVoice = type === 'voice';
 
         db.prepare(
@@ -623,7 +695,7 @@ function ensureRoutes(app: Express): void {
         );
 
         return res.json({ success: true });
-      } catch (e: any) {
+      } catch (e: unknown) {
         sendSafeError(res, e);
       }
     },

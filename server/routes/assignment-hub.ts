@@ -6,6 +6,7 @@
  * 原始二进制 BodyParser 挂载、文件下载与命令总线派发。
  */
 import express from 'express';
+import type Database from 'better-sqlite3';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
 import { getActorId, requireAuth } from '../middleware/auth.js';
 import { requireScopedAuth } from '../middleware/data-scope.js';
@@ -32,14 +33,18 @@ function decodeFileName(raw: unknown): string {
   }
 }
 
+function getSession(req: unknown): Record<string, unknown> | undefined {
+  return (req as { session?: Record<string, unknown> })?.session;
+}
+
 /**
  * M4: 物理清理已软删除超过保留期的附件文件（导出供单测使用，委托至 AssignmentService）。
  */
 export function gcSoftDeletedAssignmentFiles(
-  db: { prepare(sql: string): { get(...p: unknown[]): unknown; all(...p: unknown[]): unknown[] } } = kernelContainer.db,
+  db: Database.Database = kernelContainer.db,
   retentionMs: number = 7 * 24 * 60 * 60 * 1000,
 ): number {
-  return new AssignmentService(db as any).gcSoftDeletedAssignmentFiles(retentionMs);
+  return new AssignmentService(db).gcSoftDeletedAssignmentFiles(retentionMs);
 }
 
 /** GC 调度：注册路由时执行一次 + 每 24h 一次（unref 不阻塞退出） */
@@ -72,13 +77,13 @@ export function registerAssignmentHubRoutes(ctx: ServerContext) {
 
   /** 本文件统一的错误响应：尊重业务异常携带的 err.status，其余 500 */
   const sendHubError = (res: express.Response, e: unknown) => {
-    const status = (e as any)?.status;
+    const status = (e as { status?: unknown })?.status;
     sendSafeError(res, e, typeof status === 'number' && status >= 400 && status < 500 ? status : 500);
   };
 
   /** 当前请求者身份：privileged = 教师/管理员，否则视为学生（只能操作自己） */
   const describeRequester = (req: express.Request) => {
-    const session = (req as any).session;
+    const session = getSession(req);
     const role = session?.role;
     const isPrivileged =
       role === 'teacher' ||
@@ -98,7 +103,7 @@ export function registerAssignmentHubRoutes(ctx: ServerContext) {
     level: 'staff' | 'member',
   ) => {
     if (!classId) return false;
-    return rejectUnless(res, authorizeClass(kernelContainer.db, (req as any).session, classId, level));
+    return rejectUnless(res, authorizeClass(kernelContainer.db, getSession(req), classId, level));
   };
 
   const hubAssignmentClassId = (assignmentId: string): string | null | undefined => {
@@ -135,7 +140,7 @@ export function registerAssignmentHubRoutes(ctx: ServerContext) {
       const cmd = kernelContainer.commandBus.createCommand('assignment.create', req.body || {}, getActorId(req));
       const result = await kernelContainer.commandBus.execute(cmd);
       res.json(result);
-    } catch (e: any) {
+    } catch (e) {
       sendHubError(res, e);
     }
   });
@@ -169,7 +174,7 @@ export function registerAssignmentHubRoutes(ctx: ServerContext) {
         result.assignments = result.assignments.filter((row) => !row.class_id || allowed.includes(row.class_id));
       }
       res.json(result);
-    } catch (e: any) {
+    } catch (e) {
       sendHubError(res, e);
     }
   });
@@ -199,7 +204,7 @@ export function registerAssignmentHubRoutes(ctx: ServerContext) {
       });
       const result = await kernelContainer.commandBus.execute(cmd);
       res.json(result);
-    } catch (e: any) {
+    } catch (e) {
       sendHubError(res, e);
     }
   });
@@ -239,9 +244,9 @@ export function registerAssignmentHubRoutes(ctx: ServerContext) {
         });
 
         res.json({ success: true, file });
-      } catch (e: any) {
-        if (e.message?.includes('At most')) {
-          return res.status(409).json({ success: false, error: e.message });
+      } catch (e: unknown) {
+        if ((e as Error).message?.includes('At most')) {
+          return res.status(409).json({ success: false, error: (e as Error).message });
         }
         sendHubError(res, e);
       }
@@ -258,7 +263,7 @@ export function registerAssignmentHubRoutes(ctx: ServerContext) {
         return;
       const files = assignmentService.listAssignmentFiles(req.params.assignmentId, studentId, isPrivileged);
       res.json({ success: true, files });
-    } catch (e: any) {
+    } catch (e) {
       sendHubError(res, e);
     }
   });
@@ -308,7 +313,7 @@ export function registerAssignmentHubRoutes(ctx: ServerContext) {
       }
 
       res.download(absPath, originalName);
-    } catch (e: any) {
+    } catch (e) {
       sendHubError(res, e);
     }
   });
@@ -322,7 +327,7 @@ export function registerAssignmentHubRoutes(ctx: ServerContext) {
         return;
       assignmentService.softDeleteAssignmentFile(req.params.assignmentId, req.params.fileId, studentId, isPrivileged);
       res.json({ success: true });
-    } catch (e: any) {
+    } catch (e) {
       sendHubError(res, e);
     }
   });
@@ -355,7 +360,7 @@ export function registerAssignmentHubRoutes(ctx: ServerContext) {
       );
       const result = await kernelContainer.commandBus.execute(cmd);
       res.json(result);
-    } catch (e: any) {
+    } catch (e) {
       sendHubError(res, e);
     }
   });
@@ -391,7 +396,7 @@ export function registerAssignmentHubRoutes(ctx: ServerContext) {
       );
       const result = await kernelContainer.commandBus.execute(cmd);
       res.json(result);
-    } catch (e: any) {
+    } catch (e) {
       sendHubError(res, e);
     }
   });
@@ -411,7 +416,7 @@ export function registerAssignmentHubRoutes(ctx: ServerContext) {
         );
         const result = await kernelContainer.commandBus.execute(cmd);
         res.json(result);
-      } catch (e: any) {
+      } catch (e) {
         sendHubError(res, e);
       }
     },

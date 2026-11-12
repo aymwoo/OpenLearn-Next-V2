@@ -1,3 +1,4 @@
+import type { Request, Response } from 'express';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
 import {
   ISemesterGradeServiceToken,
@@ -8,7 +9,7 @@ import { getActorId, requireAuth } from '../middleware/auth.js';
 import { requireScopedAuth } from '../middleware/data-scope.js';
 import type { ServerContext } from '../context.js';
 import { sendSafeError } from '../utils/error-handler.js';
-import { GradingService } from '../services/grading-service.js';
+import { GradingService, type StudentSemesterGrade } from '../services/grading-service.js';
 import {
   authorizeClass,
   isAdministrator,
@@ -17,12 +18,22 @@ import {
   teacherCanSeeStudent,
 } from '../services/class-access.js';
 
+interface AttendanceRowItem {
+  student_id?: string;
+  studentId?: string;
+  [key: string]: unknown;
+}
+
+function getSession(req: Request): Record<string, unknown> | undefined {
+  return (req as unknown as { session?: Record<string, unknown> })?.session;
+}
+
 export function registerGradingRoutes(ctx: ServerContext) {
   const { app } = ctx;
   const gradingService = new GradingService();
 
-  const gate = (req: any, res: any, classId: string, level: 'staff' | 'member') =>
-    rejectUnless(res, authorizeClass(kernelContainer.db, req.session, classId, level));
+  const gate = (req: Request, res: Response, classId: string, level: 'staff' | 'member') =>
+    rejectUnless(res, authorizeClass(kernelContainer.db, getSession(req), classId, level));
 
   // ── 1. 考勤聚合与记录 ──────────────────────────────────────────────────────────
   app.get('/api/classes/:classId/attendance-summary', requireScopedAuth('class-staff'), (req, res) => {
@@ -34,27 +45,27 @@ export function registerGradingRoutes(ctx: ServerContext) {
         (req.query.academicYear as string) || null,
       );
       res.json(summary);
-    } catch (e: any) {
+    } catch (e) {
       sendSafeError(res, e);
     }
   });
 
   app.get('/api/schedules/:scheduleId/attendance', requireScopedAuth('class-member'), (req, res) => {
     try {
-      const session = (req as any).session;
+      const session = getSession(req);
       const sch = kernelContainer.db
         .prepare('SELECT class_id FROM schedules WHERE id = ?')
         .get(req.params.scheduleId) as { class_id: string } | undefined;
       if (!sch) return res.status(404).json({ error: 'Schedule not found' });
       const decision = authorizeClass(kernelContainer.db, session, sch.class_id, 'member');
       if (rejectUnless(res, decision) || !decision.ok) return;
-      let attendance: any = gradingService.getScheduleAttendance(req.params.scheduleId);
+      let attendance: unknown = gradingService.getScheduleAttendance(req.params.scheduleId);
       if (decision.level === 'student' && Array.isArray(attendance)) {
         const sid = studentActorId(session);
-        attendance = attendance.filter((row: any) => (row.student_id || row.studentId) === sid);
+        attendance = (attendance as AttendanceRowItem[]).filter((row) => (row.student_id || row.studentId) === sid);
       }
       res.json(attendance);
-    } catch (e: any) {
+    } catch (e) {
       sendSafeError(res, e);
     }
   });
@@ -69,7 +80,7 @@ export function registerGradingRoutes(ctx: ServerContext) {
       const { studentId, status } = req.body;
       gradingService.recordAttendance(req.params.scheduleId, studentId, status);
       res.json({ success: true });
-    } catch (e: any) {
+    } catch (e) {
       sendSafeError(res, e);
     }
   });
@@ -80,7 +91,7 @@ export function registerGradingRoutes(ctx: ServerContext) {
       if (gate(req, res, req.params.classId, 'member')) return;
       const weights = gradingService.getGradeWeights(req.params.classId);
       res.json(weights);
-    } catch (e: any) {
+    } catch (e) {
       sendSafeError(res, e);
     }
   });
@@ -96,9 +107,9 @@ export function registerGradingRoutes(ctx: ServerContext) {
         exam_weight,
       });
       res.json({ success: true });
-    } catch (e: any) {
-      if (e.message === 'Weights sum must equal 1.0 or 100%') {
-        return res.status(400).json({ error: e.message });
+    } catch (e: unknown) {
+      if ((e as Error).message === 'Weights sum must equal 1.0 or 100%') {
+        return res.status(400).json({ error: (e as Error).message });
       }
       sendSafeError(res, e);
     }
@@ -110,7 +121,7 @@ export function registerGradingRoutes(ctx: ServerContext) {
       if (gate(req, res, req.params.classId, 'member')) return;
       const exams = gradingService.listExams(req.params.classId, (req.query.academicYear as string) || null);
       res.json(exams);
-    } catch (e: any) {
+    } catch (e) {
       sendSafeError(res, e);
     }
   });
@@ -122,20 +133,21 @@ export function registerGradingRoutes(ctx: ServerContext) {
       if (!title) return res.status(400).json({ error: 'Title is required' });
       const examId = gradingService.createExam(req.params.classId, title, description, max_score);
       res.json({ success: true, examId });
-    } catch (e: any) {
+    } catch (e) {
       sendSafeError(res, e);
     }
   });
 
   app.get('/api/exams/:examId/scores', requireScopedAuth('class-member'), (req, res) => {
     try {
-      const session = (req as any).session;
+      const session = getSession(req);
       const exam = kernelContainer.db.prepare('SELECT class_id FROM exams WHERE id = ?').get(req.params.examId) as
         { class_id: string } | undefined;
       if (!exam) return res.status(404).json({ error: 'Exam not found' });
       const decision = authorizeClass(kernelContainer.db, session, exam.class_id, 'member');
       if (rejectUnless(res, decision) || !decision.ok) return;
-      const scores: any = gradingService.getExamScores(req.params.examId);
+      const scores = gradingService.getExamScores(req.params.examId) as
+        AttendanceRowItem[] | { scores?: AttendanceRowItem[]; data?: AttendanceRowItem[] };
       if (decision.level !== 'student') {
         res.json(scores);
         return;
@@ -143,11 +155,11 @@ export function registerGradingRoutes(ctx: ServerContext) {
       const sid = studentActorId(session);
       const list = Array.isArray(scores) ? scores : (scores?.scores ?? scores?.data ?? []);
       if (Array.isArray(list)) {
-        res.json(list.filter((r: any) => (r.student_id || r.studentId) === sid));
+        res.json(list.filter((r) => (r.student_id || r.studentId) === sid));
         return;
       }
       res.json(scores);
-    } catch (e: any) {
+    } catch (e) {
       sendSafeError(res, e);
     }
   });
@@ -162,7 +174,7 @@ export function registerGradingRoutes(ctx: ServerContext) {
       if (!Array.isArray(scores)) return res.status(400).json({ error: 'Scores array is required' });
       gradingService.batchSaveExamScores(req.params.examId, scores);
       res.json({ success: true });
-    } catch (e: any) {
+    } catch (e) {
       sendSafeError(res, e);
     }
   });
@@ -171,21 +183,22 @@ export function registerGradingRoutes(ctx: ServerContext) {
   app.get('/api/classes/:classId/semester-grades', requireScopedAuth('class-member'), (req, res) => {
     try {
       const classId = req.params.classId;
-      const session = (req as any).session;
+      const session = getSession(req);
       const decision = authorizeClass(kernelContainer.db, session, classId, 'member');
       if (rejectUnless(res, decision) || !decision.ok) return;
       const semesterName = (req.query.semesterName as string) || '2026年春季学期';
-      const result: any = gradingService.computeSemesterGrades(
+      const result = gradingService.computeSemesterGrades(
         classId,
         semesterName,
         (req.query.academicYear as string) || null,
       );
-      if (decision.level === 'student' && result && Array.isArray(result.students)) {
+      let students: StudentSemesterGrade[] = result?.students ?? [];
+      if (decision.level === 'student' && Array.isArray(students)) {
         const sid = studentActorId(session);
-        result.students = result.students.filter((s: any) => (s.student_id || s.studentId || s.id) === sid);
+        students = students.filter((s) => s.studentId === sid);
       }
-      res.json({ success: true, weights: result.weights, students: result.students });
-    } catch (e: any) {
+      res.json({ success: true, weights: result?.weights, students });
+    } catch (e) {
       sendSafeError(res, e);
     }
   });
@@ -196,7 +209,7 @@ export function registerGradingRoutes(ctx: ServerContext) {
       if (!lessonId || !studentId || grade === undefined) {
         return res.status(400).json({ success: false, error: 'lessonId, studentId, and grade are required' });
       }
-      const session = (req as any).session;
+      const session = getSession(req);
       if (!isAdministrator(session) && !teacherCanSeeStudent(kernelContainer.db, session, studentId)) {
         return res.status(403).json({ success: false, error: 'Forbidden' });
       }
@@ -209,7 +222,7 @@ export function registerGradingRoutes(ctx: ServerContext) {
       });
 
       res.json({ success: true });
-    } catch (e: any) {
+    } catch (e) {
       sendSafeError(res, e);
     }
   });
@@ -223,7 +236,7 @@ export function registerGradingRoutes(ctx: ServerContext) {
       const dimensionRegistry = await kernelContainer.serviceRegistry.resolve(IPointsDimensionRegistryToken);
       const dimensions = dimensionRegistry.listDimensions();
       res.json({ success: true, dimensions });
-    } catch (e: any) {
+    } catch (e) {
       sendSafeError(res, e);
     }
   });
@@ -260,7 +273,7 @@ export function registerGradingRoutes(ctx: ServerContext) {
       });
 
       res.json({ success: true, logItem });
-    } catch (e: any) {
+    } catch (e) {
       sendSafeError(res, e);
     }
   });
@@ -268,7 +281,7 @@ export function registerGradingRoutes(ctx: ServerContext) {
   app.get('/api/students/:studentId/points-logs', requireScopedAuth('self'), async (req, res) => {
     try {
       const { studentId } = req.params;
-      const session = (req as any).session;
+      const session = getSession(req);
       const selfId = studentActorId(session);
       const allowed =
         isAdministrator(session) ||
@@ -282,7 +295,7 @@ export function registerGradingRoutes(ctx: ServerContext) {
       const summary = await ledgerService.getStudentDimensionSummary(studentId, (classId as string) || '');
 
       res.json({ success: true, logs, summary });
-    } catch (e: any) {
+    } catch (e) {
       sendSafeError(res, e);
     }
   });
@@ -296,7 +309,7 @@ export function registerGradingRoutes(ctx: ServerContext) {
 
       gradingService.archiveSemesterReports(req.params.classId, semesterName, reports);
       res.json({ success: true });
-    } catch (e: any) {
+    } catch (e) {
       sendSafeError(res, e);
     }
   });
@@ -309,8 +322,8 @@ export function registerGradingRoutes(ctx: ServerContext) {
         const { classId, studentId } = req.params;
         if (gate(req, res, classId, 'staff')) return;
         const { semesterName = '2026年春季学期', providerId } = req.body;
-        const session = (req as any).session;
-        const userId = session?.userId || session?.username;
+        const session = getSession(req);
+        const userId = (session?.userId as string | undefined) || (session?.username as string | undefined);
 
         const aiEvaluation = await gradingService.generateSemesterAiEvaluation({
           classId,
@@ -321,12 +334,13 @@ export function registerGradingRoutes(ctx: ServerContext) {
         });
 
         res.json({ success: true, aiEvaluation });
-      } catch (e: any) {
-        if (e.message === 'Student not found') {
+      } catch (e: unknown) {
+        const err = e as { message?: string };
+        if (err.message === 'Student not found') {
           return res.status(404).json({ error: 'Student not found' });
         }
-        if (e.message?.includes('未检测到可用的 AI 提供商')) {
-          return res.status(400).json({ error: e.message });
+        if (err.message?.includes('未检测到可用的 AI 提供商')) {
+          return res.status(400).json({ error: err.message });
         }
         console.error('AI Semester Evaluation error:', e);
         sendSafeError(res, e);

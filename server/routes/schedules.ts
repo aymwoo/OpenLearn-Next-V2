@@ -7,6 +7,10 @@ import { parsePagination } from '../utils/pagination.js';
 import { ScheduleService } from '../services/schedule-service.js';
 import { accessibleClassIds, authorizeClass, rejectUnless } from '../services/class-access.js';
 
+function getSession(req: unknown): Record<string, unknown> | undefined {
+  return (req as { session?: Record<string, unknown> })?.session;
+}
+
 export function registerSchedulesRoutes(ctx: ServerContext) {
   const { app } = ctx;
   const scheduleService = new ScheduleService(kernelContainer.db, kernelContainer.getReadDb());
@@ -19,11 +23,11 @@ export function registerSchedulesRoutes(ctx: ServerContext) {
       const clientDate = (req.query.date as string) || new Date().toISOString().split('T')[0];
       const schedules = scheduleService.getTodaySchedules(
         clientDate,
-        accessibleClassIds(kernelContainer.getReadDb(), (req as any).session),
+        accessibleClassIds(kernelContainer.getReadDb(), getSession(req)),
         (req.query.academicYear as string) || null,
       );
       res.json({ success: true, schedules });
-    } catch (e: any) {
+    } catch (e) {
       sendSafeError(res, e);
     }
   });
@@ -33,14 +37,14 @@ export function registerSchedulesRoutes(ctx: ServerContext) {
    */
   app.get('/api/schedules', requireScopedAuth('class-member'), (req, res) => {
     try {
-      const pg = parsePagination(req.query as any);
+      const pg = parsePagination(req.query as Record<string, unknown>);
       const result = scheduleService.listSchedules(
         pg,
-        accessibleClassIds(kernelContainer.getReadDb(), (req as any).session),
+        accessibleClassIds(kernelContainer.getReadDb(), getSession(req)),
         (req.query.academicYear as string) || null,
       );
       res.json(result);
-    } catch (e: any) {
+    } catch (e) {
       sendSafeError(res, e);
     }
   });
@@ -54,8 +58,7 @@ export function registerSchedulesRoutes(ctx: ServerContext) {
       if (!classId || !scheduledDate) {
         return res.status(400).json({ error: 'classId and scheduledDate are required' });
       }
-      if (rejectUnless(res, authorizeClass(kernelContainer.getReadDb(), (req as any).session, classId, 'member')))
-        return;
+      if (rejectUnless(res, authorizeClass(kernelContainer.getReadDb(), getSession(req), classId, 'member'))) return;
       const report = scheduleService.detectConflicts({
         classId,
         scheduledDate,
@@ -64,7 +67,7 @@ export function registerSchedulesRoutes(ctx: ServerContext) {
         excludeScheduleId,
       });
       res.json({ success: true, ...report });
-    } catch (e: any) {
+    } catch (e) {
       sendSafeError(res, e);
     }
   });
@@ -74,19 +77,14 @@ export function registerSchedulesRoutes(ctx: ServerContext) {
    */
   app.get('/api/classes/:classId/schedules', requireScopedAuth('class-member'), (req, res) => {
     try {
-      if (
-        rejectUnless(
-          res,
-          authorizeClass(kernelContainer.getReadDb(), (req as any).session, req.params.classId, 'member'),
-        )
-      )
+      if (rejectUnless(res, authorizeClass(kernelContainer.getReadDb(), getSession(req), req.params.classId, 'member')))
         return;
       const schedules = scheduleService.getClassSchedules(
         req.params.classId,
         (req.query.academicYear as string) || null,
       );
       res.json(schedules);
-    } catch (e: any) {
+    } catch (e) {
       sendSafeError(res, e);
     }
   });
@@ -96,8 +94,7 @@ export function registerSchedulesRoutes(ctx: ServerContext) {
    */
   app.post('/api/classes/:classId/schedules', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
-      if (rejectUnless(res, authorizeClass(kernelContainer.db, (req as any).session, req.params.classId, 'staff')))
-        return;
+      if (rejectUnless(res, authorizeClass(kernelContainer.db, getSession(req), req.params.classId, 'staff'))) return;
       const { lessonId, scheduledDate, timeSlot, status, notes, force, allowConflict, academicYear } = req.body;
       const schedule = scheduleService.createSchedule(
         {
@@ -115,7 +112,7 @@ export function registerSchedulesRoutes(ctx: ServerContext) {
         success: true,
         schedule,
       });
-    } catch (e: any) {
+    } catch (e) {
       sendSafeError(res, e);
     }
   });
@@ -125,8 +122,7 @@ export function registerSchedulesRoutes(ctx: ServerContext) {
    */
   app.put('/api/classes/:classId/schedules/:scheduleId', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
-      if (rejectUnless(res, authorizeClass(kernelContainer.db, (req as any).session, req.params.classId, 'staff')))
-        return;
+      if (rejectUnless(res, authorizeClass(kernelContainer.db, getSession(req), req.params.classId, 'staff'))) return;
       const { lessonId, scheduledDate, timeSlot, status, notes, force, allowConflict, academicYear } = req.body;
       scheduleService.updateSchedule(
         req.params.scheduleId,
@@ -142,7 +138,7 @@ export function registerSchedulesRoutes(ctx: ServerContext) {
         { allowConflict: Boolean(force || allowConflict) },
       );
       res.json({ success: true });
-    } catch (e: any) {
+    } catch (e) {
       sendSafeError(res, e);
     }
   });
@@ -152,11 +148,10 @@ export function registerSchedulesRoutes(ctx: ServerContext) {
    */
   app.delete('/api/classes/:classId/schedules/:scheduleId', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
-      if (rejectUnless(res, authorizeClass(kernelContainer.db, (req as any).session, req.params.classId, 'staff')))
-        return;
+      if (rejectUnless(res, authorizeClass(kernelContainer.db, getSession(req), req.params.classId, 'staff'))) return;
       scheduleService.deleteScheduleCascade(req.params.scheduleId, req.params.classId);
       res.json({ success: true });
-    } catch (e: any) {
+    } catch (e) {
       sendSafeError(res, e);
     }
   });
@@ -166,14 +161,13 @@ export function registerSchedulesRoutes(ctx: ServerContext) {
    */
   app.post('/api/classes/:classId/schedules/batch', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
-      if (rejectUnless(res, authorizeClass(kernelContainer.db, (req as any).session, req.params.classId, 'staff')))
-        return;
+      if (rejectUnless(res, authorizeClass(kernelContainer.db, getSession(req), req.params.classId, 'staff'))) return;
       const { schedules, force, allowConflict } = req.body;
       const result = scheduleService.batchCreateSchedules(req.params.classId, schedules || [], {
         allowConflict: Boolean(force || allowConflict),
       });
       res.json({ success: true, count: result.count, ids: result.ids });
-    } catch (e: any) {
+    } catch (e) {
       sendSafeError(res, e);
     }
   });
@@ -185,15 +179,15 @@ export function registerSchedulesRoutes(ctx: ServerContext) {
     const startTime = Date.now();
     try {
       const { imageBase64, lang = 'zh', providerId } = req.body;
-      const session = (req as any).session;
-      const userId = session?.userId || session?.username;
+      const session = getSession(req);
+      const userId = (session?.userId as string | undefined) || (session?.username as string | undefined);
       const result = await scheduleService.processTimetableOcr(imageBase64, { lang, providerId, userId });
       res.json({
         success: true,
         entries: result.entries,
         providerUsed: result.providerUsed,
       });
-    } catch (e: any) {
+    } catch (e) {
       const elapsed = Date.now() - startTime;
       console.error(`[OCR Error after ${elapsed}ms]:`, (e as Error).message);
       sendSafeError(res, e);
