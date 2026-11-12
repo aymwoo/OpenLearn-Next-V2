@@ -825,7 +825,7 @@ export const BuiltinPlugin = {
         const payload = command.payload as any;
         const filter = payload.filter || {};
 
-        let sql = 'SELECT * FROM whiteboard_elements WHERE lesson_id = ?';
+        let sql = 'SELECT id, lesson_id, type, data, created_at FROM whiteboard_elements WHERE lesson_id = ?';
         const params: any[] = [payload.lessonId];
 
         if (filter.type) {
@@ -875,7 +875,9 @@ export const BuiltinPlugin = {
       async execute(command) {
         const payload = command.payload as any;
         const row = db
-          .prepare('SELECT * FROM whiteboard_elements WHERE id = ? AND lesson_id = ?')
+          .prepare(
+            'SELECT id, lesson_id, type, data, created_at FROM whiteboard_elements WHERE id = ? AND lesson_id = ?',
+          )
           .get(payload.elementId, payload.lessonId) as any;
         if (!row) {
           throw new Error(`Element not found: ${payload.elementId}`);
@@ -980,7 +982,9 @@ export const BuiltinPlugin = {
       async execute(command) {
         const payload = command.payload as any;
         const row = db
-          .prepare('SELECT * FROM whiteboard_elements WHERE id = ? AND lesson_id = ?')
+          .prepare(
+            'SELECT id, lesson_id, type, data, created_at FROM whiteboard_elements WHERE id = ? AND lesson_id = ?',
+          )
           .get(payload.elementId, payload.lessonId) as any;
         if (!row) {
           throw new Error(`Element not found: ${payload.elementId}`);
@@ -2146,7 +2150,9 @@ export const BuiltinPlugin = {
 
     await commandBus.registerHandler(listCoursewareCmdType, {
       async execute() {
-        const rows = db.prepare('SELECT * FROM courseware ORDER BY created_at DESC').all();
+        const rows = db
+          .prepare('SELECT id, uuid, name, type, entry, created_at FROM courseware ORDER BY created_at DESC LIMIT 500')
+          .all();
         return rows;
       },
     });

@@ -34,7 +34,7 @@ export class WhiteboardService {
    */
   public getWhiteboardElements(lessonId: string): WhiteboardElementItem[] {
     const elements = this.db
-      .prepare('SELECT * FROM whiteboard_elements WHERE lesson_id = ?')
+      .prepare('SELECT id, lesson_id, type, data, created_at FROM whiteboard_elements WHERE lesson_id = ?')
       .all(lessonId) as WhiteboardElementItem[];
 
     // 首次访问时自动生成快照（排除作业白板与快照自身）
@@ -95,7 +95,9 @@ export class WhiteboardService {
 
         // 提取快照备份（剔除标记）
         const snapshotElements = this.db
-          .prepare("SELECT * FROM whiteboard_elements WHERE lesson_id = ? AND type != 'snapshot_marker'")
+          .prepare(
+            "SELECT id, lesson_id, type, data, created_at FROM whiteboard_elements WHERE lesson_id = ? AND type != 'snapshot_marker'",
+          )
           .all(snapshotId) as WhiteboardElementItem[];
 
         // 还原插入

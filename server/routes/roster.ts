@@ -1497,7 +1497,9 @@ export function registerRosterRoutes(ctx: ServerContext) {
       if (rejectUnless(res, authorizeClass(kernelContainer.db, (req as any).session, req.params.classId, 'staff')))
         return;
       const assignments = kernelContainer.db
-        .prepare('SELECT * FROM assignments WHERE class_id = ? ORDER BY created_at DESC')
+        .prepare(
+          'SELECT id, class_id, lesson_id, title, description, content, academic_year, created_at FROM assignments WHERE class_id = ? ORDER BY created_at DESC LIMIT 500',
+        )
         .all(req.params.classId);
 
       const recentSubmissions = kernelContainer.db

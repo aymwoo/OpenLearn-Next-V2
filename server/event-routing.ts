@@ -86,7 +86,7 @@ export interface SocketRoute<TPayload = any> {
 }
 
 const TITLE_SQL = 'SELECT title FROM assignments WHERE id = ?';
-const ELEMENT_SQL = 'SELECT * FROM whiteboard_elements WHERE id = ?';
+const ELEMENT_SQL = 'SELECT id, lesson_id, type, data, created_at FROM whiteboard_elements WHERE id = ?';
 const ATTEMPT_STUDENT_SQL = 'SELECT student_id FROM courseware_attempt WHERE id = ?';
 const ROLLCALL_EXISTS_SQL = 'SELECT id FROM student_rollcalls WHERE id = ?';
 const ROLLCALL_INSERT_SQL =

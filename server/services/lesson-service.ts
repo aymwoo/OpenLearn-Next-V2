@@ -484,7 +484,7 @@ export class LessonService {
         );
 
       const whiteboardElements = this.db
-        .prepare('SELECT * FROM whiteboard_elements WHERE lesson_id = ?')
+        .prepare('SELECT id, lesson_id, type, data, created_at FROM whiteboard_elements WHERE lesson_id = ?')
         .all(lessonId) as any[];
 
       const insertElement = this.db.prepare(

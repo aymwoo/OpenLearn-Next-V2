@@ -1407,7 +1407,11 @@ export function registerClassroomRoutes(
         const studentId = session.studentId || session.userId || getActorId(req) || 'student';
         const studentName = session.studentName || session.name || studentId;
 
-        const buzzer = db.prepare('SELECT * FROM classroom_buzzers WHERE id = ?').get(buzzerId) as any;
+        const buzzer = db
+          .prepare(
+            'SELECT id, session_id, lesson_id, title, status, winner_student_id, winner_student_name, winner_response_time_ms, created_at FROM classroom_buzzers WHERE id = ?',
+          )
+          .get(buzzerId) as any;
         if (!buzzer) {
           return res.status(404).json({ error: 'Buzzer not found' });
         }
@@ -1468,7 +1472,11 @@ export function registerClassroomRoutes(
             ? { studentId, studentName, responseTimeMs }
             : (() => {
                 // P0-1 修复：失败路径重读，避免并发下返回更新前的空赢家
-                const fresh = db.prepare('SELECT * FROM classroom_buzzers WHERE id = ?').get(buzzerId) as any;
+                const fresh = db
+                  .prepare(
+                    'SELECT id, session_id, lesson_id, title, status, winner_student_id, winner_student_name, winner_response_time_ms, created_at FROM classroom_buzzers WHERE id = ?',
+                  )
+                  .get(buzzerId) as any;
                 return {
                   studentId: fresh?.winner_student_id ?? null,
                   studentName: fresh?.winner_student_name ?? null,
@@ -2518,7 +2526,11 @@ export function registerClassroomRoutes(
   // 内置模式以代码常量兜底，数据库记录优先，便于管理员与插件在不发版的情况下扩展。
   app.get('/api/classroom/teaching-modes', requireScopedAuth('authenticated'), (req: Request, res: Response) => {
     try {
-      const rows = db.prepare('SELECT * FROM teaching_modes ORDER BY sort_order ASC, created_at ASC').all() as any[];
+      const rows = db
+        .prepare(
+          'SELECT id, name, name_en, description, description_en, icon, color, is_builtin, sort_order, created_at, updated_at FROM teaching_modes ORDER BY sort_order ASC, created_at ASC LIMIT 100',
+        )
+        .all() as any[];
 
       const stored: TeachingMode[] = rows.map((r) => ({
         id: r.id,
@@ -2999,7 +3011,9 @@ export function registerClassroomRoutes(
           return res.status(403).json({ error: 'Forbidden' });
         }
         const rows = db
-          .prepare('SELECT * FROM lesson_preset_polls WHERE lesson_id = ? ORDER BY sort_order ASC, created_at ASC')
+          .prepare(
+            'SELECT id, lesson_id, title, question_type, options_json, correct_option, sort_order, created_at, updated_at FROM lesson_preset_polls WHERE lesson_id = ? ORDER BY sort_order ASC, created_at ASC LIMIT 200',
+          )
           .all(lessonId) as Array<{
           id: string;
           lesson_id: string;
@@ -3138,7 +3152,11 @@ export function registerClassroomRoutes(
           ...params,
         );
 
-        const updated = db.prepare('SELECT * FROM lesson_preset_polls WHERE id = ?').get(id) as any;
+        const updated = db
+          .prepare(
+            'SELECT id, lesson_id, title, question_type, options_json, correct_option, sort_order, created_at, updated_at FROM lesson_preset_polls WHERE id = ?',
+          )
+          .get(id) as any;
         res.json({
           success: true,
           preset: {

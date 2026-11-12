@@ -94,13 +94,14 @@ export function registerBridgeRoutes(ctx: ServerContext) {
 
       // 1. Courseware 查询（支持 uuid 或 id 匹配）
       let courseware = kernelContainer.db
-        .prepare('SELECT * FROM courseware WHERE uuid = ? OR id = ?')
+        .prepare('SELECT id, uuid, name, type, entry, created_at FROM courseware WHERE uuid = ? OR id = ?')
         .get(uuid, uuid) as CoursewareRow | undefined;
 
       // 2. 若 courseware 未命中，尝试向系统资源库 system_resources 回溯检索并动态自愈登记
       if (!courseware) {
-        const resRow = kernelContainer.db.prepare('SELECT * FROM system_resources WHERE id = ?').get(uuid) as
-          SystemResourceRow | undefined;
+        const resRow = kernelContainer.db
+          .prepare('SELECT id, name, type, content, created_at FROM system_resources WHERE id = ?')
+          .get(uuid) as SystemResourceRow | undefined;
         if (resRow) {
           const entryName =
             resRow.name && (resRow.name.endsWith('.html') || resRow.name.endsWith('.htm'))
@@ -130,12 +131,12 @@ export function registerBridgeRoutes(ctx: ServerContext) {
       // 3. 磁盘物理目录检测与自动补全 / 自愈（若存储目录不存在或为空，尝试从 system_resources 还原）
       if (!fs.existsSync(storageDir) || fs.readdirSync(storageDir).length === 0) {
         let resRow = kernelContainer.db
-          .prepare('SELECT * FROM system_resources WHERE id = ? OR id = ?')
+          .prepare('SELECT id, name, type, content, created_at FROM system_resources WHERE id = ? OR id = ?')
           .get(courseware.uuid, courseware.id) as SystemResourceRow | undefined;
         if (!resRow && courseware.name) {
           const nameCandidate = courseware.name.endsWith('.html') ? courseware.name : `${courseware.name}.html`;
           resRow = kernelContainer.db
-            .prepare('SELECT * FROM system_resources WHERE name = ? OR name = ?')
+            .prepare('SELECT id, name, type, content, created_at FROM system_resources WHERE name = ? OR name = ?')
             .get(courseware.name, nameCandidate) as SystemResourceRow | undefined;
         }
 

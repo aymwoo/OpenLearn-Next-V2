@@ -42,7 +42,9 @@ export function registerWorkspaceRoutes(ctx: ServerContext) {
 
   app.get('/api/events', requireAuth('administrator', 'teacher'), (req, res) => {
     try {
-      const events = kernelContainer.queryRead('SELECT * FROM events ORDER BY timestamp DESC LIMIT 50');
+      const events = kernelContainer.queryRead(
+        'SELECT id, type, source, payload, timestamp FROM events ORDER BY timestamp DESC LIMIT 50',
+      );
       res.json(events);
     } catch (e) {
       sendSafeError(res, e);
@@ -190,7 +192,8 @@ export function registerWorkspaceRoutes(ctx: ServerContext) {
           content: `# ${sub.title} by ${sub.sname}\n\nScore: ${sub.score || 'Ungraded'}\n\n---\n\n${sub.content}`,
         }));
       } else {
-        let q = 'SELECT * FROM vfs_nodes WHERE parent_id IS ? ORDER BY type ASC, name ASC';
+        let q =
+          'SELECT id, parent_id, type, name, content, created_at, updated_at FROM vfs_nodes WHERE parent_id IS ? ORDER BY type ASC, name ASC LIMIT 1000';
         nodes = kernelContainer.db.prepare(q).all(parentId) as VfsNodeRow[];
 
         if (parentId === null) {
