@@ -2,25 +2,13 @@ import { useState, useCallback } from 'react';
 import { v7 as uuidv7 } from 'uuid';
 import { frontendEventBus } from '../../../services/event-bus';
 import { paletteItemRegistry } from '../../teacher/lesson-editor/palette-item-registry';
-
-export interface WhiteboardRendererItem {
-  id?: string;
-  route?: string;
-  pluginId?: string;
-  targetType?: string;
-  slotProps?: {
-    elementType?: string;
-    targetType?: string;
-    defaultData?: Record<string, unknown>;
-  };
-  [key: string]: unknown;
-}
+import type { ExtensionPointConfig } from '../../../plugin-host/types';
 
 export interface UseWhiteboardDropOptions {
   lessonId: string;
   currentPage: number;
   activeSegmentId?: string | null;
-  whiteboardRenderers: WhiteboardRendererItem[] | undefined;
+  whiteboardRenderers: ExtensionPointConfig[] | undefined;
   containerRef: React.RefObject<HTMLDivElement | null>;
   setIsSyncing: (syncing: boolean) => void;
   onElementAdd: (type: string, data: Record<string, unknown>) => Promise<void>;
@@ -65,16 +53,23 @@ export function useWhiteboardDrop({
       const pluginConfig = paletteItemRegistry.get(type);
       const pluginDefaults = pluginConfig?.defaultData || {};
       const extRenderer = whiteboardRenderers?.find((ext) => {
+        const anyExt = ext as unknown as {
+          targetType?: string;
+          route?: string;
+          slotProps?: { elementType?: string; targetType?: string; defaultData?: Record<string, unknown> };
+        };
         return (
-          ext.targetType === type ||
+          anyExt.targetType === type ||
           ext.id === type ||
-          ext.route === type ||
+          anyExt.route === type ||
           `${ext.pluginId}/${ext.id}` === type ||
-          ext.slotProps?.elementType === type ||
-          ext.slotProps?.targetType === type
+          anyExt.slotProps?.elementType === type ||
+          anyExt.slotProps?.targetType === type
         );
       });
-      const rendererDefaults = extRenderer?.slotProps?.defaultData || {};
+      const slotProps = (extRenderer as unknown as { slotProps?: { defaultData?: Record<string, unknown> } })
+        ?.slotProps;
+      const rendererDefaults = slotProps?.defaultData || {};
       switch (type) {
         case 'code-sandbox':
           return { ...base, code: content.code ?? "console.log('Hello Sandbox!');" };
