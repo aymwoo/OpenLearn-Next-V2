@@ -13,6 +13,23 @@ import { isPathInsideRoot } from '../utils/path-guard.js';
 import type { ServerContext } from '../context.js';
 import { sendSafeError } from '../utils/error-handler.js';
 
+interface CoursewareRow {
+  id: string;
+  uuid: string;
+  name: string;
+  type: string;
+  entry?: string;
+  created_at?: number;
+}
+
+interface SystemResourceRow {
+  id: string;
+  name: string;
+  type?: string;
+  content?: string;
+  created_at?: number;
+}
+
 export function registerBridgeRoutes(ctx: ServerContext) {
   const { app } = ctx;
 
@@ -24,11 +41,11 @@ export function registerBridgeRoutes(ctx: ServerContext) {
     res.setHeader('Access-Control-Allow-Origin', '*');
     const cw = typeof req.query.cw === 'string' ? req.query.cw : '';
     const cwName = typeof req.query.name === 'string' ? req.query.name : '';
-    let runtimeScripts = '';
+    let runtimeScripts: string;
     try {
       const scripts = collectCoursewareRuntimeScripts({ id: cw, name: cwName, uuid: cw });
       runtimeScripts = scripts.head + scripts.bodyEnd;
-    } catch (e) {
+    } catch {
       runtimeScripts = '';
     }
     // P0-2: 白板 srcDoc 等「不服务端拼接 HTML」的路径经 <script src="/bridge.js"> 引入
@@ -78,13 +95,13 @@ export function registerBridgeRoutes(ctx: ServerContext) {
       // 1. Courseware 查询（支持 uuid 或 id 匹配）
       let courseware = kernelContainer.db
         .prepare('SELECT id, uuid, name, type, entry, created_at FROM courseware WHERE uuid = ? OR id = ?')
-        .get(uuid, uuid) as any;
+        .get(uuid, uuid) as CoursewareRow | undefined;
 
       // 2. 若 courseware 未命中，尝试向系统资源库 system_resources 回溯检索并动态自愈登记
       if (!courseware) {
         const resRow = kernelContainer.db
           .prepare('SELECT id, name, type, content, created_at FROM system_resources WHERE id = ?')
-          .get(uuid) as any;
+          .get(uuid) as SystemResourceRow | undefined;
         if (resRow) {
           const entryName =
             resRow.name && (resRow.name.endsWith('.html') || resRow.name.endsWith('.htm'))
@@ -115,12 +132,12 @@ export function registerBridgeRoutes(ctx: ServerContext) {
       if (!fs.existsSync(storageDir) || fs.readdirSync(storageDir).length === 0) {
         let resRow = kernelContainer.db
           .prepare('SELECT id, name, type, content, created_at FROM system_resources WHERE id = ? OR id = ?')
-          .get(courseware.uuid, courseware.id) as any;
+          .get(courseware.uuid, courseware.id) as SystemResourceRow | undefined;
         if (!resRow && courseware.name) {
           const nameCandidate = courseware.name.endsWith('.html') ? courseware.name : `${courseware.name}.html`;
           resRow = kernelContainer.db
             .prepare('SELECT id, name, type, content, created_at FROM system_resources WHERE name = ? OR name = ?')
-            .get(courseware.name, nameCandidate) as any;
+            .get(courseware.name, nameCandidate) as SystemResourceRow | undefined;
         }
 
         if (resRow && resRow.content) {
@@ -286,7 +303,7 @@ export function registerBridgeRoutes(ctx: ServerContext) {
       } else {
         return res.sendFile(filePath);
       }
-    } catch (e: any) {
+    } catch (e) {
       sendSafeError(res, e, 500, 'Failed to load courseware runtime file');
     }
   });

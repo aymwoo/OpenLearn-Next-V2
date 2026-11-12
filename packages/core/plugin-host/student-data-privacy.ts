@@ -21,6 +21,14 @@ export interface PluginStudentDeleteResult {
   error?: string;
 }
 
+interface MessageTransportLike {
+  on?: (event: string, listener: (data: unknown) => void) => void;
+  off?: (event: string, listener: (data: unknown) => void) => void;
+  removeListener?: (event: string, listener: (data: unknown) => void) => void;
+  addEventListener?: (event: string, listener: (ev: { data: unknown }) => void) => void;
+  postMessage: (message: unknown) => void;
+}
+
 /**
  * 遍历活跃插件并调度个人数据导出钩子。
  *
@@ -41,7 +49,7 @@ export async function dispatchStudentExport(
     // 1. Worker 隔离插件
     if (instance.workerRef?.transport) {
       try {
-        const transport = instance.workerRef.transport;
+        const transport = instance.workerRef.transport as unknown as MessageTransportLike;
         const invokeId = crypto.randomUUID();
         const responsePromise = new Promise<PluginStudentExportResult>((resolve) => {
           const timer = setTimeout(() => {
@@ -69,17 +77,17 @@ export async function dispatchStudentExport(
 
           const cleanup = () => {
             clearTimeout(timer);
-            if (typeof (transport as any).removeListener === 'function') {
-              (transport as any).removeListener('message', onMessage);
-            } else if (typeof (transport as any).off === 'function') {
-              (transport as any).off('message', onMessage);
+            if (typeof transport.removeListener === 'function') {
+              transport.removeListener('message', onMessage);
+            } else if (typeof transport.off === 'function') {
+              transport.off('message', onMessage);
             }
           };
 
-          if (typeof (transport as any).on === 'function') {
-            (transport as any).on('message', onMessage);
-          } else if (typeof (transport as any).addEventListener === 'function') {
-            (transport as any).addEventListener('message', (ev: any) => onMessage(ev.data));
+          if (typeof transport.on === 'function') {
+            transport.on('message', onMessage);
+          } else if (typeof transport.addEventListener === 'function') {
+            transport.addEventListener('message', (ev: { data: unknown }) => onMessage(ev.data));
           }
 
           transport.postMessage({
@@ -90,8 +98,9 @@ export async function dispatchStudentExport(
         });
 
         results[manifestId] = await responsePromise;
-      } catch (err: any) {
-        results[manifestId] = { status: 'error', error: err?.message || String(err) };
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        results[manifestId] = { status: 'error', error: msg };
       }
       continue;
     }
@@ -105,8 +114,9 @@ export async function dispatchStudentExport(
         );
         const data = await Promise.race([exportPromise, timeoutPromise]);
         results[manifestId] = { status: 'ok', data };
-      } catch (err: any) {
-        results[manifestId] = { status: 'error', error: err?.message || String(err) };
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        results[manifestId] = { status: 'error', error: msg };
       }
     } else {
       results[manifestId] = { status: 'not_implemented' };
@@ -136,7 +146,7 @@ export async function dispatchStudentDelete(
     // 1. Worker 隔离插件
     if (instance.workerRef?.transport) {
       try {
-        const transport = instance.workerRef.transport;
+        const transport = instance.workerRef.transport as unknown as MessageTransportLike;
         const invokeId = crypto.randomUUID();
         const responsePromise = new Promise<PluginStudentDeleteResult>((resolve) => {
           const timer = setTimeout(() => {
@@ -157,17 +167,17 @@ export async function dispatchStudentDelete(
 
           const cleanup = () => {
             clearTimeout(timer);
-            if (typeof (transport as any).removeListener === 'function') {
-              (transport as any).removeListener('message', onMessage);
-            } else if (typeof (transport as any).off === 'function') {
-              (transport as any).off('message', onMessage);
+            if (typeof transport.removeListener === 'function') {
+              transport.removeListener('message', onMessage);
+            } else if (typeof transport.off === 'function') {
+              transport.off('message', onMessage);
             }
           };
 
-          if (typeof (transport as any).on === 'function') {
-            (transport as any).on('message', onMessage);
-          } else if (typeof (transport as any).addEventListener === 'function') {
-            (transport as any).addEventListener('message', (ev: any) => onMessage(ev.data));
+          if (typeof transport.on === 'function') {
+            transport.on('message', onMessage);
+          } else if (typeof transport.addEventListener === 'function') {
+            transport.addEventListener('message', (ev: { data: unknown }) => onMessage(ev.data));
           }
 
           transport.postMessage({
@@ -178,8 +188,9 @@ export async function dispatchStudentDelete(
         });
 
         results[manifestId] = await responsePromise;
-      } catch (err: any) {
-        results[manifestId] = { success: false, error: err?.message || String(err) };
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        results[manifestId] = { success: false, error: msg };
       }
       continue;
     }
@@ -193,8 +204,9 @@ export async function dispatchStudentDelete(
         );
         await Promise.race([deletePromise, timeoutPromise]);
         results[manifestId] = { success: true };
-      } catch (err: any) {
-        results[manifestId] = { success: false, error: err?.message || String(err) };
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        results[manifestId] = { success: false, error: msg };
       }
     } else {
       // 未实现专有删除钩子的插件视为无额外专属状态需要抹除

@@ -24,7 +24,7 @@ export interface UseWhiteboardPagesOptions<T extends WhiteboardElementLike> {
   activeSegmentId?: string | null;
   lessonId: string;
   userRole?: 'teacher' | 'student';
-  socketRef: React.MutableRefObject<unknown>;
+  socketRef: React.MutableRefObject<{ emit?: (event: string, ...args: unknown[]) => void } | null | undefined>;
   onElementAdd?: (type: string, data: Record<string, unknown>) => Promise<unknown> | void;
   onElementUpdate?: (elementId: string, data: Record<string, unknown>) => Promise<unknown> | void;
   onElementDelete?: (elementId: string) => Promise<unknown> | void;
@@ -182,7 +182,7 @@ export function useWhiteboardPages<T extends WhiteboardElementLike>({
       } else if (onElementAdd) {
         onElementAdd('page_meta', { pages: newPages });
       }
-      if (socketRef.current) {
+      if (socketRef.current?.emit) {
         socketRef.current.emit('whiteboard-update', {
           roomId: lessonId,
           type: 'page-meta-update',
@@ -199,7 +199,7 @@ export function useWhiteboardPages<T extends WhiteboardElementLike>({
       programmaticPageSwitchRef.current = true;
       setCurrentPage(idx);
       setActiveMenuPageIdx(null);
-      if (socketRef.current) {
+      if (socketRef.current?.emit) {
         socketRef.current.emit('whiteboard-update', {
           roomId: lessonId,
           type: 'page-change',
@@ -218,7 +218,7 @@ export function useWhiteboardPages<T extends WhiteboardElementLike>({
       setPages(newPages);
       setCurrentPage(newIndex);
       savePagesConfig(newPages);
-      if (socketRef.current) {
+      if (socketRef.current?.emit) {
         socketRef.current.emit('whiteboard-update', {
           roomId: lessonId,
           type: 'page-change',

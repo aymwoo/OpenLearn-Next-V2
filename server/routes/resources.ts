@@ -13,7 +13,7 @@ export function registerResourcesRoutes(ctx: ServerContext) {
     try {
       const resources = resourceService.listResources();
       res.json(resources);
-    } catch (e: any) {
+    } catch (e) {
       sendSafeError(res, e);
     }
   });
@@ -41,7 +41,7 @@ export function registerResourcesRoutes(ctx: ServerContext) {
 
       html = injectLmsSdk(html, req, { id: resource.id, name: resource.name, uuid: resource.id });
       return res.send(html);
-    } catch (e: any) {
+    } catch (e) {
       sendSafeError(res, e);
     }
   });
@@ -76,7 +76,7 @@ export function registerResourcesRoutes(ctx: ServerContext) {
         content = injectLmsSdk(content, req, { id: resource.id, name: resource.name, uuid: resource.id });
       }
       return res.send(content);
-    } catch (e: any) {
+    } catch (e) {
       sendSafeError(res, e);
     }
   });
@@ -85,7 +85,7 @@ export function registerResourcesRoutes(ctx: ServerContext) {
     try {
       const result = await resourceService.createResource(req.body);
       res.json(result);
-    } catch (e: any) {
+    } catch (e) {
       sendSafeError(res, e);
     }
   });
@@ -94,7 +94,7 @@ export function registerResourcesRoutes(ctx: ServerContext) {
     try {
       const deleted = resourceService.deleteResource(req.params.id);
       res.json({ success: deleted });
-    } catch (e: any) {
+    } catch (e) {
       sendSafeError(res, e);
     }
   });
@@ -196,6 +196,13 @@ export function registerResourcesRoutes(ctx: ServerContext) {
   }
 
   // ── Resource command bus handlers (plugin accessible) ─────────────────
+  interface ResourceCommandPayload {
+    id?: string;
+    name?: string;
+    type?: string;
+    content?: string;
+  }
+
   const RESOURCE_HANDLERS = {
     'resource.list': {
       execute: async () => {
@@ -204,15 +211,17 @@ export function registerResourcesRoutes(ctx: ServerContext) {
       },
     },
     'resource.get': {
-      execute: async (cmd: any) => {
-        const row = resourceService.getResource(cmd.payload?.id);
+      execute: async (cmd: { payload?: unknown }) => {
+        const payload = (cmd.payload as ResourceCommandPayload | undefined) || {};
+        const row = resourceService.getResource(payload.id || '');
         if (!row) return { error: 'not_found' };
         return { resource: row };
       },
     },
     'resource.create': {
-      execute: async (cmd: any) => {
-        const { name, type, content } = cmd.payload || {};
+      execute: async (cmd: { payload?: unknown }) => {
+        const payload = (cmd.payload as ResourceCommandPayload | undefined) || {};
+        const { name, type, content } = payload;
         if (!name || !type || content === undefined) {
           return { error: 'invalid_params', message: 'name, type, content required' };
         }
@@ -221,9 +230,10 @@ export function registerResourcesRoutes(ctx: ServerContext) {
       },
     },
     'resource.delete': {
-      execute: async (cmd: any) => {
-        if (!cmd.payload?.id) return { error: 'invalid_params', message: 'id required' };
-        const success = resourceService.deleteResource(cmd.payload.id);
+      execute: async (cmd: { payload?: unknown }) => {
+        const payload = (cmd.payload as ResourceCommandPayload | undefined) || {};
+        if (!payload.id) return { error: 'invalid_params', message: 'id required' };
+        const success = resourceService.deleteResource(payload.id);
         return { success };
       },
     },

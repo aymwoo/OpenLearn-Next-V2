@@ -261,7 +261,7 @@ function resolveAuthContext(req: Request): {
  */
 export async function pluginApiGatewayMiddleware(req: Request, res: Response, next: NextFunction): Promise<void> {
   const rawPluginId = req.params.pluginId;
-  const capturedSubPath = (req.params as any)[0] || '';
+  const capturedSubPath = (req.params as Record<string, string | undefined>)[0] || '';
 
   // 1. 系统保留动作避让检查：如果子路径是单个保留词且为特定方法，交由后续核心路由处理
   if (RESERVED_ACTIONS.has(capturedSubPath)) {
@@ -415,15 +415,20 @@ export async function pluginApiGatewayMiddleware(req: Request, res: Response, ne
   };
 
   // 9. 判断是否为 SSE 流式路由
+  type RouteRuleExtras = {
+    streaming?: boolean;
+    rateLimit?: { maxConcurrentStreams?: number };
+  };
+  const matchedExtras = matchedRule as RouteRuleExtras | undefined;
   const isStream =
-    (matchedRule as any)?.streaming === true ||
+    matchedExtras?.streaming === true ||
     pluginHost.isStreamRoute(pluginId, method, normalizedSubPath) ||
     (req.headers.accept?.includes('text/event-stream') &&
       pluginHost.isStreamRoute(pluginId, method, normalizedSubPath));
 
   if (isStream) {
     // 9.1 并发流数量配额检查（防慢速长连接 DoS 耗尽套接字与文件描述符）
-    const maxIp = (matchedRule as any)?.rateLimit?.maxConcurrentStreams ?? 5;
+    const maxIp = matchedExtras?.rateLimit?.maxConcurrentStreams ?? 5;
     const acquireRes = streamConnectionTracker.tryAcquire(clientIp, resolvedUuid || pluginId, maxIp, 50);
     if (!acquireRes.success) {
       res.status(429).json({
@@ -469,7 +474,7 @@ export async function pluginApiGatewayMiddleware(req: Request, res: Response, ne
         if (res.socket && !res.socket.writable) return true;
         return false;
       },
-      write(data: string | Record<string, any>, event?: string, id?: string): boolean {
+      write(data: string | Record<string, unknown>, event?: string, id?: string): boolean {
         if (this.isClosed) return false;
         let sse = '';
         if (id) sse += `id: ${id}\n`;
@@ -506,10 +511,10 @@ export async function pluginApiGatewayMiddleware(req: Request, res: Response, ne
 
     try {
       await pluginHost.dispatchHttpStream(pluginId, reqDto, streamResponse);
-    } catch (err: any) {
+    } catch (err) {
       console.error(`[PluginApiGateway] Stream dispatch error for ${method} ${req.originalUrl}:`, err);
       if (!streamResponse.isClosed) {
-        streamResponse.error(err);
+        streamResponse.error(err instanceof Error ? err : String(err));
       }
     }
     return;
@@ -563,8 +568,9 @@ export async function pluginApiGatewayMiddleware(req: Request, res: Response, ne
     }
 
     res.status(status).send(response.body !== undefined ? response.body : '');
-  } catch (err: any) {
-    if (err.name === 'GatewayTimeoutError' || err.message?.includes('timed out')) {
+  } catch (err) {
+    const errObj = err as { name?: string; message?: string } | null;
+    if (errObj?.name === 'GatewayTimeoutError' || errObj?.message?.includes('timed out')) {
       res.status(504).json({ success: false, error: 'Gateway Timeout: Plugin did not respond in time' });
       return;
     }

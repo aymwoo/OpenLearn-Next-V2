@@ -166,7 +166,7 @@ export interface PluginStreamResponse {
    * @param id 可选的 SSE 消息唯一 ID
    * @returns 是否成功排队/写入（若客户端已断开则返回 false）
    */
-  write(data: string | Record<string, any>, event?: string, id?: string): boolean;
+  write(data: string | Record<string, unknown>, event?: string, id?: string): boolean;
 
   /**
    * 正常结束流式传输
