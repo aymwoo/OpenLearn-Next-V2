@@ -10,6 +10,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [0.7.15] - 2026-11-12
+
 ### Fixes
 
 - **插件开发指南在 npm/npx 安装下不再 404（Issue #412）**：`docs_plugin_guide.md` 纳入发布清单，路由改为按包内路径解析（`dist/../` → 源码根 → cwd 兜底），不再只依赖 `process.cwd()`。
