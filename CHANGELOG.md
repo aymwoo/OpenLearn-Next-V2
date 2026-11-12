@@ -26,6 +26,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Refactor / Performance
 
+- **课堂授课大视图结构拆分与大纲侧栏子组件解耦（Issue #434 阶段二，PR #475）**：
+  - 将 `src/components/LiveClassroomView.tsx` 嵌套的教学环节进度表与白板大纲抽屉侧栏抽离为独立子组件 `src/features/classroom/ClassroomTimelineSidebar.tsx`；
+  - 提取共享 `stripHtml` 纯函数并配齐 7 项核心交互单测，清理 18 个未引用的图标与冗余函数，单文件净减 360 行代码；
+  - 协同消除 21 处组件告警，全库 ESLint 告警上限进一步收紧锁定至 5854 条。
+- **第二批次业务路由 any 深度收敛与告警压降（Issue #433 阶段二，PR #474）**：
+  - 针对 `server/routes/assignments.ts`、`server/routes/schedules.ts`、`server/routes/assignment-hub.ts`、`server/routes/grading.ts`、`server/routes/classroom-peer-review.ts` 开展全面强类型重构；
+  - 提取统一安全 Session 提取器，补齐大屏互评全链路数据 Row 接口，消除全部 108 处 any 转型，ESLint 告警降至 5869 条。
+- **服务端路由与内核边界 any 类型收敛与告警预算收紧（Issue #433 阶段一，PR #473）**：
+  - 首批治理 `server/routes/workspace.ts`、`server/routes/bridge.ts`、`server/routes/ai-runtime.ts`、`packages/core/worker-runtime/liveness-probe.ts` 等 8 个核心边界文件；
+  - 规范化 Session 类型与 DTO 显式映射，全库 ESLint 告警从 6085 条降至 5979 条，基线收紧锁定。
+- **互动白板超大文件解耦与 Hook 外移（Issue #434 阶段一，PR #472）**：
+  - 将原嵌套在 `src/features/whiteboard/InteractiveWhiteboard.tsx` 中的随堂测验作答监听与落库 (`useQuizIngest`)、白板多页状态管理与跨端同步 (`useWhiteboardPages`) 以及拖拽上传与页面扩展交互 (`useWhiteboardDrop`) 抽离为独立自定义 Hook；
+  - 单文件净减 483 行代码，JSX 与业务行为 0 变动，并配齐各 Hook 独立单测。
+- **宽表查询收敛为显式列与列表查询分页上限（Issue #435，PR #471）**：
+  - 针对高频访问的宽表路由与服务（`server/routes/workspace.ts`、`server/routes/bridge.ts`、`server/routes/classroom.ts` 等），将无边界的 `SELECT *` 替换为显式列清单，杜绝敏感字段与大文本列的无谓反序列化开销；
+  - 为所有无上限列表查询增加默认 `LIMIT 200` / `LIMIT 50` 约束，阻断大结果集引起的内存膨胀。
 - **课堂会话只读查询收敛到 `ClassroomSessionService`（Issue #427，第一阶段）**：把 `GET /api/classroom/sessions` 与 `GET /api/classroom/active-sessions` 的归属裁剪、三表 JOIN 与互动计数聚合合并到 `server/services/classroom-session-service.ts`，两条路径共用 `buildSessionOwnershipClause()`，消除重复 SQL；同一阶段还把会话详情（`getSessionDetail()`）与学生端当前课堂（`getStudentActiveSession()`）的取数收进服务层；极速投票的创建 / 投票 / 关闭（`createQuickPoll()` / `voteQuickPoll()` / `closeQuickPoll()`）也迁入该服务，创建投票的「关闭旧投票 + 插入新投票」改为同一事务；会话视图状态回写（`updateViewState()`，`json_set` 原子更新当前页）与会话活动查找（`getActiveSessionForLesson()`）同样下沉。教学模式常量与 id 规范移入 `server/services/teaching-modes.ts`。写路径（创建/归档/阶段流转/投票生命周期）仍由 `ClassroomRuntimeService` 承载，后续分批迁移。
 - **课堂高频聚合与多表慢查只读内存缓存 (TTL Read Cache，Issue #409)**：
   - **通用 TTL 只读缓存引擎 (`server/utils/ttl-cache.ts`)**：实现高效内存级缓存 `TtlReadCache<T>`，支持毫秒级 TTL 自动过期、LRU / FIFO 容量上限淘汰守护（默认 2048 条目）、精确失效、前缀批量失效 (`invalidatePrefix`) 与命中率指标观测 (`getStats()`)；
