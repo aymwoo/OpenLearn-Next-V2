@@ -83,7 +83,7 @@ function buildMocks() {
 }
 
 const TITLE_SQL = 'SELECT title FROM assignments WHERE id = ?';
-const ELEMENT_SQL = 'SELECT * FROM whiteboard_elements WHERE id = ?';
+const ELEMENT_SQL = 'SELECT id, lesson_id, type, data, created_at FROM whiteboard_elements WHERE id = ?';
 const SCHEDULE_SQL = 'SELECT class_id FROM schedules WHERE lesson_id = ? LIMIT 1';
 const ROLLCALL_EXISTS_SQL = 'SELECT id FROM student_rollcalls WHERE id = ?';
 const ROLLCALL_INSERT_SQL =
