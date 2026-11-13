@@ -12,6 +12,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixes
 
+- **登录页自动填充与 4 处输入框中文输入法 Enter 防误触（Issue #482）**：
+  - 为 `src/components/LoginPage.tsx` 教工与学生登录表单补全 `autoComplete="username"` / `autoComplete="current-password"`、`spellCheck={false}`、`autoCapitalize="none"` 与 `<label htmlFor>` 关联；
+  - 新增 `src/utils/keyboard.ts`（`isPlainEnterSubmit`），同时校验 `nativeEvent.isComposing` 与 `keyCode === 229`（兼容 Safari 事件顺序差异），修复 `LessonPalette`、`WhiteboardPageBar`、`StudentCheckinPanel`、`ClassStudentsPanel` 在中文/CJK 输入法选词按 Enter 时误提交的问题。
 - **演示文稿组件进入互动白板时反复消失又出现**：白板渲染处把演示文稿的 `onElementUpdate` 写成内联箭头函数，父级（课堂 socket 同步 / 分页状态变化）每次重渲染都让 `RevealPresentationWrapper` 的 viewer 回调身份变化，`pptx-react-viewer` 的 `onActiveSlideChange` effect 随之反复重注册并回报页码，形成闪动循环（Issue #381 只修了 `slideIndex` 这一半）。现用 ref 持有最新回调使 viewer 回调身份恒定、白板侧提取稳定的 `useCallback`，并给分页数据的 `setPages` / `onPagesStateChange` 加内容比对阻断级联重渲染；新增挂载稳定性回归测试。
 
 ### Refactor / Performance

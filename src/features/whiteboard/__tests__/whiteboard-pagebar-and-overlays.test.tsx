@@ -93,6 +93,12 @@ describe('Whiteboard PageBar & Overlays Component Tests', () => {
       fireEvent.keyDown(input, { key: 'Enter' });
       expect(handleRename).toHaveBeenCalledWith(1, '新修改的页面标题');
 
+      // IME 组合输入期间按 Enter 不应触发重命名提交
+      handleRename.mockClear();
+      fireEvent.keyDown(input, { key: 'Enter', isComposing: true });
+      fireEvent.keyDown(input, { key: 'Enter', keyCode: 229 });
+      expect(handleRename).not.toHaveBeenCalled();
+
       // Escape 键退出编辑
       fireEvent.keyDown(input, { key: 'Escape' });
       expect(setEditingIdx).toHaveBeenCalledWith(null);

@@ -277,12 +277,20 @@ export const LoginPage = React.memo(function LoginPage({ onLoginSuccess, lang }:
             )}
 
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-slate-400 flex items-center gap-1.5">
+              <label
+                htmlFor="teacher-username"
+                className="text-xs font-medium text-slate-400 flex items-center gap-1.5"
+              >
                 <User size={13} />
                 {lang === 'zh' ? '教工账户名 / username' : 'Staff Username'}
               </label>
               <input
+                id="teacher-username"
+                name="username"
                 type="text"
+                autoComplete="username"
+                autoCapitalize="none"
+                spellCheck={false}
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 placeholder={lang === 'zh' ? '输入教工账户名' : 'Enter staff username'}
@@ -292,12 +300,18 @@ export const LoginPage = React.memo(function LoginPage({ onLoginSuccess, lang }:
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-slate-400 flex items-center gap-1.5">
+              <label
+                htmlFor="teacher-password"
+                className="text-xs font-medium text-slate-400 flex items-center gap-1.5"
+              >
                 <Lock size={13} />
                 {lang === 'zh' ? '输入登录密码 / password' : 'Access Password'}
               </label>
               <input
+                id="teacher-password"
+                name="password"
                 type="password"
+                autoComplete="current-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder={lang === 'zh' ? '输入登录密码' : 'Enter access password'}
@@ -370,12 +384,20 @@ export const LoginPage = React.memo(function LoginPage({ onLoginSuccess, lang }:
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-slate-400 flex items-center gap-1.5">
+              <label
+                htmlFor="student-access-key"
+                className="text-xs font-medium text-slate-400 flex items-center gap-1.5"
+              >
                 <User size={13} />
                 {lang === 'zh' ? '学号 / Student ID' : 'Student Access Key'}
               </label>
               <input
+                id="student-access-key"
+                name="studentAccessKey"
                 type="text"
+                autoComplete="username"
+                autoCapitalize="none"
+                spellCheck={false}
                 value={manualStudentId}
                 onChange={(e) => {
                   setManualStudentId(e.target.value);
@@ -387,12 +409,18 @@ export const LoginPage = React.memo(function LoginPage({ onLoginSuccess, lang }:
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-slate-400 flex items-center gap-1.5">
+              <label
+                htmlFor="student-password"
+                className="text-xs font-medium text-slate-400 flex items-center gap-1.5"
+              >
                 <Lock size={13} />
                 {lang === 'zh' ? '个人密码 / 临时班级密码' : 'Personal Password / Class Passcode'}
               </label>
               <input
+                id="student-password"
+                name="studentPassword"
                 type="password"
+                autoComplete="current-password"
                 required
                 value={studentPassword}
                 onChange={(e) => setStudentPassword(e.target.value)}

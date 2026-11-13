@@ -12,6 +12,7 @@ import {
   FileText,
 } from 'lucide-react';
 import type { WhiteboardPageItem } from '../InteractiveWhiteboard';
+import { isPlainEnterSubmit } from '../../../utils/keyboard';
 
 export interface WhiteboardPageBarProps {
   pages: WhiteboardPageItem[];
@@ -109,7 +110,10 @@ export const WhiteboardPageBar: React.FC<WhiteboardPageBarProps> = ({
                     value={editingPageTitle}
                     onChange={(e) => setEditingPageTitle(e.target.value)}
                     onKeyDown={(e) => {
-                      if (e.key === 'Enter') handleRenamePage(globalIdx, editingPageTitle);
+                      if (isPlainEnterSubmit(e)) {
+                        e.preventDefault();
+                        handleRenamePage(globalIdx, editingPageTitle);
+                      }
                       if (e.key === 'Escape') setEditingPageIdx(null);
                     }}
                     onBlur={() => handleRenamePage(globalIdx, editingPageTitle)}
