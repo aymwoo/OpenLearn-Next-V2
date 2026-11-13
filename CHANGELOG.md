@@ -12,6 +12,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixes
 
+- **全局 `color-scheme`、减动效基线、滚动条工具类与首屏 Logo 优先级提示（Issue #486）**：
+  - 在 `index.html` 声明 `<meta name="color-scheme" content="light dark">`，并在 `src/index.css`（`light`/`dark`/`eyecare`/`chalkboard`）及 `src/store/themeStore.ts`（含自定义深浅主题亮度推断）同步设置 `documentElement.style.colorScheme`；
+  - 在 `src/index.css` 补全 Tailwind v4 `@utility scrollbar-thin` / `scrollbar-none`、原生 `<dialog>:modal` 与 `dialog::backdrop` 的 `overscroll-behavior: contain` 滚动穿透防护，以及基于 `prefers-reduced-motion` 的动画降级规则（停止循环弹幕与脉冲/弹跳位移并保持可读定位）；在 `src/main.tsx` 全局接入 `<MotionConfig reducedMotion="user">`；
+  - 为 `LoginPage.tsx` 首屏 Logo（`width={64} height={64} fetchPriority="high"`）、`AppHeader.tsx` 与 `PluginIconRenderer.tsx` 补齐显式图片尺寸与异步解码属性。
 - **登录页自动填充与 4 处输入框中文输入法 Enter 防误触（Issue #482）**：
   - 为 `src/components/LoginPage.tsx` 教工与学生登录表单补全 `autoComplete="username"` / `autoComplete="current-password"`、`spellCheck={false}`、`autoCapitalize="none"` 与 `<label htmlFor>` 关联；
   - 新增 `src/utils/keyboard.ts`（`isPlainEnterSubmit`），同时校验 `nativeEvent.isComposing` 与 `keyCode === 229`（兼容 Safari 事件顺序差异），修复 `LessonPalette`、`WhiteboardPageBar`、`StudentCheckinPanel`、`ClassStudentsPanel` 在中文/CJK 输入法选词按 Enter 时误提交的问题。

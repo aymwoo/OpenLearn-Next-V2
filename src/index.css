@@ -147,6 +147,15 @@
   border-color: var(--color-primary);
 }
 
+@utility scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-theme) transparent;
+}
+
+@utility scrollbar-none {
+  scrollbar-width: none;
+}
+
 @layer base {
   /* Tailwind v4 的 border 默认色是 currentColor（v3 是 gray-200），因此只写
      `border` / `border-b` 而未指定颜色时会渲染成文字色 —— 浅色主题下表现为
@@ -158,8 +167,16 @@
   ::backdrop {
     border-color: var(--border-theme);
   }
+  dialog:modal {
+    overscroll-behavior: contain;
+  }
+  dialog::backdrop {
+    overflow: hidden;
+    overscroll-behavior: contain;
+  }
   :root,
   [data-theme='light'] {
+    color-scheme: light;
     --bg-app: #f8fafc;
     --bg-surface: #ffffff;
     --bg-surface-secondary: #f1f5f9;
@@ -186,6 +203,7 @@
   }
 
   [data-theme='dark'] {
+    color-scheme: dark;
     --bg-app: #0b0f19;
     --bg-surface: #111827;
     --bg-surface-secondary: #1f2937;
@@ -209,6 +227,7 @@
   }
 
   [data-theme='eyecare'] {
+    color-scheme: light;
     --bg-app: #f2f7f4;
     --bg-surface: #ffffff;
     --bg-surface-secondary: #e6f0ea;
@@ -231,6 +250,7 @@
   }
 
   [data-theme='chalkboard'] {
+    color-scheme: dark;
     --bg-app: #0e1713;
     --bg-surface: #16261f;
     --bg-surface-secondary: #1d332a;
@@ -381,6 +401,27 @@ html[data-theme] {
   }
 }
 
-.animate-danmaku-slide {
-  animation: danmaku-slide 14s linear infinite;
+@media (prefers-reduced-motion: no-preference) {
+  .animate-danmaku-slide {
+    animation: danmaku-slide 14s linear infinite;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-danmaku-slide {
+    animation: none;
+    right: auto !important;
+    inset-inline-start: 1rem;
+    max-inline-size: calc(100% - 2rem);
+  }
+  .animate-bounce,
+  .animate-ping,
+  .animate-pulse,
+  .animate-in,
+  .animate-fade-in {
+    animation: none;
+  }
+  .animate-spin {
+    animation-duration: 6s;
+  }
 }

@@ -104,10 +104,13 @@ export function PluginIconRenderer({
         <img
           src={trimmed}
           alt={alt}
+          width={size}
+          height={size}
           style={{ width: `${size}px`, height: `${size}px` }}
           className={`object-contain rounded-xs ${className}`}
           onError={() => setImgError(true)}
           loading="lazy"
+          decoding="async"
         />
       );
     }

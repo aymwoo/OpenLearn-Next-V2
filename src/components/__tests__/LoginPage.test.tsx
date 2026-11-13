@@ -45,4 +45,25 @@ describe('LoginPage autofill attributes', () => {
     expect(passwordInput.getAttribute('autocomplete')).toBe('current-password');
     expect(passwordInput.type).toBe('password');
   });
+
+  it('renders site logo with explicit dimensions and high fetchpriority for LCP', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation(async (url: string) => {
+        if (url.includes('/api/site-settings')) {
+          return {
+            ok: true,
+            json: async () => ({ siteName: 'OpenLearn V2', slogan: 'Hi', logoUrl: '/logo.png' }),
+          };
+        }
+        return { ok: true, json: async () => ({ items: [] }) };
+      }),
+    );
+
+    render(<LoginPage onLoginSuccess={vi.fn()} lang="en" />);
+    const logo = (await screen.findByAltText('OpenLearn V2')) as HTMLImageElement;
+    expect(logo.getAttribute('width')).toBe('64');
+    expect(logo.getAttribute('height')).toBe('64');
+    expect(logo.getAttribute('fetchpriority')).toBe('high');
+  });
 });

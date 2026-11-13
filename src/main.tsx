@@ -1,5 +1,6 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
+import { MotionConfig } from 'motion/react';
 import App from './App.tsx';
 import { PluginHostProvider } from './plugin-host/plugin-host-context';
 import { FrontendPluginHost } from './plugin-host/plugin-host';
@@ -46,10 +47,12 @@ window.addEventListener('vite:preloadError', (event) => {
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <GlobalErrorBoundary>
-      <PluginHostProvider host={pluginHost}>
-        <App />
-      </PluginHostProvider>
-    </GlobalErrorBoundary>
+    <MotionConfig reducedMotion="user">
+      <GlobalErrorBoundary>
+        <PluginHostProvider host={pluginHost}>
+          <App />
+        </PluginHostProvider>
+      </GlobalErrorBoundary>
+    </MotionConfig>
   </StrictMode>,
 );

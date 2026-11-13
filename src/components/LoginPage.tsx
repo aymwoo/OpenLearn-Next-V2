@@ -197,6 +197,10 @@ export const LoginPage = React.memo(function LoginPage({ onLoginSuccess, lang }:
             <img
               src={siteInfo.logoUrl}
               alt={siteInfo.siteName || 'logo'}
+              width={64}
+              height={64}
+              fetchPriority="high"
+              decoding="async"
               className="inline-block h-16 w-16 object-contain mb-4 rounded-xl"
             />
           ) : (

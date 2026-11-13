@@ -155,7 +155,14 @@ export function AppHeader(props: AppHeaderProps) {
           }
         >
           {siteInfo.logoUrl ? (
-            <img src={siteInfo.logoUrl} alt="site logo" className="h-8 w-8 object-contain rounded-lg shrink-0" />
+            <img
+              src={siteInfo.logoUrl}
+              alt="site logo"
+              width={32}
+              height={32}
+              decoding="async"
+              className="h-8 w-8 object-contain rounded-lg shrink-0"
+            />
           ) : (
             <div className="h-8 w-8 rounded-lg bg-gradient-to-tr from-indigo-600 to-indigo-700 flex items-center justify-center text-white font-black text-sm shadow-xs shrink-0">
               OL
