@@ -45,4 +45,18 @@ describe('StudentCheckinPanel', () => {
     fireEvent.click(screen.getByText('签到'));
     expect(await screen.findByText('签到码不正确，请核对大屏后重试')).toBeDefined();
   });
+
+  it('IME 组合输入期间按 Enter 不触发签到提交，非组合期间按 Enter 正常提交', async () => {
+    (fetch as any).mockResolvedValueOnce({ ok: true, json: async () => ({ success: true }) });
+    render(<StudentCheckinPanel lessonId="les-1" lang="zh" addToast={addToast} />);
+    const input = screen.getByLabelText('课堂签到码');
+    fireEvent.change(input, { target: { value: '1234' } });
+
+    fireEvent.keyDown(input, { key: 'Enter', isComposing: true });
+    fireEvent.keyDown(input, { key: 'Enter', keyCode: 229 });
+    expect(fetch).not.toHaveBeenCalled();
+
+    fireEvent.keyDown(input, { key: 'Enter' });
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+  });
 });

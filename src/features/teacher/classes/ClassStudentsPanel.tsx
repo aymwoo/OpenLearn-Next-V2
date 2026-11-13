@@ -22,6 +22,7 @@ import { ExtensionPointRenderer } from '../../../plugin-host/extension-point-ren
 import { useOptionalPluginHost } from '../../../plugin-host/plugin-host-context';
 import { StudentPrivateNotesEditor } from '../../../components/StudentPrivateNotesEditor';
 import { parseCSV } from '../../../utils/pluginParsers.js';
+import { isPlainEnterSubmit } from '../../../utils/keyboard';
 import type { ClassType, StudentType, StudentProgressType, Lesson } from '../../../types/app';
 
 export type RosterTagFilter = 'all' | 'Academic' | 'Behavioral' | 'General' | 'SpecialCare';
@@ -907,7 +908,10 @@ export function ClassStudentsPanel({
                                             setPasswordError('');
                                           }}
                                           onKeyDown={(e) => {
-                                            if (e.key === 'Enter') void submitStudentPassword(st.id);
+                                            if (isPlainEnterSubmit(e)) {
+                                              e.preventDefault();
+                                              void submitStudentPassword(st.id);
+                                            }
                                             if (e.key === 'Escape') {
                                               setPasswordEditingId(null);
                                               setPasswordDraft('');

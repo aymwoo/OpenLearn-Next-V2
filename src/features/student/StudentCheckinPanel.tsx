@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { isPlainEnterSubmit } from '../../utils/keyboard';
 
 export interface StudentCheckinPanelProps {
   lessonId: string | null;
@@ -100,7 +101,10 @@ export function StudentCheckinPanel({ lessonId, lang, addToast }: StudentCheckin
             value={code}
             onChange={(e) => setCode(e.target.value.replace(/\s/g, '').slice(0, 12))}
             onKeyDown={(e) => {
-              if (e.key === 'Enter') void submit();
+              if (isPlainEnterSubmit(e)) {
+                e.preventDefault();
+                void submit();
+              }
             }}
             placeholder={lang === 'zh' ? '输入大屏 4 位签到码' : '4-digit code on stage display'}
             inputMode="numeric"

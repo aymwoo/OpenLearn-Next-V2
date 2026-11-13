@@ -22,6 +22,7 @@ import { ExtensionPointRenderer } from '../../../plugin-host/extension-point-ren
 import { QuickInsertMenu, globalQuickInsertRegistry } from '../../quick-insert/quick-insert-menu';
 import { registerBuiltinQuickInsertItems } from '../../quick-insert/builtin-items';
 import type { WhiteboardPageItem, WhiteboardDragState } from '../../whiteboard/InteractiveWhiteboard';
+import { isPlainEnterSubmit } from '../../../utils/keyboard';
 
 export interface LessonPaletteProps {
   lang: 'zh' | 'en';
@@ -440,7 +441,8 @@ export function LessonPalette({
                             value={editingPageTitle}
                             onChange={(e) => setEditingPageTitle(e.target.value)}
                             onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
+                              if (isPlainEnterSubmit(e)) {
+                                e.preventDefault();
                                 if (editingPageTitle.trim()) onRenamePage?.(globalIdx, editingPageTitle.trim());
                                 setEditingPageIdx(null);
                               }
