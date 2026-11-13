@@ -43,18 +43,25 @@ export default function App() {
     if (typeof document === 'undefined') return;
     document.documentElement.lang = lang === 'en' ? 'en' : 'zh-CN';
     const siteName = appData.siteInfo?.siteName?.trim() || 'OpenLearn Next';
-    let section = '';
-    if (!session) {
-      section = lang === 'en' ? 'Sign In' : '登录';
-    } else if (session.mustChangePassword) {
-      section = lang === 'en' ? 'Change Default Password' : '修改默认密码';
-    } else if (isStageDisplayMode) {
-      section = lang === 'en' ? 'Stage Display' : '大屏展台';
-    } else if (activeRole === 'student') {
-      section = lang === 'en' ? 'Student Space' : '学生学习空间';
-    } else {
-      section = lang === 'en' ? 'Teacher Workbench' : '教师工作台';
-    }
+    const section = !session
+      ? lang === 'en'
+        ? 'Sign In'
+        : '登录'
+      : session.mustChangePassword
+        ? lang === 'en'
+          ? 'Change Default Password'
+          : '修改默认密码'
+        : isStageDisplayMode
+          ? lang === 'en'
+            ? 'Stage Display'
+            : '大屏展台'
+          : activeRole === 'student'
+            ? lang === 'en'
+              ? 'Student Space'
+              : '学生学习空间'
+            : lang === 'en'
+              ? 'Teacher Workbench'
+              : '教师工作台';
     document.title = section ? `${siteName} · ${section}` : siteName;
   }, [lang, appData.siteInfo?.siteName, session, isStageDisplayMode, activeRole]);
 

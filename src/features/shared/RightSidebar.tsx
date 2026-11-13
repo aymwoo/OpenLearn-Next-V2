@@ -381,7 +381,9 @@ export function RightSidebar(props: RightSidebarProps = {}) {
         <button
           type="button"
           onClick={() => setShowRightSidebar(true)}
-          aria-label={lang === 'zh' ? '展开 AI 与扩展侧栏' : 'Expand AI & Extensions Sidebar'}
+          aria-label={
+            lang === 'zh' ? 'OS Core Options · 展开 AI 与扩展侧栏' : 'OS Core Options · Expand AI & Extensions Sidebar'
+          }
           className="flex flex-col items-center py-6 h-full text-subtle w-full cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
         >
           <Wand2 size={18} className="mb-6 hover:text-indigo-500" aria-hidden="true" />

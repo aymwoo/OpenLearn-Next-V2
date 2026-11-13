@@ -28,7 +28,7 @@ describe('Shell accessibility landmarks & interactive semantics (#487)', () => {
 
     render(<RightSidebar showRightSidebar={false} setShowRightSidebar={setShowRightSidebar} lang="zh" t={{}} />);
 
-    const expandBtn = screen.getByRole('button', { name: '展开 AI 与扩展侧栏' });
+    const expandBtn = screen.getByRole('button', { name: 'OS Core Options · 展开 AI 与扩展侧栏' });
     expect(expandBtn.tagName).toBe('BUTTON');
     expect(expandBtn.getAttribute('type')).toBe('button');
     fireEvent.click(expandBtn);
