@@ -72,11 +72,7 @@ export function requireWhiteboardWriteAccess() {
     }
     req.session = session;
 
-    const isAdmin =
-      session.username === 'admin' ||
-      session.userId === 'usr_admin' ||
-      session.role === 'admin' ||
-      session.role === 'administrator';
+    const isAdmin = isAdministrator(session);
 
     // ── 随堂作业专属白板 (assignment-*) ──
     if (id.startsWith('assignment-')) {

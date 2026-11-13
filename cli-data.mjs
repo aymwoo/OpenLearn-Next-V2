@@ -83,7 +83,7 @@ export function loadCliMigrator() {
   if (!fs.existsSync(artifact)) {
     const error = new Error(
       `迁移器构建产物缺失：${artifact}\n` +
-        '  源码检出请先执行 `pnpm build`（或 `bash scripts/build-cli-artifacts.sh`）；\n' +
+        '  源码检出请先执行 `pnpm build`；\n' +
         '  若你安装的是发布包，这属于打包缺陷，请反馈。',
     );
     error.code = 'CLI_MIGRATOR_ARTIFACT_MISSING';
@@ -212,7 +212,7 @@ export async function runBackup(outputFile, options = {}) {
     log(`✓ 数据库冷备完成！`);
     log(`  快照文件: ${target} (${sizeKb} KB)`);
     return { ok: true, targetFile: target };
-  } catch (err) {
+  } catch {
     // 降级为物理文件复制
     try {
       fs.copyFileSync(dbPath, target);

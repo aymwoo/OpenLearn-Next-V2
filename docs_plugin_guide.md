@@ -139,7 +139,7 @@ export interface Manifest {
   requires?: string[]; // 强依赖的服务 Token 列表 (带版本区间，例如 "@openlearn/core:IDatabase@^1.0.0")
   optional?: string[]; // 可选依赖的服务 Token 列表
   capabilitiesProposed?: string[]; // 声明申请的权限 (如 ["lesson:write", "whiteboard:read"])
-  engines?: { openlearn: string }; // OpenLearn 宿主版本兼容性 (如 ">=2.5.0")
+  engines?: { openlearn: string }; // OpenLearn 宿主版本兼容性 (如 ">=0.7.0")
   pluginDependencies?: string[]; // 依赖的其他插件 ID 列表
   configuration?: {
     // 插件的可配置项定义
@@ -985,7 +985,7 @@ export default {
 ```typescript
 // __tests__/classroom-quiz.test.ts
 import { describe, it, expect } from 'vitest';
-import { createMockContext } from '@openlearn/plugin-test-kit';
+import { createMockContext, MockCommandBus } from '@openlearn/plugin-test-kit';
 import myPlugin from '../src/index';
 
 describe('随堂小测验插件单元测试', () => {
@@ -1000,7 +1000,7 @@ describe('随堂小测验插件单元测试', () => {
     await myPlugin.activate(ctx);
 
     // 3. 校验对应命令处理器是否已注册至 Mock 总线上
-    const handlers = ctx.services.commandBus._getHandlers();
+    const handlers = Array.from((ctx.services.commandBus as MockCommandBus).handlers.keys());
     expect(handlers).toContain('ext-classroom-quiz.create_quiz');
     expect(handlers).toContain('ext-classroom-quiz.submit_answer');
   });
@@ -1013,11 +1013,11 @@ describe('随堂小测验插件单元测试', () => {
 
 ```sql
 -- 查询指定插件的全部事件上报日志
-SELECT type, source, payload, created_at
+SELECT type, source, payload, timestamp
 FROM events
 WHERE source = 'plugin.ext-classroom-quiz'
-ORDER BY created_at DESC;
+ORDER BY timestamp DESC;
 
 -- 查看插件自动带命名空间的私有表格数据
-SELECT * FROM plugin_test-quiz-uuid_quiz_questions;
+SELECT * FROM "plugin_test-quiz-uuid_quiz_questions";
 ```

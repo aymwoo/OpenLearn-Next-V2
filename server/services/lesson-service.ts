@@ -12,7 +12,7 @@ import { stripReasoningArtifacts } from '../../packages/core/ai/strip-reasoning.
 import { CLASSROOM_EVENTS, publishClassroomEvent } from '../classroom-events.js';
 import { lessonActiveSegments, clearLessonRuntimeState } from '../shared-state.js';
 import type { Pagination } from '../utils/pagination.js';
-import { buildLessonVisibilityClause, type LessonVisibilityScope } from './class-access.js';
+import { buildLessonVisibilityClause, isAdministrator, type LessonVisibilityScope } from './class-access.js';
 
 export interface LessonOwnershipResult {
   allowed: boolean;
@@ -164,11 +164,7 @@ export class LessonService {
       return { allowed: false, status: 401, error: 'Authentication required' };
     }
 
-    const isAdmin =
-      session.username === 'admin' ||
-      session.userId === 'usr_admin' ||
-      session.role === 'admin' ||
-      session.role === 'administrator';
+    const isAdmin = isAdministrator(session);
 
     const isTeacherOrAdmin = isAdmin || session.role === 'teacher';
     if (!isTeacherOrAdmin) {

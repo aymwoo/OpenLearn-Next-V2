@@ -1,5 +1,6 @@
 import type { ClassType, StudentType } from '../types/app';
 import { escapeCSV } from '../utils/csv';
+import { formatLocalYMD } from '../utils/date';
 export { escapeCSV };
 
 export interface CsvPreviewData {
@@ -359,7 +360,7 @@ export async function generateClassPDFReport(options: GeneratePDFReportOptions) 
 
     // Output File
     const cleanClassName = className.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-    const dateStr = new Date().toISOString().split('T')[0];
+    const dateStr = formatLocalYMD();
     doc.save(`Class_Report_${cleanClassName}_${dateStr}.pdf`);
 
     addToast(
@@ -514,7 +515,7 @@ export function exportClassGradesCSV(options: {
   const link = document.createElement('a');
 
   const cleanClassName = className.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-  const dateStr = new Date().toISOString().split('T')[0];
+  const dateStr = formatLocalYMD();
   const filename = `${cleanClassName}_grades_report_${dateStr}.csv`;
 
   link.setAttribute('href', url);
@@ -769,7 +770,7 @@ export function exportAllClassesCombinedCSV(options: {
   const encodedUri = encodeURI(csvContent);
   const link = document.createElement('a');
   link.setAttribute('href', encodedUri);
-  link.setAttribute('download', `All_Classes_Combined_Grades_${new Date().toISOString().slice(0, 10)}.csv`);
+  link.setAttribute('download', `All_Classes_Combined_Grades_${formatLocalYMD()}.csv`);
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);

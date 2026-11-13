@@ -8,6 +8,7 @@
  */
 
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
+import { formatLocalYMD } from '../../../utils/date';
 import {
   X,
   Plus,
@@ -283,7 +284,7 @@ export const GroupCollabWhiteboardModal: React.FC<GroupCollabWhiteboardModalProp
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${activeGroupId}-${new Date().toISOString().slice(0, 10)}.svg`;
+    a.download = `${activeGroupId}-${formatLocalYMD()}.svg`;
     a.click();
     URL.revokeObjectURL(url);
   }, [activeGroupId]);

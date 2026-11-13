@@ -23,6 +23,7 @@ COPY scripts/assert-node-runtime.mjs ./scripts/assert-node-runtime.mjs
 COPY packages/plugin-sdk/package.json ./packages/plugin-sdk/
 COPY packages/plugin-test-kit/package.json ./packages/plugin-test-kit/
 COPY packages/bridge-sdk/package.json ./packages/bridge-sdk/
+COPY packages/interactive-lab/package.json ./packages/interactive-lab/
 
 # 安装全量依赖执行构建
 RUN pnpm install --frozen-lockfile

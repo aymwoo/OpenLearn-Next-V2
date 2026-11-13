@@ -11,6 +11,7 @@ function compileRoutePattern(pattern) {
   var normalized = pattern.indexOf('/') === 0 ? pattern : '/' + pattern;
   var paramNames = [];
   var regexStr = normalized
+    .replace(/[.+?^\\x24{}()|[\\]\\\\]/g, '\\\\$&')
     .replace(/:([a-zA-Z0-9_]+)/g, function(_m, p) {
       paramNames.push(p);
       return '([^/]+)';

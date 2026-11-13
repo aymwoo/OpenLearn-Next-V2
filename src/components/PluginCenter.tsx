@@ -170,19 +170,21 @@ export function PluginCenter({
         );
         try {
           const zipResp = await fetch(marketItem.downloadUrl);
-          const blob = await zipResp.blob();
-          const formData = new FormData();
-          formData.append('file', blob, 'update.zip');
+          if (!zipResp.ok) {
+            throw new Error(`HTTP ${zipResp.status}`);
+          }
+          const rawZipBytes = await zipResp.arrayBuffer();
           const uploadRes = await fetch(`/api/plugins/${encodeURIComponent(pluginId)}/update-zip-raw`, {
             method: 'POST',
             headers: {
+              'Content-Type': 'application/octet-stream',
               'x-install-mode': 'update',
               'x-acknowledge-risk': 'true',
               'x-community-install': 'true',
               ...(marketItem.integrity ? { 'x-integrity': marketItem.integrity } : {}),
               ...(marketItem.signature ? { 'x-signature': marketItem.signature } : {}),
             },
-            body: formData,
+            body: rawZipBytes,
           }).then((r) => r.json());
           if (uploadRes?.success) {
             setUpdateToast(lang === 'zh' ? `🎉 插件已成功热更新！` : `🎉 Hot updated!`);

@@ -34,7 +34,6 @@ test.describe('学生端「返回课堂」入口 (Issue #109)', () => {
 
     const teacher = await browser.newContext();
     const student = await browser.newContext();
-    const teacherPage = await teacher.newPage();
     const studentPage = await student.newPage();
 
     try {

@@ -31,6 +31,11 @@ function teacherActor(req: any): string {
   return actorUserId((req as any).session) || 'unknown-actor';
 }
 
+function buildAttachmentDisposition(rawFilename: string): string {
+  const safeAscii = rawFilename.replace(/[\r\n"\\]/g, '_');
+  return `attachment; filename="${safeAscii}"; filename*=UTF-8''${encodeURIComponent(rawFilename)}`;
+}
+
 function studentActor(req: any): string | null {
   return studentActorId((req as any).session);
 }
@@ -283,7 +288,7 @@ export function registerAssessmentRoutes(ctx: ServerContext, service: Assessment
         }
         const exported = await service.exportItemAnalysis(req.params.id, teacherActor(req), format);
         res.setHeader('Content-Type', exported.contentType);
-        res.setHeader('Content-Disposition', `attachment; filename="${exported.filename}"`);
+        res.setHeader('Content-Disposition', buildAttachmentDisposition(exported.filename));
         res.send(format === 'csv' ? `\uFEFF${exported.body}` : exported.body);
       } catch (e: any) {
         sendSafeError(res, e);
@@ -299,7 +304,7 @@ export function registerAssessmentRoutes(ctx: ServerContext, service: Assessment
       }
       const { filename, csv } = service.exportCsv(req.params.id, teacherActor(req));
       res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      res.setHeader('Content-Disposition', buildAttachmentDisposition(filename));
       // BOM：让 Excel 正确识别 UTF-8 中文
       res.send(`\uFEFF${csv}`);
     } catch (e: any) {
@@ -321,7 +326,7 @@ export function registerAssessmentRoutes(ctx: ServerContext, service: Assessment
       }
       const exported = await service.exportPaper(req.params.id, teacherActor(req), format);
       res.setHeader('Content-Type', exported.contentType);
-      res.setHeader('Content-Disposition', `attachment; filename="${exported.filename}"`);
+      res.setHeader('Content-Disposition', buildAttachmentDisposition(exported.filename));
       // CSV 补 BOM，让 Excel 正确识别 UTF-8 中文
       res.send(format === 'csv' ? `\uFEFF${exported.body}` : exported.body);
     } catch (e: any) {

@@ -1,4 +1,5 @@
 import React from 'react';
+import { formatLocalYMD } from '../../../utils/date';
 import {
   CalendarDays,
   Clock,
@@ -134,7 +135,7 @@ export const TimetableCalendarView: React.FC<TimetableCalendarViewProps> = ({
     const d = new Date();
     return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
   })();
-  const todayStr = new Date().toISOString().split('T')[0];
+  const todayStr = formatLocalYMD();
   const todayActiveSchedules = filteredSchedules
     .filter((s) => s.scheduled_date === todayStr && s.status !== 'cancelled' && s.status !== 'holiday')
     .sort((a, b) => (a.time_slot || '').localeCompare(b.time_slot || ''));
@@ -563,7 +564,7 @@ export const TimetableCalendarView: React.FC<TimetableCalendarViewProps> = ({
             onClick={() => {
               setFormClassId(classes[0]?.id || '');
               setFormLessonId('');
-              setFormDate(new Date().toISOString().split('T')[0]);
+              setFormDate(formatLocalYMD());
               setFormStatus('scheduled');
               setFormNotes('');
               setIsAddOpen(true);

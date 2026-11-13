@@ -378,7 +378,6 @@ export function cleanupDemoData(db: Database.Database): CleanupReport {
       // 这些表可能不存在（按迁移进度而定），逐个容错。
       for (const sql of [
         'DELETE FROM student_lesson_progress WHERE student_id = ?',
-        'DELETE FROM class_rollcalls WHERE student_id = ?',
         'DELETE FROM student_rollcalls WHERE student_id = ?',
         'DELETE FROM student_point_logs WHERE student_id = ?',
         'DELETE FROM attendance WHERE student_id = ?',
@@ -417,7 +416,6 @@ export function cleanupDemoData(db: Database.Database): CleanupReport {
       const id = entity_id;
       for (const sql of [
         'DELETE FROM class_groups WHERE class_id = ?',
-        'DELETE FROM class_rollcalls WHERE class_id = ?',
         'DELETE FROM student_rollcalls WHERE class_id = ?',
       ]) {
         try {

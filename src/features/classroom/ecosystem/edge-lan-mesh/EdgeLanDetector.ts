@@ -51,7 +51,7 @@ export class EdgeLanDetector {
     const start = Date.now();
     try {
       // 1. 尝试 ping 本地服务健康接口
-      const localRes = await fetch('/api/health', {
+      const localRes = await fetch('/health', {
         method: 'GET',
         cache: 'no-store',
       }).catch(() => null);

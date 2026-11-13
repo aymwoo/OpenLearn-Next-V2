@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { formatLocalYMD } from '../../utils/date';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, LabelList } from 'recharts';
 import {
   Trophy,
@@ -99,7 +100,7 @@ export function TopPerformersWidget({
   useEffect(() => {
     if (!selectedLessonId && lessons.length > 0) {
       // Find today's schedule or take the first lesson
-      const today = new Date().toISOString().split('T')[0];
+      const today = formatLocalYMD();
       const todaySch = schedules.find((s) => s.scheduled_date === today);
       setSelectedLessonId(todaySch?.lesson_id || lessons[0].id);
     }

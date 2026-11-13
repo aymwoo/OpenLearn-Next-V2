@@ -28,7 +28,7 @@ export const VfsPlugin = {
     const eventBus = ctx.services.eventBus;
     const db = await ctx.resolve(IDatabaseToken);
 
-    function resolvePath(pathStr: string): { parentId: string | null; name: string } {
+    function resolvePath(pathStr: string, createMissingDirs = false): { parentId: string | null; name: string } | null {
       const parts = pathStr.split('/').filter(Boolean);
       if (parts.length === 0) throw new Error('Invalid path');
 
@@ -40,6 +40,7 @@ export const VfsPlugin = {
           .prepare('SELECT * FROM vfs_nodes WHERE parent_id IS ? AND name = ? AND type = ?')
           .get(currentParentId, pName, 'dir') as any;
         if (!node) {
+          if (!createMissingDirs) return null;
           const newId = uuidv7();
           db.prepare(
             'INSERT INTO vfs_nodes (id, parent_id, type, name, content, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
@@ -72,7 +73,7 @@ export const VfsPlugin = {
     await commandBus.registerHandler(vfsWriteCmdType, {
       async execute(command) {
         const payload = command.payload as any;
-        const { parentId, name } = resolvePath(payload.path);
+        const { parentId, name } = resolvePath(payload.path, true)!;
         const fileId = uuidv7();
 
         db.prepare('DELETE FROM vfs_nodes WHERE parent_id IS ? AND name = ? AND type = ?').run(parentId, name, 'file');
@@ -114,7 +115,9 @@ export const VfsPlugin = {
     await commandBus.registerHandler(vfsReadPathCmdType, {
       async execute(command) {
         const payload = command.payload as any;
-        const { parentId, name } = resolvePath(payload.path);
+        const resolved = resolvePath(payload.path, false);
+        if (!resolved) throw new Error(`File at path ${payload.path} not found`);
+        const { parentId, name } = resolved;
         const file = db
           .prepare('SELECT * FROM vfs_nodes WHERE parent_id IS ? AND name = ? AND type = ?')
           .get(parentId, name, 'file') as any;
@@ -145,7 +148,8 @@ export const VfsPlugin = {
         let parentId: string | null = null;
 
         if (payload.path !== '/') {
-          const res = resolvePath(payload.path);
+          const res = resolvePath(payload.path, false);
+          if (!res) throw new Error(`Directory at path ${payload.path} not found`);
           const dir = db
             .prepare('SELECT * FROM vfs_nodes WHERE parent_id IS ? AND name = ? AND type = ?')
             .get(res.parentId, res.name, 'dir') as any;
@@ -177,7 +181,9 @@ export const VfsPlugin = {
     await commandBus.registerHandler(vfsMkdirCmdType, {
       async execute(command) {
         const payload = command.payload as any;
-        const { parentId, name } = resolvePath(payload.path);
+        const resolved = resolvePath(payload.path, true);
+        if (!resolved) return { error: 'Invalid path' };
+        const { parentId, name } = resolved;
         let node = db
           .prepare('SELECT * FROM vfs_nodes WHERE parent_id IS ? AND name = ? AND type = ?')
           .get(parentId, name, 'dir') as any;

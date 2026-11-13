@@ -1412,7 +1412,6 @@ export function registerPluginsRoutes(ctx: ServerContext) {
       const approvePublicRoutes = headerFlag(req, 'x-approve-public-routes');
       const approveCapabilities = headerFlag(req, 'x-approve-capabilities');
       const approveNetworkHosts = headerFlag(req, 'x-approve-network-hosts');
-      const communityInstall = headerFlag(req, 'x-community-install');
 
       if (modeHeader === 'update' && !headerFlag(req, 'x-acknowledge-risk')) {
         return res.status(400).json({

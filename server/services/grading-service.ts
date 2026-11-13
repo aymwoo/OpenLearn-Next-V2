@@ -8,8 +8,8 @@ import type Database from 'better-sqlite3';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
 import { randomId } from '../utils/id.js';
 import { deriveAcademicYear, deriveAcademicYearFromSemesterName } from '../utils/academic-year.js';
-import { decryptApiKey } from '../utils/crypto.js';
 import { resolveAccessibleAiProvider } from './ai-provider-resolver.js';
+import { isSafeExternalUrl } from '../utils/url-safety.js';
 import { fetchWithRetry } from '../../packages/core/ai/utils/fetch-with-retry.js';
 import type { StoredAIProvider } from '../context.js';
 
@@ -721,6 +721,10 @@ ${examsText}
     if (!chatUrl.endsWith('/chat/completions')) {
       chatUrl = chatUrl.endsWith('/') ? chatUrl + 'chat/completions' : chatUrl + '/chat/completions';
     }
+    const urlCheck = isSafeExternalUrl(chatUrl);
+    if (!urlCheck.safe) {
+      throw new Error(`Unsafe AI Provider URL: ${urlCheck.reason || 'Blocked'}`);
+    }
 
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
@@ -739,6 +743,10 @@ ${examsText}
       timeoutMs: 30_000,
       maxAttempts: 2,
     });
+    if (!response.ok) {
+      const errText = await response.text().catch(() => '');
+      throw new Error(`AI Provider HTTP ${response.status}: ${errText.slice(0, 200)}`);
+    }
 
     const data = await response.json();
     return data.choices?.[0]?.message?.content?.trim() || '';

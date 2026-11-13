@@ -110,7 +110,6 @@ beforeEach(() => {
         autoRecordCalls.push({ lessonId: body.lessonId, classId: body.classId });
         return { ok: true, json: async () => ({ success: true, recorded: 1, skipped: 0, details: [] }) } as any;
       }
-      console.log('[DEBUG] fetch:', url);
       // /api/commands 的真实契约：请求体 { commandType, payload }，响应 { success, result }。
       // 严格按契约 mock —— 若前端误用 type，mock 会 500，从而真正拦住这类契约漂移。
       if (url.includes('/api/commands')) {

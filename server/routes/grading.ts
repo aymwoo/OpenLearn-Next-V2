@@ -253,6 +253,13 @@ export function registerGradingRoutes(ctx: ServerContext) {
       }
       if (gate(req, res, classId, 'staff')) return;
 
+      const enrolled = kernelContainer.db
+        .prepare('SELECT 1 FROM class_students WHERE class_id = ? AND student_id = ? LIMIT 1')
+        .get(classId, studentId);
+      if (!enrolled) {
+        return res.status(404).json({ success: false, error: 'Student is not enrolled in this class' });
+      }
+
       const ledgerService = await kernelContainer.serviceRegistry.resolve(IPointsLedgerServiceToken);
       const logItem = await ledgerService.addPoints(
         studentId,
@@ -264,13 +271,17 @@ export function registerGradingRoutes(ctx: ServerContext) {
       );
 
       // Publish to EventBus & Socket.IO
-      kernelContainer.eventBus.publish({
-        id: logItem.id,
-        type: 'points.awarded',
-        source: pluginId || 'points-ledger',
-        payload: logItem,
-        timestamp: Date.now(),
-      });
+      await kernelContainer.eventBus
+        .publish({
+          id: logItem.id,
+          type: 'points.awarded',
+          source: pluginId || 'points-ledger',
+          payload: logItem,
+          timestamp: Date.now(),
+        })
+        .catch((err) => {
+          console.error('[Grading] Failed to publish points.awarded event:', err);
+        });
 
       res.json({ success: true, logItem });
     } catch (e) {

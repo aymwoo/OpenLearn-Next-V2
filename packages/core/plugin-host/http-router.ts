@@ -52,8 +52,9 @@ export function compileRoutePattern(pattern: string): { regex: RegExp; paramName
   const normalized = pattern.startsWith('/') ? pattern : '/' + pattern;
   const paramNames: string[] = [];
 
-  // 将 :param 替换为命名捕获组，将 * 替换为通配捕获组
+  // 先转义静态段里的正则元字符，再把 :param 与 * 转为捕获组
   const regexStr = normalized
+    .replace(/[.+?^${}()|[\]\\]/g, '\\$&')
     .replace(/:([a-zA-Z0-9_]+)/g, (_match, paramName) => {
       paramNames.push(paramName);
       return '([^/]+)';

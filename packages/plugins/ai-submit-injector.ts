@@ -2,8 +2,9 @@ import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 import { v7 as uuidv7 } from 'uuid';
-import { IEventBusServiceToken, IDatabaseToken, IAIServiceToken } from '@openlearn/plugin-sdk';
+import { IDatabaseToken } from '@openlearn/plugin-sdk';
 import type { PluginContext } from '@openlearn/plugin-sdk';
+import { decryptApiKey, looksLikeCiphertext } from '../core/di/api-key-crypto.js';
 
 interface StoredAIProvider {
   id: string;
@@ -57,14 +58,28 @@ ${htmlContent}
     .get() as StoredAIProvider | undefined;
 
   if (provider && provider.api_key && provider.api_key.trim()) {
+    const apiKey = decryptApiKey(provider.api_key.trim());
+    if (!apiKey || looksLikeCiphertext(apiKey)) {
+      throw new Error('AI 提供商密钥解密失败，请检查 ENCRYPTION_KEY 配置或重新保存密钥。');
+    }
+
     let chatUrl = provider.api_url.trim();
     if (!chatUrl.endsWith('/chat/completions')) {
       chatUrl = chatUrl.endsWith('/') ? chatUrl + 'chat/completions' : chatUrl + '/chat/completions';
     }
+    let parsedUrl: URL;
+    try {
+      parsedUrl = new URL(chatUrl);
+    } catch {
+      throw new Error('Invalid AI provider API URL');
+    }
+    if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
+      throw new Error(`Unsupported AI provider protocol: ${parsedUrl.protocol}`);
+    }
 
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${provider.api_key.trim()}`,
+      Authorization: `Bearer ${apiKey.trim()}`,
     };
 
     const response = await fetch(chatUrl, {
@@ -76,6 +91,7 @@ ${htmlContent}
         temperature: 0.2,
         max_tokens: 8192,
       }),
+      signal: AbortSignal.timeout(60_000),
     });
 
     if (!response.ok) {
@@ -117,8 +133,13 @@ export const AiSubmitInjectorPlugin = {
         return;
       }
 
-      const filePath = path.resolve(process.cwd(), 'storage', 'courseware', payload.uuid, payload.entry);
-      if (!fs.existsSync(filePath)) {
+      const baseCoursewareDir = path.resolve(process.cwd(), 'storage', 'courseware');
+      const sourceDir = path.resolve(baseCoursewareDir, String(payload.uuid));
+      if (!sourceDir.startsWith(baseCoursewareDir + path.sep)) {
+        return;
+      }
+      const filePath = path.resolve(sourceDir, String(payload.entry));
+      if (!filePath.startsWith(sourceDir + path.sep) || !fs.existsSync(filePath)) {
         return;
       }
 
@@ -144,9 +165,13 @@ ${htmlContent}
           if (modified && modified !== htmlContent) {
             const newUuid = uuidv7();
             const newCwId = 'cw_' + crypto.randomBytes(8).toString('hex');
-            const newStorageDir = path.resolve(process.cwd(), 'storage', 'courseware', newUuid);
-            fs.mkdirSync(newStorageDir, { recursive: true });
-            fs.writeFileSync(path.join(newStorageDir, payload.entry), modified);
+            const newStorageDir = path.resolve(baseCoursewareDir, newUuid);
+            const destFile = path.resolve(newStorageDir, String(payload.entry));
+            if (!destFile.startsWith(newStorageDir + path.sep)) {
+              return;
+            }
+            fs.mkdirSync(path.dirname(destFile), { recursive: true });
+            fs.writeFileSync(destFile, modified);
 
             db.prepare(
               'INSERT INTO courseware (id, uuid, name, type, entry, created_at) VALUES (?, ?, ?, ?, ?, ?)',

@@ -12,6 +12,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { resolveBackupDirForDb } from '../../packages/core/db/backup-paths.js';
+import { getStorageDir } from '../utils/paths.js';
 
 export interface FilePermissionIssue {
   path: string;
@@ -53,7 +54,7 @@ function defaultPaths() {
     envPath: path.resolve(process.cwd(), '.env'),
     dbPath,
     backupDir,
-    encryptionKeyPath: path.resolve(process.cwd(), 'storage', 'encryption-key'),
+    encryptionKeyPath: path.join(getStorageDir(), 'encryption-key'),
   };
 }
 

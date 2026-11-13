@@ -128,11 +128,13 @@ function createMockServices(): Record<string, unknown> {
 
 describe('金丝雀第 1 步：最小 ZIP 安装闭环（inline）', () => {
   let db: Database.Database;
+  let originalNodeEnv: string | undefined;
   let host: PluginHost;
   let pluginsDir: string;
   let pluginId: string;
 
   beforeAll(async () => {
+    originalNodeEnv = process.env.NODE_ENV;
     // 复现生产激活路径（file:// + SDK 符号链接），见文件头注释
     process.env.NODE_ENV = 'production';
 
@@ -162,6 +164,11 @@ describe('金丝雀第 1 步：最小 ZIP 安装闭环（inline）', () => {
 
   afterAll(() => {
     db?.close();
+    if (originalNodeEnv === undefined) {
+      delete process.env.NODE_ENV;
+    } else {
+      process.env.NODE_ENV = originalNodeEnv;
+    }
     if (pluginsDir) fs.rmSync(pluginsDir, { recursive: true, force: true });
   });
 

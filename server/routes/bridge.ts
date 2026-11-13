@@ -109,7 +109,9 @@ export function registerBridgeRoutes(ctx: ServerContext) {
               : 'index.html';
           const createdAt = resRow.created_at || Date.now();
           kernelContainer.db
-            .prepare('INSERT INTO courseware (id, uuid, name, type, entry, created_at) VALUES (?, ?, ?, ?, ?, ?)')
+            .prepare(
+              'INSERT OR IGNORE INTO courseware (id, uuid, name, type, entry, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+            )
             .run(resRow.id, resRow.id, resRow.name, resRow.type || 'html', entryName, createdAt);
           courseware = {
             id: resRow.id,

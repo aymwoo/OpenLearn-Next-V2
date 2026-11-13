@@ -43,12 +43,21 @@ export function registerClassroomPresetPollRoutes(app: Express): void {
           )
           .all(lessonId) as PresetPollRow[];
 
+        function safeParsePollOptions(raw: string): unknown[] {
+          try {
+            const parsed = JSON.parse(raw);
+            return Array.isArray(parsed) ? parsed : [];
+          } catch {
+            return [];
+          }
+        }
+
         const presets = rows.map((r) => ({
           id: r.id,
           lessonId: r.lesson_id,
           title: r.title,
           questionType: r.question_type,
-          options: JSON.parse(r.options_json),
+          options: safeParsePollOptions(r.options_json),
           correctOption: r.correct_option,
           sortOrder: r.sort_order,
           createdAt: r.created_at,
@@ -198,7 +207,14 @@ export function registerClassroomPresetPollRoutes(app: Express): void {
             lessonId: updated.lesson_id,
             title: updated.title,
             questionType: updated.question_type,
-            options: JSON.parse(updated.options_json),
+            options: (() => {
+              try {
+                const parsed = JSON.parse(updated.options_json);
+                return Array.isArray(parsed) ? parsed : [];
+              } catch {
+                return [];
+              }
+            })(),
             correctOption: updated.correct_option,
             sortOrder: updated.sort_order,
             createdAt: updated.created_at,

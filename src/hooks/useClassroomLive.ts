@@ -41,6 +41,14 @@ export function useClassroomLive() {
           gain.gain.exponentialRampToValueAtTime(0.001, now + 0.8);
           osc.connect(gain);
           gain.connect(ctx.destination);
+          let closed = false;
+          const closeCtx = () => {
+            if (closed) return;
+            closed = true;
+            void ctx.close().catch(() => {});
+          };
+          osc.onended = closeCtx;
+          setTimeout(closeCtx, 1100);
           osc.start(now);
           osc.stop(now + 0.8);
         }

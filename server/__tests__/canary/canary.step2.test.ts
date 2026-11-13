@@ -202,6 +202,7 @@ function createExtraServices(hostRef: { current: PluginHost | null }): Record<st
 
 describe('金丝雀第 2 步：探针报告与 Token/require 扫描', () => {
   let db: Database.Database;
+  let originalNodeEnv: string | undefined;
   let host: PluginHost;
   let pluginsDir: string;
   let pluginId: string;
@@ -210,6 +211,7 @@ describe('金丝雀第 2 步：探针报告与 Token/require 扫描', () => {
   let eventCount = -1;
 
   beforeAll(async () => {
+    originalNodeEnv = process.env.NODE_ENV;
     process.env.NODE_ENV = 'production';
 
     db = createTestDb();
@@ -366,6 +368,11 @@ describe('金丝雀第 2 步：探针报告与 Token/require 扫描', () => {
       await host.deactivatePlugin(pluginId).catch(() => {});
     }
     db?.close();
+    if (originalNodeEnv === undefined) {
+      delete process.env.NODE_ENV;
+    } else {
+      process.env.NODE_ENV = originalNodeEnv;
+    }
     if (pluginsDir) fs.rmSync(pluginsDir, { recursive: true, force: true });
   });
 

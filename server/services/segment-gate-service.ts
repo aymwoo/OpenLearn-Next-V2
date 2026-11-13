@@ -470,12 +470,15 @@ export class SegmentGateService {
         SYSTEM_ACTOR,
         { approved: true },
       );
+      let timerHandle: ReturnType<typeof setTimeout> | undefined;
       const result = await Promise.race([
         kernelContainer.commandBus.execute(command),
         new Promise<never>((_, reject) => {
-          setTimeout(() => reject(new Error('timeout')), PLUGIN_GATE_TIMEOUT_MS);
+          timerHandle = setTimeout(() => reject(new Error('timeout')), PLUGIN_GATE_TIMEOUT_MS);
         }),
-      ]);
+      ]).finally(() => {
+        if (timerHandle !== undefined) clearTimeout(timerHandle);
+      });
       return normalizePluginResult(gate.type, result);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);

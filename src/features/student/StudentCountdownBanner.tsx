@@ -27,6 +27,14 @@ function playStudentChime() {
     gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.8);
     osc1.connect(gain1);
     gain1.connect(ctx.destination);
+    let closed = false;
+    const closeCtx = () => {
+      if (closed) return;
+      closed = true;
+      void ctx.close().catch(() => {});
+    };
+    osc1.onended = closeCtx;
+    setTimeout(closeCtx, 1100);
     osc1.start(now);
     osc1.stop(now + 0.8);
   } catch (_) {}

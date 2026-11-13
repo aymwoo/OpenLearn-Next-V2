@@ -81,7 +81,7 @@ export const CommandBusPlayground: React.FC<CommandBusPlaygroundProps> = ({ regi
         return;
       }
 
-      const res = await fetch('/api/commands/execute', {
+      const res = await fetch('/api/commands', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ commandType, payload: parsedPayload }),

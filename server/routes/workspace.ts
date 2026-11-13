@@ -108,20 +108,24 @@ export function registerWorkspaceRoutes(ctx: ServerContext) {
         `[Client Diagnostics HTTP] Student ${studentId} (${studentName}) reported error [${errorPayload.type}]: ${errorPayload.message || errorPayload.title || ''}`,
       );
 
-      kernelContainer.eventBus.publish({
-        id: randomId('evt_err_'),
-        type: 'student.client_error',
-        source: 'student_client',
-        payload: {
-          studentId,
-          studentName,
-          lessonId: data.lessonId || null,
-          classId: data.classId || null,
-          error: errorPayload,
-        },
-        timestamp: errorPayload.timestamp,
-        correlationId: data.lessonId || undefined,
-      });
+      kernelContainer.eventBus
+        .publish({
+          id: randomId('evt_err_'),
+          type: 'student.client_error',
+          source: 'student_client',
+          payload: {
+            studentId,
+            studentName,
+            lessonId: data.lessonId || null,
+            classId: data.classId || null,
+            error: errorPayload,
+          },
+          timestamp: errorPayload.timestamp,
+          correlationId: data.lessonId || undefined,
+        })
+        .catch((err) => {
+          console.error('[Client Diagnostics HTTP] Failed to publish student.client_error event:', err);
+        });
 
       if (ctx.io) {
         // 学生端异常只给教师/管理员看；此前全局广播会把报错推给所有学生

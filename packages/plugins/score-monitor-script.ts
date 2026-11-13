@@ -216,7 +216,9 @@ export const SCORE_MONITOR_SCRIPT = `(function () {
 
   function init() {
     state.snapshot = snapshot();
-    setInterval(tick, INTERVAL_MS);
+    var intervalId = setInterval(tick, INTERVAL_MS);
+    var observer = null;
+    var mutationTimer = null;
     try {
       if (!window.__LMS_SCORE_WATCHERS__ || Object.prototype.toString.call(window.__LMS_SCORE_WATCHERS__) !== '[object Array]') {
         window.__LMS_SCORE_WATCHERS__ = [];
@@ -224,16 +226,22 @@ export const SCORE_MONITOR_SCRIPT = `(function () {
       window.__LMS_SCORE_WATCHERS__.push({
         stop: function () {
           state.stopped = true;
+          clearInterval(intervalId);
           if (state.timer) { clearTimeout(state.timer); state.timer = null; }
+          if (mutationTimer) { clearTimeout(mutationTimer); mutationTimer = null; }
+          if (observer && typeof observer.disconnect === 'function') {
+            observer.disconnect();
+            observer = null;
+          }
         }
       });
     } catch (err) { /* noop */ }
     if (typeof MutationObserver === 'function' && document.documentElement) {
       var scheduled = false;
-      var observer = new MutationObserver(function () {
-        if (scheduled) return;
+      observer = new MutationObserver(function () {
+        if (state.stopped || scheduled) return;
         scheduled = true;
-        setTimeout(function () { scheduled = false; tick(); }, 300);
+        mutationTimer = setTimeout(function () { scheduled = false; tick(); }, 300);
       });
       try {
         observer.observe(document.documentElement, { childList: true, subtree: true, characterData: true });

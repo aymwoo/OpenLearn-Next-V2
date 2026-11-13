@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { listFromEnvelope } from '../utils/listEnvelope.js';
+import { formatLocalYMD } from '../utils/date';
 import {
   Calendar,
   Check,
@@ -881,7 +882,11 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
   const dayOfWeekToDate = (dayOfWeek: any, weekStartDate: string): string => {
     if (!weekStartDate) return '';
     try {
-      const start = new Date(weekStartDate);
+      const parts = weekStartDate.split('-').map(Number);
+      const start =
+        parts.length === 3 && parts.every((n) => Number.isFinite(n))
+          ? new Date(parts[0], parts[1] - 1, parts[2])
+          : new Date(weekStartDate);
       let dayNum = Number(dayOfWeek);
       if (isNaN(dayNum)) {
         if (typeof dayOfWeek === 'string') {
@@ -906,7 +911,7 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
       const offset = dayNum - 1;
       const target = new Date(start);
       target.setDate(start.getDate() + offset);
-      return target.toISOString().split('T')[0];
+      return formatLocalYMD(target);
     } catch (err) {
       console.error('Failed to convert day of week to date:', err);
       return weekStartDate;
@@ -1087,7 +1092,7 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
       const day = today.getDay();
       const diff = today.getDate() - day + (day === 0 ? -6 : 1);
       const monday = new Date(today.setDate(diff));
-      const autoWeekStartDate = monday.toISOString().split('T')[0];
+      const autoWeekStartDate = formatLocalYMD(monday);
 
       setOcrImporting(true);
       setOcrMessage(null);
@@ -1287,7 +1292,7 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `timetable_export_${new Date().toISOString().split('T')[0]}.csv`);
+    link.setAttribute('download', `timetable_export_${formatLocalYMD()}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -1298,7 +1303,7 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
     const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(schedules, null, 2));
     const link = document.createElement('a');
     link.setAttribute('href', dataStr);
-    link.setAttribute('download', `timetable_export_${new Date().toISOString().split('T')[0]}.json`);
+    link.setAttribute('download', `timetable_export_${formatLocalYMD()}.json`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);

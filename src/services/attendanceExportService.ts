@@ -1,5 +1,6 @@
 import type { ClassType, StudentType, ScheduleType, AttendanceType } from '../types/app';
 import { escapeCSV } from '../utils/csv';
+import { formatLocalYMD } from '../utils/date';
 
 export interface AttendanceRowData {
   className: string;
@@ -174,7 +175,7 @@ export function exportSingleScheduleAttendanceCSV(options: {
   const csvContent = csvRows.map((r) => r.map(escapeCSV).join(',')).join('\n');
   const cleanClass = className.replace(/[^a-zA-Z0-9_\-\u4e00-\u9fa5]/g, '_');
   const cleanLesson = (schedule.lesson_title || 'schedule').replace(/[^a-zA-Z0-9_\-\u4e00-\u9fa5]/g, '_');
-  const dateStr = schedule.scheduled_date || new Date().toISOString().split('T')[0];
+  const dateStr = schedule.scheduled_date || formatLocalYMD();
   const filename = `${cleanClass}_${cleanLesson}_${dateStr}_attendance.csv`;
 
   triggerDownloadCSV(filename, csvContent);
@@ -299,7 +300,7 @@ export async function exportClassAllSchedulesAttendanceCSV(options: {
 
   const csvContent = csvRows.map((r) => r.map(escapeCSV).join(',')).join('\n');
   const cleanClass = classInfo.name.replace(/[^a-zA-Z0-9_\-\u4e00-\u9fa5]/g, '_');
-  const today = new Date().toISOString().split('T')[0];
+  const today = formatLocalYMD();
   const yearSuffix = academicYear ? `_${academicYear}` : '';
   const filename = `${cleanClass}_attendance_report_${today}${yearSuffix}.csv`;
 
@@ -402,7 +403,7 @@ export async function exportAllClassesAttendanceCSV(options: {
   });
 
   const csvContent = csvRows.map((r) => r.map(escapeCSV).join(',')).join('\n');
-  const today = new Date().toISOString().split('T')[0];
+  const today = formatLocalYMD();
   const filename = `All_Classes_Attendance_Report_${today}.csv`;
 
   triggerDownloadCSV(filename, csvContent);

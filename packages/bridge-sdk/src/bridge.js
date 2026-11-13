@@ -156,9 +156,14 @@
         if (type === 'message' && typeof listener === 'function') {
           var wrappedListener = function (event) {
             try {
-              if (event && event.source && typeof event.source.postMessage === 'function') {
+              if (
+                event &&
+                event.source &&
+                typeof event.source.postMessage === 'function' &&
+                !event.source.postMessage.__lmsWrapped
+              ) {
                 var origSourcePostMessage = event.source.postMessage;
-                event.source.postMessage = function (msg, targetOrigin, transfer) {
+                var wrappedPostMessage = function (msg, targetOrigin, transfer) {
                   var origin = targetOrigin;
                   if (origin === 'null' || origin === null) {
                     console.warn(
@@ -179,6 +184,8 @@
                     throw err;
                   }
                 };
+                wrappedPostMessage.__lmsWrapped = true;
+                event.source.postMessage = wrappedPostMessage;
               }
             } catch (e) {}
             return listener.apply(this, arguments);
@@ -400,7 +407,10 @@
                   payload: {
                     url,
                     method,
-                    headers: JSON.parse(JSON.stringify(headers)),
+                    headers:
+                      typeof Headers !== 'undefined' && headers instanceof Headers
+                        ? Object.fromEntries(headers.entries())
+                        : JSON.parse(JSON.stringify(headers)),
                     body: body ? body.toString() : null,
                   },
                 },
@@ -608,7 +618,7 @@
               const text = (el.textContent || el.innerText || '').trim();
               if (text) {
                 logData.push("Selector '" + selector + "' matched text: '" + text + "'");
-                const fractionMatch = text.match(/(\\d+(\\.\\d+)?)\\s*[\\/|之]\\s*(\\d+)/);
+                const fractionMatch = text.match(/(\d+(\.\d+)?)\s*[/|之]\s*(\d+)/);
                 if (fractionMatch) {
                   const num = parseFloat(fractionMatch[1]);
                   const den = parseFloat(fractionMatch[3]);
@@ -618,7 +628,7 @@
                     return { score: pct, log: logData };
                   }
                 }
-                const match = text.match(/\\d+(\\.\\d+)?/);
+                const match = text.match(/\d+(\.\d+)?/);
                 if (match) {
                   const num = parseFloat(match[0]);
                   if (!isNaN(num)) {
@@ -664,7 +674,7 @@
                   txt.toLowerCase().includes('score') ||
                   txt.toLowerCase().includes('points');
                 if (hasKey) {
-                  const m = txt.match(/\\d+(\\.\\d+)?/);
+                  const m = txt.match(/\d+(\.\d+)?/);
                   if (m) {
                     const val = parseFloat(m[0]);
                     logData.push('Fallback leaf <' + el.tagName + "> '" + txt + "' parsed: " + val);

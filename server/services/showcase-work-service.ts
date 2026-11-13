@@ -197,7 +197,6 @@ export function getUnifiedShowcaseWorks(
         .all(...params) as any[];
 
     let attempts: any[] = [];
-    let isClassFallback = false;
     if (coursewareIds.length > 0) {
       const placeholders = coursewareIds.map(() => '?').join(',');
       attempts = buildQuery(`AND a.courseware_id IN (${placeholders})`, coursewareIds);
@@ -205,9 +204,6 @@ export function getUnifiedShowcaseWorks(
     if (attempts.length === 0 && classStudentIds.length > 0) {
       const placeholders = classStudentIds.map(() => '?').join(',');
       attempts = buildQuery(`AND a.student_id IN (${placeholders})`, classStudentIds);
-      if (attempts.length > 0) {
-        isClassFallback = true;
-      }
     }
 
     for (const a of attempts) {

@@ -63,6 +63,8 @@ function notifyIframes(scale: number) {
   } catch {}
 }
 
+let storageListenerRegistered = false;
+
 export const useFontSizeStore = create<FontSizeState>((set, get) => ({
   scale: FONT_SCALE_DEFAULT,
   minScale: FONT_SCALE_MIN,
@@ -89,19 +91,22 @@ export const useFontSizeStore = create<FontSizeState>((set, get) => ({
     set({ scale: initialScale });
     notifyIframes(initialScale);
 
-    // 3. 监听多标签页同步事件
-    try {
-      window.addEventListener('storage', (e: StorageEvent) => {
-        if (e.key === FONT_SCALE_STORAGE_KEY && e.newValue) {
-          const newScale = Number(e.newValue);
-          if (!isNaN(newScale) && newScale >= FONT_SCALE_MIN && newScale <= FONT_SCALE_MAX) {
-            applyFontScaleToDOM(newScale);
-            set({ scale: newScale });
-            notifyIframes(newScale);
+    // 3. 监听多标签页同步事件（全局只注册一次）
+    if (!storageListenerRegistered) {
+      storageListenerRegistered = true;
+      try {
+        window.addEventListener('storage', (e: StorageEvent) => {
+          if (e.key === FONT_SCALE_STORAGE_KEY && e.newValue) {
+            const newScale = Number(e.newValue);
+            if (!isNaN(newScale) && newScale >= FONT_SCALE_MIN && newScale <= FONT_SCALE_MAX) {
+              applyFontScaleToDOM(newScale);
+              set({ scale: newScale });
+              notifyIframes(newScale);
+            }
           }
-        }
-      });
-    } catch {}
+        });
+      } catch {}
+    }
   },
 
   setScale: (rawScale: number) => {

@@ -278,14 +278,18 @@ export class CoursewareService {
     }
 
     await this.publishAttemptUpdated(attemptId, 'log');
-    void kernelContainer.eventBus.publish({
-      id: 'evt_' + crypto.randomBytes(8).toString('hex'),
-      type: 'courseware.event_logged',
-      source: 'builtin.courseware',
-      payload: { attemptId, eventType, payload },
-      timestamp: Date.now(),
-      correlationId: attemptId,
-    });
+    void kernelContainer.eventBus
+      .publish({
+        id: 'evt_' + crypto.randomBytes(8).toString('hex'),
+        type: 'courseware.event_logged',
+        source: 'builtin.courseware',
+        payload: { attemptId, eventType, payload },
+        timestamp: Date.now(),
+        correlationId: attemptId,
+      })
+      .catch((err) => {
+        console.error('[CoursewareService] Failed to publish courseware.event_logged event:', err);
+      });
   }
 
   // ── 3. 学生提交与学期成绩实时录入 ──────────────────────────────────────────

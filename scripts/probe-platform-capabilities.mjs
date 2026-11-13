@@ -89,12 +89,6 @@ try { r('spawn', typeof require === 'function' ? 'cjs' : 'esm-no-require'); } ca
 
 // ── ③ 子进程 IPC + serialization advanced ──
 {
-  const r = await runNode([
-    '--input-type=module',
-    '--eval',
-    `process.on('message', (m) => process.send({ echo: m.v, d: new Date(0), m: new Map([['k', 1]]) }));
-       process.send('ready');`,
-  ]);
   // 直接检查 IPC 往返 + 复杂类型保真
   const roundTrip = await new Promise((resolve) => {
     const child = spawn(

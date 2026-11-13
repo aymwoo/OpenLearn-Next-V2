@@ -99,14 +99,13 @@ describe('AiSubmitInjectorPlugin', () => {
 
   afterEach(() => {
     cleanupPluginsDir(pluginsDir);
+    const createdUuids = (db.prepare('SELECT uuid FROM courseware').all() as { uuid?: string }[])
+      .map((r) => r.uuid)
+      .filter((u): u is string => Boolean(u));
     db.close();
-    fs.rmSync(path.resolve(process.cwd(), 'storage', 'courseware', 'temp-test-uuid'), { recursive: true, force: true });
-    // Clean up any generated "[自动提交版]" files
-    const generatedDirs = fs.readdirSync(path.resolve(process.cwd(), 'storage', 'courseware'));
-    for (const dir of generatedDirs) {
-      if (dir !== 'temp-test-uuid') {
-        fs.rmSync(path.resolve(process.cwd(), 'storage', 'courseware', dir), { recursive: true, force: true });
-      }
+    const coursewareRoot = path.resolve(process.cwd(), 'storage', 'courseware');
+    for (const uuid of new Set(['temp-test-uuid', ...createdUuids])) {
+      fs.rmSync(path.resolve(coursewareRoot, uuid), { recursive: true, force: true });
     }
   });
 
