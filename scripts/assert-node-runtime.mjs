@@ -25,8 +25,9 @@
  * ## 支持范围为什么是 20.x / 22.x / 24.x
  *
  * - **20.x**：仍在现场的旧 LTS（better-sqlite3 官方提供预编译产物）。
- * - **22.x**：CI 全程、Docker 镜像（`node:22-alpine`）、`.nvmrc` / `.node-version` 都钉它。
- * - **24.x**：当前 LTS，本项目有全量单测通过的记录。
+ * - **22.x**：受支持的旧 LTS（CI 的 node-runtime-compat 矩阵仍覆盖它）。
+ * - **24.x**：当前 LTS，也是仓库钉住的版本 —— CI 主作业、Docker 镜像
+ *   （`node:24-alpine`）、`.nvmrc` / `.node-version` 都对齐它；本项目有全量单测通过的记录。
  * - **不含 21.x / 23.x**：非 LTS 奇数版本，且 better-sqlite3 官方 engines 不含 21.x
  *   （无预编译产物 → 客户机必须自带编译工具链，装不上）。
  * - **不含 25.x / 26.x**：本项目未验证；实测 Node 26 下复用 Node 22 装的
@@ -49,7 +50,7 @@ export const SUPPORTED_NODE_MAJORS = Object.freeze([20, 22, 24]);
 export const SUPPORTED_NODE_TEXT = 'Node.js 20.x / 22.x / 24.x';
 
 /** 仓库钉住的版本（.nvmrc / .node-version / Dockerfile 都用它）。 */
-export const PINNED_NODE_MAJOR = 22;
+export const PINNED_NODE_MAJOR = 24;
 
 /**
  * 从版本串里解析主版本号。

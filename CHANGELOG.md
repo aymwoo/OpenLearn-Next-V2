@@ -10,6 +10,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Refactor / Performance
+
+- **Node 基线从 22 迁移到 24**：`.nvmrc` / `.node-version` / `PINNED_NODE_MAJOR` / `Dockerfile`（`node:24-alpine`）/ CI 主作业 / `AGENTS.md` 与安装、部署、开发指南统一钉住 Node 24；`20.x || 22.x || 24.x` 的受支持范围与 CI 的 node-runtime-compat 矩阵保持不变。起因是本机运行时已是 Node 24（`better-sqlite3` 需 ABI 137），而仓库仍钉 22，跨环境复用 `node_modules` 会反复触发 `ERR_DLOPEN_FAILED`。
+
 ## [0.7.15] - 2026-11-12
 
 ### Fixes

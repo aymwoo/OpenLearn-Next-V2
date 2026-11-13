@@ -11,7 +11,7 @@
 | 平台版本    | `0.7.15`                                | `package.json`                          |
 | 插件 SDK    | `@openlearn/plugin-sdk@3.8.0`           | `packages/plugin-sdk/package.json`      |
 | 测试工具包  | `@openlearn/plugin-test-kit@3.3.3`      | `packages/plugin-test-kit/package.json` |
-| 宿主运行时  | Node.js `20.x / 22.x / 24.x`（推荐 22） | `AGENTS.md`                             |
+| 宿主运行时  | Node.js `20.x / 22.x / 24.x`（推荐 24） | `AGENTS.md`                             |
 | 课件 Bridge | `@openlearn/bridge-sdk`                 | `packages/bridge-sdk/src/bridge.js`     |
 | 数据库      | SQLite（`better-sqlite3`，同步 API）    | `packages/core/db/`                     |
 

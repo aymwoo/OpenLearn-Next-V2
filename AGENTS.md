@@ -148,12 +148,12 @@ All AI coding agents (including Antigravity, CodeBuddy, Cursor, Claude Code, Cop
 
 ## Environment
 
-**Node 版本：用 22（见 `.nvmrc`）**。`pnpm dev` / `pnpm test` / `pnpm test:e2e` 都请在同一版本上跑 —— 换主版本会连带触发两类问题：
+**Node 版本：用 24（见 `.nvmrc`）**。`pnpm dev` / `pnpm test` / `pnpm test:e2e` 都请在同一版本上跑 —— 换主版本会连带触发两类问题：
 
 1. **原生模块 ABI 不匹配**：`better-sqlite3` 是按主版本编译的（Node 22 → ABI 127、24 → 137、26 → 147）。换版本后不重编就会启动即崩，报 `ERR_DLOPEN_FAILED` / `NODE_MODULE_VERSION` 不匹配。修法：在当前 Node 下执行 `pnpm rebuild better-sqlite3`。
 2. **Node 26 无法跑测试**：Node 26 内置了实验性的 Web Storage，`globalThis.localStorage` **存在但值为 `undefined`**（需要 `--localstorage-file` 才可用，否则访问会打 `ExperimentalWarning`）。vitest 的 jsdom 环境会跳过 Node 已经定义过的全局，于是留下那个坏掉的 `localStorage`，表现为大量用例报 `Cannot read properties of undefined (reading 'clear')`（实测：213 个测试文件 / 298 条用例全红；换回 22 或 24 即恢复）。
 
-CI 也钉在 `node-version: 22`，本地对齐它就是对齐合并门禁。
+CI 也钉在 `node-version: 24`，本地对齐它就是对齐合并门禁。
 
 Copy `.env.example` to `.env`. AI features are configured via **AI Providers** in the admin dashboard ("AI Provider Management") with any OpenAI-compatible model provider (such as DeepSeek, Qwen, Ollama, OpenAI, etc.). Seed usernames are `admin` (administrator) and `teacher` (teacher); passwords come from `OPENLEARN_ADMIN_PASSWORD` / `OPENLEARN_TEACHER_PASSWORD`, otherwise **default to the username itself** (`admin`/`admin`, `teacher`/`teacher`) with a forced password change on first login. Set `OPENLEARN_SEED_PASSWORD_MODE=random` to get the old behavior (random value written once to `storage/bootstrap-credentials.txt`). Do not set `PLAYWRIGHT_TEST` in production. `TRUST_PROXY` defaults to off; set it explicitly behind a reverse proxy. The SQLite database is at `packages/core/db/educational_os.db`.
 
@@ -178,7 +178,7 @@ Documentation map (read the one that matches your goal; the whole tree is publis
 
 ## Cursor Cloud specific instructions
 
-- Install with Corepack pnpm `10.33.4` and `pnpm install --frozen-lockfile`. This is a pnpm workspace; `npm install` builds a second tree and skips the `better-sqlite3` build allow-list. Node 22 and `build-essential` are enough to compile that native module.
+- Install with Corepack pnpm `10.33.4` and `pnpm install --frozen-lockfile`. This is a pnpm workspace; `npm install` builds a second tree and skips the `better-sqlite3` build allow-list. Node 24 and `build-essential` are enough to compile that native module.
 - `pnpm dev` listens on port 9000 (`GET /health`, `GET /health/ready`). The Cloud Agent start script points `OPENLEARN_DATA_DIR`, `OPENLEARN_DB_PATH`, `LOG_DIR`, and `BACKUP_DIR` at `$HOME/openlearn-data` so the dev database and `storage/encryption-key` stay outside the checkout. Vitest sets its own `ENCRYPTION_KEY`; a key file left in the repo `storage/` directory fails the suite with `EncryptionKeyMismatchError`.
 - Seed usernames are `admin` and `teacher`, and their initial password equals the username (`must_change_password = 1`), so the login page can show a first-run hint from `GET /api/auth/seed-status` (public, read-only, reports only whether the default password is still active). With `OPENLEARN_SEED_PASSWORD_MODE=random` the generated password is written once to `$HOME/openlearn-data/storage/bootstrap-credentials.txt` instead. Staff login uses `entrance: "teacher"`. The first session must `POST /api/auth/change-password` (at least 8 characters, letters and numbers, different from the username) before other writes are accepted. Do not set `PLAYWRIGHT_TEST` outside Playwright.
 - AI provider API keys are configured in the admin UI and are not required to boot, log in, manage classes, or run `pnpm lint`, `pnpm lint:strict`, and `pnpm test`.

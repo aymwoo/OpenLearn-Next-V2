@@ -28,7 +28,7 @@
 
 ### 软件要求
 
-- **Node.js** 20.x / 22.x / 24.x（LTS 推荐 22.x；`package.json` 的 `engines` 约束为 `20.x || 22.x || 24.x`）
+- **Node.js** 20.x / 22.x / 24.x（LTS 推荐 24.x；`package.json` 的 `engines` 约束为 `20.x || 22.x || 24.x`）
 - **pnpm**（**本仓库是 pnpm workspace**，见 `pnpm-workspace.yaml`；全部命令以 `pnpm` 为准，**不要用 `npm install`**——会生成第二份依赖树）
 - **操作系统**：Linux（推荐）、macOS、Windows（WSL2 推荐）
 
@@ -36,14 +36,14 @@
 > `.node` 二进制按 Node 的 ABI 编译，不是跨版本通用的 JS 包。同一份 `node_modules`
 > 换到另一个 Node 主版本上就会在运行期炸出 `ERR_DLOPEN_FAILED /
 NODE_MODULE_VERSION 不一致` —— 这条原生报错对客户不可操作。平台因此只承诺
-> **实测过的**主版本：20.x（现场旧 LTS）、22.x（CI / Docker / `.nvmrc` 全程钉它）、
-> 24.x（当前 LTS）。21.x / 23.x 非 LTS 且 better-sqlite3 官方不提供 21.x 预编译产物；
+> **实测过的**主版本：20.x（现场旧 LTS）、22.x（受支持的旧 LTS）、
+> 24.x（当前 LTS，也是 CI / Docker / `.nvmrc` 钉住的版本）。21.x / 23.x 非 LTS 且 better-sqlite3 官方不提供 21.x 预编译产物；
 > 25.x 及以上本项目未验证。
 
 验证安装：
 
 ```bash
-node --version   # 应输出 v20.x / v22.x / v24.x 之一（仓库 .nvmrc 已钉住 22）
+node --version   # 应输出 v20.x / v22.x / v24.x 之一（仓库 .nvmrc 已钉住 24）
 pnpm --version   # 应输出 10.x（仓库 `packageManager` 钉 `10.33.4`，Corepack 会自动对齐）
 ```
 

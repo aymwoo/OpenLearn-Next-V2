@@ -211,7 +211,7 @@ src/plugin-host/__tests__/extension-point-renderer.test.tsx
 | 能力断言失败                          | 插件     | 换成 19 条真值                                |
 | 能力对但运行期仍被拒                  | 配置     | 管理员未勾选授予                              |
 | Mock 行为与生产不一致                 | 产品边界 | 补 L3，**不改断言迎合 Mock**                  |
-| test-kit 自身报错                     | 环境     | 核对 vitest 版本 / `better-sqlite3` / Node 22 |
+| test-kit 自身报错                     | 环境     | 核对 vitest 版本 / `better-sqlite3` / Node 24 |
 
 ---
 

@@ -6,7 +6,7 @@
 
 ## 1. Node 版本是硬门槛
 
-`package.json → engines.node` 写的是 `20.x || 22.x || 24.x`，但**CI 与文档统一钉 22**（`.nvmrc`）。
+`package.json → engines.node` 写的是 `20.x || 22.x || 24.x`，但**CI 与文档统一钉 24**（`.nvmrc`）。
 
 两个版本的坑都踩过：
 
@@ -134,7 +134,7 @@ PM2 配置在 `ecosystem.config.cjs`：
 docker compose up -d --build
 ```
 
-`Dockerfile` 两阶段（`node:22-alpine` 构建 → 运行）。三个不可改的细节：
+`Dockerfile` 两阶段（`node:24-alpine` 构建 → 运行）。三个不可改的细节：
 
 1. `corepack prepare pnpm@10.33.4` 钉版本 —— `@latest` 会带默认 `minimumReleaseAge`，
    在没有 `.npmrc` 时拒绝当天发布的传递依赖。
