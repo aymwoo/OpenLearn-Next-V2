@@ -144,12 +144,41 @@ interface ThemeState {
   deleteCustomTheme: (themeId: ThemeId) => void;
 }
 
+/** 判断十六进制背景色是否为暗色调（相对亮度 < 0.35） */
+function isDarkHexColor(hex?: string): boolean {
+  if (!hex || !hex.startsWith('#')) return false;
+  const raw = hex.trim().slice(1);
+  const full =
+    raw.length === 3
+      ? raw
+          .split('')
+          .map((c) => c + c)
+          .join('')
+      : raw.slice(0, 6);
+  if (full.length !== 6) return false;
+  const n = Number.parseInt(full, 16);
+  if (Number.isNaN(n)) return false;
+  const [r, g, b] = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((v) => {
+    const s = v / 255;
+    return s <= 0.04045 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+  });
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b < 0.35;
+}
+
+function resolveColorScheme(themeId: string): 'light' | 'dark' {
+  if (themeId === 'dark' || themeId === 'chalkboard') return 'dark';
+  if (themeId === 'light' || themeId === 'eyecare') return 'light';
+  const tokens = getThemeTokens(themeId);
+  return isDarkHexColor(tokens['--bg-app']) ? 'dark' : 'light';
+}
+
 /**
- * 将指定主题 ID 挂载到 DOM documentElement 上
+ * 将指定主题 ID 与原生 color-scheme 挂载到 DOM documentElement 上
  */
 function applyThemeToDOM(themeId: string) {
   if (typeof document === 'undefined') return;
   document.documentElement.setAttribute('data-theme', themeId);
+  document.documentElement.style.colorScheme = resolveColorScheme(themeId);
 }
 
 /**

@@ -155,7 +155,22 @@ describe('themeStore (Theming System Engine)', () => {
     useThemeStore.getState().initTheme();
 
     expect(useThemeStore.getState().theme).toBe('restored-theme');
+    expect(document.documentElement.style.colorScheme).toBe('dark');
     expect(useThemeStore.getState().availableThemes.some((t) => t.id === 'restored-theme')).toBe(true);
     expect(document.getElementById('openlearn-custom-theme-restored-theme')).not.toBeNull();
+  });
+
+  it('syncs document.documentElement.style.colorScheme for builtin dark/light themes', () => {
+    useThemeStore.getState().setTheme('dark');
+    expect(document.documentElement.style.colorScheme).toBe('dark');
+
+    useThemeStore.getState().setTheme('eyecare');
+    expect(document.documentElement.style.colorScheme).toBe('light');
+
+    useThemeStore.getState().setTheme('chalkboard');
+    expect(document.documentElement.style.colorScheme).toBe('dark');
+
+    useThemeStore.getState().setTheme('light');
+    expect(document.documentElement.style.colorScheme).toBe('light');
   });
 });
