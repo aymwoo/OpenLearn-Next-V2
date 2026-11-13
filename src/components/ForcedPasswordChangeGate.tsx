@@ -69,7 +69,7 @@ export default function ForcedPasswordChangeGate({ lang, username, onDone, onLog
     'w-full px-3 py-2 rounded-lg bg-white border border-slate-300 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent';
 
   return (
-    <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-4 font-sans">
+    <main className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-4 font-sans">
       <div className="w-full max-w-md bg-white rounded-2xl shadow-xl p-6">
         <div className="flex items-center gap-3 mb-1">
           <div className="p-2 rounded-lg bg-amber-100">
@@ -153,6 +153,6 @@ export default function ForcedPasswordChangeGate({ lang, username, onDone, onLog
           {zh ? '退出登录' : 'Log out'}
         </button>
       </div>
-    </div>
+    </main>
   );
 }

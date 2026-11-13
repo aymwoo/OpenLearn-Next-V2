@@ -698,6 +698,7 @@ export function RevealPresentationWrapper({
                 <div className="w-full h-full flex items-center justify-center p-2 bg-slate-100 max-w-[90vw] max-h-[82vh] aspect-video rounded-2xl overflow-hidden shadow-2xl border border-neutral-850">
                   <iframe
                     key={`${fileUrl}-fs-${slideIndex}`}
+                    title={fileName || 'Presentation PDF fullscreen preview'}
                     src={`${fileUrl}#page=${slideIndex + 1}&toolbar=0&navpanes=0`}
                     className="w-full h-full border-0 rounded-xl"
                   />
@@ -995,6 +996,7 @@ export function RevealPresentationWrapper({
                 >
                   <iframe
                     key={`${fileUrl}-${isContainerFullscreen ? 'fs' : 'card'}-${slideIndex}`}
+                    title={fileName || 'Presentation PDF slide preview'}
                     src={`${fileUrl}#page=${slideIndex + 1}&toolbar=0&navpanes=0`}
                     className="w-full h-full border-0 rounded-xl"
                   />

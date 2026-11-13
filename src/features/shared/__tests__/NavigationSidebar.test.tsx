@@ -208,4 +208,12 @@ describe('NavigationSidebar (紧凑化与分类折叠)', () => {
     expect(collapsedLabelSpan?.className).toContain('hidden');
     expect(screen.queryByText('系统导航')).toBeNull();
   });
+
+  it('uses a semantic <nav> landmark with aria-label and accessible collapse button (#487)', () => {
+    render(<NavigationSidebar {...defaultProps} />);
+    const nav = screen.getByRole('navigation', { name: '主导航' });
+    expect(nav.tagName).toBe('NAV');
+    const collapseBtn = screen.getByRole('button', { name: '折叠导航' });
+    expect(collapseBtn.getAttribute('type')).toBe('button');
+  });
 });

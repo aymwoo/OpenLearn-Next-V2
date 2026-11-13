@@ -397,6 +397,16 @@ export function registerRosterRoutes(ctx: ServerContext) {
         (process.env.NODE_ENV === 'production' && process.env.ENABLE_HTTPS === 'true');
       const secureFlag = isSecure ? '; Secure' : '';
       res.setHeader('Set-Cookie', `edu_os_token=; Path=/; HttpOnly; Max-Age=0; SameSite=Lax${secureFlag}`);
+      try {
+        const settingRow = kernelContainer.db
+          .prepare('SELECT logout_clear_site_data FROM site_settings WHERE id = ?')
+          .get('global') as { logout_clear_site_data?: number } | undefined;
+        if (settingRow?.logout_clear_site_data) {
+          res.setHeader('Clear-Site-Data', '"cookies", "storage", "cache"');
+        }
+      } catch {
+        // Ignore if minimal unit test DB lacks site_settings
+      }
       res.json({ success: true });
     } catch (e: any) {
       sendSafeError(res, e);

@@ -47,6 +47,7 @@ export interface SiteInfo {
   uploadMaxFileMb?: number | null;
   currentAcademicYear?: string | null;
   academicStartMonth?: number;
+  logoutClearSiteData?: boolean;
 }
 
 interface AdminPanelProps {
@@ -86,6 +87,7 @@ export function AdminPanel({
   const [uploadMaxFileMb, setUploadMaxFileMb] = useState<number>(siteInfo?.uploadMaxFileMb ?? 10);
   const [currentAcademicYear, setCurrentAcademicYear] = useState<string>(siteInfo?.currentAcademicYear ?? '');
   const [academicStartMonth, setAcademicStartMonth] = useState<number>(9);
+  const [logoutClearSiteData, setLogoutClearSiteData] = useState<boolean>(Boolean(siteInfo?.logoutClearSiteData));
   const [siteSettingsSaving, setSiteSettingsSaving] = useState(false);
   const [siteSettingsLoaded, setSiteSettingsLoaded] = useState(false);
 
@@ -211,6 +213,7 @@ export function AdminPanel({
         if (typeof data.academicStartMonth === 'number' && data.academicStartMonth > 0) {
           setAcademicStartMonth(data.academicStartMonth);
         }
+        setLogoutClearSiteData(Boolean(data.logoutClearSiteData));
         setSiteSettingsLoaded(true);
       }
     } catch (err) {
@@ -244,6 +247,7 @@ export function AdminPanel({
           uploadMaxFileMb: Math.round(Number(uploadMaxFileMb)),
           currentAcademicYear: currentAcademicYear.trim() || undefined,
           academicStartMonth: Math.round(Number(academicStartMonth)),
+          logoutClearSiteData,
         }),
       });
       if (res.ok) {
@@ -1396,6 +1400,33 @@ export function AdminPanel({
                 />
               </div>
 
+              <div className="pt-2 border-t border-gray-100">
+                <div className="flex items-start gap-3">
+                  <input
+                    id="site_logout_clear_site_data"
+                    type="checkbox"
+                    checked={logoutClearSiteData}
+                    onChange={(e) => setLogoutClearSiteData(e.target.checked)}
+                    className="mt-1 h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                  />
+                  <div className="space-y-0.5">
+                    <label
+                      htmlFor="site_logout_clear_site_data"
+                      className="text-xs font-bold text-gray-700 cursor-pointer block"
+                    >
+                      {lang === 'zh'
+                        ? '登出时下发 Clear-Site-Data 清理浏览器数据'
+                        : 'Send Clear-Site-Data header on logout'}
+                    </label>
+                    <p className="text-xs text-gray-500 leading-relaxed">
+                      {lang === 'zh'
+                        ? '开启后，用户退出登录时服务端会返回 Clear-Site-Data: "cookies", "storage", "cache"，彻底清理同源 Cookie、Web Storage 与缓存（适合机房公用终端；开启后会同步重置本地主题偏好）。'
+                        : 'When enabled, logout responses include Clear-Site-Data: "cookies", "storage", "cache" to purge cookies, Web Storage, and HTTP cache on shared lab computers (also resets local theme preferences).'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
               <div className="flex items-center justify-end gap-3 pt-2 border-t border-gray-100">
                 <button
                   type="submit"
@@ -1618,8 +1649,10 @@ export function AdminPanel({
                     : 'New Teacher Credentials'}
               </h4>
               <button
+                type="button"
+                aria-label={lang === 'zh' ? '关闭对话框' : 'Close dialog'}
                 onClick={() => setIsFormOpen(false)}
-                className="text-gray-400 hover:text-gray-600 focus:outline-none"
+                className="text-gray-400 hover:text-gray-600 rounded p-0.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
               >
                 <X size={18} />
               </button>

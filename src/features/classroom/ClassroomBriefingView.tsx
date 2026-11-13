@@ -867,7 +867,7 @@ export function ClassroomBriefingView({
         <div className="overflow-x-auto">
           <table className="w-full border-collapse text-left text-xs text-main">
             <thead>
-              <tr className="bg-surface-secondary border-b border-theme font-bold text-muted select-none">
+              <tr className="bg-surface-secondary border-b border-theme font-bold text-muted">
                 <th className="p-3">{lang === 'zh' ? '学号' : 'ID'}</th>
                 <th className="p-3">{lang === 'zh' ? '学生姓名' : 'Student Name'}</th>
                 <th className="p-3">{lang === 'zh' ? '考勤' : 'Attendance'}</th>

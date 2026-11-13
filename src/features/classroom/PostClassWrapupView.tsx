@@ -433,7 +433,7 @@ export function PostClassWrapupView({
               ) : (
                 <table className="w-full border-collapse text-left text-xs text-main">
                   <thead>
-                    <tr className="bg-surface-secondary border-b border-theme font-bold text-muted select-none">
+                    <tr className="bg-surface-secondary border-b border-theme font-bold text-muted">
                       <th className="p-3">{lang === 'zh' ? '学生姓名' : 'Student'}</th>
                       <th className="p-3">{lang === 'zh' ? '课件项目' : 'Courseware'}</th>
                       <th className="p-3">{lang === 'zh' ? '状态' : 'Status'}</th>

@@ -329,4 +329,23 @@ describe('isPayloadOversized — 按序列化长度估算', () => {
     expect(consoleSpy).toHaveBeenCalledWith('[LMS Bridge] Dropped oversized postMessage (>512KB)');
     consoleSpy.mockRestore();
   });
+
+  it('processLmsMessage 丢弃 event.source 为 null 的伪造消息', async () => {
+    vi.restoreAllMocks();
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    await processLmsMessage(
+      makeEvent(
+        {
+          type: 'LMS_SUBMIT',
+          attempt_id: 'atk-null-source',
+          payload: { score: 100 },
+        },
+        null,
+      ),
+    );
+
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
 });

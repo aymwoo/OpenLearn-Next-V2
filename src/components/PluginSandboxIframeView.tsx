@@ -125,7 +125,7 @@ export function PluginSandboxIframeView({
   useEffect(() => {
     const handleMessage = async (event: MessageEvent) => {
       const iframe = iframeRef.current;
-      if (!iframe || event.source !== iframe.contentWindow) return;
+      if (!iframe || !event.source || event.source !== iframe.contentWindow) return;
       const data = event.data;
       if (!data || data.channel !== PLUGIN_VIEW_CHANNEL) return;
 

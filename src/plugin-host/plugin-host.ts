@@ -498,7 +498,7 @@ export class FrontendPluginHost {
 
     // I1: 注册长驻消息处理器（与激活 Promise 解耦）
     const onPersistentMessage = (event: MessageEvent) => {
-      if (event.source !== frame.contentWindow || !isPluginFrameMessage(event.data)) return;
+      if (!event.source || event.source !== frame.contentWindow || !isPluginFrameMessage(event.data)) return;
       const data = event.data;
       if (data.type !== 'call' || !data.callId || !data.op) return;
       void this.answerSandboxCall(frame, data.callId, data.op, data.args ?? [], {
@@ -547,7 +547,7 @@ export class FrontendPluginHost {
       };
 
       const onActivationMessage = (event: MessageEvent) => {
-        if (event.source !== frame.contentWindow || !isPluginFrameMessage(event.data)) return;
+        if (!event.source || event.source !== frame.contentWindow || !isPluginFrameMessage(event.data)) return;
         const data = event.data;
         if (data.type === 'ready') {
           frame.contentWindow?.postMessage(

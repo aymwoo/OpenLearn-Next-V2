@@ -310,9 +310,9 @@ export async function processLmsMessage(event: MessageEvent): Promise<void> {
   }
 
   // Security: 仅接受受管辖课件 iframe（data-lms-bridge）或同窗口自身的消息，
-  // 丢弃未知外部窗口 / 弹窗 / 未标记 iframe 的消息
-  if (typeof window !== 'undefined' && event.source) {
-    if (event.source !== window && !isFromManagedIframe(event.source)) {
+  // 丢弃未知外部窗口 / 弹窗 / 未标记 iframe 或 null source 的消息
+  if (typeof window !== 'undefined') {
+    if (!event.source || (event.source !== window && !isFromManagedIframe(event.source))) {
       return;
     }
   }

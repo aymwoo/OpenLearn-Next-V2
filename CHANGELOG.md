@@ -12,6 +12,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixes
 
+- **无障碍语义地标、焦点可见性、跨文档消息安全与可选登出站点清理（Issue #487）**：
+  - 为 `App.tsx` 主应用壳、登录页及强制改密页补齐 Skip Link、`lang`/`title` 动态同步与 `<main>`/`<nav>`/`<aside>` 地标；为 `QuickActionsMenu.tsx` 菜单选项与 `RightSidebar.tsx` 折叠触发器、通知列表项等可点击 `<div>` 改用原生 `<button type="button">`；为 `RevealPresentationWrapper.tsx` 演示文稿 PDF `<iframe>` 补充 `title`；补全 `focus-visible:ring-2` 键盘焦点指示并清理表格与表单中的反效 `select-none`；
+  - 加固 `lms-bridge.ts`、`PluginSandboxIframeView.tsx` 与 `plugin-host.ts` 的 `postMessage` 校验，显式拒绝 `event.source` 为 `null`/伪造来源的消息；
+  - 新增迁移 `046_logout_clear_site_data.sql`（同步更新 `schema-golden.json`）并在管理后台站点设置支持配置 `logoutClearSiteData`（默认关闭），开启后 `POST /api/auth/logout` 响应自动下发 `Clear-Site-Data: "cookies", "storage", "cache"`。
 - **全局 `color-scheme`、减动效基线、滚动条工具类与首屏 Logo 优先级提示（Issue #486）**：
   - 在 `index.html` 声明 `<meta name="color-scheme" content="light dark">`，并在 `src/index.css`（`light`/`dark`/`eyecare`/`chalkboard`）及 `src/store/themeStore.ts`（含自定义深浅主题亮度推断）同步设置 `documentElement.style.colorScheme`；
   - 在 `src/index.css` 补全 Tailwind v4 `@utility scrollbar-thin` / `scrollbar-none`、原生 `<dialog>:modal` 与 `dialog::backdrop` 的 `overscroll-behavior: contain` 滚动穿透防护，以及基于 `prefers-reduced-motion` 的动画降级规则（停止循环弹幕与脉冲/弹跳位移并保持可读定位）；在 `src/main.tsx` 全局接入 `<MotionConfig reducedMotion="user">`；

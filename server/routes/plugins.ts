@@ -1888,7 +1888,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
     try {
       const row = kernelContainer.db
         .prepare(
-          'SELECT site_name, slogan, logo_url, upload_max_file_mb, current_academic_year, academic_start_month FROM site_settings WHERE id = ?',
+          'SELECT site_name, slogan, logo_url, upload_max_file_mb, current_academic_year, academic_start_month, logout_clear_site_data FROM site_settings WHERE id = ?',
         )
         .get('global') as any;
       const academicStartMonth = row?.academic_start_month ?? 9;
@@ -1901,6 +1901,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
         uploadMaxFileMb: row?.upload_max_file_mb ?? null,
         currentAcademicYear,
         academicStartMonth,
+        logoutClearSiteData: Boolean(row?.logout_clear_site_data),
       });
     } catch (e: any) {
       sendSafeError(res, e);
@@ -1909,7 +1910,15 @@ export function registerPluginsRoutes(ctx: ServerContext) {
 
   app.put('/api/site-settings', requireAuth('administrator'), (req, res) => {
     try {
-      const { siteName, slogan, logoUrl, uploadMaxFileMb, currentAcademicYear, academicStartMonth } = req.body || {};
+      const {
+        siteName,
+        slogan,
+        logoUrl,
+        uploadMaxFileMb,
+        currentAcademicYear,
+        academicStartMonth,
+        logoutClearSiteData,
+      } = req.body || {};
       // v0.6.1：上传大小上限校验（整数 1–90；90 受 express.json 110MB 全局
       // 上限约束，base64 膨胀 ~33% 后约 90MB 文件）。undefined = 不修改。
       let maxFileMb: number | null | undefined = undefined;
@@ -1918,6 +1927,14 @@ export function registerPluginsRoutes(ctx: ServerContext) {
         if (!Number.isInteger(maxFileMb) || maxFileMb < 1 || maxFileMb > 90) {
           return res.status(400).json({ error: '上传大小上限必须是 1–90 之间的整数（MB）' });
         }
+      }
+
+      let normalizedLogoutClearSiteData: number | null = null;
+      if (logoutClearSiteData !== undefined && logoutClearSiteData !== null) {
+        if (typeof logoutClearSiteData !== 'boolean') {
+          return res.status(400).json({ error: 'logoutClearSiteData 必须是布尔值' });
+        }
+        normalizedLogoutClearSiteData = logoutClearSiteData ? 1 : 0;
       }
 
       // 学年设置校验
@@ -1942,11 +1959,12 @@ export function registerPluginsRoutes(ctx: ServerContext) {
 
       kernelContainer.db
         .prepare(
-          `INSERT INTO site_settings (id, site_name, slogan, logo_url, upload_max_file_mb, current_academic_year, academic_start_month) VALUES ('global', ?, ?, ?, ?, ?, ?)
+          `INSERT INTO site_settings (id, site_name, slogan, logo_url, upload_max_file_mb, current_academic_year, academic_start_month, logout_clear_site_data) VALUES ('global', ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT(id) DO UPDATE SET site_name = excluded.site_name, slogan = excluded.slogan, logo_url = excluded.logo_url,
              upload_max_file_mb = COALESCE(excluded.upload_max_file_mb, site_settings.upload_max_file_mb),
              current_academic_year = COALESCE(excluded.current_academic_year, site_settings.current_academic_year),
-             academic_start_month = COALESCE(excluded.academic_start_month, site_settings.academic_start_month)`,
+             academic_start_month = COALESCE(excluded.academic_start_month, site_settings.academic_start_month),
+             logout_clear_site_data = COALESCE(?, site_settings.logout_clear_site_data, 0)`,
         )
         .run(
           siteName || '',
@@ -1955,18 +1973,27 @@ export function registerPluginsRoutes(ctx: ServerContext) {
           maxFileMb ?? null,
           normalizedAcademicYear ?? null,
           normalizedStartMonth ?? null,
+          normalizedLogoutClearSiteData ?? 0,
+          normalizedLogoutClearSiteData,
         );
       const row = kernelContainer.db
         .prepare(
-          'SELECT upload_max_file_mb, current_academic_year, academic_start_month FROM site_settings WHERE id = ?',
+          'SELECT upload_max_file_mb, current_academic_year, academic_start_month, logout_clear_site_data FROM site_settings WHERE id = ?',
         )
         .get('global') as any;
+      const resolvedLogoutClear = Boolean(row?.logout_clear_site_data);
       res.json({
         success: true,
-        siteInfo: { siteName: siteName || '', slogan: slogan || '', logoUrl: logoUrl || null },
+        siteInfo: {
+          siteName: siteName || '',
+          slogan: slogan || '',
+          logoUrl: logoUrl || null,
+          logoutClearSiteData: resolvedLogoutClear,
+        },
         uploadMaxFileMb: row?.upload_max_file_mb ?? null,
         currentAcademicYear: row?.current_academic_year ?? null,
         academicStartMonth: row?.academic_start_month ?? 9,
+        logoutClearSiteData: resolvedLogoutClear,
       });
     } catch (e: any) {
       sendSafeError(res, e);

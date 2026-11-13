@@ -161,4 +161,45 @@ describe('AdminPanel (管理后台页面样式规范化与标签切换)', () => 
     fireEvent.change(searchInput, { target: { value: '不存在的姓名' } });
     expect(await screen.findByText('未检索到任何符合条件的教师账户')).toBeTruthy();
   });
+
+  it('renders and persists logoutClearSiteData setting in Site Settings tab', async () => {
+    const putCalls: Array<{ url: string; body: Record<string, unknown> }> = [];
+    global.fetch = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+      if (url === '/api/users') {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+      }
+      if (url === '/api/site-settings' && init?.method === 'PUT') {
+        putCalls.push({ url, body: JSON.parse(String(init.body || '{}')) });
+        return Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              ok: true,
+              siteInfo: {
+                siteName: 'OpenLearn Next',
+                slogan: 'Next-Gen Educational OS',
+                logoUrl: null,
+                logoutClearSiteData: true,
+              },
+            }),
+        });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+    });
+
+    render(<AdminPanel {...defaultProps} />);
+
+    fireEvent.click(screen.getByText('站点信息设置'));
+    const checkbox = await screen.findByLabelText(/登出时下发 Clear-Site-Data/);
+    expect((checkbox as HTMLInputElement).checked).toBe(false);
+
+    fireEvent.click(checkbox);
+    expect((checkbox as HTMLInputElement).checked).toBe(true);
+
+    fireEvent.click(screen.getByRole('button', { name: /保存站点信息/ }));
+    await vi.waitFor(() => {
+      expect(putCalls).toHaveLength(1);
+    });
+    expect(putCalls[0].body.logoutClearSiteData).toBe(true);
+  });
 });

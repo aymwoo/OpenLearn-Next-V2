@@ -362,9 +362,10 @@ export function AppHeader(props: AppHeaderProps) {
                       {studentNotifications.map((notif) => {
                         const isUnread = !readNotifications.has(notif.id);
                         return (
-                          <div
+                          <button
+                            type="button"
                             key={notif.id}
-                            className={`p-3 hover:bg-gray-50 cursor-pointer ${isUnread ? 'bg-indigo-50/30' : ''}`}
+                            className={`w-full text-left p-3 hover:bg-gray-50 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-500 ${isUnread ? 'bg-indigo-50/30' : ''}`}
                             onClick={() => {
                               if (isUnread) {
                                 if (activeStudentId) {
@@ -387,7 +388,7 @@ export function AppHeader(props: AppHeaderProps) {
                             }}
                           >
                             <div className="flex gap-3">
-                              <div className="mt-0.5">
+                              <div className="mt-0.5" aria-hidden="true">
                                 {notif.type === 'new_assignment' ? (
                                   <ClipboardList size={16} className="text-indigo-500" />
                                 ) : (
@@ -404,9 +405,11 @@ export function AppHeader(props: AppHeaderProps) {
                                   {notif.message}
                                 </div>
                               </div>
-                              {isUnread && <div className="w-2 h-2 rounded-full bg-indigo-500 mt-1"></div>}
+                              {isUnread && (
+                                <div className="w-2 h-2 rounded-full bg-indigo-500 mt-1" aria-hidden="true"></div>
+                              )}
                             </div>
-                          </div>
+                          </button>
                         );
                       })}
                     </div>
