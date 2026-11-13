@@ -1,7 +1,7 @@
 {
   "_comment": "数据库结构金样（自动生成，勿手改）：空库跑完 migrations/ 全部迁移后的表→列快照。启动时 assertSchemaMatchesGolden 以子集校验（实际库缺金样结构即拒绝启动；多出的表/列不报错）。改迁移后请运行 pnpm db:gen-golden 再生成。",
-  "migrationCount": 47,
-  "generatedAt": "2026-11-13T13:15:24.794Z",
+  "migrationCount": 48,
+  "generatedAt": "2026-11-13T15:34:59.721Z",
   "tables": {
     "_academic_year_backfill": ["backfilled_at", "id"],
     "_class_passcode_encryption": ["id", "note"],
@@ -546,6 +546,7 @@
     "site_settings": [
       "academic_start_month",
       "current_academic_year",
+      "default_theme_id",
       "id",
       "logo_url",
       "logout_clear_site_data",
@@ -633,6 +634,40 @@
       "name",
       "name_en",
       "sort_order",
+      "updated_at"
+    ],
+    "theme_versions": [
+      "asset_manifest_json",
+      "created_at",
+      "manifest_json",
+      "styles_css",
+      "theme_id",
+      "uploader_id",
+      "version"
+    ],
+    "themes": [
+      "author",
+      "created_at",
+      "description",
+      "id",
+      "latest_version",
+      "manifest_json",
+      "name",
+      "platform_max_version",
+      "platform_min_version",
+      "status",
+      "styles_css",
+      "supports_modes",
+      "updated_at",
+      "uploader_id",
+      "uploader_name"
+    ],
+    "user_theme_preferences": [
+      "appearance_json",
+      "installed_version",
+      "mode",
+      "principal_key",
+      "theme_id",
       "updated_at"
     ],
     "users": [

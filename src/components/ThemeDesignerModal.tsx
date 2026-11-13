@@ -15,6 +15,7 @@ import {
   Layers,
   Save,
 } from 'lucide-react';
+import JSZip from 'jszip';
 import { useThemeStore, type ThemeSpec, BUILTIN_THEME_TOKENS, getThemeTokens } from '../store/themeStore';
 
 interface ThemeDesignerModalProps {
@@ -753,6 +754,41 @@ export function ThemeDesignerModal({ isOpen, onClose, lang = 'zh' }: ThemeDesign
               <div className="flex items-center justify-end gap-2">
                 {importExportMode === 'export' ? (
                   <>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const safeId = (themeId || 'custom-theme')
+                          .toLowerCase()
+                          .replace(/[^a-z0-9._-]/g, '-')
+                          .replace(/^-+/, 'custom-');
+                        const manifest = {
+                          schemaVersion: 1,
+                          id: safeId.length >= 2 ? safeId : 'custom-theme',
+                          name: label || 'Custom Theme',
+                          version: '1.0.0',
+                          description: description || 'Exported from OpenLearn Theme Designer',
+                          author: 'Theme Designer User',
+                          defaultMode: 'auto',
+                          tokens,
+                          modes: { light: { tokens }, dark: { tokens } },
+                          stylesFile: 'styles.css',
+                        };
+                        const zip = new JSZip();
+                        zip.file('theme.json', JSON.stringify(manifest, null, 2));
+                        zip.file('styles.css', `/* Custom theme styles for ${manifest.id} */\n`);
+                        const blob = await zip.generateAsync({ type: 'blob' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `${manifest.id}-1.0.0.zip`;
+                        a.click();
+                        URL.revokeObjectURL(url);
+                      }}
+                      className="px-3 py-1.5 rounded-lg border border-theme text-main text-xs font-medium flex items-center gap-1.5 hover:bg-surface-secondary cursor-pointer"
+                    >
+                      <Download size={14} />
+                      {lang === 'zh' ? '导出为 .zip 包' : 'Export .zip'}
+                    </button>
                     <button
                       onClick={handleCopyExportJson}
                       className="px-4 py-1.5 rounded-lg bg-primary-theme text-white text-xs font-medium flex items-center gap-1.5 cursor-pointer"

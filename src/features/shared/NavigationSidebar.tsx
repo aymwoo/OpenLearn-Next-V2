@@ -27,6 +27,7 @@ export interface NavigationSidebarProps {
   lang?: string;
   session?: SessionType | null;
   todaySchedules?: ScheduleType[];
+  navPosition?: 'left' | 'right' | 'top';
 }
 
 const STORAGE_KEY = 'openlearn_nav_collapsed_groups';
@@ -98,15 +99,30 @@ export function NavigationSidebar(props: NavigationSidebarProps = {}) {
 
   const itemsByGroup = (groupKey: NavigationGroupKey) => navItems.filter((item) => item.group === groupKey);
 
+  const navPos = props.navPosition || 'left';
+  const borderClass =
+    navPos === 'top'
+      ? 'w-full border-b border-theme'
+      : navPos === 'right'
+        ? 'border-l border-theme'
+        : 'border-r border-theme';
+
   return (
     <nav
       id="navigation_sidebar"
       aria-label={lang === 'zh' ? '主导航' : 'Primary Navigation'}
-      className={`${mainNavCollapsed ? 'w-16' : 'w-44 md:w-44'} shrink-0 bg-surface border-r border-theme text-main flex flex-col transition-all duration-300`}
+      data-nav-position={navPos}
+      className={`${
+        navPos === 'top'
+          ? 'w-full flex-row flex-wrap items-center'
+          : `${mainNavCollapsed ? 'w-16' : 'w-44 md:w-44'} flex-col`
+      } shrink-0 bg-surface ${borderClass} text-main flex transition-all duration-300`}
     >
       {/* Collapse/Expand Toggle */}
       <div
-        className={`p-2 flex border-b border-theme-subtle ${mainNavCollapsed ? 'justify-center' : 'justify-between items-center px-3'} min-h-[48px] shrink-0`}
+        className={`p-2 flex ${navPos === 'top' ? 'border-r border-theme-subtle px-3' : 'border-b border-theme-subtle'} ${
+          mainNavCollapsed && navPos !== 'top' ? 'justify-center' : 'justify-between items-center px-3'
+        } min-h-[48px] shrink-0`}
       >
         {!mainNavCollapsed && (
           <span className="inline text-xs font-black tracking-widest text-muted uppercase">
@@ -140,7 +156,13 @@ export function NavigationSidebar(props: NavigationSidebarProps = {}) {
         </button>
       </div>
 
-      <div className={`p-2 ${mainNavCollapsed ? 'md:p-2' : 'md:p-2.5'} flex flex-col gap-2 overflow-y-auto flex-1`}>
+      <div
+        className={`p-2 ${mainNavCollapsed ? 'md:p-2' : 'md:p-2.5'} flex ${
+          navPos === 'top'
+            ? 'flex-row flex-wrap items-center gap-1.5 overflow-x-auto'
+            : 'flex-col gap-2 overflow-y-auto flex-1'
+        }`}
+      >
         {/* 分组按 registry 的 position 顺序渲染：teaching → system → extensions → support */}
         {(['teaching', 'system', 'extensions', 'support'] as NavigationGroupKey[]).map((groupKey) => {
           // 扩展应用分组的内容来自插件贡献（slot teacher.tab），由 ExtensionPointRenderer 渲染

@@ -1,0 +1,86 @@
+{
+  "schemaVersion": 1,
+  "id": "campus-atelier",
+  "name": "Campus Atelier",
+  "version": "1.0.0",
+  "description": "Warm editorial classroom theme with split login layout, right-docked teacher navigation, spacious student grid cards, and bundled SVG graphics.",
+  "author": "OpenLearn Community",
+  "defaultMode": "auto",
+  "compatibility": {
+    "minPlatformVersion": "0.7.0",
+    "maxPlatformVersion": "1.99.0"
+  },
+  "tokens": {
+    "--color-primary": "#0f766e",
+    "--primary-solid": "#0f766e",
+    "--primary-hover": "#115e59",
+    "--primary-ink": "#0f766e"
+  },
+  "modes": {
+    "light": {
+      "tokens": {
+        "--bg-app": "#f7f4ed",
+        "--bg-surface": "#ffffff",
+        "--bg-surface-secondary": "#efe9dc",
+        "--bg-surface-elevated": "#ffffff",
+        "--text-main": "#1c1917",
+        "--text-muted": "#57534e",
+        "--border-theme": "#e7e0d2"
+      }
+    },
+    "dark": {
+      "tokens": {
+        "--bg-app": "#161917",
+        "--bg-surface": "#1f2421",
+        "--bg-surface-secondary": "#28302b",
+        "--bg-surface-elevated": "#232a25",
+        "--text-main": "#f5f5f4",
+        "--text-muted": "#a8a29e",
+        "--border-theme": "#343e37"
+      }
+    }
+  },
+  "typography": {
+    "fontSans": "'Plus Jakarta Sans', 'Noto Sans SC', system-ui, sans-serif",
+    "fontDisplay": "'Georgia', 'Noto Serif SC', serif",
+    "fontMono": "'JetBrains Mono', ui-monospace, monospace",
+    "baseScale": 1
+  },
+  "appearance": {
+    "borderRadius": "pill",
+    "cardStyle": "elevated",
+    "density": "spacious",
+    "accentPattern": "dots",
+    "backgroundImage": "assets/backdrop.svg"
+  },
+  "layouts": {
+    "login": {
+      "arrangement": "split-left",
+      "order": ["brand", "auth-form", "seed-hint"],
+      "cardPosition": "center"
+    },
+    "teacher": {
+      "navPosition": "right",
+      "contentMaxWidth": "wide"
+    },
+    "student": {
+      "headerPosition": "top",
+      "order": ["status-banner", "main-content", "quick-tools"],
+      "cardColumns": 3
+    },
+    "admin": {
+      "navStyle": "sidebar-left",
+      "sectionOrder": ["overview", "themes", "site-settings", "users", "diagnostics"]
+    }
+  },
+  "stylesFile": "styles.css",
+  "previewImage": "assets/emblem.svg",
+  "changelog": "Initial release with adaptive light/dark modes, SVG studio backdrop, and declarative role layouts.",
+  "settingsCapabilities": {
+    "accentColor": true,
+    "borderRadius": true,
+    "density": true,
+    "fontScale": true,
+    "mode": true
+  }
+}

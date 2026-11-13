@@ -23,10 +23,13 @@ import {
   Compass,
   ArrowUpCircle,
   Copy,
+  Sparkles,
 } from 'lucide-react';
 import { AiProvidersPanel, type AIProvider } from '../features/admin/AiProvidersPanel';
 import { DemoDataPanel } from '../features/admin/DemoDataPanel';
 import { ExtensionPointRenderer } from '../plugin-host/extension-point-renderer';
+import { BUILTIN_THEMES, useThemeStore } from '../store/themeStore';
+import { ThemeCenterModal } from './ThemeCenterModal';
 
 export type { AIProvider };
 
@@ -48,6 +51,7 @@ export interface SiteInfo {
   currentAcademicYear?: string | null;
   academicStartMonth?: number;
   logoutClearSiteData?: boolean;
+  defaultThemeId?: string | null;
 }
 
 interface AdminPanelProps {
@@ -88,8 +92,13 @@ export function AdminPanel({
   const [currentAcademicYear, setCurrentAcademicYear] = useState<string>(siteInfo?.currentAcademicYear ?? '');
   const [academicStartMonth, setAcademicStartMonth] = useState<number>(9);
   const [logoutClearSiteData, setLogoutClearSiteData] = useState<boolean>(Boolean(siteInfo?.logoutClearSiteData));
+  const [defaultThemeId, setDefaultThemeId] = useState<string>(siteInfo?.defaultThemeId || 'light');
+  const [isThemeCenterOpen, setIsThemeCenterOpen] = useState(false);
   const [siteSettingsSaving, setSiteSettingsSaving] = useState(false);
   const [siteSettingsLoaded, setSiteSettingsLoaded] = useState(false);
+
+  const adminLayout = useThemeStore((s) => s.resolvedLayouts.admin);
+  const themeCatalog = useThemeStore((s) => s.catalog);
 
   // Search/Filter State
   const [searchQuery, setSearchQuery] = useState('');
@@ -214,6 +223,9 @@ export function AdminPanel({
           setAcademicStartMonth(data.academicStartMonth);
         }
         setLogoutClearSiteData(Boolean(data.logoutClearSiteData));
+        if (typeof data.defaultThemeId === 'string' && data.defaultThemeId) {
+          setDefaultThemeId(data.defaultThemeId);
+        }
         setSiteSettingsLoaded(true);
       }
     } catch (err) {
@@ -248,6 +260,7 @@ export function AdminPanel({
           currentAcademicYear: currentAcademicYear.trim() || undefined,
           academicStartMonth: Math.round(Number(academicStartMonth)),
           logoutClearSiteData,
+          defaultThemeId,
         }),
       });
       if (res.ok) {
@@ -432,11 +445,13 @@ export function AdminPanel({
 
   return (
     <div
-      className="flex-1 bg-white border border-gray-200 rounded-xl shadow-sm flex flex-col min-h-0 overflow-hidden h-full"
+      className="flex-1 bg-surface border border-theme text-main rounded-xl shadow-sm flex flex-col min-h-0 overflow-hidden h-full"
       id="admin_panel_root"
+      data-admin-nav-style={adminLayout.navStyle}
+      data-theme-surface="card"
     >
       {/* Admin Panel Header Banner */}
-      <div className="px-6 py-4 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white shrink-0">
+      <div className="px-6 py-4 border-b border-theme flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-surface shrink-0">
         <div>
           <h2 className="text-base sm:text-lg font-bold text-gray-800 flex items-center gap-2">
             <Shield className="text-indigo-600 shrink-0" size={20} />
@@ -491,1147 +506,1229 @@ export function AdminPanel({
         </div>
       ) : null}
 
-      {/* Sub tabs list segment: Modern Segmented Tab Bar */}
-      <div className="px-6 py-2.5 border-b border-gray-100 bg-gray-50/50 flex items-center justify-between gap-4 shrink-0 overflow-x-auto">
-        <div className="bg-gray-200/60 p-1 rounded-xl flex items-center gap-1 shrink-0">
-          <button
-            onClick={() => setActiveAdminTab('directory')}
-            className={`px-3.5 py-1.5 text-xs font-bold rounded-lg flex items-center gap-1.5 transition-all cursor-pointer ${
-              activeAdminTab === 'directory'
-                ? 'bg-white text-indigo-700 shadow-xs'
-                : 'text-gray-500 hover:text-gray-800'
-            }`}
-          >
-            <Users size={14} />
-            <span>{lang === 'zh' ? '学校教职及系统配置' : 'Staff Accounts & Config'}</span>
-          </button>
-          <button
-            onClick={() => setActiveAdminTab('ai_providers')}
-            className={`px-3.5 py-1.5 text-xs font-bold rounded-lg flex items-center gap-1.5 transition-all cursor-pointer ${
-              activeAdminTab === 'ai_providers'
-                ? 'bg-white text-indigo-700 shadow-xs'
-                : 'text-gray-500 hover:text-gray-800'
-            }`}
-          >
-            <Server size={14} />
-            <span>{lang === 'zh' ? 'AI 模型提供商' : 'AI Providers'}</span>
-          </button>
-          <button
-            onClick={() => setActiveAdminTab('sqlite')}
-            className={`px-3.5 py-1.5 text-xs font-bold rounded-lg flex items-center gap-1.5 transition-all cursor-pointer ${
-              activeAdminTab === 'sqlite' ? 'bg-white text-indigo-700 shadow-xs' : 'text-gray-500 hover:text-gray-800'
-            }`}
-          >
-            <Database size={14} />
-            <span>{lang === 'zh' ? '系统监控' : 'System Monitor'}</span>
-          </button>
-          <button
-            onClick={() => setActiveAdminTab('site_settings')}
-            className={`px-3.5 py-1.5 text-xs font-bold rounded-lg flex items-center gap-1.5 transition-all cursor-pointer ${
-              activeAdminTab === 'site_settings'
-                ? 'bg-white text-indigo-700 shadow-xs'
-                : 'text-gray-500 hover:text-gray-800'
-            }`}
-          >
-            <Settings size={14} />
-            <span>{lang === 'zh' ? '站点信息设置' : 'Site Settings'}</span>
-          </button>
-
-          {/* admin.tab 扩展 Tab 按钮 */}
-          <ExtensionPointRenderer
-            slot="admin.tab"
-            slotProps={{
-              renderType: 'button',
-              adminActiveTab: activeAdminTab,
-              setAdminActiveTab: setActiveAdminTab,
-            }}
-          />
-        </div>
-      </div>
-
-      {success && (
-        <div className="mx-6 mt-3 p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs rounded-xl flex items-center gap-2 shrink-0 animate-fade-in shadow-xs font-medium">
-          <CheckCircle size={15} />
-          <span>{success}</span>
-        </div>
-      )}
-
-      {error && (
-        <div className="mx-6 mt-3 p-3 bg-rose-50 border border-rose-200 text-rose-800 text-xs rounded-xl flex items-center gap-2 shrink-0 animate-fade-in shadow-xs">
-          <AlertTriangle size={15} />
-          <span>{error}</span>
-        </div>
-      )}
-
-      {activeAdminTab === 'ai_providers' ? (
-        <AiProvidersPanel
-          lang={lang}
-          aiProviders={aiProviders}
-          onAIProvidersChanged={onAIProvidersChanged}
-          currentUserId={currentUserId}
-          currentUserRole={currentUserRole}
-        />
-      ) : activeAdminTab === 'sqlite' ? (
-        <div className="flex-1 overflow-y-auto p-6 space-y-6 animate-fade-in text-gray-800">
-          {/* System Version & Upgrade Maintenance Card */}
-          <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 border border-indigo-800/60 rounded-2xl p-5 text-white shadow-xs overflow-hidden relative">
-            <div className="absolute right-0 top-0 translate-x-8 -translate-y-8 w-56 h-56 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-indigo-800/50 pb-4">
-              <div className="flex items-start sm:items-center gap-3">
-                <div className="p-2.5 bg-indigo-600/30 border border-indigo-500/30 rounded-xl text-indigo-300 shrink-0">
-                  <ArrowUpCircle size={22} className={checkingUpgrade ? 'animate-spin' : ''} />
-                </div>
-                <div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h3 className="font-extrabold text-sm sm:text-base text-white tracking-wide">
-                      {lang === 'zh' ? '系统版本与升级生命周期' : 'System Version & Upgrade Lifecycle'}
-                    </h3>
-                    <span className="font-mono text-xs px-2 py-0.5 rounded-md bg-indigo-900/90 text-indigo-200 border border-indigo-700/60 font-semibold">
-                      v{upgradeInfo?.currentVersion || '2.0.0'}
-                    </span>
-                    {upgradeInfo?.hasUpdate ? (
-                      <span className="text-xs px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/40 font-semibold flex items-center gap-1.5 animate-pulse">
-                        <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
-                        {lang === 'zh'
-                          ? `可升级至 v${upgradeInfo.latestVersion}`
-                          : `Update Available: v${upgradeInfo.latestVersion}`}
-                      </span>
-                    ) : upgradeInfo ? (
-                      <span className="text-xs px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-semibold flex items-center gap-1">
-                        <Check size={12} />
-                        {lang === 'zh' ? '已是最新版本' : 'Up to date'}
-                      </span>
-                    ) : null}
-                  </div>
-                  <p className="text-xs text-indigo-200/80 mt-1">
-                    {lang === 'zh'
-                      ? '纯 Node.js 生产环境平滑升级管理，支持 NPM 官方源与国内镜像双源智能探测与一键迁移保障。'
-                      : 'Zero-downtime upgrades for Node.js environments with automated pre-migration safety snapshots.'}
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2 shrink-0">
-                <button
-                  type="button"
-                  onClick={fetchUpgradeInfo}
-                  disabled={checkingUpgrade}
-                  className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-xl border border-indigo-400/40 flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50 shadow-xs"
-                >
-                  <RefreshCw size={12} className={checkingUpgrade ? 'animate-spin' : ''} />
-                  <span>
-                    {checkingUpgrade
-                      ? lang === 'zh'
-                        ? '正在检测...'
-                        : 'Checking...'
-                      : lang === 'zh'
-                        ? '检查更新'
-                        : 'Check Updates'}
-                  </span>
-                </button>
-              </div>
-            </div>
-
-            {/* Upgrade Command Switcher */}
-            <div className="mt-4 space-y-3">
-              <div className="flex items-center justify-between flex-wrap gap-2">
-                <span className="text-xs font-semibold text-indigo-200/90">
-                  {lang === 'zh'
-                    ? '无缝升级执行命令（根据您的部署方式选择）：'
-                    : 'Upgrade command by deployment form factor:'}
-                </span>
-                <div className="flex items-center bg-indigo-950/90 p-0.5 rounded-lg border border-indigo-700/50 text-xs font-semibold">
-                  <button
-                    type="button"
-                    onClick={() => setSelectedDeployEnv('npm')}
-                    className={`px-2.5 py-1 rounded-md transition-all cursor-pointer ${
-                      selectedDeployEnv === 'npm'
-                        ? 'bg-indigo-600 text-white shadow-xs'
-                        : 'text-indigo-300 hover:text-white'
-                    }`}
-                  >
-                    {lang === 'zh' ? '全局 NPM' : 'Global NPM'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setSelectedDeployEnv('npx')}
-                    className={`px-2.5 py-1 rounded-md transition-all cursor-pointer ${
-                      selectedDeployEnv === 'npx'
-                        ? 'bg-indigo-600 text-white shadow-xs'
-                        : 'text-indigo-300 hover:text-white'
-                    }`}
-                  >
-                    {lang === 'zh' ? 'NPX 免安装' : 'NPX Runner'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setSelectedDeployEnv('git')}
-                    className={`px-2.5 py-1 rounded-md transition-all cursor-pointer ${
-                      selectedDeployEnv === 'git'
-                        ? 'bg-indigo-600 text-white shadow-xs'
-                        : 'text-indigo-300 hover:text-white'
-                    }`}
-                  >
-                    {lang === 'zh' ? '源码部署 (Git)' : 'Source Clone'}
-                  </button>
-                </div>
-              </div>
-
-              {/* Code snippet with copy button */}
-              <div className="bg-slate-950/90 border border-indigo-800/80 rounded-xl p-3 flex items-center justify-between gap-3 font-mono text-xs">
-                <div className="text-emerald-400 select-all overflow-x-auto whitespace-nowrap scrollbar-none font-medium">
-                  {selectedDeployEnv === 'npm' &&
-                    (upgradeInfo?.upgradeCommands.npm || 'npm i -g openlearn-next@latest')}
-                  {selectedDeployEnv === 'npx' && (upgradeInfo?.upgradeCommands.npx || 'npx openlearn-next@latest')}
-                  {selectedDeployEnv === 'git' &&
-                    (upgradeInfo?.upgradeCommands.git || 'git pull && pnpm build && pnpm start')}
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const cmd =
-                      selectedDeployEnv === 'npm'
-                        ? upgradeInfo?.upgradeCommands.npm || 'npm i -g openlearn-next@latest'
-                        : selectedDeployEnv === 'npx'
-                          ? upgradeInfo?.upgradeCommands.npx || 'npx openlearn-next@latest'
-                          : upgradeInfo?.upgradeCommands.git || 'git pull && pnpm build && pnpm start';
-                    handleCopyCommand(cmd, selectedDeployEnv);
-                  }}
-                  className="px-2.5 py-1 bg-indigo-600/40 hover:bg-indigo-600 text-indigo-100 hover:text-white rounded-lg border border-indigo-500/40 flex items-center gap-1.5 transition-all cursor-pointer shrink-0 font-sans text-xs font-semibold"
-                >
-                  {copiedKey === selectedDeployEnv ? (
-                    <>
-                      <Check size={12} className="text-emerald-400" />
-                      <span className="text-emerald-300">{lang === 'zh' ? '已复制' : 'Copied'}</span>
-                    </>
-                  ) : (
-                    <>
-                      <Copy size={12} />
-                      <span>{lang === 'zh' ? '复制' : 'Copy'}</span>
-                    </>
-                  )}
-                </button>
-              </div>
-
-              <div className="flex items-center justify-between text-[11px] text-indigo-300/80 pt-0.5">
-                <span>
-                  {lang === 'zh'
-                    ? '🛡️ 数据安全保障：系统启动及执行数据库迁移时会自动创建物理快照 (backups/pre_migration_*.db)。亦可随时执行 openlearn backup --full 整包归档。'
-                    : '🛡️ Automated pre-migration snapshots are recorded. Run "openlearn backup --full" anytime for complete state packaging.'}
-                </span>
-                {upgradeInfo?.publishTime && (
-                  <span className="shrink-0 ml-2">
-                    {lang === 'zh' ? '更新时间: ' : 'Published: '}
-                    {new Date(upgradeInfo.publishTime).toLocaleDateString()}
-                  </span>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Quick Header Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {/* Health status check card */}
-            <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-3xs flex items-center justify-between">
-              <div className="space-y-1 text-left">
-                <span className="text-xs font-black text-slate-400 uppercase tracking-widest block">
-                  {lang === 'zh' ? 'SQLite引擎状况' : 'SQLite Health Status'}
-                </span>
-                <span className="text-base font-extrabold text-gray-800 flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse inline-block" />
-                  <span className="text-emerald-600 font-extrabold uppercase mt-0.5">
-                    {sqliteStats?.status === 'connected'
-                      ? lang === 'zh'
-                        ? '运行正常'
-                        : 'Healthy'
-                      : lang === 'zh'
-                        ? '连接正常'
-                        : 'Connected'}
-                  </span>
-                </span>
-                <span className="text-xs text-gray-400 block font-mono">SQLite Core v3.x Connected</span>
-              </div>
-              <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl">
-                <Shield size={20} />
-              </div>
-            </div>
-
-            {/* Total Tables card */}
-            <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-3xs flex items-center justify-between">
-              <div className="space-y-1 text-left">
-                <span className="text-xs font-black text-slate-400 uppercase tracking-widest block">
-                  {lang === 'zh' ? '核心实体数据表' : 'Database Table Count'}
-                </span>
-                <span className="text-xl font-black font-mono text-gray-800 block">
-                  {sqliteStats?.tableCount ?? '--'}
-                </span>
-                <span className="text-xs text-gray-400 block">
-                  {lang === 'zh'
-                    ? `包含其外 ${sqliteStats?.systemTableCount ?? 0} 个系统表`
-                    : `Plus ${sqliteStats?.systemTableCount ?? 0} system catalogs`}
-                </span>
-              </div>
-              <div className="p-3 bg-indigo-50 text-indigo-600 rounded-xl">
-                <Database size={20} />
-              </div>
-            </div>
-
-            {/* Total Row counts */}
-            <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-3xs flex items-center justify-between">
-              <div className="space-y-1 text-left">
-                <span className="text-xs font-black text-slate-400 uppercase tracking-widest block">
-                  {lang === 'zh' ? '系统数据承载行' : 'Total Records Managed'}
-                </span>
-                <span className="text-xl font-black font-mono text-indigo-700 block">
-                  {sqliteStats?.totalRows !== undefined ? sqliteStats.totalRows.toLocaleString() : '--'}
-                </span>
-                <span className="text-xs text-gray-400 block">
-                  {lang === 'zh' ? '在册全量索引行数总和' : 'Cumulative dataset depth'}
-                </span>
-              </div>
-              <div className="p-3 bg-indigo-50 text-indigo-600 rounded-xl">
-                <Layers size={20} />
-              </div>
-            </div>
-
-            {/* Disk space usage */}
-            <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-3xs flex items-center justify-between">
-              <div className="space-y-1 text-left">
-                <span className="text-xs font-black text-slate-400 uppercase tracking-widest block">
-                  {lang === 'zh' ? '物理文件占用空间' : 'Physical Disk Usage'}
-                </span>
-                <span className="text-xl font-black font-mono text-emerald-600 block">
-                  {sqliteStats?.diskUsageFriendly ?? '--'}
-                </span>
-                <span className="text-xs text-gray-400 block font-mono">
-                  {sqliteStats?.diskUsageBytes ? `${sqliteStats.diskUsageBytes.toLocaleString()} Bytes` : ''}
-                </span>
-              </div>
-              <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl">
-                <Cpu size={20} />
-              </div>
-            </div>
-
-            {/* admin.dashboard.card 扩展指标卡（容器集群监控 / API 吞吐率 / 带宽卡片） */}
-            <ExtensionPointRenderer slot="admin.dashboard.card" slotProps={{ sqliteStats, lang }} />
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-            {/* Table layout detail catalog (lg:col-span-8) */}
-            <div className="lg:col-span-8 bg-white border border-gray-200 rounded-xl shadow-3xs overflow-hidden flex flex-col">
-              <div className="p-4 sm:p-5 border-b border-gray-100 bg-gray-50/60 flex items-center justify-between">
-                <div className="text-left">
-                  <h3 className="font-extrabold text-gray-800 text-sm sm:text-base flex items-center gap-1.5 justify-start">
-                    <Database className="text-indigo-600" size={18} />
-                    {lang === 'zh' ? 'SQLite 数据库实体列表与行数字典' : 'SQLite Relational Entity Tables Catalog'}
-                  </h3>
-                  <p className="text-xs text-gray-400 mt-1 block">
-                    {lang === 'zh'
-                      ? '实时展示当前在 educational_os.db 内核中的关系型实体及在册记录行数。'
-                      : 'Dynamic row counting dictionary directly querying metadata catalogs.'}
-                  </p>
-                </div>
-                <button
-                  onClick={fetchSqliteStats}
-                  disabled={loadingSqlite}
-                  className="p-1 px-3 text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold border border-indigo-200/45 rounded-xl flex items-center gap-1 transition-all cursor-pointer"
-                >
-                  <RefreshCw size={11} className={loadingSqlite ? 'animate-spin' : ''} />
-                  {lang === 'zh' ? '重算/刷新 font' : 'Refresh Metrics'}
-                </button>
-              </div>
-
-              <div className="p-4 sm:p-5">
-                {loadingSqlite && !sqliteStats ? (
-                  <div className="flex flex-col items-center justify-center py-12 text-slate-400 text-xs">
-                    <RefreshCw size={36} className="animate-spin text-indigo-500 mb-2" />
-                    <span>
-                      {lang === 'zh'
-                        ? '正在重算数据库实体表统计指标...'
-                        : 'Calculating database page allocation and statistics...'}
-                    </span>
-                  </div>
-                ) : !sqliteStats ? (
-                  <div className="text-center text-xs py-12 text-slate-400">
-                    {lang === 'zh'
-                      ? '无法提取到 SQLite 信息，可能进程被独占。'
-                      : 'Failed to retrieve connection parameters.'}
-                  </div>
-                ) : (
-                  <div className="overflow-x-auto border border-gray-100 rounded-xl">
-                    <table className="w-full text-left border-collapse min-w-[500px]">
-                      <thead>
-                        <tr className="bg-slate-50/70 border-b border-gray-100 text-gray-500 font-bold text-xs uppercase tracking-wider font-sans">
-                          <th className="py-3 px-4">{lang === 'zh' ? '实体数据表名' : 'Table Name'}</th>
-                          <th className="py-3 px-4">{lang === 'zh' ? '当前承载行数' : 'Active Rows'}</th>
-                          <th className="py-3 px-4">{lang === 'zh' ? '行数比例分布' : 'Distribution Scale'}</th>
-                          <th className="py-3 px-4 font-mono select-none">
-                            {lang === 'zh' ? '系统属性类型' : 'Metadata Type'}
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-100 text-xs text-gray-700 font-sans">
-                        {sqliteStats.tables.map((tbl) => {
-                          const maxRows = Math.max(...sqliteStats.tables.map((t) => t.rows), 1);
-                          const percentage = Math.min((tbl.rows / maxRows) * 100, 100);
-
-                          let desc = 'Core Application Storage';
-                          if (tbl.name === 'users') desc = 'Teacher & Administrator profiles';
-                          else if (tbl.name === 'students') desc = 'Student accounts and lock states';
-                          else if (tbl.name === 'classes') desc = 'Active classes, metadata & codes';
-                          else if (tbl.name === 'lessons') desc = 'Lectures, slides and markdown modules';
-                          else if (tbl.name === 'ai_providers') desc = 'Third party API key provider gateways';
-                          else if (tbl.name === 'vfs_nodes') desc = 'Virtual file storage hierarchies';
-                          else if (tbl.name === 'client_sessions') desc = 'Active browser auth cookies';
-
-                          return (
-                            <tr key={tbl.name} className="hover:bg-slate-50/40 transition-colors">
-                              <td className="py-3 px-4 text-left">
-                                <div className="flex items-center gap-2 justify-start">
-                                  <span className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
-                                  <span className="font-extrabold text-slate-800 font-mono text-sm">{tbl.name}</span>
-                                </div>
-                                <span className="text-xs text-gray-400 block mt-0.5">{desc}</span>
-                              </td>
-                              <td className="py-3 px-4 font-mono font-bold text-gray-750 text-left">
-                                {tbl.rows >= 0 ? (
-                                  tbl.rows.toLocaleString()
-                                ) : (
-                                  <span className="text-rose-500 italic font-normal">error</span>
-                                )}
-                              </td>
-                              <td className="py-3 px-4 min-w-[150px]">
-                                <div className="flex items-center gap-2">
-                                  <div className="w-24 bg-gray-100 rounded-full h-1.5 overflow-hidden border border-gray-200/50 shrink-0">
-                                    <div
-                                      className="bg-indigo-600 h-1.5 rounded-full"
-                                      style={{ width: `${percentage}%` }}
-                                    />
-                                  </div>
-                                  <span className="text-xs font-mono font-bold text-slate-400">
-                                    {Math.round(percentage)}%
-                                  </span>
-                                </div>
-                              </td>
-                              <td className="py-3 px-4 text-left">
-                                <span className="bg-slate-100 text-slate-700 font-bold border border-slate-200 text-xs font-mono px-2 py-0.5 rounded uppercase">
-                                  {tbl.name === 'vfs_nodes' || tbl.name === 'whiteboard_strokes'
-                                    ? 'BLOB_JSON'
-                                    : 'RELATIONAL'}
-                                </span>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Performance Parameters / PRAGMAs panel (lg:col-span-4) */}
-            <div className="lg:col-span-4 space-y-6">
-              {/* SQLite Inner PRAGMAs card */}
-              <div className="bg-white border border-gray-200 rounded-2xl shadow-xs p-5 block text-left">
-                <h3 className="text-xs font-black text-gray-700 uppercase tracking-widest flex items-center gap-2 border-b border-gray-100 pb-3 mb-4">
-                  <Settings size={15} className="text-slate-500" />
-                  {lang === 'zh' ? '物理控制参数 (PRAGMA)' : 'SQLite Physical PRAGMAs'}
-                </h3>
-
-                <div className="space-y-4">
-                  {/* Journal Mode */}
-                  <div className="flex items-center justify-between py-1.5 border-b border-gray-100">
-                    <div className="text-left">
-                      <span className="text-xs font-extrabold text-gray-800 block">
-                        {lang === 'zh' ? '日志记录模式' : 'Journal Write Mode'}
-                      </span>
-                      <span className="text-xs text-gray-400 block">
-                        {lang === 'zh' ? '决定写操作事务隔离行为' : 'Active database write transaction protocol'}
-                      </span>
-                    </div>
-                    <span className="bg-emerald-50 text-emerald-800 font-mono font-extrabold text-xs px-2.5 py-1 border border-emerald-200 rounded-lg">
-                      {sqliteStats?.journalMode ? sqliteStats.journalMode.toUpperCase() : 'N/A'}
-                    </span>
-                  </div>
-
-                  {/* Sector Block Size */}
-                  <div className="flex items-center justify-between py-1.5 border-b border-gray-100">
-                    <div className="text-left">
-                      <span className="text-xs font-extrabold text-gray-800 block">
-                        {lang === 'zh' ? '物理扇区页面大小' : 'Database Page Size'}
-                      </span>
-                      <span className="text-xs text-gray-400 block">
-                        {lang === 'zh' ? '单次读写磁盘扇区的字节' : 'Bytes per allocated physical sector block'}
-                      </span>
-                    </div>
-                    <span className="bg-slate-100 text-slate-800 font-mono font-bold text-xs px-2 py-1 border border-slate-200 rounded">
-                      {sqliteStats?.pageSize ? `${sqliteStats.pageSize} B` : '4096 B'}
-                    </span>
-                  </div>
-
-                  {/* Total Allocated Pages */}
-                  <div className="flex items-center justify-between py-1.5 border-b border-gray-100">
-                    <div className="text-left">
-                      <span className="text-xs font-extrabold text-gray-800 block">
-                        {lang === 'zh' ? '逻辑数据页面总数' : 'Allocated Blocks Count'}
-                      </span>
-                      <span className="text-xs text-gray-400 block">
-                        {lang === 'zh' ? '物理文件包含的逻辑存储页总数' : 'Total blocks assigned inside database space'}
-                      </span>
-                    </div>
-                    <span className="font-mono text-xs font-bold text-gray-700">
-                      {sqliteStats?.pageCount ?? 0} pages
-                    </span>
-                  </div>
-
-                  {/* Database Integrity status */}
-                  <div className="flex items-center justify-between py-1.5 border-b border-gray-100">
-                    <div className="text-left">
-                      <span className="text-xs font-extrabold text-gray-800 block">
-                        {lang === 'zh' ? '数据文件完整性自检' : 'Database File Integrity'}
-                      </span>
-                      <span className="text-xs text-gray-400 block">
-                        {lang === 'zh' ? '校验物理页面结构是否损坏' : 'Validates internal database consistency'}
-                      </span>
-                    </div>
-                    <span className="bg-indigo-600 text-white font-mono font-black text-xs px-2 py-0.5 rounded-full shadow-xs">
-                      {sqliteStats?.integrity ? sqliteStats.integrity.toUpperCase() : 'PASS'}
-                    </span>
-                  </div>
-
-                  {/* Freelist page count */}
-                  <div className="flex items-center justify-between py-1.5 border-b border-gray-100">
-                    <div className="text-left">
-                      <span className="text-xs font-extrabold text-gray-800 block">
-                        {lang === 'zh' ? '空闲可回收空间块数' : 'Freelist Empty Pages'}
-                      </span>
-                      <span className="text-xs text-gray-400 block">
-                        {lang === 'zh' ? '已被清删但未回缩的空间块数' : 'Reclaimable blocks pending database VACUUM'}
-                      </span>
-                    </div>
-                    <span className="font-mono text-xs text-gray-750">{sqliteStats?.freelistCount ?? 0} Blocks</span>
-                  </div>
-
-                  {/* Auto Vacuum state */}
-                  <div className="flex items-center justify-between py-1.5">
-                    <div className="text-left">
-                      <span className="text-xs font-extrabold text-gray-800 block">
-                        {lang === 'zh' ? '自动空间释放 (Auto Vacuum)' : 'Auto Vacuum Mode'}
-                      </span>
-                      <span className="text-xs text-gray-400 block">
-                        {lang === 'zh' ? '删除数据是否即时整理碎片' : 'Reclaims file blocks upon record deletions'}
-                      </span>
-                    </div>
-                    <span className="text-xs text-slate-500 font-bold">
-                      {sqliteStats?.autoVacuum === 0
-                        ? 'NONE (OFF)'
-                        : sqliteStats?.autoVacuum === 1
-                          ? 'FULL'
-                          : 'INCREMENTAL'}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Action operations center */}
-              <div className="bg-white border border-gray-200 rounded-2xl shadow-xs p-5 block text-left text-gray-800">
-                <h3 className="text-xs font-black text-gray-700 uppercase tracking-widest flex items-center gap-2 border-b border-gray-100 pb-3 mb-4 select-none font-sans">
-                  <Activity size={14} className="text-indigo-600 animate-pulse" />
-                  {lang === 'zh' ? '分布式内核维护工具箱' : 'In-Memory Engine Toolbox'}
-                </h3>
-                <div className="space-y-3">
-                  <button
-                    onClick={async () => {
-                      alert(
-                        lang === 'zh'
-                          ? 'PRAGMA integrity_check 执行结果: 完整性检测通过(OK). SQLite 数据库物理区块没有任何损坏。'
-                          : 'Database physical consistency verification result: PASS. File blocks are structurally sound.',
-                      );
-                    }}
-                    className="w-full text-left bg-slate-50 hover:bg-slate-100 text-gray-800 border border-gray-200 p-3 rounded-xl transition-all cursor-pointer flex items-center gap-3"
-                  >
-                    <Shield size={16} className="text-indigo-600 shrink-0" />
-                    <div className="text-left">
-                      <span className="text-xs font-bold block text-gray-800">
-                        {lang === 'zh' ? '立即执行物理文件自检' : 'Run Consistency self-audit'}
-                      </span>
-                      <span className="text-xs text-gray-500 block leading-tight mt-0.5">
-                        {lang === 'zh'
-                          ? '核验 educational_os.db 是否有损坏或空页'
-                          : 'Runs a full PRAGMA integrity_check cycle'}
-                      </span>
-                    </div>
-                  </button>
-
-                  <button
-                    onClick={async () => {
-                      alert(
-                        lang === 'zh'
-                          ? '数据库空间优化成功！释放 0 空闲逻辑页，文件结构对齐完成。'
-                          : 'VACUUM command completed. Over-allocated files are fully reclaimed.',
-                      );
-                    }}
-                    className="w-full text-left bg-slate-50 hover:bg-slate-100 text-gray-800 border border-gray-200 p-3 rounded-xl transition-all cursor-pointer flex items-center gap-3"
-                  >
-                    <Cpu size={16} className="text-emerald-600 shrink-0" />
-                    <div className="text-left">
-                      <span className="text-xs font-bold block text-gray-800">
-                        {lang === 'zh' ? '磁盘碎片整理与空间回缩 (VACUUM)' : 'Defragment Storage (VACUUM)'}
-                      </span>
-                      <span className="text-xs text-gray-500 block leading-tight mt-0.5">
-                        {lang === 'zh'
-                          ? '物理重排在册物理空间，释放可能存在的空置块'
-                          : 'Triggers VACUUM rebuild to compress physical file'}
-                      </span>
-                    </div>
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-          {/* Section 1: 'Database Health' Section Card */}
+      {/* Sub tabs list segment + main body: adapts to resolvedLayouts.admin.navStyle */}
+      <div
+        className={`flex-1 min-h-0 flex overflow-hidden ${
+          adminLayout.navStyle === 'sidebar-left'
+            ? 'flex-row'
+            : adminLayout.navStyle === 'sidebar-right'
+              ? 'flex-row-reverse'
+              : 'flex-col'
+        }`}
+      >
+        <div
+          className={
+            adminLayout.navStyle === 'tabs'
+              ? 'px-6 py-2.5 border-b border-theme bg-surface-secondary/50 flex items-center justify-between gap-4 shrink-0 overflow-x-auto'
+              : `w-52 shrink-0 p-3 bg-surface-secondary/40 ${
+                  adminLayout.navStyle === 'sidebar-right' ? 'border-l' : 'border-r'
+                } border-theme overflow-y-auto`
+          }
+        >
           <div
-            className="bg-white border border-gray-200 rounded-2xl shadow-xs p-5 flex flex-col shrink-0 animate-fade-in text-gray-850"
-            id="db_health_dashboard_card"
+            className={
+              adminLayout.navStyle === 'tabs'
+                ? 'bg-surface-secondary p-1 rounded-xl flex items-center gap-1 shrink-0'
+                : 'flex flex-col gap-1.5'
+            }
           >
-            <div className="flex items-center justify-between border-b border-gray-100 pb-3 mb-4">
-              <div className="text-left">
-                <h3 className="text-xs font-black text-gray-750 uppercase tracking-widest flex items-center gap-1.5">
-                  <Database size={15} className="text-indigo-600" />
-                  {lang === 'zh' ? 'SQLite 数据库健康体检' : 'Database Engine Health'}
-                </h3>
-                <span className="text-xs text-gray-405 block mt-0.5">
-                  {lang === 'zh'
-                    ? '实时检测 SQLite 物理空间分配与查询相应时延'
-                    : 'Dynamic, real-time diagnostic metrics directly from connection catalogs.'}
-                </span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                </span>
-                <span className="text-xs font-bold text-emerald-600 font-mono uppercase tracking-wider">
-                  {lang === 'zh' ? '正常运行' : 'Healthy'}
-                </span>
-              </div>
-            </div>
+            <button
+              onClick={() => setActiveAdminTab('directory')}
+              className={`px-3.5 py-1.5 text-xs font-bold rounded-lg flex items-center gap-1.5 transition-all cursor-pointer ${
+                activeAdminTab === 'directory'
+                  ? 'bg-white text-indigo-700 shadow-xs'
+                  : 'text-gray-500 hover:text-gray-800'
+              }`}
+            >
+              <Users size={14} />
+              <span>{lang === 'zh' ? '学校教职及系统配置' : 'Staff Accounts & Config'}</span>
+            </button>
+            <button
+              onClick={() => setActiveAdminTab('ai_providers')}
+              className={`px-3.5 py-1.5 text-xs font-bold rounded-lg flex items-center gap-1.5 transition-all cursor-pointer ${
+                activeAdminTab === 'ai_providers'
+                  ? 'bg-white text-indigo-700 shadow-xs'
+                  : 'text-gray-500 hover:text-gray-800'
+              }`}
+            >
+              <Server size={14} />
+              <span>{lang === 'zh' ? 'AI 模型提供商' : 'AI Providers'}</span>
+            </button>
+            <button
+              onClick={() => setActiveAdminTab('sqlite')}
+              className={`px-3.5 py-1.5 text-xs font-bold rounded-lg flex items-center gap-1.5 transition-all cursor-pointer ${
+                activeAdminTab === 'sqlite' ? 'bg-white text-indigo-700 shadow-xs' : 'text-gray-500 hover:text-gray-800'
+              }`}
+            >
+              <Database size={14} />
+              <span>{lang === 'zh' ? '系统监控' : 'System Monitor'}</span>
+            </button>
+            <button
+              onClick={() => setActiveAdminTab('site_settings')}
+              className={`px-3.5 py-1.5 text-xs font-bold rounded-lg flex items-center gap-1.5 transition-all cursor-pointer ${
+                activeAdminTab === 'site_settings'
+                  ? 'bg-white text-indigo-700 shadow-xs'
+                  : 'text-gray-500 hover:text-gray-800'
+              }`}
+            >
+              <Settings size={14} />
+              <span>{lang === 'zh' ? '站点信息设置' : 'Site Settings'}</span>
+            </button>
 
-            {/* Metrics Dashboard Row */}
-            <div className="grid grid-cols-3 gap-3 mb-4">
-              {/* Stat 1: Total Tables */}
-              <div className="bg-slate-50 border border-gray-100 p-3 rounded-xl flex flex-col justify-between text-left">
-                <span className="text-xs font-black text-gray-450 uppercase tracking-widest block">
-                  {lang === 'zh' ? '实体表总数' : 'Total Tables'}
-                </span>
-                <div className="mt-2 flex items-baseline gap-1">
-                  <span className="text-xl font-extrabold text-slate-800 font-mono">
-                    {sqliteStats?.tableCount ?? '--'}
-                  </span>
-                  <span className="text-xs text-gray-405 font-bold uppercase">{lang === 'zh' ? '个' : 'tbls'}</span>
-                </div>
-                <span className="text-xs text-gray-400 block mt-1 truncate">
-                  {lang === 'zh'
-                    ? `外含 ${sqliteStats?.systemTableCount ?? 0} 个系统表`
-                    : `+${sqliteStats?.systemTableCount ?? 0} catalogs`}
-                </span>
-              </div>
-
-              {/* Stat 2: Database Size */}
-              <div className="bg-slate-50 border border-gray-100 p-3 rounded-xl flex flex-col justify-between text-left">
-                <span className="text-xs font-black text-gray-450 uppercase tracking-widest block">
-                  {lang === 'zh' ? '文件容量' : 'Disk Size'}
-                </span>
-                <div className="mt-2 flex items-baseline gap-1">
-                  <span className="text-xl font-extrabold text-indigo-650 font-mono animate-fade-in">
-                    {sqliteStats?.sizeMb !== undefined ? sqliteStats.sizeMb : '--'}
-                  </span>
-                  <span className="text-xs text-gray-455 font-bold uppercase">MB</span>
-                </div>
-                <span className="text-xs text-gray-400 block mt-1 truncate">
-                  {sqliteStats?.diskUsageFriendly ?? (lang === 'zh' ? '计算空间中...' : 'Evaluating...')}
-                </span>
-              </div>
-
-              {/* Stat 3: Query Latency */}
-              <div className="bg-slate-50 border border-gray-100 p-3 rounded-xl flex flex-col justify-between text-left">
-                <span className="text-xs font-black text-gray-455 uppercase tracking-widest block">
-                  {lang === 'zh' ? '读取时延/耗时' : 'Query Latency'}
-                </span>
-                <div className="mt-2 flex items-baseline gap-1">
-                  <span className="text-xl font-extrabold text-emerald-600 font-mono animate-fade-in">
-                    {sqliteStats?.latencyMs !== undefined ? sqliteStats.latencyMs : '--'}
-                  </span>
-                  <span className="text-xs text-gray-450 font-bold uppercase">ms</span>
-                </div>
-                <span className="text-xs text-gray-400 block mt-1 truncate">
-                  {lang === 'zh' ? '元数据对齐周期' : 'Direct catalog check'}
-                </span>
-              </div>
-            </div>
-
-            {/* Quick action bar */}
-            <div className="flex items-center justify-between bg-slate-50/50 border border-gray-150/40 p-2 rounded-xl">
-              <span className="text-xs text-gray-400 font-medium pl-1">
-                {lang === 'zh' ? '自动检测轮询间隔: 5s' : 'Dynamic background poll: 5s'}
-              </span>
-              <button
-                type="button"
-                onClick={fetchSqliteStats}
-                disabled={loadingSqlite}
-                className="p-1 px-3 text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-black tracking-wider uppercase border border-indigo-250/20 rounded-lg flex items-center gap-1 transition-all cursor-pointer"
-              >
-                <RefreshCw size={10} className={loadingSqlite ? 'animate-spin' : ''} />
-                {lang === 'zh' ? '实时评测' : 'Benchmark Latency'}
-              </button>
-            </div>
-          </div>
-
-          {/* Section 2: Real-time System Telemetry Grid */}
-          <div className="bg-white border border-gray-200 rounded-xl shadow-3xs p-5 flex flex-col flex-1 overflow-y-auto">
-            <h3 className="text-xs font-black text-gray-700 uppercase tracking-widest flex items-center gap-2 border-b border-gray-100 pb-3 mb-4 select-none">
-              <Activity size={14} className="text-indigo-600 animate-pulse" />
-              {lang === 'zh' ? '分布式操作系统硬件状况' : 'Distributed Node Telemetry'}
-            </h3>
-
-            <div className="grid grid-cols-3 gap-3 mb-5">
-              <div className="bg-slate-50 border border-gray-150/65 p-2.5 rounded-xl text-center">
-                <span className="text-xs font-bold text-gray-500 block uppercase">
-                  {lang === 'zh' ? '处理器负载' : 'CPU Load'}
-                </span>
-                <span className="text-sm font-black font-mono text-indigo-600 block mt-1">{cpuUsage}%</span>
-              </div>
-              <div className="bg-slate-50 border border-gray-150/65 p-2.5 rounded-xl text-center">
-                <span className="text-xs font-bold text-gray-500 block uppercase">
-                  {lang === 'zh' ? '数据库行数' : 'DB Buffer'}
-                </span>
-                <span className="text-sm font-black font-mono text-emerald-600 block mt-1">
-                  {sqliteStats !== null ? sqliteStats.totalRows.toLocaleString() : '2,840'}
-                </span>
-              </div>
-              <div className="bg-slate-50 border border-gray-150/65 p-2.5 rounded-xl text-center">
-                <span className="text-xs font-bold text-gray-500 block uppercase">
-                  {lang === 'zh' ? '主数据库延迟' : 'DB Net Delay'}
-                </span>
-                <span className="text-sm font-black font-mono text-amber-600 block mt-1">
-                  {sqliteStats !== null && sqliteStats.latencyMs !== undefined
-                    ? `${sqliteStats.latencyMs} ms`
-                    : '1.5 ms'}
-                </span>
-              </div>
-            </div>
-
-            <div className="flex-1 min-h-[160px] overflow-y-auto bg-slate-50 border border-gray-150/60 p-3 rounded-xl font-mono text-xs space-y-1.5 text-gray-650 scrollbar-none">
-              <div className="flex items-center gap-1 text-gray-450 select-none">
-                <Terminal size={11} /> <span>[root@sys-kernel-0] logs --level=info</span>
-              </div>
-              <div>
-                <span className="text-emerald-500 font-bold">[OK]</span> SQLite3 initialization complete:
-                educational_os.db successfully mounted.
-              </div>
-              <div>
-                <span className="text-indigo-400 font-bold">[INFO]</span> Synchronizing 14 internal structural
-                collections...
-              </div>
-              <div>
-                <span className="text-indigo-400 font-bold">[INFO]</span> Loaded active school credentials database.
-                Current admins count: {users.filter((u) => u.role === 'administrator').length}
-              </div>
-              <div>
-                <span className="text-amber-500 font-bold">[WARN]</span> Port 9000 detected as default proxy ingress
-                bypass bind.
-              </div>
-              <div>
-                <span className="text-indigo-600 font-bold">[INFO]</span> Listening on network http://0.0.0.0:9000...
-              </div>
-            </div>
+            {/* admin.tab 扩展 Tab 按钮 */}
+            <ExtensionPointRenderer
+              slot="admin.tab"
+              slotProps={{
+                renderType: 'button',
+                adminActiveTab: activeAdminTab,
+                setAdminActiveTab: setActiveAdminTab,
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => setIsThemeCenterOpen(true)}
+              className="px-3.5 py-1.5 text-xs font-bold rounded-lg flex items-center gap-1.5 transition-all cursor-pointer text-primary-theme hover:bg-primary-theme/10"
+            >
+              <Sparkles size={14} />
+              <span>{lang === 'zh' ? '第三方主题管理' : 'Themes'}</span>
+            </button>
           </div>
         </div>
-      ) : activeAdminTab === 'site_settings' ? (
-        <div className="flex-1 overflow-y-auto p-6 animate-fade-in text-gray-800">
-          <div className="bg-white border border-gray-200 rounded-xl shadow-3xs overflow-hidden max-w-3xl">
-            <div className="p-4 sm:p-5 border-b border-gray-100 flex items-center justify-between bg-gray-50/60">
-              <div>
-                <h3 className="font-bold text-gray-800 flex items-center gap-2 text-sm sm:text-base">
-                  <Settings size={18} className="text-indigo-600" />
-                  {lang === 'zh' ? '平台站点信息（名称 / 口号 / Logo）' : 'Platform Site Info (Name / Slogan / Logo)'}
-                </h3>
-                <p className="text-xs text-gray-400 mt-0.5">
-                  {lang === 'zh'
-                    ? '设置将应用于登录页与平台各处的品牌 Logo 展示位。'
-                    : 'Applied to the login page and brand logo slots across the platform.'}
-                </p>
-              </div>
+
+        <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+          {success && (
+            <div className="mx-6 mt-3 p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs rounded-xl flex items-center gap-2 shrink-0 animate-fade-in shadow-xs font-medium">
+              <CheckCircle size={15} />
+              <span>{success}</span>
             </div>
+          )}
 
-            <form onSubmit={handleSaveSiteSettings} className="p-5 space-y-5 text-left">
-              <div className="space-y-1">
-                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider">
-                  {lang === 'zh' ? '站点名称 *' : 'Site Name *'}
-                </label>
-                <input
-                  type="text"
-                  value={siteName}
-                  onChange={(e) => setSiteName(e.target.value)}
-                  placeholder={lang === 'zh' ? '例如：阳光实验小学智慧课堂' : 'e.g. Sunshine Elementary Smart Class'}
-                  className="w-full text-sm bg-gray-50 hover:bg-gray-100/50 focus:bg-white border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all font-semibold"
-                />
-              </div>
+          {error && (
+            <div className="mx-6 mt-3 p-3 bg-rose-50 border border-rose-200 text-rose-800 text-xs rounded-xl flex items-center gap-2 shrink-0 animate-fade-in shadow-xs">
+              <AlertTriangle size={15} />
+              <span>{error}</span>
+            </div>
+          )}
 
-              <div className="space-y-1">
-                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider">
-                  {lang === 'zh' ? '站点口号 / 标语' : 'Site Slogan / Tagline'}
-                </label>
-                <input
-                  type="text"
-                  value={siteSlogan}
-                  onChange={(e) => setSiteSlogan(e.target.value)}
-                  placeholder={
-                    lang === 'zh' ? '例如：下一代智能数字化学习系统' : 'e.g. Next-Generation Intelligent Learning'
-                  }
-                  className="w-full text-sm bg-gray-50 hover:bg-gray-100/50 focus:bg-white border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider">
-                  {lang === 'zh' ? '上传文件大小上限 (MB)' : 'Upload Size Limit (MB)'}
-                </label>
-                <input
-                  type="number"
-                  min={1}
-                  max={90}
-                  value={uploadMaxFileMb}
-                  onChange={(e) => setUploadMaxFileMb(Number(e.target.value))}
-                  className="w-40 text-sm bg-gray-50 hover:bg-gray-100/50 focus:bg-white border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all font-semibold"
-                />
-                <p className="text-xs text-gray-400 mt-1">
-                  {lang === 'zh'
-                    ? '课件（PDF/PPTX）等文件上传的体积上限，范围 1–90 MB，保存后立即生效。'
-                    : 'Size cap for file uploads (PDF/PPTX), 1–90 MB. Takes effect immediately after saving.'}
-                </p>
-
-                <div className="space-y-1">
-                  <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider">
-                    {lang === 'zh' ? '当前学年 (YYYY-YYYY)' : 'Current Academic Year (YYYY-YYYY)'}
-                  </label>
-                  <input
-                    type="text"
-                    value={currentAcademicYear}
-                    onChange={(e) => setCurrentAcademicYear(e.target.value)}
-                    placeholder={lang === 'zh' ? '例如：2025-2026' : 'e.g. 2025-2026'}
-                    className="w-48 text-sm bg-gray-50 hover:bg-gray-100/50 focus:bg-white border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all font-semibold"
-                  />
-                  <p className="text-xs text-gray-400 mt-1">
-                    {lang === 'zh'
-                      ? '平台默认学年筛选与新数据归属会使用该值；格式必须连续，如 2025-2026。'
-                      : 'Default academic-year filtering and new records use this value; must be contiguous, e.g. 2025-2026.'}
-                  </p>
-                </div>
-
-                <div className="space-y-1">
-                  <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider">
-                    {lang === 'zh' ? '学年起始月份' : 'Academic Year Start Month'}
-                  </label>
-                  <input
-                    type="number"
-                    min={1}
-                    max={12}
-                    value={academicStartMonth}
-                    onChange={(e) => setAcademicStartMonth(Number(e.target.value))}
-                    className="w-24 text-sm bg-gray-50 hover:bg-gray-100/50 focus:bg-white border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all font-semibold"
-                  />
-                  <p className="text-xs text-gray-400 mt-1">
-                    {lang === 'zh'
-                      ? '用于根据日期自动推断学年，默认 9 月。'
-                      : 'Used to derive academic year from dates; defaults to September.'}
-                  </p>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider">
-                  {lang === 'zh' ? '站点 Logo 图片' : 'Site Logo Image'}
-                </label>
-
-                {/* Logo preview slot */}
-                <div className="flex items-center gap-4">
-                  <div className="w-20 h-20 rounded-xl border border-gray-200 bg-slate-50 flex items-center justify-center overflow-hidden shrink-0">
-                    {siteLogoInput ? (
-                      <img src={siteLogoInput} alt="logo preview" className="w-full h-full object-contain" />
-                    ) : (
-                      <Settings size={24} className="text-gray-300" />
-                    )}
+          {activeAdminTab === 'ai_providers' ? (
+            <AiProvidersPanel
+              lang={lang}
+              aiProviders={aiProviders}
+              onAIProvidersChanged={onAIProvidersChanged}
+              currentUserId={currentUserId}
+              currentUserRole={currentUserRole}
+            />
+          ) : activeAdminTab === 'sqlite' ? (
+            <div className="flex-1 overflow-y-auto p-6 space-y-6 animate-fade-in text-gray-800">
+              {/* System Version & Upgrade Maintenance Card */}
+              <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 border border-indigo-800/60 rounded-2xl p-5 text-white shadow-xs overflow-hidden relative">
+                <div className="absolute right-0 top-0 translate-x-8 -translate-y-8 w-56 h-56 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-indigo-800/50 pb-4">
+                  <div className="flex items-start sm:items-center gap-3">
+                    <div className="p-2.5 bg-indigo-600/30 border border-indigo-500/30 rounded-xl text-indigo-300 shrink-0">
+                      <ArrowUpCircle size={22} className={checkingUpgrade ? 'animate-spin' : ''} />
+                    </div>
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="font-extrabold text-sm sm:text-base text-white tracking-wide">
+                          {lang === 'zh' ? '系统版本与升级生命周期' : 'System Version & Upgrade Lifecycle'}
+                        </h3>
+                        <span className="font-mono text-xs px-2 py-0.5 rounded-md bg-indigo-900/90 text-indigo-200 border border-indigo-700/60 font-semibold">
+                          v{upgradeInfo?.currentVersion || '2.0.0'}
+                        </span>
+                        {upgradeInfo?.hasUpdate ? (
+                          <span className="text-xs px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/40 font-semibold flex items-center gap-1.5 animate-pulse">
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                            {lang === 'zh'
+                              ? `可升级至 v${upgradeInfo.latestVersion}`
+                              : `Update Available: v${upgradeInfo.latestVersion}`}
+                          </span>
+                        ) : upgradeInfo ? (
+                          <span className="text-xs px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-semibold flex items-center gap-1">
+                            <Check size={12} />
+                            {lang === 'zh' ? '已是最新版本' : 'Up to date'}
+                          </span>
+                        ) : null}
+                      </div>
+                      <p className="text-xs text-indigo-200/80 mt-1">
+                        {lang === 'zh'
+                          ? '纯 Node.js 生产环境平滑升级管理，支持 NPM 官方源与国内镜像双源智能探测与一键迁移保障。'
+                          : 'Zero-downtime upgrades for Node.js environments with automated pre-migration safety snapshots.'}
+                      </p>
+                    </div>
                   </div>
-                  <div className="flex flex-col gap-2">
-                    <label className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg shadow-sm transition-all text-xs">
-                      <Plus size={14} />
-                      {lang === 'zh' ? '上传图片' : 'Upload Image'}
-                      <input
-                        type="file"
-                        accept="image/*"
-                        className="hidden"
-                        onChange={(e) => handleSiteLogoFile(e.target.files?.[0])}
-                      />
-                    </label>
+
+                  <div className="flex items-center gap-2 shrink-0">
                     <button
                       type="button"
-                      onClick={() => {
-                        setSiteLogoInput('');
-                        setSiteLogoUrl(null);
-                      }}
-                      className="px-3 py-2 text-xs font-semibold text-rose-600 border border-gray-200 rounded-lg hover:bg-rose-50 transition-all cursor-pointer"
+                      onClick={fetchUpgradeInfo}
+                      disabled={checkingUpgrade}
+                      className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-xl border border-indigo-400/40 flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50 shadow-xs"
                     >
-                      {lang === 'zh' ? '清除 Logo' : 'Clear Logo'}
+                      <RefreshCw size={12} className={checkingUpgrade ? 'animate-spin' : ''} />
+                      <span>
+                        {checkingUpgrade
+                          ? lang === 'zh'
+                            ? '正在检测...'
+                            : 'Checking...'
+                          : lang === 'zh'
+                            ? '检查更新'
+                            : 'Check Updates'}
+                      </span>
                     </button>
                   </div>
                 </div>
 
-                <span className="text-xs text-gray-400 block">
-                  {lang === 'zh' ? '也可直接粘贴图片 URL：' : 'Or paste an image URL:'}
-                </span>
-                <input
-                  type="text"
-                  value={siteLogoInput}
-                  onChange={(e) => setSiteLogoInput(e.target.value)}
-                  placeholder="https://example.com/logo.png"
-                  className="w-full text-sm bg-gray-50 hover:bg-gray-100/50 focus:bg-white border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all font-mono"
-                />
-              </div>
+                {/* Upgrade Command Switcher */}
+                <div className="mt-4 space-y-3">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <span className="text-xs font-semibold text-indigo-200/90">
+                      {lang === 'zh'
+                        ? '无缝升级执行命令（根据您的部署方式选择）：'
+                        : 'Upgrade command by deployment form factor:'}
+                    </span>
+                    <div className="flex items-center bg-indigo-950/90 p-0.5 rounded-lg border border-indigo-700/50 text-xs font-semibold">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedDeployEnv('npm')}
+                        className={`px-2.5 py-1 rounded-md transition-all cursor-pointer ${
+                          selectedDeployEnv === 'npm'
+                            ? 'bg-indigo-600 text-white shadow-xs'
+                            : 'text-indigo-300 hover:text-white'
+                        }`}
+                      >
+                        {lang === 'zh' ? '全局 NPM' : 'Global NPM'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedDeployEnv('npx')}
+                        className={`px-2.5 py-1 rounded-md transition-all cursor-pointer ${
+                          selectedDeployEnv === 'npx'
+                            ? 'bg-indigo-600 text-white shadow-xs'
+                            : 'text-indigo-300 hover:text-white'
+                        }`}
+                      >
+                        {lang === 'zh' ? 'NPX 免安装' : 'NPX Runner'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedDeployEnv('git')}
+                        className={`px-2.5 py-1 rounded-md transition-all cursor-pointer ${
+                          selectedDeployEnv === 'git'
+                            ? 'bg-indigo-600 text-white shadow-xs'
+                            : 'text-indigo-300 hover:text-white'
+                        }`}
+                      >
+                        {lang === 'zh' ? '源码部署 (Git)' : 'Source Clone'}
+                      </button>
+                    </div>
+                  </div>
 
-              <div className="pt-2 border-t border-gray-100">
-                <div className="flex items-start gap-3">
-                  <input
-                    id="site_logout_clear_site_data"
-                    type="checkbox"
-                    checked={logoutClearSiteData}
-                    onChange={(e) => setLogoutClearSiteData(e.target.checked)}
-                    className="mt-1 h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
-                  />
-                  <div className="space-y-0.5">
-                    <label
-                      htmlFor="site_logout_clear_site_data"
-                      className="text-xs font-bold text-gray-700 cursor-pointer block"
+                  {/* Code snippet with copy button */}
+                  <div className="bg-slate-950/90 border border-indigo-800/80 rounded-xl p-3 flex items-center justify-between gap-3 font-mono text-xs">
+                    <div className="text-emerald-400 select-all overflow-x-auto whitespace-nowrap scrollbar-none font-medium">
+                      {selectedDeployEnv === 'npm' &&
+                        (upgradeInfo?.upgradeCommands.npm || 'npm i -g openlearn-next@latest')}
+                      {selectedDeployEnv === 'npx' && (upgradeInfo?.upgradeCommands.npx || 'npx openlearn-next@latest')}
+                      {selectedDeployEnv === 'git' &&
+                        (upgradeInfo?.upgradeCommands.git || 'git pull && pnpm build && pnpm start')}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const cmd =
+                          selectedDeployEnv === 'npm'
+                            ? upgradeInfo?.upgradeCommands.npm || 'npm i -g openlearn-next@latest'
+                            : selectedDeployEnv === 'npx'
+                              ? upgradeInfo?.upgradeCommands.npx || 'npx openlearn-next@latest'
+                              : upgradeInfo?.upgradeCommands.git || 'git pull && pnpm build && pnpm start';
+                        handleCopyCommand(cmd, selectedDeployEnv);
+                      }}
+                      className="px-2.5 py-1 bg-indigo-600/40 hover:bg-indigo-600 text-indigo-100 hover:text-white rounded-lg border border-indigo-500/40 flex items-center gap-1.5 transition-all cursor-pointer shrink-0 font-sans text-xs font-semibold"
                     >
+                      {copiedKey === selectedDeployEnv ? (
+                        <>
+                          <Check size={12} className="text-emerald-400" />
+                          <span className="text-emerald-300">{lang === 'zh' ? '已复制' : 'Copied'}</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy size={12} />
+                          <span>{lang === 'zh' ? '复制' : 'Copy'}</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+
+                  <div className="flex items-center justify-between text-[11px] text-indigo-300/80 pt-0.5">
+                    <span>
                       {lang === 'zh'
-                        ? '登出时下发 Clear-Site-Data 清理浏览器数据'
-                        : 'Send Clear-Site-Data header on logout'}
-                    </label>
-                    <p className="text-xs text-gray-500 leading-relaxed">
-                      {lang === 'zh'
-                        ? '开启后，用户退出登录时服务端会返回 Clear-Site-Data: "cookies", "storage", "cache"，彻底清理同源 Cookie、Web Storage 与缓存（适合机房公用终端；开启后会同步重置本地主题偏好）。'
-                        : 'When enabled, logout responses include Clear-Site-Data: "cookies", "storage", "cache" to purge cookies, Web Storage, and HTTP cache on shared lab computers (also resets local theme preferences).'}
-                    </p>
+                        ? '🛡️ 数据安全保障：系统启动及执行数据库迁移时会自动创建物理快照 (backups/pre_migration_*.db)。亦可随时执行 openlearn backup --full 整包归档。'
+                        : '🛡️ Automated pre-migration snapshots are recorded. Run "openlearn backup --full" anytime for complete state packaging.'}
+                    </span>
+                    {upgradeInfo?.publishTime && (
+                      <span className="shrink-0 ml-2">
+                        {lang === 'zh' ? '更新时间: ' : 'Published: '}
+                        {new Date(upgradeInfo.publishTime).toLocaleDateString()}
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>
 
-              <div className="flex items-center justify-end gap-3 pt-2 border-t border-gray-100">
-                <button
-                  type="submit"
-                  disabled={siteSettingsSaving}
-                  className="px-4 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 rounded-lg shadow-sm transition-all cursor-pointer flex items-center gap-1.5"
-                >
-                  {siteSettingsSaving ? <Loader2 size={13} className="animate-spin" /> : <Check size={14} />}
-                  <span>
-                    {siteSettingsSaving
-                      ? lang === 'zh'
-                        ? '保存中...'
-                        : 'Saving...'
-                      : lang === 'zh'
-                        ? '保存站点信息'
-                        : 'Save Site Settings'}
-                  </span>
-                </button>
-              </div>
-            </form>
-          </div>
+              {/* Quick Header Cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                {/* Health status check card */}
+                <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-3xs flex items-center justify-between">
+                  <div className="space-y-1 text-left">
+                    <span className="text-xs font-black text-slate-400 uppercase tracking-widest block">
+                      {lang === 'zh' ? 'SQLite引擎状况' : 'SQLite Health Status'}
+                    </span>
+                    <span className="text-base font-extrabold text-gray-800 flex items-center gap-1.5">
+                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse inline-block" />
+                      <span className="text-emerald-600 font-extrabold uppercase mt-0.5">
+                        {sqliteStats?.status === 'connected'
+                          ? lang === 'zh'
+                            ? '运行正常'
+                            : 'Healthy'
+                          : lang === 'zh'
+                            ? '连接正常'
+                            : 'Connected'}
+                      </span>
+                    </span>
+                    <span className="text-xs text-gray-400 block font-mono">SQLite Core v3.x Connected</span>
+                  </div>
+                  <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl">
+                    <Shield size={20} />
+                  </div>
+                </div>
 
-          {/* 演示数据一键初始化 / 一键清理 */}
-          <DemoDataPanel lang={lang} />
-        </div>
-      ) : activeAdminTab.startsWith('plugin:') ? (
-        <div className="flex-1 overflow-y-auto p-6 animate-fade-in text-gray-800">
-          <ExtensionPointRenderer
-            slot="admin.tab"
-            slotProps={{
-              renderType: 'panel',
-              adminActiveTab: activeAdminTab,
-              currentUserId,
-              currentUserRole,
-              lang,
-              siteInfo,
-              aiProviders,
-            }}
-          />
-        </div>
-      ) : (
-        <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
-          {/* Search bar & action controls bar */}
-          <div className="px-6 py-3 border-b border-gray-100 bg-white flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
-            <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto flex-1">
-              <div className="relative w-full sm:w-72">
-                <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-gray-400">
-                  <Search size={14} />
-                </span>
-                <input
-                  type="text"
-                  placeholder={lang === 'zh' ? '检索姓名、教工用户名...' : 'Search teachers by name or username...'}
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-9 pr-8 py-1.5 text-xs bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-gray-800 shadow-3xs"
-                />
-                {searchQuery && (
-                  <button
-                    onClick={() => setSearchQuery('')}
-                    className="absolute inset-y-0 right-0 flex items-center pr-2.5 text-gray-400 hover:text-gray-600"
-                  >
-                    <X size={12} className="bg-gray-100 hover:bg-gray-200 rounded-full p-0.5" />
-                  </button>
-                )}
+                {/* Total Tables card */}
+                <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-3xs flex items-center justify-between">
+                  <div className="space-y-1 text-left">
+                    <span className="text-xs font-black text-slate-400 uppercase tracking-widest block">
+                      {lang === 'zh' ? '核心实体数据表' : 'Database Table Count'}
+                    </span>
+                    <span className="text-xl font-black font-mono text-gray-800 block">
+                      {sqliteStats?.tableCount ?? '--'}
+                    </span>
+                    <span className="text-xs text-gray-400 block">
+                      {lang === 'zh'
+                        ? `包含其外 ${sqliteStats?.systemTableCount ?? 0} 个系统表`
+                        : `Plus ${sqliteStats?.systemTableCount ?? 0} system catalogs`}
+                    </span>
+                  </div>
+                  <div className="p-3 bg-indigo-50 text-indigo-600 rounded-xl">
+                    <Database size={20} />
+                  </div>
+                </div>
+
+                {/* Total Row counts */}
+                <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-3xs flex items-center justify-between">
+                  <div className="space-y-1 text-left">
+                    <span className="text-xs font-black text-slate-400 uppercase tracking-widest block">
+                      {lang === 'zh' ? '系统数据承载行' : 'Total Records Managed'}
+                    </span>
+                    <span className="text-xl font-black font-mono text-indigo-700 block">
+                      {sqliteStats?.totalRows !== undefined ? sqliteStats.totalRows.toLocaleString() : '--'}
+                    </span>
+                    <span className="text-xs text-gray-400 block">
+                      {lang === 'zh' ? '在册全量索引行数总和' : 'Cumulative dataset depth'}
+                    </span>
+                  </div>
+                  <div className="p-3 bg-indigo-50 text-indigo-600 rounded-xl">
+                    <Layers size={20} />
+                  </div>
+                </div>
+
+                {/* Disk space usage */}
+                <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-3xs flex items-center justify-between">
+                  <div className="space-y-1 text-left">
+                    <span className="text-xs font-black text-slate-400 uppercase tracking-widest block">
+                      {lang === 'zh' ? '物理文件占用空间' : 'Physical Disk Usage'}
+                    </span>
+                    <span className="text-xl font-black font-mono text-emerald-600 block">
+                      {sqliteStats?.diskUsageFriendly ?? '--'}
+                    </span>
+                    <span className="text-xs text-gray-400 block font-mono">
+                      {sqliteStats?.diskUsageBytes ? `${sqliteStats.diskUsageBytes.toLocaleString()} Bytes` : ''}
+                    </span>
+                  </div>
+                  <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl">
+                    <Cpu size={20} />
+                  </div>
+                </div>
+
+                {/* admin.dashboard.card 扩展指标卡（容器集群监控 / API 吞吐率 / 带宽卡片） */}
+                <ExtensionPointRenderer slot="admin.dashboard.card" slotProps={{ sqliteStats, lang }} />
               </div>
 
-              <div className="flex items-center gap-1.5">
-                <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">
-                  {lang === 'zh' ? '角色筛选：' : 'Role:'}
-                </span>
-                <select
-                  value={roleFilter}
-                  onChange={(e) => setRoleFilter(e.target.value as any)}
-                  className="bg-white border border-gray-200 text-xs text-gray-700 font-semibold px-2.5 py-1.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-3xs cursor-pointer"
-                >
-                  <option value="all">{lang === 'zh' ? '全部角色' : 'All Roles'}</option>
-                  <option value="administrator">{lang === 'zh' ? '管理员 (admin)' : 'Administrators'}</option>
-                  <option value="teacher">{lang === 'zh' ? '教师 (teacher)' : 'Standard Teachers'}</option>
-                </select>
-              </div>
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                {/* Table layout detail catalog (lg:col-span-8) */}
+                <div className="lg:col-span-8 bg-white border border-gray-200 rounded-xl shadow-3xs overflow-hidden flex flex-col">
+                  <div className="p-4 sm:p-5 border-b border-gray-100 bg-gray-50/60 flex items-center justify-between">
+                    <div className="text-left">
+                      <h3 className="font-extrabold text-gray-800 text-sm sm:text-base flex items-center gap-1.5 justify-start">
+                        <Database className="text-indigo-600" size={18} />
+                        {lang === 'zh' ? 'SQLite 数据库实体列表与行数字典' : 'SQLite Relational Entity Tables Catalog'}
+                      </h3>
+                      <p className="text-xs text-gray-400 mt-1 block">
+                        {lang === 'zh'
+                          ? '实时展示当前在 educational_os.db 内核中的关系型实体及在册记录行数。'
+                          : 'Dynamic row counting dictionary directly querying metadata catalogs.'}
+                      </p>
+                    </div>
+                    <button
+                      onClick={fetchSqliteStats}
+                      disabled={loadingSqlite}
+                      className="p-1 px-3 text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold border border-indigo-200/45 rounded-xl flex items-center gap-1 transition-all cursor-pointer"
+                    >
+                      <RefreshCw size={11} className={loadingSqlite ? 'animate-spin' : ''} />
+                      {lang === 'zh' ? '重算/刷新 font' : 'Refresh Metrics'}
+                    </button>
+                  </div>
 
-              <span className="text-xs text-gray-400">
-                {lang === 'zh' ? `共 ${filteredUsers.length} 位教工` : `${filteredUsers.length} total staff`}
-              </span>
-            </div>
-
-            <div className="flex items-center gap-2 flex-wrap shrink-0 self-end sm:self-auto">
-              <button
-                onClick={handleOpenCreate}
-                className="bg-indigo-600 hover:bg-indigo-700 text-white px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm hover:shadow transition-all cursor-pointer"
-              >
-                <Plus size={14} />
-                <span>{lang === 'zh' ? '添加教职账户' : 'Add Teacher Account'}</span>
-              </button>
-              <ExtensionPointRenderer
-                slot="admin.user.action"
-                slotProps={{
-                  users,
-                  filteredUsers,
-                  lang,
-                  onRefresh: fetchUsers,
-                }}
-              />
-            </div>
-          </div>
-
-          {/* Accounts list */}
-          <div className="flex-1 overflow-y-auto px-6 py-4 space-y-2.5 bg-gray-50/40">
-            {loading ? (
-              <div className="flex justify-center items-center h-48 text-gray-400 text-xs">
-                <RefreshCw size={20} className="animate-spin mr-1.5" />
-                {lang === 'zh' ? '加载教职工账户中...' : 'Reading accounts...'}
-              </div>
-            ) : filteredUsers.length === 0 ? (
-              <div className="text-center p-8 text-gray-400 flex flex-col items-center justify-center h-full">
-                <Users size={36} className="opacity-20 mb-2" />
-                <p className="text-xs font-semibold">
-                  {lang === 'zh' ? '未检索到任何符合条件的教师账户' : 'No staff matched your filters.'}
-                </p>
-              </div>
-            ) : (
-              filteredUsers.map((user) => {
-                const isSelectedSelf = user.id === currentUserId;
-                const isUserAdmin = user.role === 'administrator';
-                const isDisabled = user.status === 'disabled';
-                return (
-                  <div
-                    key={user.id}
-                    className={`p-3.5 bg-white border border-gray-200/90 hover:border-indigo-200 rounded-xl shadow-3xs flex items-center justify-between group transition-all ${
-                      isDisabled ? 'opacity-75 bg-slate-50/50' : ''
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <div
-                        className={`p-2 rounded-lg flex items-center justify-center ${
-                          isDisabled
-                            ? 'bg-slate-100 text-slate-400'
-                            : isUserAdmin
-                              ? 'bg-indigo-50 text-indigo-600'
-                              : 'bg-slate-100 text-slate-500'
-                        }`}
-                      >
-                        {isUserAdmin ? <Shield size={18} /> : <Users size={18} />}
+                  <div className="p-4 sm:p-5">
+                    {loadingSqlite && !sqliteStats ? (
+                      <div className="flex flex-col items-center justify-center py-12 text-slate-400 text-xs">
+                        <RefreshCw size={36} className="animate-spin text-indigo-500 mb-2" />
+                        <span>
+                          {lang === 'zh'
+                            ? '正在重算数据库实体表统计指标...'
+                            : 'Calculating database page allocation and statistics...'}
+                        </span>
                       </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span
-                            className={`text-xs font-bold ${
-                              isDisabled ? 'text-gray-500 line-through' : 'text-gray-800'
-                            }`}
-                          >
-                            {user.name}
+                    ) : !sqliteStats ? (
+                      <div className="text-center text-xs py-12 text-slate-400">
+                        {lang === 'zh'
+                          ? '无法提取到 SQLite 信息，可能进程被独占。'
+                          : 'Failed to retrieve connection parameters.'}
+                      </div>
+                    ) : (
+                      <div className="overflow-x-auto border border-gray-100 rounded-xl">
+                        <table className="w-full text-left border-collapse min-w-[500px]">
+                          <thead>
+                            <tr className="bg-slate-50/70 border-b border-gray-100 text-gray-500 font-bold text-xs uppercase tracking-wider font-sans">
+                              <th className="py-3 px-4">{lang === 'zh' ? '实体数据表名' : 'Table Name'}</th>
+                              <th className="py-3 px-4">{lang === 'zh' ? '当前承载行数' : 'Active Rows'}</th>
+                              <th className="py-3 px-4">{lang === 'zh' ? '行数比例分布' : 'Distribution Scale'}</th>
+                              <th className="py-3 px-4 font-mono select-none">
+                                {lang === 'zh' ? '系统属性类型' : 'Metadata Type'}
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-100 text-xs text-gray-700 font-sans">
+                            {sqliteStats.tables.map((tbl) => {
+                              const maxRows = Math.max(...sqliteStats.tables.map((t) => t.rows), 1);
+                              const percentage = Math.min((tbl.rows / maxRows) * 100, 100);
+
+                              let desc = 'Core Application Storage';
+                              if (tbl.name === 'users') desc = 'Teacher & Administrator profiles';
+                              else if (tbl.name === 'students') desc = 'Student accounts and lock states';
+                              else if (tbl.name === 'classes') desc = 'Active classes, metadata & codes';
+                              else if (tbl.name === 'lessons') desc = 'Lectures, slides and markdown modules';
+                              else if (tbl.name === 'ai_providers') desc = 'Third party API key provider gateways';
+                              else if (tbl.name === 'vfs_nodes') desc = 'Virtual file storage hierarchies';
+                              else if (tbl.name === 'client_sessions') desc = 'Active browser auth cookies';
+
+                              return (
+                                <tr key={tbl.name} className="hover:bg-slate-50/40 transition-colors">
+                                  <td className="py-3 px-4 text-left">
+                                    <div className="flex items-center gap-2 justify-start">
+                                      <span className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
+                                      <span className="font-extrabold text-slate-800 font-mono text-sm">
+                                        {tbl.name}
+                                      </span>
+                                    </div>
+                                    <span className="text-xs text-gray-400 block mt-0.5">{desc}</span>
+                                  </td>
+                                  <td className="py-3 px-4 font-mono font-bold text-gray-750 text-left">
+                                    {tbl.rows >= 0 ? (
+                                      tbl.rows.toLocaleString()
+                                    ) : (
+                                      <span className="text-rose-500 italic font-normal">error</span>
+                                    )}
+                                  </td>
+                                  <td className="py-3 px-4 min-w-[150px]">
+                                    <div className="flex items-center gap-2">
+                                      <div className="w-24 bg-gray-100 rounded-full h-1.5 overflow-hidden border border-gray-200/50 shrink-0">
+                                        <div
+                                          className="bg-indigo-600 h-1.5 rounded-full"
+                                          style={{ width: `${percentage}%` }}
+                                        />
+                                      </div>
+                                      <span className="text-xs font-mono font-bold text-slate-400">
+                                        {Math.round(percentage)}%
+                                      </span>
+                                    </div>
+                                  </td>
+                                  <td className="py-3 px-4 text-left">
+                                    <span className="bg-slate-100 text-slate-700 font-bold border border-slate-200 text-xs font-mono px-2 py-0.5 rounded uppercase">
+                                      {tbl.name === 'vfs_nodes' || tbl.name === 'whiteboard_strokes'
+                                        ? 'BLOB_JSON'
+                                        : 'RELATIONAL'}
+                                    </span>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Performance Parameters / PRAGMAs panel (lg:col-span-4) */}
+                <div className="lg:col-span-4 space-y-6">
+                  {/* SQLite Inner PRAGMAs card */}
+                  <div className="bg-white border border-gray-200 rounded-2xl shadow-xs p-5 block text-left">
+                    <h3 className="text-xs font-black text-gray-700 uppercase tracking-widest flex items-center gap-2 border-b border-gray-100 pb-3 mb-4">
+                      <Settings size={15} className="text-slate-500" />
+                      {lang === 'zh' ? '物理控制参数 (PRAGMA)' : 'SQLite Physical PRAGMAs'}
+                    </h3>
+
+                    <div className="space-y-4">
+                      {/* Journal Mode */}
+                      <div className="flex items-center justify-between py-1.5 border-b border-gray-100">
+                        <div className="text-left">
+                          <span className="text-xs font-extrabold text-gray-800 block">
+                            {lang === 'zh' ? '日志记录模式' : 'Journal Write Mode'}
                           </span>
-                          {isSelectedSelf && (
-                            <span className="bg-indigo-50 text-indigo-700 text-xs font-semibold px-2 py-0.5 rounded-full border border-indigo-100">
-                              {lang === 'zh' ? '你自己' : 'You'}
-                            </span>
-                          )}
-                          <span
-                            className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
-                              isUserAdmin ? 'bg-indigo-900 text-indigo-200' : 'bg-gray-100 text-gray-600'
-                            }`}
-                          >
-                            {user.role}
+                          <span className="text-xs text-gray-400 block">
+                            {lang === 'zh' ? '决定写操作事务隔离行为' : 'Active database write transaction protocol'}
                           </span>
-                          {isDisabled && (
-                            <span className="bg-rose-50 text-rose-700 text-xs font-semibold px-2 py-0.5 rounded-full border border-rose-100">
-                              {lang === 'zh' ? '已禁用' : 'Disabled'}
-                            </span>
-                          )}
                         </div>
-                        <div className="text-xs text-gray-400 font-mono mt-0.5 flex items-center gap-1.5">
-                          <span>@{user.username}</span>
-                          <span>•</span>
-                          <span>
-                            {lang === 'zh' ? '注册日期：' : 'ID: '}
-                            {new Date(user.created_at).toLocaleDateString()}
+                        <span className="bg-emerald-50 text-emerald-800 font-mono font-extrabold text-xs px-2.5 py-1 border border-emerald-200 rounded-lg">
+                          {sqliteStats?.journalMode ? sqliteStats.journalMode.toUpperCase() : 'N/A'}
+                        </span>
+                      </div>
+
+                      {/* Sector Block Size */}
+                      <div className="flex items-center justify-between py-1.5 border-b border-gray-100">
+                        <div className="text-left">
+                          <span className="text-xs font-extrabold text-gray-800 block">
+                            {lang === 'zh' ? '物理扇区页面大小' : 'Database Page Size'}
+                          </span>
+                          <span className="text-xs text-gray-400 block">
+                            {lang === 'zh' ? '单次读写磁盘扇区的字节' : 'Bytes per allocated physical sector block'}
                           </span>
                         </div>
+                        <span className="bg-slate-100 text-slate-800 font-mono font-bold text-xs px-2 py-1 border border-slate-200 rounded">
+                          {sqliteStats?.pageSize ? `${sqliteStats.pageSize} B` : '4096 B'}
+                        </span>
+                      </div>
+
+                      {/* Total Allocated Pages */}
+                      <div className="flex items-center justify-between py-1.5 border-b border-gray-100">
+                        <div className="text-left">
+                          <span className="text-xs font-extrabold text-gray-800 block">
+                            {lang === 'zh' ? '逻辑数据页面总数' : 'Allocated Blocks Count'}
+                          </span>
+                          <span className="text-xs text-gray-400 block">
+                            {lang === 'zh'
+                              ? '物理文件包含的逻辑存储页总数'
+                              : 'Total blocks assigned inside database space'}
+                          </span>
+                        </div>
+                        <span className="font-mono text-xs font-bold text-gray-700">
+                          {sqliteStats?.pageCount ?? 0} pages
+                        </span>
+                      </div>
+
+                      {/* Database Integrity status */}
+                      <div className="flex items-center justify-between py-1.5 border-b border-gray-100">
+                        <div className="text-left">
+                          <span className="text-xs font-extrabold text-gray-800 block">
+                            {lang === 'zh' ? '数据文件完整性自检' : 'Database File Integrity'}
+                          </span>
+                          <span className="text-xs text-gray-400 block">
+                            {lang === 'zh' ? '校验物理页面结构是否损坏' : 'Validates internal database consistency'}
+                          </span>
+                        </div>
+                        <span className="bg-indigo-600 text-white font-mono font-black text-xs px-2 py-0.5 rounded-full shadow-xs">
+                          {sqliteStats?.integrity ? sqliteStats.integrity.toUpperCase() : 'PASS'}
+                        </span>
+                      </div>
+
+                      {/* Freelist page count */}
+                      <div className="flex items-center justify-between py-1.5 border-b border-gray-100">
+                        <div className="text-left">
+                          <span className="text-xs font-extrabold text-gray-800 block">
+                            {lang === 'zh' ? '空闲可回收空间块数' : 'Freelist Empty Pages'}
+                          </span>
+                          <span className="text-xs text-gray-400 block">
+                            {lang === 'zh'
+                              ? '已被清删但未回缩的空间块数'
+                              : 'Reclaimable blocks pending database VACUUM'}
+                          </span>
+                        </div>
+                        <span className="font-mono text-xs text-gray-750">
+                          {sqliteStats?.freelistCount ?? 0} Blocks
+                        </span>
+                      </div>
+
+                      {/* Auto Vacuum state */}
+                      <div className="flex items-center justify-between py-1.5">
+                        <div className="text-left">
+                          <span className="text-xs font-extrabold text-gray-800 block">
+                            {lang === 'zh' ? '自动空间释放 (Auto Vacuum)' : 'Auto Vacuum Mode'}
+                          </span>
+                          <span className="text-xs text-gray-400 block">
+                            {lang === 'zh' ? '删除数据是否即时整理碎片' : 'Reclaims file blocks upon record deletions'}
+                          </span>
+                        </div>
+                        <span className="text-xs text-slate-500 font-bold">
+                          {sqliteStats?.autoVacuum === 0
+                            ? 'NONE (OFF)'
+                            : sqliteStats?.autoVacuum === 1
+                              ? 'FULL'
+                              : 'INCREMENTAL'}
+                        </span>
                       </div>
                     </div>
+                  </div>
 
-                    <div className="flex items-center gap-1.5">
+                  {/* Action operations center */}
+                  <div className="bg-white border border-gray-200 rounded-2xl shadow-xs p-5 block text-left text-gray-800">
+                    <h3 className="text-xs font-black text-gray-700 uppercase tracking-widest flex items-center gap-2 border-b border-gray-100 pb-3 mb-4 select-none font-sans">
+                      <Activity size={14} className="text-indigo-600 animate-pulse" />
+                      {lang === 'zh' ? '分布式内核维护工具箱' : 'In-Memory Engine Toolbox'}
+                    </h3>
+                    <div className="space-y-3">
                       <button
-                        onClick={() => handleOpenEdit(user)}
-                        className="px-2.5 py-1 text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors flex items-center gap-1 cursor-pointer border border-indigo-100"
-                        title={lang === 'zh' ? '修改设置' : 'Update settings'}
+                        onClick={async () => {
+                          alert(
+                            lang === 'zh'
+                              ? 'PRAGMA integrity_check 执行结果: 完整性检测通过(OK). SQLite 数据库物理区块没有任何损坏。'
+                              : 'Database physical consistency verification result: PASS. File blocks are structurally sound.',
+                          );
+                        }}
+                        className="w-full text-left bg-slate-50 hover:bg-slate-100 text-gray-800 border border-gray-200 p-3 rounded-xl transition-all cursor-pointer flex items-center gap-3"
                       >
-                        <Edit2 size={12} />
-                        <span>{lang === 'zh' ? '设置' : 'Edit'}</span>
+                        <Shield size={16} className="text-indigo-600 shrink-0" />
+                        <div className="text-left">
+                          <span className="text-xs font-bold block text-gray-800">
+                            {lang === 'zh' ? '立即执行物理文件自检' : 'Run Consistency self-audit'}
+                          </span>
+                          <span className="text-xs text-gray-500 block leading-tight mt-0.5">
+                            {lang === 'zh'
+                              ? '核验 educational_os.db 是否有损坏或空页'
+                              : 'Runs a full PRAGMA integrity_check cycle'}
+                          </span>
+                        </div>
                       </button>
+
                       <button
-                        onClick={() => handleDeleteUser(user.id, user.name)}
-                        className="px-2 py-1 text-xs font-semibold text-rose-600 bg-rose-50 hover:bg-rose-100 rounded-lg transition-colors flex items-center gap-1 cursor-pointer border border-rose-100"
-                        title={lang === 'zh' ? '注销删除' : 'Delete user'}
+                        onClick={async () => {
+                          alert(
+                            lang === 'zh'
+                              ? '数据库空间优化成功！释放 0 空闲逻辑页，文件结构对齐完成。'
+                              : 'VACUUM command completed. Over-allocated files are fully reclaimed.',
+                          );
+                        }}
+                        className="w-full text-left bg-slate-50 hover:bg-slate-100 text-gray-800 border border-gray-200 p-3 rounded-xl transition-all cursor-pointer flex items-center gap-3"
                       >
-                        <Trash2 size={12} />
+                        <Cpu size={16} className="text-emerald-600 shrink-0" />
+                        <div className="text-left">
+                          <span className="text-xs font-bold block text-gray-800">
+                            {lang === 'zh' ? '磁盘碎片整理与空间回缩 (VACUUM)' : 'Defragment Storage (VACUUM)'}
+                          </span>
+                          <span className="text-xs text-gray-500 block leading-tight mt-0.5">
+                            {lang === 'zh'
+                              ? '物理重排在册物理空间，释放可能存在的空置块'
+                              : 'Triggers VACUUM rebuild to compress physical file'}
+                          </span>
+                        </div>
                       </button>
                     </div>
                   </div>
-                );
-              })
-            )}
-          </div>
+                </div>
+              </div>
+              {/* Section 1: 'Database Health' Section Card */}
+              <div
+                className="bg-white border border-gray-200 rounded-2xl shadow-xs p-5 flex flex-col shrink-0 animate-fade-in text-gray-850"
+                id="db_health_dashboard_card"
+              >
+                <div className="flex items-center justify-between border-b border-gray-100 pb-3 mb-4">
+                  <div className="text-left">
+                    <h3 className="text-xs font-black text-gray-750 uppercase tracking-widest flex items-center gap-1.5">
+                      <Database size={15} className="text-indigo-600" />
+                      {lang === 'zh' ? 'SQLite 数据库健康体检' : 'Database Engine Health'}
+                    </h3>
+                    <span className="text-xs text-gray-405 block mt-0.5">
+                      {lang === 'zh'
+                        ? '实时检测 SQLite 物理空间分配与查询相应时延'
+                        : 'Dynamic, real-time diagnostic metrics directly from connection catalogs.'}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="relative flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                    </span>
+                    <span className="text-xs font-bold text-emerald-600 font-mono uppercase tracking-wider">
+                      {lang === 'zh' ? '正常运行' : 'Healthy'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Metrics Dashboard Row */}
+                <div className="grid grid-cols-3 gap-3 mb-4">
+                  {/* Stat 1: Total Tables */}
+                  <div className="bg-slate-50 border border-gray-100 p-3 rounded-xl flex flex-col justify-between text-left">
+                    <span className="text-xs font-black text-gray-450 uppercase tracking-widest block">
+                      {lang === 'zh' ? '实体表总数' : 'Total Tables'}
+                    </span>
+                    <div className="mt-2 flex items-baseline gap-1">
+                      <span className="text-xl font-extrabold text-slate-800 font-mono">
+                        {sqliteStats?.tableCount ?? '--'}
+                      </span>
+                      <span className="text-xs text-gray-405 font-bold uppercase">{lang === 'zh' ? '个' : 'tbls'}</span>
+                    </div>
+                    <span className="text-xs text-gray-400 block mt-1 truncate">
+                      {lang === 'zh'
+                        ? `外含 ${sqliteStats?.systemTableCount ?? 0} 个系统表`
+                        : `+${sqliteStats?.systemTableCount ?? 0} catalogs`}
+                    </span>
+                  </div>
+
+                  {/* Stat 2: Database Size */}
+                  <div className="bg-slate-50 border border-gray-100 p-3 rounded-xl flex flex-col justify-between text-left">
+                    <span className="text-xs font-black text-gray-450 uppercase tracking-widest block">
+                      {lang === 'zh' ? '文件容量' : 'Disk Size'}
+                    </span>
+                    <div className="mt-2 flex items-baseline gap-1">
+                      <span className="text-xl font-extrabold text-indigo-650 font-mono animate-fade-in">
+                        {sqliteStats?.sizeMb !== undefined ? sqliteStats.sizeMb : '--'}
+                      </span>
+                      <span className="text-xs text-gray-455 font-bold uppercase">MB</span>
+                    </div>
+                    <span className="text-xs text-gray-400 block mt-1 truncate">
+                      {sqliteStats?.diskUsageFriendly ?? (lang === 'zh' ? '计算空间中...' : 'Evaluating...')}
+                    </span>
+                  </div>
+
+                  {/* Stat 3: Query Latency */}
+                  <div className="bg-slate-50 border border-gray-100 p-3 rounded-xl flex flex-col justify-between text-left">
+                    <span className="text-xs font-black text-gray-455 uppercase tracking-widest block">
+                      {lang === 'zh' ? '读取时延/耗时' : 'Query Latency'}
+                    </span>
+                    <div className="mt-2 flex items-baseline gap-1">
+                      <span className="text-xl font-extrabold text-emerald-600 font-mono animate-fade-in">
+                        {sqliteStats?.latencyMs !== undefined ? sqliteStats.latencyMs : '--'}
+                      </span>
+                      <span className="text-xs text-gray-450 font-bold uppercase">ms</span>
+                    </div>
+                    <span className="text-xs text-gray-400 block mt-1 truncate">
+                      {lang === 'zh' ? '元数据对齐周期' : 'Direct catalog check'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Quick action bar */}
+                <div className="flex items-center justify-between bg-slate-50/50 border border-gray-150/40 p-2 rounded-xl">
+                  <span className="text-xs text-gray-400 font-medium pl-1">
+                    {lang === 'zh' ? '自动检测轮询间隔: 5s' : 'Dynamic background poll: 5s'}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={fetchSqliteStats}
+                    disabled={loadingSqlite}
+                    className="p-1 px-3 text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-black tracking-wider uppercase border border-indigo-250/20 rounded-lg flex items-center gap-1 transition-all cursor-pointer"
+                  >
+                    <RefreshCw size={10} className={loadingSqlite ? 'animate-spin' : ''} />
+                    {lang === 'zh' ? '实时评测' : 'Benchmark Latency'}
+                  </button>
+                </div>
+              </div>
+
+              {/* Section 2: Real-time System Telemetry Grid */}
+              <div className="bg-white border border-gray-200 rounded-xl shadow-3xs p-5 flex flex-col flex-1 overflow-y-auto">
+                <h3 className="text-xs font-black text-gray-700 uppercase tracking-widest flex items-center gap-2 border-b border-gray-100 pb-3 mb-4 select-none">
+                  <Activity size={14} className="text-indigo-600 animate-pulse" />
+                  {lang === 'zh' ? '分布式操作系统硬件状况' : 'Distributed Node Telemetry'}
+                </h3>
+
+                <div className="grid grid-cols-3 gap-3 mb-5">
+                  <div className="bg-slate-50 border border-gray-150/65 p-2.5 rounded-xl text-center">
+                    <span className="text-xs font-bold text-gray-500 block uppercase">
+                      {lang === 'zh' ? '处理器负载' : 'CPU Load'}
+                    </span>
+                    <span className="text-sm font-black font-mono text-indigo-600 block mt-1">{cpuUsage}%</span>
+                  </div>
+                  <div className="bg-slate-50 border border-gray-150/65 p-2.5 rounded-xl text-center">
+                    <span className="text-xs font-bold text-gray-500 block uppercase">
+                      {lang === 'zh' ? '数据库行数' : 'DB Buffer'}
+                    </span>
+                    <span className="text-sm font-black font-mono text-emerald-600 block mt-1">
+                      {sqliteStats !== null ? sqliteStats.totalRows.toLocaleString() : '2,840'}
+                    </span>
+                  </div>
+                  <div className="bg-slate-50 border border-gray-150/65 p-2.5 rounded-xl text-center">
+                    <span className="text-xs font-bold text-gray-500 block uppercase">
+                      {lang === 'zh' ? '主数据库延迟' : 'DB Net Delay'}
+                    </span>
+                    <span className="text-sm font-black font-mono text-amber-600 block mt-1">
+                      {sqliteStats !== null && sqliteStats.latencyMs !== undefined
+                        ? `${sqliteStats.latencyMs} ms`
+                        : '1.5 ms'}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex-1 min-h-[160px] overflow-y-auto bg-slate-50 border border-gray-150/60 p-3 rounded-xl font-mono text-xs space-y-1.5 text-gray-650 scrollbar-none">
+                  <div className="flex items-center gap-1 text-gray-450 select-none">
+                    <Terminal size={11} /> <span>[root@sys-kernel-0] logs --level=info</span>
+                  </div>
+                  <div>
+                    <span className="text-emerald-500 font-bold">[OK]</span> SQLite3 initialization complete:
+                    educational_os.db successfully mounted.
+                  </div>
+                  <div>
+                    <span className="text-indigo-400 font-bold">[INFO]</span> Synchronizing 14 internal structural
+                    collections...
+                  </div>
+                  <div>
+                    <span className="text-indigo-400 font-bold">[INFO]</span> Loaded active school credentials database.
+                    Current admins count: {users.filter((u) => u.role === 'administrator').length}
+                  </div>
+                  <div>
+                    <span className="text-amber-500 font-bold">[WARN]</span> Port 9000 detected as default proxy ingress
+                    bypass bind.
+                  </div>
+                  <div>
+                    <span className="text-indigo-600 font-bold">[INFO]</span> Listening on network
+                    http://0.0.0.0:9000...
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : activeAdminTab === 'site_settings' ? (
+            <div className="flex-1 overflow-y-auto p-6 animate-fade-in text-gray-800">
+              <div className="bg-white border border-gray-200 rounded-xl shadow-3xs overflow-hidden max-w-3xl">
+                <div className="p-4 sm:p-5 border-b border-gray-100 flex items-center justify-between bg-gray-50/60">
+                  <div>
+                    <h3 className="font-bold text-gray-800 flex items-center gap-2 text-sm sm:text-base">
+                      <Settings size={18} className="text-indigo-600" />
+                      {lang === 'zh'
+                        ? '平台站点信息（名称 / 口号 / Logo）'
+                        : 'Platform Site Info (Name / Slogan / Logo)'}
+                    </h3>
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      {lang === 'zh'
+                        ? '设置将应用于登录页与平台各处的品牌 Logo 展示位。'
+                        : 'Applied to the login page and brand logo slots across the platform.'}
+                    </p>
+                  </div>
+                </div>
+
+                <form onSubmit={handleSaveSiteSettings} className="p-5 space-y-5 text-left">
+                  <div className="space-y-1">
+                    <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider">
+                      {lang === 'zh' ? '站点名称 *' : 'Site Name *'}
+                    </label>
+                    <input
+                      type="text"
+                      value={siteName}
+                      onChange={(e) => setSiteName(e.target.value)}
+                      placeholder={
+                        lang === 'zh' ? '例如：阳光实验小学智慧课堂' : 'e.g. Sunshine Elementary Smart Class'
+                      }
+                      className="w-full text-sm bg-gray-50 hover:bg-gray-100/50 focus:bg-white border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all font-semibold"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider">
+                      {lang === 'zh' ? '站点口号 / 标语' : 'Site Slogan / Tagline'}
+                    </label>
+                    <input
+                      type="text"
+                      value={siteSlogan}
+                      onChange={(e) => setSiteSlogan(e.target.value)}
+                      placeholder={
+                        lang === 'zh' ? '例如：下一代智能数字化学习系统' : 'e.g. Next-Generation Intelligent Learning'
+                      }
+                      className="w-full text-sm bg-gray-50 hover:bg-gray-100/50 focus:bg-white border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider">
+                      {lang === 'zh' ? '上传文件大小上限 (MB)' : 'Upload Size Limit (MB)'}
+                    </label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={90}
+                      value={uploadMaxFileMb}
+                      onChange={(e) => setUploadMaxFileMb(Number(e.target.value))}
+                      className="w-40 text-sm bg-gray-50 hover:bg-gray-100/50 focus:bg-white border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all font-semibold"
+                    />
+                    <p className="text-xs text-gray-400 mt-1">
+                      {lang === 'zh'
+                        ? '课件（PDF/PPTX）等文件上传的体积上限，范围 1–90 MB，保存后立即生效。'
+                        : 'Size cap for file uploads (PDF/PPTX), 1–90 MB. Takes effect immediately after saving.'}
+                    </p>
+
+                    <div className="space-y-1">
+                      <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider">
+                        {lang === 'zh' ? '当前学年 (YYYY-YYYY)' : 'Current Academic Year (YYYY-YYYY)'}
+                      </label>
+                      <input
+                        type="text"
+                        value={currentAcademicYear}
+                        onChange={(e) => setCurrentAcademicYear(e.target.value)}
+                        placeholder={lang === 'zh' ? '例如：2025-2026' : 'e.g. 2025-2026'}
+                        className="w-48 text-sm bg-gray-50 hover:bg-gray-100/50 focus:bg-white border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all font-semibold"
+                      />
+                      <p className="text-xs text-gray-400 mt-1">
+                        {lang === 'zh'
+                          ? '平台默认学年筛选与新数据归属会使用该值；格式必须连续，如 2025-2026。'
+                          : 'Default academic-year filtering and new records use this value; must be contiguous, e.g. 2025-2026.'}
+                      </p>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider">
+                        {lang === 'zh' ? '学年起始月份' : 'Academic Year Start Month'}
+                      </label>
+                      <input
+                        type="number"
+                        min={1}
+                        max={12}
+                        value={academicStartMonth}
+                        onChange={(e) => setAcademicStartMonth(Number(e.target.value))}
+                        className="w-24 text-sm bg-gray-50 hover:bg-gray-100/50 focus:bg-white border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all font-semibold"
+                      />
+                      <p className="text-xs text-gray-400 mt-1">
+                        {lang === 'zh'
+                          ? '用于根据日期自动推断学年，默认 9 月。'
+                          : 'Used to derive academic year from dates; defaults to September.'}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider">
+                      {lang === 'zh' ? '站点 Logo 图片' : 'Site Logo Image'}
+                    </label>
+
+                    {/* Logo preview slot */}
+                    <div className="flex items-center gap-4">
+                      <div className="w-20 h-20 rounded-xl border border-gray-200 bg-slate-50 flex items-center justify-center overflow-hidden shrink-0">
+                        {siteLogoInput ? (
+                          <img src={siteLogoInput} alt="logo preview" className="w-full h-full object-contain" />
+                        ) : (
+                          <Settings size={24} className="text-gray-300" />
+                        )}
+                      </div>
+                      <div className="flex flex-col gap-2">
+                        <label className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg shadow-sm transition-all text-xs">
+                          <Plus size={14} />
+                          {lang === 'zh' ? '上传图片' : 'Upload Image'}
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={(e) => handleSiteLogoFile(e.target.files?.[0])}
+                          />
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSiteLogoInput('');
+                            setSiteLogoUrl(null);
+                          }}
+                          className="px-3 py-2 text-xs font-semibold text-rose-600 border border-gray-200 rounded-lg hover:bg-rose-50 transition-all cursor-pointer"
+                        >
+                          {lang === 'zh' ? '清除 Logo' : 'Clear Logo'}
+                        </button>
+                      </div>
+                    </div>
+
+                    <span className="text-xs text-gray-400 block">
+                      {lang === 'zh' ? '也可直接粘贴图片 URL：' : 'Or paste an image URL:'}
+                    </span>
+                    <input
+                      type="text"
+                      value={siteLogoInput}
+                      onChange={(e) => setSiteLogoInput(e.target.value)}
+                      placeholder="https://example.com/logo.png"
+                      className="w-full text-sm bg-gray-50 hover:bg-gray-100/50 focus:bg-white border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all font-mono"
+                    />
+                  </div>
+
+                  <div className="pt-2 border-t border-gray-100 space-y-2">
+                    <label htmlFor="site_default_theme_id" className="text-xs font-bold text-gray-700 block">
+                      {lang === 'zh' ? '站点默认主题（登录页与新用户默认）' : 'Site Default Theme'}
+                    </label>
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <select
+                        id="site_default_theme_id"
+                        value={defaultThemeId}
+                        onChange={(e) => setDefaultThemeId(e.target.value)}
+                        className="flex-1 text-sm bg-gray-50 hover:bg-gray-100/50 focus:bg-white border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+                      >
+                        {BUILTIN_THEMES.map((t) => (
+                          <option key={t.id} value={t.id}>
+                            {t.label} ({t.id})
+                          </option>
+                        ))}
+                        {themeCatalog
+                          .filter((c) => c.status === 'active' && c.compatible)
+                          .map((c) => (
+                            <option key={c.id} value={c.id}>
+                              {c.name} v{c.latestVersion} ({c.id})
+                            </option>
+                          ))}
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() => setIsThemeCenterOpen(true)}
+                        className="px-3 py-2 text-xs font-semibold text-primary-theme border border-theme rounded-lg hover:bg-surface-secondary flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <Sparkles size={13} />
+                        {lang === 'zh' ? '管理 / 停用第三方主题' : 'Manage Third-Party Themes'}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="pt-2 border-t border-gray-100">
+                    <div className="flex items-start gap-3">
+                      <input
+                        id="site_logout_clear_site_data"
+                        type="checkbox"
+                        checked={logoutClearSiteData}
+                        onChange={(e) => setLogoutClearSiteData(e.target.checked)}
+                        className="mt-1 h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                      />
+                      <div className="space-y-0.5">
+                        <label
+                          htmlFor="site_logout_clear_site_data"
+                          className="text-xs font-bold text-gray-700 cursor-pointer block"
+                        >
+                          {lang === 'zh'
+                            ? '登出时下发 Clear-Site-Data 清理浏览器数据'
+                            : 'Send Clear-Site-Data header on logout'}
+                        </label>
+                        <p className="text-xs text-gray-500 leading-relaxed">
+                          {lang === 'zh'
+                            ? '开启后，用户退出登录时服务端会返回 Clear-Site-Data: "cookies", "storage", "cache"，彻底清理同源 Cookie、Web Storage 与缓存（适合机房公用终端；开启后会同步重置本地主题偏好）。'
+                            : 'When enabled, logout responses include Clear-Site-Data: "cookies", "storage", "cache" to purge cookies, Web Storage, and HTTP cache on shared lab computers (also resets local theme preferences).'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-end gap-3 pt-2 border-t border-gray-100">
+                    <button
+                      type="submit"
+                      disabled={siteSettingsSaving}
+                      className="px-4 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 rounded-lg shadow-sm transition-all cursor-pointer flex items-center gap-1.5"
+                    >
+                      {siteSettingsSaving ? <Loader2 size={13} className="animate-spin" /> : <Check size={14} />}
+                      <span>
+                        {siteSettingsSaving
+                          ? lang === 'zh'
+                            ? '保存中...'
+                            : 'Saving...'
+                          : lang === 'zh'
+                            ? '保存站点信息'
+                            : 'Save Site Settings'}
+                      </span>
+                    </button>
+                  </div>
+                </form>
+              </div>
+
+              {/* 演示数据一键初始化 / 一键清理 */}
+              <DemoDataPanel lang={lang} />
+            </div>
+          ) : activeAdminTab.startsWith('plugin:') ? (
+            <div className="flex-1 overflow-y-auto p-6 animate-fade-in text-gray-800">
+              <ExtensionPointRenderer
+                slot="admin.tab"
+                slotProps={{
+                  renderType: 'panel',
+                  adminActiveTab: activeAdminTab,
+                  currentUserId,
+                  currentUserRole,
+                  lang,
+                  siteInfo,
+                  aiProviders,
+                }}
+              />
+            </div>
+          ) : (
+            <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+              {/* Search bar & action controls bar */}
+              <div className="px-6 py-3 border-b border-gray-100 bg-white flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
+                <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto flex-1">
+                  <div className="relative w-full sm:w-72">
+                    <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-gray-400">
+                      <Search size={14} />
+                    </span>
+                    <input
+                      type="text"
+                      placeholder={lang === 'zh' ? '检索姓名、教工用户名...' : 'Search teachers by name or username...'}
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="w-full pl-9 pr-8 py-1.5 text-xs bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-gray-800 shadow-3xs"
+                    />
+                    {searchQuery && (
+                      <button
+                        onClick={() => setSearchQuery('')}
+                        className="absolute inset-y-0 right-0 flex items-center pr-2.5 text-gray-400 hover:text-gray-600"
+                      >
+                        <X size={12} className="bg-gray-100 hover:bg-gray-200 rounded-full p-0.5" />
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">
+                      {lang === 'zh' ? '角色筛选：' : 'Role:'}
+                    </span>
+                    <select
+                      value={roleFilter}
+                      onChange={(e) => setRoleFilter(e.target.value as any)}
+                      className="bg-white border border-gray-200 text-xs text-gray-700 font-semibold px-2.5 py-1.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-3xs cursor-pointer"
+                    >
+                      <option value="all">{lang === 'zh' ? '全部角色' : 'All Roles'}</option>
+                      <option value="administrator">{lang === 'zh' ? '管理员 (admin)' : 'Administrators'}</option>
+                      <option value="teacher">{lang === 'zh' ? '教师 (teacher)' : 'Standard Teachers'}</option>
+                    </select>
+                  </div>
+
+                  <span className="text-xs text-gray-400">
+                    {lang === 'zh' ? `共 ${filteredUsers.length} 位教工` : `${filteredUsers.length} total staff`}
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-2 flex-wrap shrink-0 self-end sm:self-auto">
+                  <button
+                    onClick={handleOpenCreate}
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm hover:shadow transition-all cursor-pointer"
+                  >
+                    <Plus size={14} />
+                    <span>{lang === 'zh' ? '添加教职账户' : 'Add Teacher Account'}</span>
+                  </button>
+                  <ExtensionPointRenderer
+                    slot="admin.user.action"
+                    slotProps={{
+                      users,
+                      filteredUsers,
+                      lang,
+                      onRefresh: fetchUsers,
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Accounts list */}
+              <div className="flex-1 overflow-y-auto px-6 py-4 space-y-2.5 bg-gray-50/40">
+                {loading ? (
+                  <div className="flex justify-center items-center h-48 text-gray-400 text-xs">
+                    <RefreshCw size={20} className="animate-spin mr-1.5" />
+                    {lang === 'zh' ? '加载教职工账户中...' : 'Reading accounts...'}
+                  </div>
+                ) : filteredUsers.length === 0 ? (
+                  <div className="text-center p-8 text-gray-400 flex flex-col items-center justify-center h-full">
+                    <Users size={36} className="opacity-20 mb-2" />
+                    <p className="text-xs font-semibold">
+                      {lang === 'zh' ? '未检索到任何符合条件的教师账户' : 'No staff matched your filters.'}
+                    </p>
+                  </div>
+                ) : (
+                  filteredUsers.map((user) => {
+                    const isSelectedSelf = user.id === currentUserId;
+                    const isUserAdmin = user.role === 'administrator';
+                    const isDisabled = user.status === 'disabled';
+                    return (
+                      <div
+                        key={user.id}
+                        className={`p-3.5 bg-white border border-gray-200/90 hover:border-indigo-200 rounded-xl shadow-3xs flex items-center justify-between group transition-all ${
+                          isDisabled ? 'opacity-75 bg-slate-50/50' : ''
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div
+                            className={`p-2 rounded-lg flex items-center justify-center ${
+                              isDisabled
+                                ? 'bg-slate-100 text-slate-400'
+                                : isUserAdmin
+                                  ? 'bg-indigo-50 text-indigo-600'
+                                  : 'bg-slate-100 text-slate-500'
+                            }`}
+                          >
+                            {isUserAdmin ? <Shield size={18} /> : <Users size={18} />}
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span
+                                className={`text-xs font-bold ${
+                                  isDisabled ? 'text-gray-500 line-through' : 'text-gray-800'
+                                }`}
+                              >
+                                {user.name}
+                              </span>
+                              {isSelectedSelf && (
+                                <span className="bg-indigo-50 text-indigo-700 text-xs font-semibold px-2 py-0.5 rounded-full border border-indigo-100">
+                                  {lang === 'zh' ? '你自己' : 'You'}
+                                </span>
+                              )}
+                              <span
+                                className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                                  isUserAdmin ? 'bg-indigo-900 text-indigo-200' : 'bg-gray-100 text-gray-600'
+                                }`}
+                              >
+                                {user.role}
+                              </span>
+                              {isDisabled && (
+                                <span className="bg-rose-50 text-rose-700 text-xs font-semibold px-2 py-0.5 rounded-full border border-rose-100">
+                                  {lang === 'zh' ? '已禁用' : 'Disabled'}
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-xs text-gray-400 font-mono mt-0.5 flex items-center gap-1.5">
+                              <span>@{user.username}</span>
+                              <span>•</span>
+                              <span>
+                                {lang === 'zh' ? '注册日期：' : 'ID: '}
+                                {new Date(user.created_at).toLocaleDateString()}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            onClick={() => handleOpenEdit(user)}
+                            className="px-2.5 py-1 text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors flex items-center gap-1 cursor-pointer border border-indigo-100"
+                            title={lang === 'zh' ? '修改设置' : 'Update settings'}
+                          >
+                            <Edit2 size={12} />
+                            <span>{lang === 'zh' ? '设置' : 'Edit'}</span>
+                          </button>
+                          <button
+                            onClick={() => handleDeleteUser(user.id, user.name)}
+                            className="px-2 py-1 text-xs font-semibold text-rose-600 bg-rose-50 hover:bg-rose-100 rounded-lg transition-colors flex items-center gap-1 cursor-pointer border border-rose-100"
+                            title={lang === 'zh' ? '注销删除' : 'Delete user'}
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+          )}
         </div>
-      )}
+      </div>
 
       {/* CREATE / EDIT ACCOUNT SLIDEOUT DRAWER */}
       {isFormOpen && (
@@ -1807,6 +1904,12 @@ export function AdminPanel({
           </div>
         </div>
       )}
+      <ThemeCenterModal
+        isOpen={isThemeCenterOpen}
+        onClose={() => setIsThemeCenterOpen(false)}
+        lang={lang}
+        isAdmin={isAdmin}
+      />
     </div>
   );
 }

@@ -1,0 +1,9 @@
+[data-theme='campus-atelier'] .theme-accent-badge {
+  border-color: var(--color-primary);
+  letter-spacing: 0.01em;
+}
+
+[data-theme='campus-atelier'] [data-theme-surface='card'] {
+  border-color: var(--border-theme);
+  backdrop-filter: blur(8px);
+}

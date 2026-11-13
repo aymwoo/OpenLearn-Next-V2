@@ -6,6 +6,7 @@ import { useAppData } from '../../context/AppDataContext';
 import type { ToastType } from '../../hooks/useToast';
 import { StudentDashboardPanel } from './StudentDashboardPanel';
 import { useStudentActiveSessionPolling } from './useStudentActiveSession';
+import { useThemeStore } from '../../store/themeStore';
 
 const StudentLessonView = lazy(() => import('./StudentLessonView').then((m) => ({ default: m.StudentLessonView })));
 const StudentAssignmentView = lazy(() =>
@@ -69,8 +70,19 @@ export function StudentView() {
   // 供看板横幅 / 顶部导航 / 悬浮菜单复用（模块级 store 单例，只发一次请求）
   useStudentActiveSessionPolling(activeStudentId || null);
 
+  const studentLayout = useThemeStore((s) => s.resolvedLayouts.student);
+
   return (
-    <div className="flex-1 p-6 overflow-y-auto w-full max-w-full space-y-6">
+    <div
+      data-testid="student-view-root"
+      data-theme-bg-canvas="student"
+      data-student-header-position={studentLayout.headerPosition}
+      data-student-card-columns={studentLayout.cardColumns}
+      style={{ '--ol-student-cols': String(studentLayout.cardColumns) } as React.CSSProperties}
+      className={`flex-1 p-6 overflow-y-auto w-full max-w-full bg-app text-main flex ${
+        studentLayout.headerPosition === 'bottom' ? 'flex-col-reverse' : 'flex-col'
+      } gap-6 transition-colors duration-150`}
+    >
       {!activeStudentId ? (
         <div className="bg-surface border border-theme rounded-xl p-12 text-center text-muted flex flex-col items-center justify-center">
           <Users size={48} className="text-muted/40 mb-4" />

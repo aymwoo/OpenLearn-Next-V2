@@ -92,7 +92,7 @@ describe('AdminPanel (管理后台页面样式规范化与标签切换)', () => 
     const classAttr = root?.getAttribute('class') || '';
     expect(classAttr).toContain('rounded-xl');
     expect(classAttr).toContain('shadow-sm');
-    expect(classAttr).toContain('border-gray-200');
+    expect(classAttr).toContain('border-theme');
   });
 
   it('renders modern segmented pill tabs and switches active tabs', () => {

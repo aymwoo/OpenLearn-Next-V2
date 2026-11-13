@@ -106,3 +106,84 @@ useThemeStore.getState().registerTheme(
   - `LiveClassroomView`: 步骤时间轴、互动反馈流、学生专注力监控环与课件轨迹分析模态框全面支持 4 套教学主题。
   - `LessonEditorView`: 课程编辑器、工具调色板 (`LessonPalette`) 与空状态均无缝换肤。
   - `StudentView`: 学生端工作台、白板交互面板与大纲面板完全统一视觉语言。
+
+---
+
+## 6. 第三方声明式主题包系统 (Third-Party Theme Packages)
+
+在内置主题与 Token 体系之上，平台现已提供完整的第三方 `.zip` 主题包架构，涵盖清单与包体校验 (`packages/core/themes/theme-spec.ts`、`packages/core/themes/theme-package.ts`)、服务端共享目录与每账号隔离持久化 (`migrations/047_third_party_theme_system.sql`、`server/services/theme-service.ts`、`server/routes/themes.ts`) 以及前端主题中心与安全恢复栏 (`src/components/ThemeCenterModal.tsx`、`src/components/ThemeFailsafeRecoveryButton.tsx`)。
+
+### 6.1 主题包目录结构与安全边界
+
+标准示例见 `examples/themes/campus-atelier/`：
+
+```text
+campus-atelier/
+├── theme.json          # 声明式主题清单（必填）
+├── styles.css          # 可选作用域样式文件（仅允许 scoped CSS）
+└── assets/
+    ├── emblem.svg      # 预览缩略图
+    └── backdrop.svg    # 本地图片 / SVG / WOFF2 字体等静态资源
+```
+
+安装入口 (`POST /api/themes/install`) 与浏览器导入均执行严格沙盒校验：
+
+- **禁止执行脚本**：拒绝一切 `.js` / `.mjs` / `.html` / `.wasm` / `.sh` 文件，仅允许清单 JSON、CSS、常见图片及字体格式；
+- **防路径穿越与体积限制**：单个 ZIP 上限 `10 MB`、解压后总量上限 `25 MB`、最多 `64` 个文件，禁止 `..` 与符号链接；
+- **零外部网络请求**：禁止 CSS `@import`、`expression()`、`javascript:` 及任何 `http://` / `https://` 外链资源；所有字体、壁纸与徽标必须随 `.zip` 包本地携带；
+- **SVG 安全扫描**：拦截 `<script>`、`<foreignObject>`、`on*=` 事件处理器及外链 URL，静态资源服务同时附带 `X-Content-Type-Options: nosniff` 与 SVG `Content-Security-Policy: sandbox`；
+- **声明式布局安全白名单**：通过 `resolveSafeLayouts` 对登录页 (`LoginPage.tsx`)、教师端 (`TeacherView.tsx`)、学生端 (`StudentView.tsx`) 与管理后台 (`AdminPanel.tsx`) 进行区域重排与列数定制，并强制保留登录表单、导航项、管理权限等必选控件。
+
+### 6.2 清单示例 (`theme.json`)
+
+```json
+{
+  "schemaVersion": 1,
+  "id": "campus-atelier",
+  "name": "Campus Atelier",
+  "version": "1.0.0",
+  "author": "OpenLearn Community",
+  "defaultMode": "auto",
+  "compatibility": { "minPlatformVersion": "0.7.0", "maxPlatformVersion": "1.99.0" },
+  "tokens": { "--color-primary": "#0f766e" },
+  "modes": {
+    "light": { "tokens": { "--bg-app": "#f7f4ed", "--bg-surface": "#ffffff", "--text-main": "#1c1917" } },
+    "dark": { "tokens": { "--bg-app": "#161917", "--bg-surface": "#1f2421", "--text-main": "#f5f5f4" } }
+  },
+  "layouts": {
+    "login": { "arrangement": "split-left", "order": ["brand", "auth-form", "seed-hint"] },
+    "teacher": { "navPosition": "right", "contentMaxWidth": "wide" },
+    "student": { "headerPosition": "top", "cardColumns": 3 },
+    "admin": { "navStyle": "sidebar-left" }
+  }
+}
+```
+
+### 6.3 多账号隔离、版本更新与管理员治理
+
+- **共享安装，账号隔离生效**：所有已登录账号（学生、教师、管理员）均可上传 `.zip` 主题包至平台共享目录 (`themes`)，用户个人选择的主题、锁定版本、`light/dark/auto` 模式与基础外观覆盖（强调色、圆角、密度、字号比例）按 `principal_key` 严格隔离存储在 `user_theme_preferences`；
+- **作者版本发布与非静默升级**：仅原上传者可向同一主题 ID 发布更高 SemVer 版本。新版进入共享目录后，**不会静默替换** 其他账号当前正在使用的旧版本，而是在主题中心提示「确认升级」并展示变更日志；
+- **匿名登录前隐私保护**：未登录接口 `GET /api/themes/public` 仅返回平台默认主题与公开摘要，不包含任何账号 ID 或个人偏好；浏览器本地仅保存纯视觉快照键 `openlearn_browser_appearance`；
+- **管理员治理与故障回退**：仅管理员可通过 `/api/themes/:id/disable`、`/api/themes/:id/enable`、`DELETE /api/themes/:id` 停用或删除主题，并在站点设置配置全站默认主题 (`default_theme_id`)。当主题被停用、删除、不兼容或样式异常时，系统自动回退至安全默认主题，并在全端左下角常驻独立内联样式的 **「一键恢复默认主题」** 按钮 (`ThemeFailsafeRecoveryButton.tsx`)，确保样式损坏时仍可一键自救。
+
+### 6.4 第三方插件与沙箱课件适配 (`window.LMS` / Bridge SDK)
+
+所有微前端插件（`PluginSandboxIframeView.tsx`）与教学课件 iframe 均可通过统一接口同步宿主主题、深浅模式、Token、圆角密度与字体栈：
+
+```javascript
+// 方式一：使用 Bridge SDK（window.LMS）
+function applyHostTheme(themeMeta) {
+  if (!themeMeta) return;
+  document.documentElement.dataset.theme = themeMeta.theme;
+  document.documentElement.dataset.colorScheme = themeMeta.colorScheme;
+  Object.entries(themeMeta.tokens || {}).forEach(([k, v]) => {
+    document.documentElement.style.setProperty(k, v);
+  });
+}
+
+applyHostTheme(window.LMS?.getTheme?.());
+window.LMS?.on?.('theme:changed', applyHostTheme);
+
+// 方式二：直接监听浏览器原生事件
+window.addEventListener('openlearn:themechange', (ev) => applyHostTheme(ev.detail));
+```

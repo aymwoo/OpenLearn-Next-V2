@@ -17,6 +17,7 @@ import { ClassroomOverlays } from './components/ClassroomOverlays';
 import { ToastContainer } from './features/shared/ToastContainer';
 import { CommandPaletteHost } from './features/command-palette/CommandPaletteHost';
 import { SystemErrorCenterModal } from './features/modals/SystemErrorCenterModal';
+import ThemeFailsafeRecoveryButton from './components/ThemeFailsafeRecoveryButton';
 import { useAppComposer } from './hooks/useAppComposer';
 
 export default function App() {
@@ -85,6 +86,7 @@ export default function App() {
       <AcademicYearProvider>
         <AppDataProvider value={appData}>
           <LoginPage onLoginSuccess={handleLoginSuccess} lang={lang} />
+          <ThemeFailsafeRecoveryButton lang={lang} />
         </AppDataProvider>
       </AcademicYearProvider>
     );
@@ -102,6 +104,7 @@ export default function App() {
             onDone={() => setSession({ ...session, mustChangePassword: false })}
             onLogout={handleLogout}
           />
+          <ThemeFailsafeRecoveryButton lang={lang} />
         </AppDataProvider>
       </AcademicYearProvider>
     );
@@ -186,6 +189,9 @@ export default function App() {
 
               {/* Global System Error Diagnostics Center & Floating Pill */}
               <SystemErrorCenterModal />
+
+              {/* Theme Failsafe Recovery Bar (inline styles, immune to theme CSS) */}
+              <ThemeFailsafeRecoveryButton lang={lang} />
             </div>
           )}
         </>
