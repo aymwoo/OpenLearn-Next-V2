@@ -10,6 +10,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Fixes
+
+- **演示文稿组件进入互动白板时反复消失又出现**：白板渲染处把演示文稿的 `onElementUpdate` 写成内联箭头函数，父级（课堂 socket 同步 / 分页状态变化）每次重渲染都让 `RevealPresentationWrapper` 的 viewer 回调身份变化，`pptx-react-viewer` 的 `onActiveSlideChange` effect 随之反复重注册并回报页码，形成闪动循环（Issue #381 只修了 `slideIndex` 这一半）。现用 ref 持有最新回调使 viewer 回调身份恒定、白板侧提取稳定的 `useCallback`，并给分页数据的 `setPages` / `onPagesStateChange` 加内容比对阻断级联重渲染；新增挂载稳定性回归测试。
+
 ### Refactor / Performance
 
 - **Node 基线从 22 迁移到 24**：`.nvmrc` / `.node-version` / `PINNED_NODE_MAJOR` / `Dockerfile`（`node:24-alpine`）/ CI 主作业 / `AGENTS.md` 与安装、部署、开发指南统一钉住 Node 24；`20.x || 22.x || 24.x` 的受支持范围与 CI 的 node-runtime-compat 矩阵保持不变。起因是本机运行时已是 Node 24（`better-sqlite3` 需 ABI 137），而仓库仍钉 22，跨环境复用 `node_modules` 会反复触发 `ERR_DLOPEN_FAILED`。

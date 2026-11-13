@@ -1833,7 +1833,11 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
           }
         } else if (data.type === 'page-meta-update') {
           if (Array.isArray(data.payload?.pages)) {
-            setPages(data.payload.pages);
+            // 广播里的 pages 每次都是新引用；内容相同就别换，避免白板
+            // 整轮重渲染把演示文稿组件的挂载链再抖一次。
+            setPages((prev) =>
+              JSON.stringify(prev) === JSON.stringify(data.payload.pages) ? prev : data.payload.pages,
+            );
           }
         }
       };
@@ -2124,6 +2128,24 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
      * 之所以做成参数而不是另写一套渲染：所有元素类型共用同一套定位计算
      * （displayX/Y/Width/Height），在这里统一覆盖，9 个分支零改动即可获得全屏布局。
      */
+    // 演示文稿的 onElementUpdate 必须保持稳定引用：课堂里 socket 同步、分页状态
+    // 变化都会让白板重渲染，内联箭头函数会让 pptx-react-viewer 的回调 effect
+    // 反复重注册并回报页码，形成「组件反复消失又出现」的闪动。
+    const handlePresentationElementUpdate = useCallback(
+      async (id: string, d: Record<string, unknown>) => {
+        await onElementUpdate?.(id, d);
+        frontendEventBus.publish({
+          id: uuidv7(),
+          type: 'whiteboard.element_updated',
+          source: 'whiteboard',
+          payload: { lessonId },
+          timestamp: Date.now(),
+          correlationId: lessonId,
+        });
+      },
+      [onElementUpdate, lessonId],
+    );
+
     const renderElement = (
       el: WhiteboardElement,
       opts?: { fullscreen?: { width: number; height: number; padding: number } },
@@ -3347,21 +3369,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                           elementId={el.id}
                           data={data}
                           userRole={userRole}
-                          onElementUpdate={
-                            onElementUpdate
-                              ? async (id, d) => {
-                                  await onElementUpdate(id, d);
-                                  frontendEventBus.publish({
-                                    id: uuidv7(),
-                                    type: 'whiteboard.element_updated',
-                                    source: 'whiteboard',
-                                    payload: { lessonId },
-                                    timestamp: Date.now(),
-                                    correlationId: lessonId,
-                                  });
-                                }
-                              : undefined
-                          }
+                          onElementUpdate={onElementUpdate ? handlePresentationElementUpdate : undefined}
                         />
                       </Suspense>
                     </div>

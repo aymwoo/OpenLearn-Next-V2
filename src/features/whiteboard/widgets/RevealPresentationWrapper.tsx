@@ -106,6 +106,12 @@ export function RevealPresentationWrapper({
   const pendingPptxTargetRef = useRef<number | null>(null);
   const dataRef = useRef(data);
   dataRef.current = data;
+  // viewer 的回调 effect 依赖 onActiveSlideChange / onSlideCountChange 的引用。
+  // 真实课堂里白板每次重渲染都会重建 onElementUpdate，若把它写进 useCallback
+  // 依赖，回调身份就会抖动，viewer 反复重注册并回报页码 —— 表现为演示文稿
+  // 组件反复消失又出现（Issue #381 只修了 slideIndex 这一半）。用 ref 持有最新值。
+  const onElementUpdateRef = useRef(onElementUpdate);
+  onElementUpdateRef.current = onElementUpdate;
   const [autoplay, setAutoplay] = useState(false);
   const [autoplayInterval, setAutoplayInterval] = useState(4); // seconds
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -272,27 +278,30 @@ export function RevealPresentationWrapper({
       // viewer 内部真正换页（缩略图 / 键盘）：采纳并同步给其他人。
       slideIndexRef.current = newIndex;
       setSlideIndex(newIndex);
-      if (isTeacher && onElementUpdate) {
-        onElementUpdate(elementId, {
+      const update = onElementUpdateRef.current;
+      if (isTeacher && update) {
+        update(elementId, {
           ...dataRef.current,
           slideX: newIndex,
         });
       }
     },
-    // 不能依赖 slideIndex：回调身份变化会触发 viewer 重新回报当前页，形成循环。
-    [isTeacher, onElementUpdate, elementId],
+    // 不能依赖 slideIndex / onElementUpdate：回调身份变化会触发 viewer
+    // 重新回报当前页，形成循环（真实白板里 onElementUpdate 每次渲染都重建）。
+    [isTeacher, elementId],
   );
 
   const handlePptxSlideCountChange = useCallback(
     (count: number) => {
-      if (count > 0 && isTeacher && onElementUpdate && data.slideCount !== count) {
-        onElementUpdate(elementId, {
-          ...data,
+      const update = onElementUpdateRef.current;
+      if (count > 0 && isTeacher && update && dataRef.current.slideCount !== count) {
+        update(elementId, {
+          ...dataRef.current,
           slideCount: count,
         });
       }
     },
-    [isTeacher, onElementUpdate, data, elementId],
+    [isTeacher, elementId],
   );
 
   const renderPptxViewer = (fullscreen: boolean) => {
