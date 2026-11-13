@@ -82,6 +82,65 @@ export function resolveCanvasSize(
   };
 }
 
+/** 画布布局：逻辑尺寸 + 是否需要滚动条。 */
+export interface CanvasLayout {
+  canvas: CanvasSize;
+  overflowX: boolean;
+  overflowY: boolean;
+}
+
+/**
+ * 用「不受滚动条显隐影响」的 padding box 一次算清画布逻辑尺寸。
+ *
+ * 若把 overflow:auto 容器的 clientWidth/clientHeight 直接当作 viewport，
+ * 滚动条一出现 client 盒就会变窄/变矮，画布最小尺寸跟着收缩，再触发
+ * ResizeObserver —— 这正是滚动条反复显隐、界面抖动的反馈环。
+ *
+ * 本函数以稳定的 padding box 为基准，并在同一轮计算里预留即将出现的
+ * 经典滚动条厚度，使首帧尺寸等于「出现滚动条之后」的稳定终态。
+ * 叠加滚动条（厚度为 0）时退化为 resolveCanvasSize(paddingBox, ...)。
+ */
+export function resolveCanvasLayout(
+  paddingBox: ViewportSize,
+  content: { maxX: number; maxY: number },
+  padding = 0,
+  scrollbarSize = 0,
+): CanvasLayout {
+  const pad = Math.max(0, finite(padding));
+  const boxW = Math.max(0, finite(paddingBox?.width));
+  const boxH = Math.max(0, finite(paddingBox?.height));
+  const bar = Math.max(0, finite(scrollbarSize));
+  const needW = Math.ceil(Math.max(0, finite(content?.maxX)) + pad);
+  const needH = Math.ceil(Math.max(0, finite(content?.maxY)) + pad);
+
+  let overflowX = needW > boxW;
+  let overflowY = needH > boxH;
+
+  const layoutFrom = (nextX: boolean, nextY: boolean) => {
+    const clientW = Math.max(0, boxW - (nextY ? bar : 0));
+    const clientH = Math.max(0, boxH - (nextX ? bar : 0));
+    return {
+      canvas: {
+        width: Math.max(clientW, needW),
+        height: Math.max(clientH, needH),
+      },
+      overflowX: needW > clientW,
+      overflowY: needH > clientH,
+    };
+  };
+
+  // 一条轴上的滚动条会挤占另一条轴的可用空间；最多收敛两次即可到达不动点。
+  for (let i = 0; i < 3; i++) {
+    const layout = layoutFrom(overflowX, overflowY);
+    if (layout.overflowX === overflowX && layout.overflowY === overflowY) {
+      return layout;
+    }
+    overflowX = layout.overflowX;
+    overflowY = layout.overflowY;
+  }
+  return layoutFrom(overflowX, overflowY);
+}
+
 /**
  * 把 viewport 坐标（鼠标事件的 clientX/clientY）换算成画布坐标。
  *
