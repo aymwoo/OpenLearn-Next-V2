@@ -350,7 +350,7 @@ Output pure JSON only without markdown code blocks, matching this structure:
           }
         });
 
-        autoScore = Math.round((correctCount / questions.length) * 100);
+        autoScore = questions.length > 0 ? Math.round((correctCount / questions.length) * 100) : 0;
         autoFeedback = `Auto-Graded Multiple Choice Quiz.\nScore: ${autoScore}%\n\nDetails:\n${feedbackParts.join('\n')}`;
       }
     } catch {
@@ -604,6 +604,11 @@ Provide a grade score (0-100) and brief feedback. Ensure you output in this exac
   public listAssignmentFiles(assignmentId: string, studentId: string | null, isPrivileged: boolean): any[] {
     const assignmentRow = this.db.prepare('SELECT class_id FROM plugin_assignments WHERE id = ?').get(assignmentId) as
       { class_id: string | null } | undefined;
+    if (!assignmentRow) {
+      const err: Error & { status?: number } = new Error('Assignment not found');
+      err.status = 404;
+      throw err;
+    }
     this.assertClassMembership(assignmentRow, isPrivileged, studentId);
 
     const rows = this.db

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { formatLocalYMD } from '../utils/date';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { Calendar, Users, CheckCircle2, Clock, XCircle, Loader2, TrendingUp, AlertCircle } from 'lucide-react';
 
@@ -54,15 +55,16 @@ export function ClassAttendanceSummaryChart({ classId, lang = 'en' }: ClassAtten
     const diffToSunday = endDOfWeek === 0 ? 0 : 7 - endDOfWeek;
     endLimit.setDate(endLimit.getDate() + diffToSunday);
 
+    const todayStr = formatLocalYMD(today);
     while (current <= endLimit) {
-      const dateStr = current.toISOString().split('T')[0];
+      const dateStr = formatLocalYMD(current);
       const match = data.find((item) => item.date === dateStr);
 
       grid.push({
         dateStr,
         dayOfMonth: current.getDate(),
         monthName: current.toLocaleDateString(lang === 'zh' ? 'zh-CN' : 'en-US', { month: 'short' }),
-        isToday: dateStr === today.toISOString().split('T')[0],
+        isToday: dateStr === todayStr,
         isFuture: current > today,
         dayOfWeek: current.getDay(),
         match,

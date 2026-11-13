@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { useOptionalAcademicYear } from '../context/AcademicYearContext';
 import type { ScheduleType, AttendanceType } from '../store/appStore';
+import { formatLocalYMD } from '../utils/date';
 
 export function useLabAndSchedule() {
   const academicYearCtx = useOptionalAcademicYear();
@@ -46,7 +47,7 @@ export function useLabAndSchedule() {
 
   const fetchTodaySchedules = useCallback(async () => {
     try {
-      const todayStr = new Date().toISOString().split('T')[0];
+      const todayStr = formatLocalYMD();
       const res = await fetch(`/api/schedules/today?date=${todayStr}`);
       if (res.ok) {
         const data = await res.json();

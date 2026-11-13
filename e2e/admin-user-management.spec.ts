@@ -47,7 +47,6 @@ test.describe('管理后台：教工与管理员账号生命周期治理 E2E 测
     const testUsername = `e2e_teacher_${ts}`.toLowerCase();
     const testName = `E2E 讲师_${ts}`;
     const updatedName = `E2E 资深讲师_${ts}`;
-    let createdUserId: string | null = null;
 
     try {
       // 1. 超级管理员鉴权登录

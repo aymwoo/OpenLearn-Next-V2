@@ -16,6 +16,7 @@ import { randomId } from '../utils/id.js';
 import { normalizeAcademicYear, deriveAcademicYear } from '../utils/academic-year.js';
 import type { Pagination } from '../utils/pagination.js';
 import { resolveAccessibleAiProvider } from './ai-provider-resolver.js';
+import { isSafeExternalUrl } from '../utils/url-safety.js';
 import { fetchWithRetry } from '../../packages/core/ai/utils/fetch-with-retry.js';
 
 export interface ScheduleRecord {
@@ -806,6 +807,10 @@ export class ScheduleService {
     if (!chatUrl.endsWith('/chat/completions')) {
       chatUrl = chatUrl.endsWith('/') ? chatUrl + 'chat/completions' : chatUrl + '/chat/completions';
     }
+    const urlCheck = isSafeExternalUrl(chatUrl);
+    if (!urlCheck.safe) {
+      throw new Error(`Unsafe AI Provider URL: ${urlCheck.reason || 'Blocked'}`);
+    }
 
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
@@ -844,6 +849,9 @@ export class ScheduleService {
     });
 
     const responseText = await response.text();
+    if (!response.ok) {
+      throw new Error(`AI Provider (${provider.name}) HTTP ${response.status}: ${responseText.substring(0, 200)}`);
+    }
     if (!responseText || !responseText.trim()) {
       throw new Error(
         lang === 'zh'

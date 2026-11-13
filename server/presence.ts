@@ -378,6 +378,13 @@ export function setupPresence({
         plog.warn(`[Presence Security] Student ${session.userId} attempted to impersonate ${data.studentId}`);
         return socket.emit('error', { message: 'Forbidden: Cannot register presence for another student' });
       }
+      if (registeredStudentId && registeredStudentId !== data.studentId) {
+        const prev = onlineStudents.get(registeredStudentId);
+        if (prev?.socketId === socket.id) {
+          onlineStudents.delete(registeredStudentId);
+          activeStudentLessons.delete(registeredStudentId);
+        }
+      }
       registeredStudentId = data.studentId;
       onlineStudents.set(data.studentId, { socketId: socket.id, name: data.name });
       plog.info(`[Presence] Student online: ${data.name} (${data.studentId})`);
@@ -467,14 +474,18 @@ export function setupPresence({
           return;
         }
         // 1. 发布到服务端 EventBus（自动写入 events 表，审计日志）
-        eventBus.publish({
-          id: data.id,
-          type: data.type,
-          source: 'whiteboard',
-          payload: data.payload,
-          timestamp: data.timestamp,
-          correlationId: data.payload.lessonId,
-        });
+        eventBus
+          .publish({
+            id: data.id,
+            type: data.type,
+            source: 'whiteboard',
+            payload: data.payload,
+            timestamp: data.timestamp,
+            correlationId: data.payload.lessonId,
+          })
+          .catch((err) => {
+            plog.warn({ err }, `[Presence] Failed to publish whiteboard-event ${data.type}`);
+          });
 
         // 2. 广播到「课节房间 + 全局白板广播房间」的其他客户端。
         //
@@ -525,20 +536,24 @@ export function setupPresence({
         );
 
         // 2. 发布到 EventBus 自动记录在 events 审计日志表中
-        eventBus.publish({
-          id: randomId('evt_err_'),
-          type: 'student.client_error',
-          source: 'student_client',
-          payload: {
-            studentId: data.studentId,
-            studentName,
-            lessonId,
-            classId,
-            error: data.error,
-          },
-          timestamp: data.error.timestamp || Date.now(),
-          correlationId: lessonId || undefined,
-        });
+        eventBus
+          .publish({
+            id: randomId('evt_err_'),
+            type: 'student.client_error',
+            source: 'student_client',
+            payload: {
+              studentId: data.studentId,
+              studentName,
+              lessonId,
+              classId,
+              error: data.error,
+            },
+            timestamp: data.error.timestamp || Date.now(),
+            correlationId: lessonId || undefined,
+          })
+          .catch((err) => {
+            plog.warn({ err }, '[Presence] Failed to publish student.client_error event');
+          });
 
         // 3. 只投教师/管理员房间：学生端异常属于教师监控数据，
         //    此前全局广播会把任意学生的报错（含课节、姓名）推给所有学生。

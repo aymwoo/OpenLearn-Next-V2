@@ -23,6 +23,7 @@ export interface BuildOptions {
 let cachedBundle: string | null = null;
 
 async function bundleIndex(): Promise<string> {
+  if (cachedBundle !== null) return cachedBundle;
   const result = await esbuild.build({
     entryPoints: [path.join(SRC_DIR, 'index.ts')],
     bundle: true,
@@ -41,6 +42,7 @@ async function bundleIndex(): Promise<string> {
 let cachedFrontend: string | null = null;
 
 async function bundleFrontend(): Promise<string> {
+  if (cachedFrontend !== null) return cachedFrontend;
   const frontendPath = path.join(SRC_DIR, 'frontend.tsx');
   if (!fs.existsSync(frontendPath)) return '';
   const result = await esbuild.build({

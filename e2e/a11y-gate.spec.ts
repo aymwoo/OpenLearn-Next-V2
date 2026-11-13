@@ -97,7 +97,8 @@ async function seedTeacherWorkspaceData(request: import('@playwright/test').APIR
 
   // 4. 两条排课（今天的上午 + 下午）—— 课表页的分行渲染靠它触发
   if (seeded.classId && seeded.lessonId) {
-    const today = new Date().toISOString().split('T')[0];
+    const now = new Date();
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
     await request
       .post(`/api/classes/${seeded.classId}/schedules/batch`, {
         data: {

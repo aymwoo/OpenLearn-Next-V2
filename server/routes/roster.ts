@@ -4,9 +4,9 @@ import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
 import { verifyPassword, hashPassword as bcryptHashPassword } from '../../packages/core/db/index.js';
-import { getCookieToken, getValidSession, checkIsTeacherOrAdmin, getActorId, requireAuth } from '../middleware/auth.js';
+import { getCookieToken, getValidSession, getActorId, requireAuth } from '../middleware/auth.js';
 import { requireScopedAuth } from '../middleware/data-scope.js';
-import { validateMagicBytes, BLOCKED_EXTENSIONS, generateStudentNumber } from './shared.js';
+import { validateMagicBytes, BLOCKED_EXTENSIONS } from './shared.js';
 import { sendSafeError } from '../utils/error-handler.js';
 import { getUploadsDir } from '../utils/paths.js';
 import { isPasswordChangeGateSkipped } from '../utils/password-gate.js';
@@ -21,6 +21,7 @@ import {
   type AccessSession,
   actorUserId,
   authorizeClass,
+  authorizeLessonStaff,
   isAdministrator,
   isTeacher,
   redactAssignmentForStudent,
@@ -38,12 +39,6 @@ import {
 } from '../../packages/core/db/class-passcode-crypto.js';
 
 const rlog = createLogger('roster');
-/**
- * 学生级联删除（DATA-INT-01）：12 张子表 + students 本体，委托至 RosterService。
- */
-async function deleteStudentCascade(db: typeof kernelContainer.db, studentId: string): Promise<void> {
-  await new RosterService(db).deleteStudentCascade(studentId);
-}
 
 /**
  * 学生对象的写操作级联授权（P0 IDOR 修复）。
@@ -448,10 +443,12 @@ export function registerRosterRoutes(ctx: ServerContext) {
           .run(bcryptHashPassword(newPassword), session.userId);
         // 种子账号的默认口令已退役，登录页的首次安装提示应立刻消失
         invalidateSeedStatusCache();
-        // 使该用户所有其他 session 失效
+        // 使该用户所有其他 session 失效（使用 json_extract 精确匹配 userId，避免 LIKE '%id%' 误伤 prefix 相同的其他用户）
         kernelContainer.db
-          .prepare('DELETE FROM client_sessions WHERE id != ? AND session_data LIKE ?')
-          .run(token, `%${session.userId}%`);
+          .prepare(
+            "DELETE FROM client_sessions WHERE id != ? AND json_valid(session_data) = 1 AND json_extract(session_data, '$.userId') = ?",
+          )
+          .run(token, session.userId);
         // SEC-AUTH-06: 改密成功后清除当前会话的默认密码标记（其余会话已被删除）
         try {
           const updatedSession = { ...session, mustChangePassword: false };
@@ -486,10 +483,12 @@ export function registerRosterRoutes(ctx: ServerContext) {
         kernelContainer.db
           .prepare('UPDATE students SET password = ? WHERE id = ?')
           .run(bcryptHashPassword(newPassword), session.studentId);
-        // 使该学生所有其他 session 失效
+        // 使该学生所有其他 session 失效（使用 json_extract 精确匹配 studentId，避免 LIKE '%id%' 误伤其他学生）
         kernelContainer.db
-          .prepare('DELETE FROM client_sessions WHERE id != ? AND session_data LIKE ?')
-          .run(token, `%${session.studentId}%`);
+          .prepare(
+            "DELETE FROM client_sessions WHERE id != ? AND json_valid(session_data) = 1 AND json_extract(session_data, '$.studentId') = ?",
+          )
+          .run(token, session.studentId);
         // SEC-AUTH-06 / Issue #94: 改密成功后清除当前会话的默认密码标记与提示标记（其余会话已被删除）
         try {
           const updatedSession = { ...session, mustChangePassword: false, usedDefaultPassword: false };
@@ -652,7 +651,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
       }
       if (oldAvatar && oldAvatar.startsWith('/uploads/avatars/')) {
         try {
-          fs.unlinkSync(path.join(process.cwd(), oldAvatar));
+          fs.unlinkSync(path.join(getUploadsDir(), oldAvatar.replace(/^\/uploads\//, '')));
         } catch {
           /* ignore */
         }
@@ -1789,7 +1788,18 @@ export function registerRosterRoutes(ctx: ServerContext) {
   // 服务端未落库的静默不一致。
   app.post('/api/rollcalls/evaluate', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
-      const payload = rosterService.evaluateRollcall(req.body || {});
+      const session = (req as any).session as AccessSession | undefined;
+      const body = req.body || {};
+      if (body.classId) {
+        if (rejectUnless(res, authorizeClass(kernelContainer.db, session, String(body.classId), 'staff'))) return;
+      } else if (body.lessonId) {
+        if (rejectUnless(res, authorizeLessonStaff(kernelContainer.db, session, String(body.lessonId)))) return;
+      } else if (body.studentId && !isAdministrator(session)) {
+        if (!teacherCanSeeStudent(kernelContainer.db, session, String(body.studentId))) {
+          return res.status(403).json({ error: 'Forbidden' });
+        }
+      }
+      const payload = rosterService.evaluateRollcall(body);
 
       if (io) {
         // 投递到「课节 + 班级 + 被评价学生」：同班可见的课堂公开评价，

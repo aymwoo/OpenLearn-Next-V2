@@ -2,7 +2,7 @@ import path from 'path';
 import crypto from 'crypto';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
 import { ICoursewareRuntimeScriptRegistryToken } from '../../packages/core/di/interfaces.js';
-import { getCookieToken } from '../middleware/auth.js';
+import { getCookieToken, getValidSession } from '../middleware/auth.js';
 import { BRIDGE_SDK_CODE } from '../utils/bridge-sdk.js';
 
 export { validateMagicBytes, BLOCKED_EXTENSIONS } from '../utils/upload.js';
@@ -92,9 +92,8 @@ export function injectLmsSdk(htmlContent: string, req: any, cwInfo: { id: string
   };
 
   if (token) {
-    const sessionRow = kernelContainer.db.prepare('SELECT * FROM client_sessions WHERE id = ?').get(token) as any;
-    if (sessionRow) {
-      const session = JSON.parse(sessionRow.session_data);
+    const session = getValidSession(token);
+    if (session) {
       if (session.role === 'student') {
         const classRow = kernelContainer.db
           .prepare('SELECT class_id FROM class_students WHERE student_id = ? LIMIT 1')
@@ -115,8 +114,8 @@ export function injectLmsSdk(htmlContent: string, req: any, cwInfo: { id: string
         }
 
         studentInfo = {
-          student_id: session.studentId,
-          student_name: session.name,
+          student_id: session.studentId || 'guest',
+          student_name: session.name || 'Guest Student',
           class_id: classRow ? classRow.class_id : '',
           attempt_id: attempt.id,
         };

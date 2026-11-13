@@ -8,6 +8,7 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { X, Copy, Check, Download, Sparkles, Users, AlertTriangle, FileText, RefreshCw } from 'lucide-react';
 import { ExtensionPointRenderer } from '../../../plugin-host/extension-point-renderer';
+import { formatLocalYMD } from '../../../utils/date';
 
 // ── 输入数据类型 ──────────────────────────────────────────────────────
 
@@ -169,7 +170,7 @@ export const ParentNotificationModal: React.FC<ParentNotificationModalProps> = (
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `parent-notification-${snapshot.lessonTitle}-${new Date().toISOString().slice(0, 10)}.md`;
+    a.download = `parent-notification-${snapshot.lessonTitle}-${formatLocalYMD()}.md`;
     a.click();
     URL.revokeObjectURL(url);
   }, [response, snapshot.lessonTitle]);

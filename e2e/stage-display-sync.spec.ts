@@ -4,7 +4,7 @@
  * Issue #230：CI 改为跑 e2e/ 下**全部**用例（pnpm test:e2e），
  * 本注释用于标明该用例覆盖的能力域 —— 新增用例时按同一口径挂靠。
  */
-import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
+import { expect, test, type APIRequestContext } from '@playwright/test';
 import path from 'node:path';
 import fs from 'node:fs';
 import Database from 'better-sqlite3';
@@ -134,32 +134,6 @@ async function cleanupStageDisplayE2EViaApi(request: APIRequestContext) {
       }
     }
   } catch {}
-}
-
-async function loginAsAdmin(page: Page): Promise<void> {
-  await page.addInitScript(() => {
-    localStorage.setItem('edu_os_tour_completed', 'true');
-  });
-  await page.goto('/');
-
-  const usernameInput = page.locator('input[placeholder*="教工账户名"]');
-  const sidebarIndicator = page.locator('button:has-text("在线课堂"), button:has-text("课程管理"), aside');
-
-  await Promise.race([
-    usernameInput.waitFor({ state: 'visible', timeout: 10000 }).catch(() => null),
-    sidebarIndicator.waitFor({ state: 'visible', timeout: 10000 }).catch(() => null),
-  ]);
-
-  if (await usernameInput.isVisible()) {
-    await usernameInput.fill('admin');
-    await page.locator('input[placeholder*="输入登录密码"]').fill('admin');
-    await page.locator('button:has-text("安全验证登录"), button[type="submit"]').first().click();
-    await expect(usernameInput).toBeHidden({ timeout: 15_000 });
-  }
-
-  await expect(page.locator('button:has-text("在线课堂"), button:has-text("课程管理")').first()).toBeVisible({
-    timeout: 15_000,
-  });
 }
 
 test.describe('大屏独立展台（StageDisplayView）投屏与实时交互同步 E2E 测试', () => {

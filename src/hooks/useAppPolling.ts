@@ -75,13 +75,17 @@ export function useAppPolling(options: UseAppPollingOptions): void {
     expandedClassIdRef.current = expandedClassId;
   }, [expandedClassId]);
 
-  useEffect(() => {
-    if (!session) return;
+  const sessionRole = session?.role;
+  const sessionSubRole = session?.subRole;
+  const sessionUsername = session?.username;
+  const sessionUserId = session?.userId;
 
-    const isTeacher = session.role === 'teacher';
+  useEffect(() => {
+    if (!sessionRole) return;
+
+    const isTeacher = sessionRole === 'teacher';
     const isAdmin =
-      isTeacher &&
-      (session.subRole === 'administrator' || session.username === 'admin' || session.userId === 'usr_admin');
+      isTeacher && (sessionSubRole === 'administrator' || sessionUsername === 'admin' || sessionUserId === 'usr_admin');
 
     fetchLessons();
     fetchPlugins();
@@ -148,15 +152,16 @@ export function useAppPolling(options: UseAppPollingOptions): void {
     }, 2000);
 
     return () => clearInterval(intervalId);
-  }, [session, showProcessLogs, activeStudentId]);
+  }, [session?.role, session?.subRole, session?.username, session?.userId, showProcessLogs, activeStudentId]);
 
+  const vfsRole = session?.role;
   useEffect(() => {
-    if (!session) return;
+    if (!vfsRole) return;
     // VFS 仅教师/管理员可读（SEC-AUTH）；学生不再发起请求
-    if (session.role === 'teacher') {
+    if (vfsRole === 'teacher') {
       fetchVfs(currentVfsParent);
     }
-  }, [currentVfsParent, session]);
+  }, [currentVfsParent, vfsRole]);
 
   useEffect(() => {
     if (selectedLesson) {

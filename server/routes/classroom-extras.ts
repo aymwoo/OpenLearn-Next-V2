@@ -15,6 +15,7 @@
 import type { Application } from 'express';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
 import { getActorId, requireAuth } from '../middleware/auth.js';
+import { authorizeLessonStaff, rejectUnless } from '../services/class-access.js';
 import { sendSafeError } from '../utils/error-handler.js';
 
 /**
@@ -85,6 +86,7 @@ export function registerClassroomExtrasRoutes(app: Application): void {
     async (req, res) => {
       try {
         const { lessonId } = req.params;
+        if (rejectUnless(res, authorizeLessonStaff(kernelContainer.db, (req as any).session, lessonId))) return;
         const summary = req.body as ClassSummaryInput;
 
         if (!summary || !Array.isArray(summary.studentReports)) {
@@ -107,7 +109,7 @@ export function registerClassroomExtrasRoutes(app: Application): void {
               studentName: sr.studentName,
               markdown: md,
             });
-          } catch (e: any) {
+          } catch {
             // 单生失败不影响其他学生；降级为模板
             studentNotifications.push({
               studentId: sr.studentId,
@@ -126,10 +128,10 @@ export function registerClassroomExtrasRoutes(app: Application): void {
           counts: {
             students: summary.studentReports.length,
             online: summary.onlineCount,
-            highlights: summary.highlights.length,
+            highlights: Array.isArray(summary.highlights) ? summary.highlights.length : 0,
           },
         });
-      } catch (e: any) {
+      } catch (e: unknown) {
         sendSafeError(res, e);
       }
     },
@@ -139,6 +141,7 @@ export function registerClassroomExtrasRoutes(app: Application): void {
   app.post('/api/classroom/:lessonId/predict-mastery', requireAuth('teacher', 'administrator'), async (req, res) => {
     try {
       const { lessonId } = req.params;
+      if (rejectUnless(res, authorizeLessonStaff(kernelContainer.db, (req as any).session, lessonId))) return;
       const snapshot = req.body as {
         lessonTitle: string;
         currentStageName: string;
@@ -175,7 +178,7 @@ ${snapshot.studentSnapshots
     (s) =>
       `- ${s.studentName} (id=${s.studentId})：参与度 ${s.participationScore}/100` +
       (s.quizScore !== undefined ? `，测验 ${s.quizScore}/100` : '') +
-      `，节奏 ${s.paceIndicator}，信号 [${s.behaviorSignals.join(', ')}]`,
+      `，节奏 ${s.paceIndicator}，信号 [${(Array.isArray(s.behaviorSignals) ? s.behaviorSignals : []).join(', ')}]`,
   )
   .join('\n')}
 
@@ -191,7 +194,7 @@ ${snapshot.studentSnapshots
           predictions = parsed;
           aiSucceeded = true;
         }
-      } catch (e: any) {
+      } catch {
         // AI 失败时降级为本地启发式
         predictions = [];
       }
@@ -275,14 +278,15 @@ ${JSON.stringify({
     lines.push('');
   }
 
-  if (summary.highlights.length > 0) {
+  const highlights = Array.isArray(summary.highlights) ? summary.highlights : [];
+  if (highlights.length > 0) {
     lines.push('## ✨ 课堂亮点');
-    summary.highlights.slice(0, 5).forEach((h) => lines.push(`- ${h}`));
+    highlights.slice(0, 5).forEach((h) => lines.push(`- ${h}`));
     lines.push('');
   }
 
   lines.push('## 📊 各阶段节奏');
-  summary.stages.forEach((s) => {
+  (Array.isArray(summary.stages) ? summary.stages : []).forEach((s) => {
     const delta = s.actualMin - s.plannedMin;
     const arrow = delta > 2 ? '⚠️' : delta < -2 ? '⏩' : '✅';
     lines.push(`- ${arrow} ${s.stageName}：计划 ${s.plannedMin}min，实际 ${s.actualMin}min`);
@@ -310,7 +314,7 @@ async function renderStudentMarkdown(
 出勤：${sr.online ? '在线' : '未在线'}
 参与度：${sr.participationScore}/100
 ${sr.quizScore !== undefined ? `随堂测：${sr.quizScore}/100` : ''}
-行为标签：${sr.behaviorTags.join('、') || '无'}
+行为标签：${(Array.isArray(sr.behaviorTags) ? sr.behaviorTags : []).join('、') || '无'}
 ${sr.note ? `教师备注：${sr.note}` : ''}
 
 直接返回 Markdown 文本，不要任何前缀或 JSON。`;
@@ -325,7 +329,7 @@ function renderStudentMarkdownFallback(
   sr: ClassSummaryInput['studentReports'][number],
   summary: ClassSummaryInput,
 ): string {
-  const tags = sr.behaviorTags.length > 0 ? sr.behaviorTags.join('、') : '表现稳定';
+  const tags = Array.isArray(sr.behaviorTags) && sr.behaviorTags.length > 0 ? sr.behaviorTags.join('、') : '表现稳定';
   const quiz = sr.quizScore !== undefined ? `随堂测得分 ${sr.quizScore}/100。` : '';
   return [
     `### 致 ${sr.studentName} 家长`,

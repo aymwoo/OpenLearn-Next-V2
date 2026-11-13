@@ -51,7 +51,12 @@ export function registerProcessesRoutes(ctx: ServerContext) {
       if (!pending) return res.status(404).json({ error: 'Not found' });
 
       // SEC-FIX: 严禁允许外部客户端通过 payloadOverride 篡改审批单原始指令参数
-      const payload = JSON.parse(pending.payload);
+      let payload: unknown;
+      try {
+        payload = JSON.parse(pending.payload);
+      } catch {
+        return res.status(400).json({ error: 'Corrupted pending command payload' });
+      }
       const approverId = getActorId(req) || 'admin';
 
       const cmd = kernelContainer.commandBus.createCommand(pending.command_type, payload, approverId, {
@@ -85,7 +90,8 @@ export function registerProcessesRoutes(ctx: ServerContext) {
 
   app.post('/api/approvals/:id/reject', requireAuth('administrator'), async (req, res) => {
     try {
-      kernelContainer.db.prepare('DELETE FROM pending_commands WHERE id = ?').run(req.params.id);
+      const info = kernelContainer.db.prepare('DELETE FROM pending_commands WHERE id = ?').run(req.params.id);
+      if (info.changes === 0) return res.status(404).json({ error: 'Not found' });
       res.json({ success: true });
     } catch (e) {
       sendSafeError(res, e);

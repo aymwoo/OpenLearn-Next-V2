@@ -17,6 +17,7 @@ import {
 } from '../../packages/core/observability/metrics.js';
 import { renderPluginMetrics } from '../../packages/core/observability/plugin-metrics.js';
 import { PLATFORM_VERSION } from '../../packages/core/version.js';
+import { getDefaultMigrationsDir } from '../../packages/core/db/migrator.js';
 import { getBackupsDir, getStorageDir } from '../utils/paths.js';
 import { requireAuth } from '../middleware/auth.js';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
@@ -118,7 +119,7 @@ function defaultCountEvents(): number {
 export function registerHealthRoutes(app: Express, options?: HealthRoutesOptions): void {
   const startTime = options?.startTime ?? Date.now();
   const platformVersion = options?.platformVersion ?? PLATFORM_VERSION;
-  const migrationsDir = options?.migrationsDir ?? path.join(process.cwd(), 'migrations');
+  const migrationsDir = options?.migrationsDir ?? getDefaultMigrationsDir();
   const storageDir = options?.storageDir ?? getStorageDir();
   const backupDir = options?.backupDir ?? getBackupsDir();
   const countEvents = options?.countEvents ?? defaultCountEvents;

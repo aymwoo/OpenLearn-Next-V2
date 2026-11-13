@@ -75,9 +75,13 @@ export function startBackupScheduler(deps: BackupSchedulerDeps): BackupScheduler
   const dbPath = resolveDbPath(deps.dbPath);
 
   let stopped = false;
-  const timers: ReturnType<typeof setTimeout>[] = [];
-  const track = (t: ReturnType<typeof setTimeout>): ReturnType<typeof setTimeout> => {
-    timers.push(t);
+  const timers = new Set<ReturnType<typeof setTimeout>>();
+  const track = (fn: () => void, delayMs: number): ReturnType<typeof setTimeout> => {
+    const t = setTimeout(() => {
+      timers.delete(t);
+      fn();
+    }, delayMs);
+    timers.add(t);
     try {
       (t as any).unref?.();
     } catch {
@@ -105,7 +109,7 @@ export function startBackupScheduler(deps: BackupSchedulerDeps): BackupScheduler
     } catch (err) {
       console.error('[BackupScheduler] checkpoint failed:', err);
     }
-    track(setTimeout(doCheckpoint, checkpointInterval));
+    if (!stopped) track(doCheckpoint, checkpointInterval);
   };
 
   const doBackup = () => {
@@ -118,20 +122,21 @@ export function startBackupScheduler(deps: BackupSchedulerDeps): BackupScheduler
       // R2：备份失败必须可见（非零信号给 CI/compose），但不中断服务
       console.error('[BackupScheduler] FATAL daily backup failed:', err);
     }
-    track(setTimeout(doBackup, DAY_MS));
+    if (!stopped) track(doBackup, DAY_MS);
   };
 
   // 打印启动时的库路径与目标，便于排障第一眼定位备错库问题
   console.log(
     `[BackupScheduler] enabled db=${dbPath} keep=${keep} dailyAt=${atHour}:00 checkpointEvery=${Math.round(checkpointInterval / 60000)}min`,
   );
-  track(setTimeout(doCheckpoint, checkpointInterval));
-  track(setTimeout(doBackup, msUntilNextDailyRun(Date.now(), atHour)));
+  track(doCheckpoint, checkpointInterval);
+  track(doBackup, msUntilNextDailyRun(Date.now(), atHour));
 
   return {
     stop: () => {
       stopped = true;
       for (const t of timers) clearTimeout(t);
+      timers.clear();
     },
   };
 }

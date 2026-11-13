@@ -155,9 +155,13 @@ export function useClassroomSocket(options: UseClassroomSocketOptions) {
   useEffect(() => {
     onStudentProgressUpdatedRef.current = onStudentProgressUpdated;
   }, [onStudentProgressUpdated]);
+  const hasSession = Boolean(session);
+  const sessionRole = session?.role;
+  const sessionIdentityKey = session ? `${session.role}:${session.userId ?? ''}:${session.studentId ?? ''}` : '';
+
   // Main Socket Connection & Event Registration
   useEffect(() => {
-    if (!session) return;
+    if (!hasSession) return;
     const socket = io();
     socketRef.current = socket;
     setSocketInstance(socket);
@@ -712,9 +716,10 @@ export function useClassroomSocket(options: UseClassroomSocketOptions) {
       }
     });
 
-    socket.io?.on('reconnect', () => {
+    const onReconnect = () => {
       syncPresenceAndRooms();
-    });
+    };
+    socket.io?.on('reconnect', onReconnect);
 
     const ingestQuizAnswered = (data: any) => {
       try {
@@ -747,12 +752,12 @@ export function useClassroomSocket(options: UseClassroomSocketOptions) {
     // v0.6.1 Issue #238：主事件对学生房间脱敏（无 correctAnswer/correctIndex/answer），
     // 教师端改吃 presence-staff 房间的全量镜像事件；学生端只收主事件。
     socket.on('whiteboard-quiz-answered-staff', (data: any) => {
-      if (activeRoleRef.current !== 'teacher' && session?.role !== 'administrator') return;
+      if (activeRoleRef.current !== 'teacher' && sessionRole !== 'administrator') return;
       ingestQuizAnswered(data);
     });
     socket.on('whiteboard-quiz-answered', (data: any) => {
       // 教师在 lesson 房间也会收到脱敏主事件 —— 避免与 staff 镜像重复 ingest
-      if (activeRoleRef.current === 'teacher' || session?.role === 'administrator') return;
+      if (activeRoleRef.current === 'teacher' || sessionRole === 'administrator') return;
       ingestQuizAnswered(data);
     });
 
@@ -788,10 +793,11 @@ export function useClassroomSocket(options: UseClassroomSocketOptions) {
     });
 
     return () => {
+      socket.io?.off('reconnect', onReconnect);
       socket.disconnect();
       socketRef.current = null;
     };
-  }, [session, activeRole, activeStudentId]);
+  }, [hasSession, sessionIdentityKey, sessionRole, activeRole, activeStudentId]);
 
   // Student enters/leaves lesson room
   useEffect(() => {

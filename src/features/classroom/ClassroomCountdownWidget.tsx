@@ -81,6 +81,14 @@ function playChime() {
     gain2.gain.exponentialRampToValueAtTime(0.001, now + 1.2);
     osc2.connect(gain2);
     gain2.connect(ctx.destination);
+    let closed = false;
+    const closeCtx = () => {
+      if (closed) return;
+      closed = true;
+      void ctx.close().catch(() => {});
+    };
+    osc2.onended = closeCtx;
+    setTimeout(closeCtx, 1500);
     osc2.start(now + 0.15);
     osc2.stop(now + 1.2);
   } catch (_) {
@@ -255,7 +263,15 @@ export function ClassroomCountdownWidget({
 
   // 2. 状态变化时持久化与广播
   const syncAndBroadcast = useCallback(
-    (newState: ClassroomCountdownState) => {
+    (
+      newState: ClassroomCountdownState,
+      serverPayload?: {
+        action: 'start' | 'pause' | 'resume' | 'reset' | 'add_time' | 'set';
+        duration?: number;
+        addSeconds?: number;
+        label?: string;
+      },
+    ) => {
       setCountdown(newState);
 
       // 本地存储备份
@@ -278,11 +294,13 @@ export function ClassroomCountdownWidget({
         fetch(`/api/classroom/sessions/${lessonId}/countdown`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            action: newState.isRunning ? 'start' : newState.isPaused ? 'pause' : 'set',
-            duration: newState.totalDuration,
-            label: newState.label,
-          }),
+          body: JSON.stringify(
+            serverPayload ?? {
+              action: newState.isRunning ? 'start' : newState.isPaused ? 'pause' : 'set',
+              duration: newState.totalDuration,
+              label: newState.label,
+            },
+          ),
         }).catch(() => {});
       }
 
@@ -386,7 +404,7 @@ export function ClassroomCountdownWidget({
       endsAt: now + duration * 1000,
       updatedAt: now,
     };
-    syncAndBroadcast(nextState);
+    syncAndBroadcast(nextState, { action: 'start', duration: nextState.totalDuration, label: nextState.label });
 
     try {
       window.dispatchEvent(
@@ -410,7 +428,7 @@ export function ClassroomCountdownWidget({
       endsAt: null,
       updatedAt: now,
     };
-    syncAndBroadcast(nextState);
+    syncAndBroadcast(nextState, { action: 'pause' });
 
     try {
       window.dispatchEvent(
@@ -434,7 +452,7 @@ export function ClassroomCountdownWidget({
       endsAt: now + remaining * 1000,
       updatedAt: now,
     };
-    syncAndBroadcast(nextState);
+    syncAndBroadcast(nextState, { action: 'resume' });
 
     try {
       window.dispatchEvent(
@@ -456,7 +474,7 @@ export function ClassroomCountdownWidget({
       endsAt: null,
       updatedAt: now,
     };
-    syncAndBroadcast(nextState);
+    syncAndBroadcast(nextState, { action: 'reset' });
 
     try {
       window.dispatchEvent(
@@ -480,18 +498,33 @@ export function ClassroomCountdownWidget({
       endsAt: current.isRunning ? now + newRemaining * 1000 : null,
       updatedAt: now,
     };
-    syncAndBroadcast(nextState);
+    syncAndBroadcast(nextState, { action: 'add_time', addSeconds: seconds });
+  };
+
+  const actionHandlersRef = useRef({
+    handleStart,
+    handlePause,
+    handleResume,
+    handleReset,
+    handleAddTime,
+  });
+  actionHandlersRef.current = {
+    handleStart,
+    handlePause,
+    handleResume,
+    handleReset,
+    handleAddTime,
   };
 
   // 5. 挂载第三方插件全局互操作接口 (Window API & 自定义事件驱动)
   useEffect(() => {
     const api = {
       getState: () => countdownRef.current,
-      start: (duration: number, label?: string) => handleStart(duration, label),
-      pause: () => handlePause(),
-      resume: () => handleResume(),
-      reset: () => handleReset(),
-      addTime: (seconds: number) => handleAddTime(seconds),
+      start: (duration: number, label?: string) => actionHandlersRef.current.handleStart(duration, label),
+      pause: () => actionHandlersRef.current.handlePause(),
+      resume: () => actionHandlersRef.current.handleResume(),
+      reset: () => actionHandlersRef.current.handleReset(),
+      addTime: (seconds: number) => actionHandlersRef.current.handleAddTime(seconds),
       registerPreset: (preset: CountdownPreset) => {
         setPluginPresets((prev) => {
           if (prev.some((p) => p.id === preset.id)) return prev;
@@ -506,14 +539,14 @@ export function ClassroomCountdownWidget({
     // 监听第三方插件通过 window 自定义事件下发的指令
     const onTriggerStart = (e: any) => {
       const { duration, label } = e.detail || {};
-      handleStart(duration || 300, label);
+      actionHandlersRef.current.handleStart(duration || 300, label);
     };
-    const onTriggerPause = () => handlePause();
-    const onTriggerResume = () => handleResume();
-    const onTriggerReset = () => handleReset();
+    const onTriggerPause = () => actionHandlersRef.current.handlePause();
+    const onTriggerResume = () => actionHandlersRef.current.handleResume();
+    const onTriggerReset = () => actionHandlersRef.current.handleReset();
     const onTriggerAddTime = (e: any) => {
       const { seconds } = e.detail || {};
-      handleAddTime(seconds || 60);
+      actionHandlersRef.current.handleAddTime(seconds || 60);
     };
 
     window.addEventListener('openlearn:countdown:trigger_start', onTriggerStart);
@@ -523,6 +556,9 @@ export function ClassroomCountdownWidget({
     window.addEventListener('openlearn:countdown:trigger_add_time', onTriggerAddTime);
 
     return () => {
+      if ((window as any).__openlearn_countdown === api) {
+        delete (window as any).__openlearn_countdown;
+      }
       window.removeEventListener('openlearn:countdown:trigger_start', onTriggerStart);
       window.removeEventListener('openlearn:countdown:trigger_pause', onTriggerPause);
       window.removeEventListener('openlearn:countdown:trigger_resume', onTriggerResume);

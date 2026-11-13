@@ -340,7 +340,7 @@ test.describe('教务管理端：日常课表中心与排课调度 E2E 测试', 
       const pad = (n: number) => String(n).padStart(2, '0');
       const now = new Date();
       const timeSlot = `${pad(now.getHours())}:00 - ${pad(Math.min(now.getHours() + 1, 23))}:59`;
-      const today = new Date().toISOString().split('T')[0];
+      const today = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
       const batchRes = await context.request.post(`/api/classes/${createdClassId}/schedules/batch`, {
         data: {
           schedules: [

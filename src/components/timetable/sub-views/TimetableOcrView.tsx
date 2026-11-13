@@ -13,6 +13,7 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 import type { ClassType } from '../types';
+import { formatLocalYMD } from '../../../utils/date';
 import { asyncTaskStore } from '../../../store';
 import { ExtensionPointRenderer } from '../../../plugin-host/extension-point-renderer';
 
@@ -382,7 +383,7 @@ export const TimetableOcrView: React.FC<TimetableOcrViewProps> = ({
             const day = today.getDay();
             const diff = today.getDate() - day + (day === 0 ? -6 : 1);
             const monday = new Date(today.setDate(diff));
-            const mondayDate = monday.toISOString().split('T')[0];
+            const mondayDate = formatLocalYMD(monday);
 
             const selectedItems = ocrEntries.filter((_, i) => ocrSelectedEntries.has(i));
             const unmatchedClasses = new Set<string>();

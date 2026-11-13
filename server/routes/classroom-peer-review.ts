@@ -60,6 +60,17 @@ function isPrivileged(req: Request): boolean {
   return role === 'teacher' || role === 'administrator' || role === 'admin';
 }
 
+function resolveParticipantName(db: typeof kernelContainer.db, actorId: string, req: Request): string {
+  const stu = db.prepare('SELECT name FROM students WHERE id = ?').get(actorId) as { name?: string } | undefined;
+  if (stu?.name) return stu.name;
+  const usr = db.prepare('SELECT name, username FROM users WHERE id = ?').get(actorId) as
+    { name?: string; username?: string } | undefined;
+  if (usr?.name) return usr.name;
+  if (usr?.username) return usr.username;
+  const sessionName = (req as unknown as { session?: { name?: string } }).session?.name;
+  return sessionName || actorId;
+}
+
 /**
  * 课中互评的班级归属授权（Issue #221）。
  *
@@ -586,9 +597,7 @@ function ensureRoutes(app: Express): void {
         }
 
         const senderId = currentStudentId(req) ?? getActorId(req);
-        const senderName =
-          (db.prepare('SELECT name FROM students WHERE id = ?').get(senderId) as { name?: string } | undefined)?.name ??
-          senderId;
+        const senderName = resolveParticipantName(db, senderId, req);
         const receiverName =
           (db.prepare('SELECT name FROM students WHERE id = ?').get(receiverId) as { name?: string } | undefined)
             ?.name ?? receiverId;
@@ -672,9 +681,7 @@ function ensureRoutes(app: Express): void {
         if (!trimmed) return res.status(400).json({ success: false, error: 'text is required (max 120 chars)' });
 
         const senderId = currentStudentId(req) ?? getActorId(req);
-        const senderName =
-          (db.prepare('SELECT name FROM students WHERE id = ?').get(senderId) as { name?: string } | undefined)?.name ??
-          senderId;
+        const senderName = resolveParticipantName(db, senderId, req);
         const isVoice = type === 'voice';
 
         db.prepare(

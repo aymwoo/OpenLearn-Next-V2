@@ -206,6 +206,7 @@ function createExtraServices(): Record<string, unknown> {
 
 describe('金丝雀插件双模式全链路测试（步骤 3）', () => {
   let db: Database.Database;
+  let originalNodeEnv: string | undefined;
   let host: PluginHost;
   let workerManager: WorkerManager;
   let pluginsDir: string;
@@ -213,6 +214,7 @@ describe('金丝雀插件双模式全链路测试（步骤 3）', () => {
   let services: Record<string, unknown>;
 
   beforeAll(async () => {
+    originalNodeEnv = process.env.NODE_ENV;
     process.env.NODE_ENV = 'production';
 
     db = createTestDb();
@@ -361,6 +363,11 @@ describe('金丝雀插件双模式全链路测试（步骤 3）', () => {
       await host.deactivatePlugin(pluginId).catch(() => {});
     }
     db?.close();
+    if (originalNodeEnv === undefined) {
+      delete process.env.NODE_ENV;
+    } else {
+      process.env.NODE_ENV = originalNodeEnv;
+    }
     if (pluginsDir) fs.rmSync(pluginsDir, { recursive: true, force: true });
   });
 

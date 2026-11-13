@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { ClassType, StudentType } from '../store/appStore';
+import { formatLocalYMD } from '../utils/date';
 
 export interface UseClassBatchOperationsOptions {
   lang: 'zh' | 'en';
@@ -94,7 +95,7 @@ export function useClassBatchOperations(options: UseClassBatchOperationsOptions)
   const handleBatchScheduleClasses = () => {
     if (selectedClassIds.size === 0) return;
     setBatchPickerLesson('');
-    setBatchPickerDate(new Date().toISOString().split('T')[0]);
+    setBatchPickerDate(formatLocalYMD());
     setBatchPicker('schedule');
   };
 

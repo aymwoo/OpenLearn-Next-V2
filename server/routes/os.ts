@@ -120,12 +120,18 @@ export function registerOsRoutes(ctx: ServerContext) {
       // kernel/插件 handler 会令教师端工具下发按钮永久 pending（前端亦无
       // AbortSignal）。10s 为宽上限：覆盖合法的慢命令（如对接外部网关的
       // 插件命令），又不至于无限挂死。
+      let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
       const result = await Promise.race([
         kernelContainer.commandBus.execute(cmd),
-        new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error(`Command execution timed out after 10s: ${commandType}`)), 10_000),
-        ),
-      ]);
+        new Promise<never>((_, reject) => {
+          timeoutHandle = setTimeout(
+            () => reject(new Error(`Command execution timed out after 10s: ${commandType}`)),
+            10_000,
+          );
+        }),
+      ]).finally(() => {
+        if (timeoutHandle !== undefined) clearTimeout(timeoutHandle);
+      });
       res.json({ success: true, result });
     } catch (err: any) {
       sendSafeError(res, err);
@@ -280,12 +286,19 @@ export function registerOsRoutes(ctx: ServerContext) {
     try {
       let { message, lang = 'zh', currentLessonId, attachments, providerId } = req.body as AgentChatRequest;
 
+      if (typeof message !== 'string' || !message.trim()) {
+        return res.status(400).json({
+          success: false,
+          error: lang === 'zh' ? 'message 参数不能为空。' : 'message is required',
+        });
+      }
+
       // SEC-NET-03: XSS 消毒用户输入
       message = filterXSS(message);
-      if (attachments) {
+      if (Array.isArray(attachments)) {
         attachments = attachments.map((att: AgentChatAttachment) => ({
           ...att,
-          name: filterXSS(att.name),
+          name: typeof att?.name === 'string' ? filterXSS(att.name) : '',
         }));
       }
 
@@ -377,9 +390,9 @@ export function registerOsRoutes(ctx: ServerContext) {
     try {
       const token = getCookieToken(req);
       let userId: string | undefined;
-      if (token) {
-        const session = getValidSession(token);
-        if (session) userId = session.userId;
+      const session = (req as any).session || (token ? getValidSession(token) : null);
+      if (session) {
+        userId = session.userId || session.username;
       }
       const currentLessonId = (req.query.lessonId as string) || undefined;
       const convKey = `agent:${userId || 'anonymous'}:${currentLessonId || 'global'}`;
@@ -399,9 +412,9 @@ export function registerOsRoutes(ctx: ServerContext) {
     try {
       const token = getCookieToken(req);
       let userId: string | undefined;
-      if (token) {
-        const session = getValidSession(token);
-        if (session) userId = session.userId;
+      const session = (req as any).session || (token ? getValidSession(token) : null);
+      if (session) {
+        userId = session.userId || session.username;
       }
       const currentLessonId = (req.query.lessonId as string) || undefined;
       const convKey = `agent:${userId || 'anonymous'}:${currentLessonId || 'global'}`;
