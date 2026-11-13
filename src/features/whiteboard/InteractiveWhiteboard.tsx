@@ -52,7 +52,8 @@ import {
   type StackDirection,
 } from './utils/auto-tiling';
 import { parseElementData } from './utils/element-cache';
-import { computeContentBounds, resolveCanvasSize, toCanvasPoint } from './utils/canvas-bounds';
+import { computeContentBounds, resolveCanvasLayout, toCanvasPoint } from './utils/canvas-bounds';
+import { measurePaddingBox, measureScrollbarThickness } from './utils/scrollbar-thickness';
 import { whiteboardViewStore, useWhiteboardViewStore } from '../../store/whiteboardViewStore';
 import { usePluginHostStore } from '../../plugin-host/plugin-host-store';
 import { ExtensionPointRenderer } from '../../plugin-host/extension-point-renderer';
@@ -435,8 +436,9 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
     const [isDrawing, setIsDrawing] = useState(false);
     const stageRef = useRef<any>(null);
     const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
-    /** 画布承载容器的**内容框**尺寸（已扣边框与滚动条占位）—— 画布逻辑尺寸的基准。 */
+    /** 画布承载容器的 padding box（扣边框、不含滚动条反馈）—— 画布逻辑尺寸的稳定基准。 */
     const [canvasBox, setCanvasBox] = useState({ width: 0, height: 0 });
+    const [scrollbarThickness, setScrollbarThickness] = useState(0);
     const [remoteDrawings, setRemoteDrawings] = useState<Record<string, any>>({});
     const { quizCounts, setQuizCounts } = useQuizIngest({ lessonId });
     // Fullscreen: when set, only this element is rendered full-viewport
@@ -694,7 +696,10 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
      * 就既看不见也拖不动，而且**没有任何办法**把它们拉回视口。
      *
      * 现在画布至少要装得下当前页全部组件；容器装不下时由**容器**出滚动条，
-     * 画布本身保持逻辑尺寸不变。内容装得下时画布 == 容器，行为与修复前逐像素一致。
+     * 画布本身保持逻辑尺寸不变。内容装得下时画布等于稳定的 padding box。
+     *
+     * 尺寸必须按 padding box 计算，并一次预留滚动条厚度：若用 clientWidth
+     * （随滚动条显隐变化）当 viewport，会出现滚动条反复出现/消失的抖动。
      */
     const canvasContentBounds = useMemo(() => {
       // localGeometryVersion 仅用于让覆盖层的增删触发重算（与 renderElement 同口径）
@@ -719,8 +724,8 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
     }, [getCurrentPageElements, localGeometryVersion]);
 
     const canvasSize = useMemo(
-      () => resolveCanvasSize(canvasBox, canvasContentBounds, CANVAS_CONTENT_PADDING),
-      [canvasBox, canvasContentBounds],
+      () => resolveCanvasLayout(canvasBox, canvasContentBounds, CANVAS_CONTENT_PADDING, scrollbarThickness).canvas,
+      [canvasBox, canvasContentBounds, scrollbarThickness],
     );
 
     /**
@@ -1855,14 +1860,14 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
         for (let entry of entries) {
           // 两个尺寸概念，各司其职：
           //   containerSize —— 边框盒（offsetWidth/offsetHeight）。给「自动平铺」的铺排
-          //     区域与全屏覆盖层用；**不含滚动条**，尺寸稳定，不会因为滚动条出现与否
-          //     而反复触发重排。
-          //   canvasBox —— 内容框（clientWidth/clientHeight）。给画布逻辑尺寸用：
-          //     它已经扣掉边框与滚动条占位，画布取它才不会比可视区多出边框那 2px
-          //     （多出来的 2px 会凭空冒出一条横向滚动范围）。
+          //     区域与全屏覆盖层用；不随滚动条显隐变化。
+          //   canvasBox —— padding box（边框盒减边框）。给画布逻辑尺寸用：稳定、
+          //     不受滚动条占位反馈。不能用 clientWidth —— 滚动条一出现它就变窄，
+          //     画布跟着收缩，会再触发 ResizeObserver，形成显隐抖动。
           if (containerRef.current) {
-            const w = containerRef.current.clientWidth;
-            const h = containerRef.current.clientHeight;
+            const paddingBox = measurePaddingBox(containerRef.current);
+            const w = paddingBox.width;
+            const h = paddingBox.height;
             // 避免在 keep-alive 隐藏（display: none 测出 0x0）时重置尺寸，导致切回白板时发生重排闪烁
             setContainerSize((prev) => {
               if (w === 0 && h === 0 && prev.width > 0 && prev.height > 0) return prev;
@@ -1887,8 +1892,9 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
       // Fallback: also run an initial resize and register window resize
       const handleWindowResize = () => {
         if (containerRef.current) {
-          const w = containerRef.current.clientWidth;
-          const h = containerRef.current.clientHeight;
+          const paddingBox = measurePaddingBox(containerRef.current);
+          const w = paddingBox.width;
+          const h = paddingBox.height;
           setContainerSize((prev) => {
             if (w === 0 && h === 0 && prev.width > 0 && prev.height > 0) return prev;
             const nextWidth = containerRef.current!.offsetWidth;
@@ -1906,6 +1912,8 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
           });
         }
       };
+      const thickness = measureScrollbarThickness();
+      setScrollbarThickness((prev) => (prev === thickness ? prev : thickness));
       handleWindowResize();
       window.addEventListener('resize', handleWindowResize);
 
@@ -3812,7 +3820,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
             // overflow-auto：画布逻辑高度大于容器可视高度时由**本容器**出滚动条 ——
             // 修复前这里是 overflow-hidden，溢出被裁掉且整条祖先链无可滚动容器，
             // 画在下部的组件因此永远够不着（见 canvas-bounds.ts 的说明）。
-            className="flex-1 rounded-xl border border-theme/80 relative overflow-auto w-full shadow-inner transition-colors"
+            className="flex-1 min-h-0 min-w-0 rounded-xl border border-theme/80 relative overflow-auto w-full shadow-inner transition-colors"
             style={{
               backgroundImage: showGrid ? `radial-gradient(${themeTokens.gridDot} 1.2px, transparent 1.2px)` : 'none',
               backgroundSize: '24px 24px',
@@ -3826,6 +3834,17 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
               await handleWhiteboardDrop(e);
             }}
           >
+            {/*
+              流式占位：用画布逻辑尺寸撑开滚动范围。
+              只靠 absolute inset-0 的 Stage 计算 overflow 时，flex 子项的
+              min-height:auto 与滚动条占位会互相反馈，滚动条可能反复显隐。
+            */}
+            <div
+              data-testid="whiteboard-stage-sizer"
+              aria-hidden="true"
+              className="pointer-events-none"
+              style={{ width: canvasSize.width, height: canvasSize.height }}
+            />
             {/* Drag dropzone hover hint */}
             {isDragOverBoard && (
               <div className="absolute inset-0 border-2 border-dashed border-indigo-500 bg-indigo-500/10 backdrop-blur-[2px] rounded-2xl flex flex-col items-center justify-center text-indigo-600 font-bold text-sm z-30 animate-in fade-in pointer-events-none">
