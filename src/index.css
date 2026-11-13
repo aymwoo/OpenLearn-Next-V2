@@ -174,6 +174,64 @@
     overflow: hidden;
     overscroll-behavior: contain;
   }
+  dialog.openlearn-dialog {
+    margin: auto;
+    padding: 0;
+    border-width: 0;
+    background-color: transparent;
+    color: inherit;
+    width: calc(100% - 2rem);
+    max-width: calc(100vw - 2rem);
+    max-height: calc(100dvh - 2rem);
+    opacity: 0;
+    transition-property: opacity, transform, display, overlay;
+    transition-duration: 0.2s;
+    transition-timing-function: ease-out;
+    transition-behavior: allow-discrete;
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    dialog.openlearn-dialog {
+      transform: scale(0.96);
+    }
+  }
+  dialog.openlearn-dialog[open] {
+    display: flex;
+    flex-direction: column;
+    opacity: 1;
+
+    @starting-style {
+      opacity: 0;
+    }
+
+    @media (prefers-reduced-motion: no-preference) {
+      transform: scale(1);
+
+      @starting-style {
+        transform: scale(0.96);
+      }
+    }
+  }
+  dialog.openlearn-dialog::backdrop {
+    background-color: rgba(15, 23, 42, 0);
+    backdrop-filter: blur(4px);
+    transition-property: background-color, display, overlay;
+    transition-duration: 0.2s;
+    transition-timing-function: ease-out;
+    transition-behavior: allow-discrete;
+  }
+  dialog.openlearn-dialog[open]::backdrop {
+    background-color: rgba(15, 23, 42, 0.5);
+
+    @starting-style {
+      background-color: rgba(15, 23, 42, 0);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    dialog.openlearn-dialog,
+    dialog.openlearn-dialog::backdrop {
+      transition-duration: 0.1s;
+    }
+  }
   :root,
   [data-theme='light'] {
     color-scheme: light;
