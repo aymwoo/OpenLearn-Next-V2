@@ -10,7 +10,7 @@
  *
  * ## 前置条件
  *
- * 1. Node 22（仓库 `.nvmrc`；Node 26 下原生模块 ABI 不匹配）
+ * 1. Node 24（仓库 `.nvmrc`；Node 26 下原生模块 ABI 不匹配）
  * 2. 一个**干净的演示实例**：`pnpm dev:demo`。脚本假定演示库没有进行中的课堂会话，
  *    若检测到「继续上课」会直接退出并提示重置演示库（`pnpm dev:demo -- --reset`）。
  * 3. Playwright 的 Chromium：系统装了 `/usr/bin/chromium` 也可（`--chromium` 指定）。

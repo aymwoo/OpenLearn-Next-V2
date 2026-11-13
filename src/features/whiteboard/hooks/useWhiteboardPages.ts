@@ -90,10 +90,8 @@ export function useWhiteboardPages<T extends WhiteboardElementLike>({
   // 同步给外部监听者（如备课组件边栏的大纲）
   const lastReportedPagesStateRef = useRef<{ pages: WhiteboardPageItem[]; currentPage: number } | null>(null);
   useEffect(() => {
-    if (
-      lastReportedPagesStateRef.current?.currentPage === currentPage &&
-      lastReportedPagesStateRef.current?.pages === pages
-    ) {
+    const lastReported = lastReportedPagesStateRef.current;
+    if (lastReported?.currentPage === currentPage && JSON.stringify(lastReported.pages) === JSON.stringify(pages)) {
       return;
     }
     lastReportedPagesStateRef.current = { pages, currentPage };
@@ -106,7 +104,9 @@ export function useWhiteboardPages<T extends WhiteboardElementLike>({
     if (metaEl) {
       const parsed = parseElementData(metaEl);
       if (Array.isArray(parsed?.pages) && parsed.pages.length > 0) {
-        setPages(parsed.pages);
+        // 内容未变时保持 pages 引用：否则 safeElements 每次换新引用都会
+        // 触发一轮白板重渲染，再沿 onPagesStateChange 回推父级形成级联。
+        setPages((prev) => (JSON.stringify(prev) === JSON.stringify(parsed.pages) ? prev : parsed.pages));
       }
     }
   }, [safeElements]);

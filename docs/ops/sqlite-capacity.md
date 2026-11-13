@@ -23,14 +23,14 @@ OpenLearn V2 平台采用 **SQLite（基于 `better-sqlite3` 原生驱动）** �
 
 本次压测在推荐规格（4核8GB以上）的主机上进行，测试环境完全对齐生产推荐规范：
 
-| 规格维度           | 本次实测机型规格                        | 生产基线参考规格（[`docs/deployment/production-guide.md`](../deployment/production-guide.md)） |
-| :----------------- | :-------------------------------------- | :--------------------------------------------------------------------------------------------- |
-| **CPU 型号与核心** | AMD Ryzen 9 5900HS (16 vCPUs)           | 4 核 (推荐规格) / 2 核 (最低规格)                                                              |
-| **内存容量**       | 15.0 GB RAM                             | 8 GB RAM (推荐规格) / 2 GB RAM (最低规格)                                                      |
-| **持久化存储介质** | Samsung NVMe SSD (ROTA = 0)             | 本地 SSD / NVMe 高速云盘                                                                       |
-| **操作系统**       | Linux 6.18.9-arch1-1-g14 (x64)          | Ubuntu 22.04 LTS / Debian 12 / Linux 6.x                                                       |
-| **Node.js 运行时** | **v22.16.0** (对齐 `.nvmrc` 与 CI 门禁) | Node.js 22 LTS                                                                                 |
-| **SQLite 驱动**    | better-sqlite3 12.x                     | better-sqlite3 12.x                                                                            |
+| 规格维度           | 本次实测机型规格                                            | 生产基线参考规格（[`docs/deployment/production-guide.md`](../deployment/production-guide.md)） |
+| :----------------- | :---------------------------------------------------------- | :--------------------------------------------------------------------------------------------- |
+| **CPU 型号与核心** | AMD Ryzen 9 5900HS (16 vCPUs)                               | 4 核 (推荐规格) / 2 核 (最低规格)                                                              |
+| **内存容量**       | 15.0 GB RAM                                                 | 8 GB RAM (推荐规格) / 2 GB RAM (最低规格)                                                      |
+| **持久化存储介质** | Samsung NVMe SSD (ROTA = 0)                                 | 本地 SSD / NVMe 高速云盘                                                                       |
+| **操作系统**       | Linux 6.18.9-arch1-1-g14 (x64)                              | Ubuntu 22.04 LTS / Debian 12 / Linux 6.x                                                       |
+| **Node.js 运行时** | **v22.16.0** (本次实测环境，对齐当时的 `.nvmrc` 与 CI 门禁) | Node.js 24 LTS（当前仓库基线；本次压测在 22 LTS 上完成）                                       |
+| **SQLite 驱动**    | better-sqlite3 12.x                                         | better-sqlite3 12.x                                                                            |
 
 ---
 

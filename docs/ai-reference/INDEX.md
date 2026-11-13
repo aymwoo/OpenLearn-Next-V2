@@ -15,7 +15,7 @@
 | Git commit      | `4f41c9b`                                                                                                                          | `git log -1 --oneline`                  |
 | Plugin SDK      | **3.7.5**                                                                                                                          | `packages/plugin-sdk/package.json`      |
 | plugin-test-kit | **3.3.3**                                                                                                                          | `packages/plugin-test-kit/package.json` |
-| Node            | **22**（`.nvmrc`）                                                                                                                 | CI 与 Dockerfile 均钉 22                |
+| Node            | **24**（`.nvmrc`）                                                                                                                 | CI 与 Dockerfile 均钉 24                |
 | 分析日期        | 2026-10-31                                                                                                                         | —                                       |
 | 索引产物        | `.repomix/openlearn-next.repo.pack.md`（1,688 文件 / 4.46M tokens）+ `.repomix/plugin-subsystem.pack.md`（193 文件 / 628k tokens） | repomix 1.18.1                          |
 

@@ -34,7 +34,7 @@ npx openlearn-next@latest --demo -o    # 一次性演示数据，退出即销毁
 
 | 依赖 | 版本要求           | 说明                                                            |
 | ---- | ------------------ | --------------------------------------------------------------- |
-| Node | 20.x / 22.x / 24.x | **推荐 22**（仓库 `.nvmrc` 与 CI 门禁均对齐它）                 |
+| Node | 20.x / 22.x / 24.x | **推荐 24**（仓库 `.nvmrc` 与 CI 门禁均对齐它）                 |
 | pnpm | 10.33.4            | 仓库是 pnpm workspace，`npm i` 会装出第二棵依赖树并漏编原生模块 |
 
 ```bash
@@ -107,7 +107,7 @@ pnpm dev:demo -- --reset  # 丢弃旧演示数据重来
 
 | 现象                                                | 原因                                                | 处理                                                      |
 | --------------------------------------------------- | --------------------------------------------------- | --------------------------------------------------------- |
-| `ERR_DLOPEN_FAILED` / `NODE_MODULE_VERSION ...`     | Node 主版本变了，`better-sqlite3` 二进制 ABI 不匹配 | 切回 Node 22，或执行 `pnpm rebuild better-sqlite3`        |
+| `ERR_DLOPEN_FAILED` / `NODE_MODULE_VERSION ...`     | Node 主版本变了，`better-sqlite3` 二进制 ABI 不匹配 | 切回 Node 24，或执行 `pnpm rebuild better-sqlite3`        |
 | `EADDRINUSE :9000`                                  | 端口被占用                                          | `PORT=3999 pnpm dev`（dev 下 CLI 参数无效，要用环境变量） |
 | 登录后几乎所有请求 403 `FORBIDDEN_DEFAULT_PASSWORD` | 还在用默认口令                                      | 先完成强制改密                                            |
 
@@ -244,7 +244,7 @@ npx skills add https://gitee.com/aymwoo/openlearn-skills.git --skill openlearn-n
 ## 5. 常见问题
 
 **Q：`pnpm install` 直接失败了？**
-Node 版本不对。用 Node 22（`.nvmrc`），或按 `preinstall` 守卫的提示切版本 / `pnpm rebuild better-sqlite3`。
+Node 版本不对。用 Node 24（`.nvmrc`），或按 `preinstall` 守卫的提示切版本 / `pnpm rebuild better-sqlite3`。
 
 **Q：登录后什么都不能点，接口全是 403？**
 还在默认口令状态。先改密；改密前除改密、登出、读会话外的接口都会被拒。

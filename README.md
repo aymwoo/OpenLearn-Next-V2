@@ -74,7 +74,7 @@ npm update -g openlearn-next    # 更新
 ### 方式 C：源码本地开发
 
 ```bash
-# 1. 克隆仓库并安装依赖（建议 Node 22 + pnpm）
+# 1. 克隆仓库并安装依赖（建议 Node 24 + pnpm）
 git clone https://github.com/aymwoo/OpenLearn-Next-V2.git openlearnv2
 # 国内网络访问 GitHub 受限时，改用 Gitee 镜像（内容一致，单向同步）：
 # git clone https://gitee.com/aymwoo/openlearn-next.git openlearnv2

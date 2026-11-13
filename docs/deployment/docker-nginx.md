@@ -18,7 +18,7 @@
 
 **`Dockerfile` 要点**（改配置时按此对齐）：
 
-- 构建阶段用 `node:22-alpine`，`apk add python3 make g++ gcc` 装 `better-sqlite3` 等原生模块的编译工具
+- 构建阶段用 `node:24-alpine`，`apk add python3 make g++ gcc` 装 `better-sqlite3` 等原生模块的编译工具
 - 依赖清单单独 COPY（`package.json` / `pnpm-lock.yaml` / `pnpm-workspace.yaml` + 两个 workspace 包的 `package.json`）以利用 Docker 层缓存
 - **必须 COPY `migrations/`** —— 生产镜像没有 devDependencies，不会跑 `tsc`，迁移执行器直接读 `migrations/*.sql`
 - 入口以 root 修正 `/data` 与 `/backups` 的属主，再 `su-exec` 降到 `node`。不要再写成 `USER node` 直接启动，否则命名卷属主是 root 时写不了库。

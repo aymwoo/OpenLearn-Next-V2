@@ -1,5 +1,5 @@
 # ── Build Stage ────────────────────────────────────────────────────
-FROM node:22-alpine AS build
+FROM node:24-alpine AS build
 
 WORKDIR /app
 
@@ -40,7 +40,7 @@ RUN pnpm run build && node scripts/verify-plugin-sdk-entry.mjs
 RUN CI=true pnpm prune --prod --ignore-scripts
 
 # ── Production Stage ───────────────────────────────────────────────
-FROM node:22-alpine
+FROM node:24-alpine
 
 WORKDIR /app
 
