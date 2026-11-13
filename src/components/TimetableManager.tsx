@@ -1754,7 +1754,7 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
                 </label>
                 <select
                   title="Form Class ID"
-                  className="w-full border border-gray-250 text-xs p-2 rounded-lg bg-white select-none cursor-pointer focus:outline-hidden"
+                  className="w-full border border-gray-250 text-xs p-2 rounded-lg bg-white cursor-pointer focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500"
                   value={formClassId}
                   onChange={(e) => setFormClassId(e.target.value)}
                   required
@@ -1776,7 +1776,7 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
                 </label>
                 <select
                   title="Form Lesson ID"
-                  className="w-full border border-gray-250 text-xs p-2 rounded-lg bg-white select-none cursor-pointer focus:outline-hidden rounded-lg"
+                  className="w-full border border-gray-250 text-xs p-2 rounded-lg bg-white cursor-pointer focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500"
                   value={formLessonId}
                   onChange={(e) => setFormLessonId(e.target.value)}
                 >
@@ -1798,7 +1798,7 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
                   </label>
                   <input
                     type="date"
-                    className="w-full border border-gray-250 text-xs p-2 rounded-lg bg-white focus:outline-hidden"
+                    className="w-full border border-gray-250 text-xs p-2 rounded-lg bg-white focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500"
                     value={formDate}
                     onChange={(e) => setFormDate(e.target.value)}
                     required
@@ -1810,7 +1810,7 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
                   </label>
                   <select
                     title="Form Status"
-                    className="w-full border border-gray-250 text-xs p-2 rounded-lg bg-white cursor-pointer focus:outline-hidden"
+                    className="w-full border border-gray-250 text-xs p-2 rounded-lg bg-white cursor-pointer focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500"
                     value={formStatus}
                     onChange={(e) => setFormStatus(e.target.value)}
                   >
@@ -1829,14 +1829,14 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
                 <div className="flex gap-1.5 items-center">
                   <input
                     type="text"
-                    className="flex-1 border border-gray-200 rounded-lg text-xs p-2 bg-white text-gray-750 focus:outline-hidden"
+                    className="flex-1 border border-gray-200 rounded-lg text-xs p-2 bg-white text-gray-750 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500"
                     value={formTimeSlot}
                     onChange={(e) => setFormTimeSlot(e.target.value)}
                     placeholder="e.g. 09:00 - 10:30"
                   />
                   <select
                     title="Preset Time Slot"
-                    className="border border-gray-250 text-xs p-2 rounded-lg bg-white cursor-pointer focus:outline-hidden"
+                    className="border border-gray-250 text-xs p-2 rounded-lg bg-white cursor-pointer focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500"
                     onChange={(e) => {
                       if (e.target.value) setFormTimeSlot(e.target.value);
                     }}
@@ -1862,7 +1862,7 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
                       ? '例如：节假日补课、更替老师讲义，不填则无'
                       : 'e.g. Substitute instructor lesson outline'
                   }
-                  className="w-full border border-gray-250 text-xs p-2 rounded-lg bg-white focus:outline-hidden"
+                  className="w-full border border-gray-250 text-xs p-2 rounded-lg bg-white focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500"
                   value={formNotes}
                   onChange={(e) => setFormNotes(e.target.value)}
                 />
@@ -1930,7 +1930,7 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
                 <select
                   id="edit_lesson_select"
                   title="Edit Lesson"
-                  className="w-full border border-gray-250 text-xs p-2 rounded-lg bg-white select-none cursor-pointer focus:outline-hidden rounded-lg"
+                  className="w-full border border-gray-250 text-xs p-2 rounded-lg bg-white cursor-pointer focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500"
                   value={formLessonId}
                   onChange={(e) => setFormLessonId(e.target.value)}
                 >
@@ -1952,7 +1952,7 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
                   </label>
                   <input
                     type="date"
-                    className="w-full border border-gray-250 text-xs p-2 rounded-lg bg-white focus:outline-hidden"
+                    className="w-full border border-gray-250 text-xs p-2 rounded-lg bg-white focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500"
                     value={formDate}
                     onChange={(e) => setFormDate(e.target.value)}
                     required
@@ -1965,7 +1965,7 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
                   <select
                     id="edit_status_select"
                     title="Edit Status"
-                    className="w-full border border-gray-250 text-xs p-2 rounded-lg bg-white cursor-pointer focus:outline-hidden"
+                    className="w-full border border-gray-250 text-xs p-2 rounded-lg bg-white cursor-pointer focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500"
                     value={formStatus}
                     onChange={(e) => setFormStatus(e.target.value)}
                   >
@@ -1991,7 +1991,7 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
                   />
                   <select
                     title="Edit Preset Time"
-                    className="border border-gray-250 text-xs p-2 rounded-lg bg-white cursor-pointer focus:outline-hidden"
+                    className="border border-gray-250 text-xs p-2 rounded-lg bg-white cursor-pointer focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500"
                     onChange={(e) => {
                       if (e.target.value) setFormTimeSlot(e.target.value);
                     }}
@@ -2013,7 +2013,7 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
                 <input
                   type="text"
                   placeholder={lang === 'zh' ? '例：国庆假停课 / 本课更替为第二节' : 'Explain reasons of ad-hoc swaps'}
-                  className="w-full border border-gray-250 text-xs p-2 rounded-lg bg-white focus:outline-hidden"
+                  className="w-full border border-gray-250 text-xs p-2 rounded-lg bg-white focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500"
                   value={formNotes}
                   onChange={(e) => setFormNotes(e.target.value)}
                 />

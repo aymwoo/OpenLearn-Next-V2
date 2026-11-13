@@ -90,8 +90,9 @@ export function RightSidebar(props: RightSidebarProps = {}) {
   }, [showRightSidebar]);
 
   return (
-    <div
-      className={`transition-all duration-300 bg-white border-l border-gray-200 flex flex-col shadow-xl relative z-30 shrink-0 ${showRightSidebar ? 'w-96' : 'w-12 items-center cursor-pointer hover:bg-gray-50'}`}
+    <aside
+      aria-label={lang === 'zh' ? 'AI 与扩展侧栏' : 'AI & Extensions Sidebar'}
+      className={`transition-all duration-300 bg-white border-l border-gray-200 flex flex-col shadow-xl relative z-30 shrink-0 ${showRightSidebar ? 'w-96' : 'w-12 items-center hover:bg-gray-50'}`}
     >
       {showRightSidebar ? (
         <>
@@ -118,8 +119,10 @@ export function RightSidebar(props: RightSidebarProps = {}) {
               }}
             />
             <button
+              type="button"
               onClick={() => setShowRightSidebar(false)}
-              className="ml-1 p-1.5 text-gray-400 hover:text-gray-600 rounded-md"
+              aria-label={lang === 'zh' ? '收起右侧栏' : 'Collapse sidebar'}
+              className="ml-1 p-1.5 text-gray-400 hover:text-gray-600 rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
             >
               <PanelRightClose size={14} />
             </button>
@@ -375,19 +378,21 @@ export function RightSidebar(props: RightSidebarProps = {}) {
           )}
         </>
       ) : (
-        <div
-          className="flex flex-col items-center py-6 h-full text-subtle w-full"
+        <button
+          type="button"
           onClick={() => setShowRightSidebar(true)}
+          aria-label={lang === 'zh' ? '展开 AI 与扩展侧栏' : 'Expand AI & Extensions Sidebar'}
+          className="flex flex-col items-center py-6 h-full text-subtle w-full cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
         >
-          <Wand2 size={18} className="mb-6 hover:text-indigo-500" />
-          <Terminal size={18} className="hover:text-indigo-500" />
+          <Wand2 size={18} className="mb-6 hover:text-indigo-500" aria-hidden="true" />
+          <Terminal size={18} className="hover:text-indigo-500" aria-hidden="true" />
           <div className="mt-8 flex-1 flex flex-col justify-end pb-8">
             <div className="uppercase tracking-widest text-xs rotate-180" style={{ writingMode: 'vertical-rl' }}>
               OS Core Options
             </div>
           </div>
-        </div>
+        </button>
       )}
-    </div>
+    </aside>
   );
 }

@@ -369,7 +369,7 @@ export function SemesterGradeManager({ classId, className, students, lang }: Sem
     Number(weightInputs.exam);
 
   return (
-    <div className="flex-1 flex flex-col font-sans p-4 bg-white select-none">
+    <div className="flex-1 flex flex-col font-sans p-4 bg-white">
       {/* Top Header Controls */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-slate-100 pb-3 mb-4 gap-3 shrink-0 text-left">
         <div className="flex items-center gap-2">
@@ -711,7 +711,7 @@ export function SemesterGradeManager({ classId, className, students, lang }: Sem
                                     ? '记入平时发挥、缺考、复习等备注...'
                                     : 'Enter note (e.g. absent, late)...'
                                 }
-                                className="w-full bg-slate-50 border border-slate-150 rounded-lg p-1.5 text-xs focus:outline-none text-gray-700"
+                                className="w-full bg-slate-50 border border-slate-150 rounded-lg p-1.5 text-xs focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 text-gray-700"
                               />
                             </td>
                           </tr>

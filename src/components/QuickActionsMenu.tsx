@@ -234,14 +234,16 @@ export function QuickActionsMenu({
                 <h3 className="font-bold text-sm tracking-wide">{t.quickActions}</h3>
               </div>
               <button
+                type="button"
+                aria-label="Close Portal"
                 onClick={() => {
                   setIsOpen(false);
                   setCurrentView('menu');
                 }}
-                className="text-white/80 hover:text-white hover:bg-white/15 p-1 rounded-full transition-all focus:outline-none"
+                className="text-white/80 hover:text-white hover:bg-white/15 p-1 rounded-full transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
                 title="Close Portal"
               >
-                <X size={16} />
+                <X size={16} aria-hidden="true" />
               </button>
             </div>
 
@@ -254,12 +256,16 @@ export function QuickActionsMenu({
                   </p>
 
                   {/* Action 1: Schedule Class */}
-                  <div
+                  <button
+                    type="button"
                     onClick={() => handleActionClick('schedule')}
-                    className="flex items-start gap-3.5 p-3.5 bg-white border border-gray-200 hover:border-indigo-400 hover:shadow-md rounded-xl cursor-pointer transition-all hover:scale-101 group"
+                    className="w-full text-left flex items-start gap-3.5 p-3.5 bg-white border border-gray-200 hover:border-indigo-400 hover:shadow-md rounded-xl cursor-pointer transition-all hover:scale-101 group focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
                     id="action-schedule-class"
                   >
-                    <div className="p-2.5 bg-indigo-50 text-indigo-600 rounded-lg group-hover:bg-indigo-600 group-hover:text-white transition-colors duration-200">
+                    <div
+                      className="p-2.5 bg-indigo-50 text-indigo-600 rounded-lg group-hover:bg-indigo-600 group-hover:text-white transition-colors duration-200"
+                      aria-hidden="true"
+                    >
                       <Calendar size={18} />
                     </div>
                     <div className="flex-1">
@@ -268,15 +274,19 @@ export function QuickActionsMenu({
                       </h4>
                       <p className="text-xs text-gray-500 mt-1 leading-relaxed">{t.scheduleDesc}</p>
                     </div>
-                  </div>
+                  </button>
 
                   {/* Action 2: Generate Assignment / Quiz */}
-                  <div
+                  <button
+                    type="button"
                     onClick={() => handleActionClick('assignment')}
-                    className="flex items-start gap-3.5 p-3.5 bg-white border border-gray-200 hover:border-purple-400 hover:shadow-md rounded-xl cursor-pointer transition-all hover:scale-101 group"
+                    className="w-full text-left flex items-start gap-3.5 p-3.5 bg-white border border-gray-200 hover:border-purple-400 hover:shadow-md rounded-xl cursor-pointer transition-all hover:scale-101 group focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500"
                     id="action-generate-assignment"
                   >
-                    <div className="p-2.5 bg-purple-50 text-purple-600 rounded-lg group-hover:bg-purple-600 group-hover:text-white transition-colors duration-200">
+                    <div
+                      className="p-2.5 bg-purple-50 text-purple-600 rounded-lg group-hover:bg-purple-600 group-hover:text-white transition-colors duration-200"
+                      aria-hidden="true"
+                    >
                       <Wand2 size={18} />
                     </div>
                     <div className="flex-1">
@@ -285,15 +295,19 @@ export function QuickActionsMenu({
                       </h4>
                       <p className="text-xs text-gray-500 mt-1 leading-relaxed">{t.generateDesc}</p>
                     </div>
-                  </div>
+                  </button>
 
                   {/* Action 3: Create Lesson Curriculum */}
-                  <div
+                  <button
+                    type="button"
                     onClick={() => handleActionClick('lesson')}
-                    className="flex items-start gap-3.5 p-3.5 bg-white border border-gray-200 hover:border-emerald-400 hover:shadow-md rounded-xl cursor-pointer transition-all hover:scale-101 group"
+                    className="w-full text-left flex items-start gap-3.5 p-3.5 bg-white border border-gray-200 hover:border-emerald-400 hover:shadow-md rounded-xl cursor-pointer transition-all hover:scale-101 group focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
                     id="action-create-lesson"
                   >
-                    <div className="p-2.5 bg-emerald-50 text-emerald-600 rounded-lg group-hover:bg-emerald-600 group-hover:text-white transition-colors duration-200">
+                    <div
+                      className="p-2.5 bg-emerald-50 text-emerald-600 rounded-lg group-hover:bg-emerald-600 group-hover:text-white transition-colors duration-200"
+                      aria-hidden="true"
+                    >
                       <BookOpen size={18} />
                     </div>
                     <div className="flex-1">
@@ -302,7 +316,7 @@ export function QuickActionsMenu({
                       </h4>
                       <p className="text-xs text-gray-500 mt-1 leading-relaxed">{t.createDesc}</p>
                     </div>
-                  </div>
+                  </button>
                 </div>
               )}
 
@@ -310,11 +324,12 @@ export function QuickActionsMenu({
                 <div className="relative">
                   {/* Back button */}
                   <button
+                    type="button"
                     onClick={() => setCurrentView('menu')}
-                    className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-indigo-600 font-semibold mb-4 cursor-pointer focus:outline-none"
+                    className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-indigo-600 font-semibold mb-4 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 rounded"
                     id="action-back-button"
                   >
-                    <ArrowLeft size={14} />
+                    <ArrowLeft size={14} aria-hidden="true" />
                     <span>{t.back}</span>
                   </button>
 
@@ -500,11 +515,14 @@ export function QuickActionsMenu({
       </AnimatePresence>
 
       <button
+        type="button"
+        aria-label={t.quickActions}
+        aria-expanded={isOpen}
         onClick={() => {
           setIsOpen(!isOpen);
           setCurrentView('menu');
         }}
-        className={`w-14 h-14 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full flex items-center justify-center shadow-lg hover:shadow-indigo-200 hover:shadow-2xl transition-all duration-250 cursor-pointer active:scale-95 focus:outline-none relative group`}
+        className={`w-14 h-14 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full flex items-center justify-center shadow-lg hover:shadow-indigo-200 hover:shadow-2xl transition-all duration-250 cursor-pointer active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 relative group`}
         title="Trigger Education OS Quick Scheduler Command Panel"
         id="quick-actions-fab-button"
       >

@@ -99,8 +99,9 @@ export function NavigationSidebar(props: NavigationSidebarProps = {}) {
   const itemsByGroup = (groupKey: NavigationGroupKey) => navItems.filter((item) => item.group === groupKey);
 
   return (
-    <div
+    <nav
       id="navigation_sidebar"
+      aria-label={lang === 'zh' ? '主导航' : 'Primary Navigation'}
       className={`${mainNavCollapsed ? 'w-16' : 'w-44 md:w-44'} shrink-0 bg-surface border-r border-theme text-main flex flex-col transition-all duration-300`}
     >
       {/* Collapse/Expand Toggle */}
@@ -108,13 +109,23 @@ export function NavigationSidebar(props: NavigationSidebarProps = {}) {
         className={`p-2 flex border-b border-theme-subtle ${mainNavCollapsed ? 'justify-center' : 'justify-between items-center px-3'} min-h-[48px] shrink-0`}
       >
         {!mainNavCollapsed && (
-          <span className="inline text-xs font-black tracking-widest text-muted uppercase select-none">
+          <span className="inline text-xs font-black tracking-widest text-muted uppercase">
             {lang === 'zh' ? '系统导航' : 'NAVIGATION'}
           </span>
         )}
         <button
+          type="button"
           onClick={() => setMainNavCollapsed(!mainNavCollapsed)}
-          className="p-1.5 rounded-lg hover:bg-surface-secondary text-muted hover:text-primary-theme transition-colors cursor-pointer flex items-center justify-center shrink-0"
+          className="p-1.5 rounded-lg hover:bg-surface-secondary text-muted hover:text-primary-theme transition-colors cursor-pointer flex items-center justify-center shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+          aria-label={
+            mainNavCollapsed
+              ? lang === 'zh'
+                ? '展开导航'
+                : 'Expand Sidebar'
+              : lang === 'zh'
+                ? '折叠导航'
+                : 'Collapse Sidebar'
+          }
           title={
             mainNavCollapsed
               ? lang === 'zh'
@@ -227,7 +238,7 @@ export function NavigationSidebar(props: NavigationSidebarProps = {}) {
           </div>
         );
       })()}
-    </div>
+    </nav>
   );
 }
 

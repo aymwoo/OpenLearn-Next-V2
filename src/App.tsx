@@ -39,6 +39,25 @@ export default function App() {
     lang,
   } = useAppComposer();
 
+  React.useEffect(() => {
+    if (typeof document === 'undefined') return;
+    document.documentElement.lang = lang === 'en' ? 'en' : 'zh-CN';
+    const siteName = appData.siteInfo?.siteName?.trim() || 'OpenLearn Next';
+    let section = '';
+    if (!session) {
+      section = lang === 'en' ? 'Sign In' : '登录';
+    } else if (session.mustChangePassword) {
+      section = lang === 'en' ? 'Change Default Password' : '修改默认密码';
+    } else if (isStageDisplayMode) {
+      section = lang === 'en' ? 'Stage Display' : '大屏展台';
+    } else if (activeRole === 'student') {
+      section = lang === 'en' ? 'Student Space' : '学生学习空间';
+    } else {
+      section = lang === 'en' ? 'Teacher Workbench' : '教师工作台';
+    }
+    document.title = section ? `${siteName} · ${section}` : siteName;
+  }, [lang, appData.siteInfo?.siteName, session, isStageDisplayMode, activeRole]);
+
   if (sessionLoading) {
     return (
       <AcademicYearProvider>
@@ -96,6 +115,12 @@ export default function App() {
 
           {!isStageDisplayMode && (
             <div className="flex h-screen bg-app text-main font-sans transition-colors duration-150">
+              <a
+                href="#main-content"
+                className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[100] focus:px-4 focus:py-2 focus:rounded-lg focus:bg-indigo-600 focus:text-white focus:text-sm focus:font-semibold focus:shadow-lg focus:outline-none focus:ring-2 focus:ring-white"
+              >
+                {lang === 'zh' ? '跳到主内容' : 'Skip to main content'}
+              </a>
               {/* Main Content Area: App Shell representing the Plugin Views */}
               <div className="flex-1 flex flex-col bg-app h-full overflow-hidden">
                 {/* 全局模拟学生提示条 */}
@@ -127,7 +152,13 @@ export default function App() {
                   }}
                 />
 
-                <AppShell activeRole={activeRole} />
+                <main
+                  id="main-content"
+                  tabIndex={-1}
+                  className="flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden outline-none"
+                >
+                  <AppShell activeRole={activeRole} />
+                </main>
 
                 {/* 全局底部状态栏（statusbar.item 扩展槽；无插件贡献时不渲染） */}
                 <AppStatusBar />

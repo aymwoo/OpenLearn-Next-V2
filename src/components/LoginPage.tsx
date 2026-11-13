@@ -179,7 +179,7 @@ export const LoginPage = React.memo(function LoginPage({ onLoginSuccess, lang }:
   };
 
   return (
-    <div
+    <main
       className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-4 relative overflow-hidden font-sans"
       id="login_page_container"
     >
@@ -246,26 +246,28 @@ export const LoginPage = React.memo(function LoginPage({ onLoginSuccess, lang }:
         {/* Custom Tab Switcher */}
         <div className="flex bg-slate-900 p-1 rounded-xl border border-slate-800 gap-1 mb-6">
           <button
+            type="button"
             onClick={() => setActiveTab('teacher')}
-            className={`flex-1 py-2.5 rounded-lg text-xs font-bold transition-all duration-200 flex items-center justify-center gap-2 focus:outline-none ${
+            className={`flex-1 py-2.5 rounded-lg text-xs font-bold transition-all duration-200 flex items-center justify-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 ${
               activeTab === 'teacher'
                 ? 'bg-indigo-600 text-white shadow-md'
                 : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
             }`}
           >
-            <Shield size={14} />
+            <Shield size={14} aria-hidden="true" />
             {lang === 'zh' ? '教师与管理端' : 'Teacher / Staff Portal'}
           </button>
 
           <button
+            type="button"
             onClick={() => setActiveTab('student')}
-            className={`flex-1 py-2.5 rounded-lg text-xs font-bold transition-all duration-200 flex items-center justify-center gap-2 focus:outline-none ${
+            className={`flex-1 py-2.5 rounded-lg text-xs font-bold transition-all duration-200 flex items-center justify-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 ${
               activeTab === 'student'
                 ? 'bg-indigo-600 text-white shadow-md'
                 : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
             }`}
           >
-            <Users size={14} />
+            <Users size={14} aria-hidden="true" />
             {lang === 'zh' ? '学生自助端' : 'Student Self-Service'}
           </button>
         </div>
@@ -452,6 +454,6 @@ export const LoginPage = React.memo(function LoginPage({ onLoginSuccess, lang }:
           </form>
         )}
       </div>
-    </div>
+    </main>
   );
 });

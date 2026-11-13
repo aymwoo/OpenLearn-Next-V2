@@ -261,14 +261,14 @@ describe('TeacherView', () => {
     expect(container.querySelector('.bg-gray-50')).toBeTruthy();
     // NavigationSidebar always renders its nav items regardless of tab.
     expect(screen.getByText('Live Class')).toBeTruthy();
-    // The branch root has the sidebar plus an inner content div (>= 2 children).
-    expect(container.querySelectorAll('.bg-gray-50 > div').length).toBeGreaterThanOrEqual(2);
+    // The branch root has the <nav> sidebar plus an inner content div (>= 2 children).
+    expect(container.querySelector('.bg-gray-50')?.children.length).toBeGreaterThanOrEqual(2);
   });
 
   it('renders the Dashboard child when teacherTab="dashboard"', () => {
     const { container } = renderView({ teacherTab: 'dashboard' });
-    // Dashboard renders inside the inner content div; the content area must be populated.
-    const content = container.querySelector('.bg-gray-50 > div + div');
+    // Dashboard renders inside the inner content div after <nav>; the content area must be populated.
+    const content = container.querySelector('.bg-gray-50 > nav + div');
     expect(content).toBeTruthy();
     expect(content?.children.length).toBeGreaterThan(0);
   });

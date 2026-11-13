@@ -259,7 +259,7 @@ export function LiveSubmissionsPanel({
             return (
               <table className="w-full border-collapse text-left text-xs text-main">
                 <thead>
-                  <tr className="bg-surface-secondary border-b border-theme font-bold text-muted select-none">
+                  <tr className="bg-surface-secondary border-b border-theme font-bold text-muted">
                     <th className="p-3">{lang === 'zh' ? '学生姓名' : 'Student Name'}</th>
                     <th className="p-3">{lang === 'zh' ? '交互课件' : 'Courseware'}</th>
                     <th className="p-3">{lang === 'zh' ? '状态' : 'Status'}</th>
