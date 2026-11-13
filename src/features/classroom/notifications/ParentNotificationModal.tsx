@@ -9,6 +9,7 @@ import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { X, Copy, Check, Download, Sparkles, Users, AlertTriangle, FileText, RefreshCw } from 'lucide-react';
 import { ExtensionPointRenderer } from '../../../plugin-host/extension-point-renderer';
 import { formatLocalYMD } from '../../../utils/date';
+import { copyToClipboard as copyTextToClipboard } from '../../../utils/clipboard';
 
 // ── 输入数据类型 ──────────────────────────────────────────────────────
 
@@ -143,8 +144,8 @@ export const ParentNotificationModal: React.FC<ParentNotificationModalProps> = (
       : (response?.studentNotifications.find((n) => n.studentId === selectedStudentId)?.markdown ?? '');
 
   const copyToClipboard = useCallback(async () => {
-    try {
-      await navigator.clipboard.writeText(currentMarkdown);
+    const ok = await copyTextToClipboard(currentMarkdown);
+    if (ok) {
       setCopied(true);
       addToast(
         lang === 'zh' ? '已复制到剪贴板' : 'Copied to clipboard',
@@ -152,7 +153,7 @@ export const ParentNotificationModal: React.FC<ParentNotificationModalProps> = (
         'success',
       );
       setTimeout(() => setCopied(false), 2000);
-    } catch {
+    } else {
       addToast(lang === 'zh' ? '复制失败' : 'Copy failed', '', 'error');
     }
   }, [currentMarkdown, addToast, lang]);

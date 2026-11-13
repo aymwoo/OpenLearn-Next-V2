@@ -23,6 +23,7 @@ import { RuntimeScheduler } from './scheduler.js';
 import { RuntimePermissionManager } from './permission-manager.js';
 import { RuntimeResourceManager } from './resource-manager.js';
 import { RuntimeSnapshotManager } from './snapshot-recovery.js';
+import { safeRandomUUID } from '../security/safe-uuid.js';
 import { RuntimeHooksManager } from './hooks-system.js';
 import { ClassroomSessionManager, ClassroomSessionData } from './session-manager.js';
 import { RuntimeMonitor, RuntimeDiagnostics } from './monitor.js';
@@ -44,7 +45,7 @@ export class ClassroomRuntimeKernel {
   private currentUser?: UserParticipant;
   private currentRole: RuntimeRole = 'Teacher';
 
-  constructor(id = `rt_${globalThis.crypto.randomUUID()}`) {
+  constructor(id = `rt_${safeRandomUUID()}`) {
     this.runtimeId = id;
     this.eventBus = new RuntimeEventBus();
     this.stateManager = new RuntimeStateManager(id);

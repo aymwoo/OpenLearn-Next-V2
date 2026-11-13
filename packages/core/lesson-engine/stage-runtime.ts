@@ -5,6 +5,7 @@
 
 import { Stage, StageAnalytics, StudentAction, Activity, ActivityStatus } from './types.js';
 import { EventBusPort } from '../event-bus/index.js';
+import { safeRandomUUID } from '../security/safe-uuid.js';
 
 export interface StageRuntimeOptions {
   eventBus?: EventBusPort;
@@ -53,7 +54,7 @@ export class StageRuntime {
 
     if (this.eventBus) {
       await this.eventBus.publish({
-        id: globalThis.crypto.randomUUID(),
+        id: safeRandomUUID(),
         type: 'stage.entered',
         source: 'stage.runtime',
         payload: { lessonId, flowId, stageId: stage.id, stageIndex, timestamp: Date.now() },
@@ -72,7 +73,7 @@ export class StageRuntime {
 
     if (this.eventBus) {
       await this.eventBus.publish({
-        id: globalThis.crypto.randomUUID(),
+        id: safeRandomUUID(),
         type: 'stage.finished',
         source: 'stage.runtime',
         payload: { lessonId, flowId, stageId: this.currentStage.id, analytics, timestamp: Date.now() },

@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { copyToClipboard } from '../../utils/clipboard';
 import { usePointsLedgerStore } from '../../store/pointsLedgerStore';
 import {
   Trophy,
@@ -378,7 +379,7 @@ ${
         'success',
       );
     } catch {
-      navigator.clipboard?.writeText(reportMd);
+      void copyToClipboard(reportMd);
       addToast?.(
         lang === 'zh' ? '已复制至剪贴板' : 'Copied to Clipboard',
         lang === 'zh' ? '学情报告内容已复制' : 'Report copied',

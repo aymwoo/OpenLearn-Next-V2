@@ -12,6 +12,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixes
 
+- **局域网 HTTP 访问被 Chrome 升级为 HTTPS 导致静态资源加载失败（Issue #494）**：
+  - 抽出 `server/security/host-helmet.ts`（`buildHostHelmetOptions`）并在未启用 `ENABLE_HSTS` / 生产 `FORCE_HTTPS` 时显式设置 `upgradeInsecureRequests: null`，修复 Helmet v8 默认 `useDefaults: true` 下省略该键仍下发 `upgrade-insecure-requests`、导致 Chrome 在局域网 HTTP IP 下把 `/assets/*` 强升为 `https://...` 并报 `net::ERR_SSL_PROTOCOL_ERROR` 白屏的问题；
+  - 新增 `packages/core/security/safe-uuid.ts`（`safeRandomUUID`），替换前端可触达模块（`classroom-runtime` / `lesson-engine`）对 `crypto.randomUUID()` 的裸调用（在非安全上下文的局域网 HTTP 下为 `undefined`），并将 `src/` 中 11 处裸用 `navigator.clipboard.writeText` 统一收敛到带 `execCommand` 回退的 `copyToClipboard`；
+  - 新增 `server/__tests__/lan-http-csp.test.ts` 与 `packages/core/__tests__/safe-uuid.test.ts`，并在 [docs/deployment/production-guide.md](docs/deployment/production-guide.md) 补充局域网 HTTP 与可信 HTTPS 配置说明。
 - **无障碍语义地标、焦点可见性、跨文档消息安全与可选登出站点清理（Issue #487）**：
   - 为 `App.tsx` 主应用壳、登录页及强制改密页补齐 Skip Link、`lang`/`title` 动态同步与 `<main>`/`<nav>`/`<aside>` 地标；为 `QuickActionsMenu.tsx` 菜单选项与 `RightSidebar.tsx` 折叠触发器、通知列表项等可点击 `<div>` 改用原生 `<button type="button">`；为 `RevealPresentationWrapper.tsx` 演示文稿 PDF `<iframe>` 补充 `title`；补全 `focus-visible:ring-2` 键盘焦点指示并清理表格与表单中的反效 `select-none`；
   - 加固 `lms-bridge.ts`、`PluginSandboxIframeView.tsx` 与 `plugin-host.ts` 的 `postMessage` 校验，显式拒绝 `event.source` 为 `null`/伪造来源的消息；

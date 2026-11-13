@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { copyToClipboard } from '../../utils/clipboard';
 import {
   BookOpen,
   Upload,
@@ -90,7 +91,8 @@ export function CourseManagement() {
   };
 
   const handleCopyId = (lessonId: string) => {
-    navigator.clipboard.writeText(lessonId).then(() => {
+    void copyToClipboard(lessonId).then((ok) => {
+      if (!ok) return;
       setCopiedLessonId(lessonId);
       setTimeout(() => setCopiedLessonId(null), 1500);
     });
