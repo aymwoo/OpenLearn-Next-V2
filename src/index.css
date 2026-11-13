@@ -425,3 +425,76 @@ html[data-theme] {
     animation-duration: 6s;
   }
 }
+
+/* ── Modern Forms & Accessible Validation (#489) ── */
+@layer components {
+  .field-sizing-auto {
+    field-sizing: content;
+    min-block-size: 4.5rem;
+    max-block-size: 24rem;
+    resize: vertical;
+  }
+
+  /* Only highlight invalid controls after interaction or explicit aria-invalid="true",
+     wrapping :user-invalid in :is() so unsupported selectors never drop the whole rule. */
+  :is(input, select, textarea):is(:user-invalid, .user-invalid-fallback),
+  :is(input, select, textarea)[aria-invalid='true'] {
+    border-color: #dc2626;
+  }
+
+  .table-scroll-region {
+    overflow-x: auto;
+    max-inline-size: 100%;
+    container-type: inline-size;
+  }
+
+  .table-scroll-region:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+    border-radius: 0.75rem;
+  }
+
+  .responsive-data-table th,
+  .responsive-data-table td {
+    vertical-align: middle;
+  }
+
+  @container (width < 540px) {
+    .responsive-data-table[data-stack-mobile='true'],
+    .responsive-data-table[data-stack-mobile='true'] thead,
+    .responsive-data-table[data-stack-mobile='true'] tbody,
+    .responsive-data-table[data-stack-mobile='true'] tr,
+    .responsive-data-table[data-stack-mobile='true'] th,
+    .responsive-data-table[data-stack-mobile='true'] td {
+      display: block;
+      width: 100%;
+    }
+
+    .responsive-data-table[data-stack-mobile='true'] thead {
+      display: none;
+    }
+
+    .responsive-data-table[data-stack-mobile='true'] tbody tr {
+      margin-block-end: 0.75rem;
+      border: 1px solid var(--border-theme);
+      border-radius: 0.75rem;
+      padding: 0.5rem 0.75rem;
+      background-color: var(--bg-surface);
+    }
+
+    .responsive-data-table[data-stack-mobile='true'] tbody td,
+    .responsive-data-table[data-stack-mobile='true'] tbody th[scope='row'] {
+      padding-inline: 0.25rem;
+      padding-block: 0.35rem;
+      border-bottom: 1px solid var(--border-theme-subtle);
+      text-align: start;
+    }
+
+    .responsive-data-table[data-stack-mobile='true'] tbody td[data-label]::before {
+      content: attr(data-label) ': ';
+      font-weight: 600;
+      color: var(--text-muted);
+      margin-inline-end: 0.35rem;
+    }
+  }
+}

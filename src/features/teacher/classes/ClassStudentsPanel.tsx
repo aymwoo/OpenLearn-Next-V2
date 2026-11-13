@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Users,
   LayoutGrid,
@@ -17,12 +17,13 @@ import {
   Settings2,
   Copy,
   Check,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import { ExtensionPointRenderer } from '../../../plugin-host/extension-point-renderer';
 import { useOptionalPluginHost } from '../../../plugin-host/plugin-host-context';
 import { StudentPrivateNotesEditor } from '../../../components/StudentPrivateNotesEditor';
 import { parseCSV } from '../../../utils/pluginParsers.js';
-import { isPlainEnterSubmit } from '../../../utils/keyboard';
 import type { ClassType, StudentType, StudentProgressType, Lesson } from '../../../types/app';
 
 export type RosterTagFilter = 'all' | 'Academic' | 'Behavioral' | 'General' | 'SpecialCare';
@@ -104,6 +105,8 @@ export function ClassStudentsPanel({
   const [passwordDraft, setPasswordDraft] = useState('');
   const [passwordSaving, setPasswordSaving] = useState(false);
   const [passwordError, setPasswordError] = useState('');
+  const [showStudentPwd, setShowStudentPwd] = useState(false);
+  const studentPasswordInputRef = useRef<HTMLInputElement>(null);
 
   // ── 接入双向受控 IHostActionDispatcher：响应全局或插件发起的 host:refresh ──
   useEffect(() => {
@@ -136,6 +139,7 @@ export function ClassStudentsPanel({
     const password = passwordDraft.trim();
     if (!password) {
       setPasswordError(lang === 'zh' ? '密码不能为空' : 'Password cannot be empty');
+      studentPasswordInputRef.current?.focus();
       return;
     }
     setPasswordSaving(true);
@@ -895,34 +899,73 @@ export function ClassStudentsPanel({
                                       {lang === 'zh' ? '该生个人登录密码:' : 'Personal Login Password:'}
                                     </span>
                                     {passwordEditingId === st.id ? (
-                                      <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                                        <input
-                                          type="password"
-                                          autoFocus
-                                          autoComplete="new-password"
-                                          className="border rounded text-xs p-1 bg-white focus:ring-1 focus:ring-indigo-500 font-mono w-28 text-center text-gray-750"
-                                          value={passwordDraft}
-                                          placeholder={lang === 'zh' ? '输入新密码' : 'New password'}
-                                          onChange={(e) => {
-                                            setPasswordDraft(e.target.value);
-                                            setPasswordError('');
-                                          }}
-                                          onKeyDown={(e) => {
-                                            if (isPlainEnterSubmit(e)) {
-                                              e.preventDefault();
-                                              void submitStudentPassword(st.id);
-                                            }
-                                            if (e.key === 'Escape') {
-                                              setPasswordEditingId(null);
-                                              setPasswordDraft('');
+                                      <form
+                                        noValidate
+                                        className="flex items-center gap-1"
+                                        onClick={(e) => e.stopPropagation()}
+                                        onSubmit={(e) => {
+                                          e.preventDefault();
+                                          void submitStudentPassword(st.id);
+                                        }}
+                                      >
+                                        <label htmlFor={`student-password-input-${st.id}`} className="sr-only">
+                                          {lang === 'zh'
+                                            ? `${st.name} 的新登录密码`
+                                            : `New login password for ${st.name}`}
+                                        </label>
+                                        <div className="relative flex items-center">
+                                          <input
+                                            ref={studentPasswordInputRef}
+                                            id={`student-password-input-${st.id}`}
+                                            name="newPassword"
+                                            type={showStudentPwd ? 'text' : 'password'}
+                                            autoFocus
+                                            autoComplete="new-password"
+                                            spellCheck={false}
+                                            required
+                                            aria-invalid={passwordError ? 'true' : 'false'}
+                                            aria-describedby={passwordError ? `student-pwd-err-${st.id}` : undefined}
+                                            className="border rounded text-xs py-1 pl-1.5 pr-6 bg-white focus:ring-1 focus:ring-indigo-500 font-mono w-32 text-gray-750"
+                                            value={passwordDraft}
+                                            placeholder={lang === 'zh' ? '输入新密码' : 'New password'}
+                                            onChange={(e) => {
+                                              setPasswordDraft(e.target.value);
                                               setPasswordError('');
+                                            }}
+                                            onKeyDown={(e) => {
+                                              if (e.key === 'Escape') {
+                                                setPasswordEditingId(null);
+                                                setPasswordDraft('');
+                                                setPasswordError('');
+                                                setShowStudentPwd(false);
+                                              }
+                                            }}
+                                          />
+                                          <button
+                                            type="button"
+                                            aria-pressed={showStudentPwd}
+                                            aria-label={
+                                              showStudentPwd
+                                                ? lang === 'zh'
+                                                  ? '隐藏密码'
+                                                  : 'Hide password'
+                                                : lang === 'zh'
+                                                  ? '显示密码'
+                                                  : 'Show password'
                                             }
-                                          }}
-                                        />
+                                            onClick={() => setShowStudentPwd((prev) => !prev)}
+                                            className="absolute right-1 p-0.5 text-gray-400 hover:text-gray-600 cursor-pointer"
+                                          >
+                                            {showStudentPwd ? (
+                                              <EyeOff size={12} aria-hidden="true" />
+                                            ) : (
+                                              <Eye size={12} aria-hidden="true" />
+                                            )}
+                                          </button>
+                                        </div>
                                         <button
-                                          type="button"
-                                          disabled={passwordSaving || passwordDraft.trim() === ''}
-                                          onClick={() => void submitStudentPassword(st.id)}
+                                          type="submit"
+                                          disabled={passwordSaving}
                                           className="px-1.5 py-0.5 rounded text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed text-xs font-semibold cursor-pointer"
                                         >
                                           {lang === 'zh' ? '确认' : 'Save'}
@@ -933,12 +976,13 @@ export function ClassStudentsPanel({
                                             setPasswordEditingId(null);
                                             setPasswordDraft('');
                                             setPasswordError('');
+                                            setShowStudentPwd(false);
                                           }}
                                           className="px-1.5 py-0.5 rounded border border-gray-200 text-gray-500 hover:bg-gray-50 text-xs cursor-pointer"
                                         >
                                           {lang === 'zh' ? '取消' : 'Cancel'}
                                         </button>
-                                      </div>
+                                      </form>
                                     ) : (
                                       <div className="flex items-center gap-1.5">
                                         <span className="font-mono text-gray-400 tracking-widest" aria-label="hidden">
@@ -963,7 +1007,11 @@ export function ClassStudentsPanel({
                                     )}
                                   </div>
                                   {passwordEditingId === st.id && passwordError && (
-                                    <div className="text-[10px] text-rose-600 mt-0.5" role="alert">
+                                    <div
+                                      id={`student-pwd-err-${st.id}`}
+                                      className="text-[10px] text-rose-600 mt-0.5"
+                                      role="alert"
+                                    >
                                       {passwordError}
                                     </div>
                                   )}

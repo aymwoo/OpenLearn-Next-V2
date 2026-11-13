@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { Blocks, Check, Globe, Loader2, Plus, Puzzle, Settings2, X, ShieldCheck, User } from 'lucide-react';
+import { PasswordInput } from '../../components/PasswordInput';
+import { AccessibleTableRegion } from '../../components/AccessibleTableRegion';
 
 export interface AIProvider {
   id: string;
@@ -180,16 +182,34 @@ export function AiProvidersPanel({
                 </p>
               </div>
             ) : (
-              <div className="overflow-x-auto border border-gray-100 rounded-xl">
-                <table className="w-full text-left border-collapse min-w-[700px]">
+              <AccessibleTableRegion
+                labelledBy="ai-providers-table-caption"
+                className="border border-gray-100 rounded-xl"
+              >
+                <table className="responsive-data-table w-full text-left border-collapse" data-stack-mobile="true">
+                  <caption id="ai-providers-table-caption" className="sr-only">
+                    {lang === 'zh' ? 'AI 提供商配置列表' : 'AI Providers List'}
+                  </caption>
                   <thead>
                     <tr className="bg-slate-50/70 border-b border-gray-100 text-gray-500 font-bold text-xs uppercase tracking-wider">
-                      <th className="py-3.5 px-4">{lang === 'zh' ? '名称' : 'Name'}</th>
-                      <th className="py-3.5 px-4">{lang === 'zh' ? '类型 / 范围' : 'Scope'}</th>
-                      <th className="py-3.5 px-4">{lang === 'zh' ? 'API 端点 URL' : 'API Endpoint URL'}</th>
-                      <th className="py-3.5 px-4">{lang === 'zh' ? '模型代号' : 'Model Identifier'}</th>
-                      <th className="py-3.5 px-4">{lang === 'zh' ? '密钥状态' : 'API Key'}</th>
-                      <th className="py-3.5 px-4 text-center">{lang === 'zh' ? '操作' : 'Actions'}</th>
+                      <th scope="col" className="py-3.5 px-4">
+                        {lang === 'zh' ? '名称' : 'Name'}
+                      </th>
+                      <th scope="col" className="py-3.5 px-4">
+                        {lang === 'zh' ? '类型 / 范围' : 'Scope'}
+                      </th>
+                      <th scope="col" className="py-3.5 px-4">
+                        {lang === 'zh' ? 'API 端点 URL' : 'API Endpoint URL'}
+                      </th>
+                      <th scope="col" className="py-3.5 px-4">
+                        {lang === 'zh' ? '模型代号' : 'Model Identifier'}
+                      </th>
+                      <th scope="col" className="py-3.5 px-4">
+                        {lang === 'zh' ? '密钥状态' : 'API Key'}
+                      </th>
+                      <th scope="col" className="py-3.5 px-4 text-center">
+                        {lang === 'zh' ? '操作' : 'Actions'}
+                      </th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100 text-xs text-gray-700">
@@ -203,13 +223,16 @@ export function AiProvidersPanel({
 
                       return (
                         <tr key={provider.id} className="hover:bg-slate-50/50 transition-colors">
-                          <td className="py-4 px-4">
+                          <th scope="row" data-label={lang === 'zh' ? '名称' : 'Name'} className="py-4 px-4 text-left">
                             <div className="flex items-center gap-2">
                               <div className={`w-2 h-2 rounded-full ${isShared ? 'bg-purple-500' : 'bg-indigo-500'}`} />
                               <span className="font-extrabold text-gray-800 text-sm">{provider.name}</span>
                             </div>
-                          </td>
-                          <td className="py-4 px-4 whitespace-nowrap">
+                          </th>
+                          <td
+                            data-label={lang === 'zh' ? '类型 / 范围' : 'Scope'}
+                            className="py-4 px-4 whitespace-nowrap"
+                          >
                             {isShared ? (
                               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-purple-50 text-purple-700 border border-purple-200">
                                 <ShieldCheck size={12} />
@@ -222,15 +245,18 @@ export function AiProvidersPanel({
                               </span>
                             )}
                           </td>
-                          <td className="py-4 px-4 font-mono text-gray-550 truncate max-w-[220px]">
+                          <td
+                            data-label={lang === 'zh' ? 'API 端点 URL' : 'API Endpoint URL'}
+                            className="py-4 px-4 font-mono text-gray-550 truncate max-w-[220px]"
+                          >
                             {provider.api_url}
                           </td>
-                          <td className="py-4 px-4">
+                          <td data-label={lang === 'zh' ? '模型代号' : 'Model Identifier'} className="py-4 px-4">
                             <span className="bg-slate-100 text-slate-800 font-bold px-2 py-1 rounded font-mono text-xs border border-slate-200">
                               {provider.model_name}
                             </span>
                           </td>
-                          <td className="py-4 px-4">
+                          <td data-label={lang === 'zh' ? '密钥状态' : 'API Key'} className="py-4 px-4">
                             {provider.api_key ? (
                               <span className="text-emerald-600 font-bold flex items-center gap-1 font-mono">
                                 <Check size={12} /> Key Saved
@@ -239,7 +265,7 @@ export function AiProvidersPanel({
                               <span className="text-amber-500/90 font-mono italic">Not Set</span>
                             )}
                           </td>
-                          <td className="py-4 px-4 text-center">
+                          <td data-label={lang === 'zh' ? '操作' : 'Actions'} className="py-4 px-4 text-center">
                             <div className="flex items-center justify-center gap-2">
                               <button
                                 onClick={() => handleTestProvider(provider)}
@@ -296,7 +322,7 @@ export function AiProvidersPanel({
                     })}
                   </tbody>
                 </table>
-              </div>
+              </AccessibleTableRegion>
             )}
           </div>
         </div>
@@ -329,10 +355,15 @@ export function AiProvidersPanel({
 
             <form onSubmit={handleSaveProvider} className="p-5 space-y-4 text-left">
               <div>
-                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5 text-left">
+                <label
+                  htmlFor="ai-provider-name"
+                  className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5 text-left"
+                >
                   {lang === 'zh' ? '服务商名称 *' : 'Provider Name *'}
                 </label>
                 <input
+                  id="ai-provider-name"
+                  name="provider_name"
                   type="text"
                   required
                   placeholder="e.g. Deepseek, Minimax"
@@ -342,12 +373,19 @@ export function AiProvidersPanel({
                 />
               </div>
               <div>
-                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5 text-left">
+                <label
+                  htmlFor="ai-provider-url"
+                  className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5 text-left"
+                >
                   {lang === 'zh' ? 'API 端点 URL *' : 'API Endpoint URL *'}
                 </label>
                 <input
+                  id="ai-provider-url"
+                  name="provider_api_url"
                   type="url"
                   required
+                  spellCheck={false}
+                  autoCapitalize="none"
                   placeholder="https://api.deepseek.com/v1"
                   value={providerApiUrl}
                   onChange={(e) => setProviderApiUrl(e.target.value)}
@@ -360,30 +398,37 @@ export function AiProvidersPanel({
                 </span>
               </div>
               <div>
-                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5 text-left">
+                <label
+                  htmlFor="ai-provider-model"
+                  className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5 text-left"
+                >
                   {lang === 'zh' ? '模型代号 *' : 'Model Identifier *'}
                 </label>
                 <input
+                  id="ai-provider-model"
+                  name="provider_model_name"
                   type="text"
                   required
+                  spellCheck={false}
+                  autoCapitalize="none"
                   placeholder="e.g. deepseek-chat"
                   value={providerModelName}
                   onChange={(e) => setProviderModelName(e.target.value)}
                   className="w-full text-xs sm:text-sm bg-gray-50 hover:bg-gray-100/50 focus:bg-white border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all font-mono"
                 />
               </div>
-              <div>
-                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5 text-left">
-                  {lang === 'zh' ? 'API Key (可选)' : 'API Key (Optional)'}
-                </label>
-                <input
-                  type="password"
-                  placeholder={lang === 'zh' ? '不修改请留空' : 'Leave empty to keep existing'}
-                  value={providerApiKey}
-                  onChange={(e) => setProviderApiKey(e.target.value)}
-                  className="w-full text-xs sm:text-sm bg-gray-50 hover:bg-gray-100/50 focus:bg-white border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all font-mono"
-                />
-              </div>
+              <PasswordInput
+                id="ai-provider-key"
+                name="provider_api_key"
+                label={lang === 'zh' ? 'API Key (可选)' : 'API Key (Optional)'}
+                labelClassName="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5 text-left"
+                placeholder={lang === 'zh' ? '不修改请留空' : 'Leave empty to keep existing'}
+                value={providerApiKey}
+                onChange={setProviderApiKey}
+                autoComplete="off"
+                lang={lang}
+                className="w-full text-xs sm:text-sm bg-gray-50 hover:bg-gray-100/50 focus:bg-white border border-gray-200 rounded-lg px-3 py-2 pr-10 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all font-mono"
+              />
 
               {currentUserRole === 'administrator' && (
                 <div className="pt-2 border-t border-gray-100">

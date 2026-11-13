@@ -13,6 +13,7 @@ import {
   CheckCircle2,
 } from 'lucide-react';
 import type { ClassType, StudentType, Lesson } from '../../../types/app';
+import { AccessibleTableRegion } from '../../../components/AccessibleTableRegion';
 
 export interface ClassAssignmentsPanelProps {
   cls: ClassType;
@@ -491,18 +492,31 @@ export function ClassAssignmentsPanel(props: ClassAssignmentsPanelProps) {
           {/* Heatmap */}
           {classDashboardMap[cls.id].assignments.length > 0 && cStudents.length > 0 && (
             <div>
-              <div className="text-xs font-medium text-gray-500 mb-1 uppercase tracking-wider">
+              <div
+                id={`heatmap-caption-${cls.id}`}
+                className="text-xs font-medium text-gray-500 mb-1 uppercase tracking-wider"
+              >
                 Class Performance Heatmap
               </div>
-              <div className="overflow-x-auto border border-gray-200 rounded">
-                <table className="w-full text-xs text-left bg-white">
+              <AccessibleTableRegion
+                labelledBy={`heatmap-caption-${cls.id}`}
+                className="border border-gray-200 rounded"
+              >
+                <table className="responsive-data-table w-full text-xs text-left bg-white">
+                  <caption className="sr-only">
+                    {lang === 'zh' ? '班级作业表现热力表' : 'Class Performance Heatmap'}
+                  </caption>
                   <thead className="bg-gray-50 sticky top-0">
                     <tr>
-                      <th className="p-2 border-b border-r border-gray-200 font-medium whitespace-nowrap text-gray-600">
+                      <th
+                        scope="col"
+                        className="p-2 border-b border-r border-gray-200 font-medium whitespace-nowrap text-gray-600"
+                      >
                         Student
                       </th>
                       {classDashboardMap[cls.id].assignments.map((a: any) => (
                         <th
+                          scope="col"
                           key={a.id}
                           className="p-2 border-b border-r border-gray-200 font-medium truncate max-w-[80px]"
                           title={a.title}
@@ -515,7 +529,10 @@ export function ClassAssignmentsPanel(props: ClassAssignmentsPanelProps) {
                   <tbody>
                     {cStudents.map((st) => (
                       <tr key={st.id} className="border-b border-gray-100 last:border-b-0">
-                        <td className="p-2 border-r border-gray-100 font-medium text-gray-700 whitespace-nowrap truncate max-w-[160px]">
+                        <th
+                          scope="row"
+                          className="p-2 border-r border-gray-100 font-medium text-gray-700 whitespace-nowrap truncate max-w-[160px] text-left"
+                        >
                           <div className="flex items-center gap-1.5">
                             <span className="truncate" title={st.name}>
                               {st.name}
@@ -540,7 +557,7 @@ export function ClassAssignmentsPanel(props: ClassAssignmentsPanelProps) {
                               return null;
                             })()}
                           </div>
-                        </td>
+                        </th>
                         {classDashboardMap[cls.id].assignments.map((a: any) => {
                           const perf = classDashboardMap[cls.id].performance.find(
                             (p: any) => p.assignment_id === a.id && p.student_id === st.id,
@@ -614,7 +631,7 @@ export function ClassAssignmentsPanel(props: ClassAssignmentsPanelProps) {
                     ))}
                   </tbody>
                 </table>
-              </div>
+              </AccessibleTableRegion>
             </div>
           )}
         </div>

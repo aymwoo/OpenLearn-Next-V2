@@ -8,6 +8,7 @@ import { ArrowLeft, Download, Loader2, RefreshCw } from 'lucide-react';
 import { assessmentApi, ApiError, type AssessmentAssignment, type AssessmentStats } from './api';
 import { ExtensionPointRenderer } from '../../plugin-host/extension-point-renderer';
 import { toAssessmentStatsCardProps } from './extension-slot-props';
+import { AccessibleTableRegion } from '../../components/AccessibleTableRegion';
 
 export function StatsPanel({
   assignment,
@@ -116,45 +117,51 @@ export function StatsPanel({
               />
             </div>
 
-            <table data-testid="stats-table" className="w-full text-xs border border-theme rounded-xl overflow-hidden">
-              <caption className="sr-only">{zh ? '逐题统计' : 'Per-item statistics'}</caption>
-              <thead className="bg-surface-secondary text-muted">
-                <tr>
-                  <th scope="col" className="text-left px-3 py-2 font-semibold">
-                    #
-                  </th>
-                  <th scope="col" className="text-left px-3 py-2 font-semibold">
-                    {zh ? '题干' : 'Stem'}
-                  </th>
-                  <th scope="col" className="text-right px-3 py-2 font-semibold">
-                    {zh ? '作答' : 'Answered'}
-                  </th>
-                  <th scope="col" className="text-right px-3 py-2 font-semibold">
-                    {zh ? '正确率' : 'Correct rate'}
-                  </th>
-                  <th scope="col" className="text-right px-3 py-2 font-semibold">
-                    {zh ? '均分' : 'Avg score'}
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {stats.items.map((item, index) => (
-                  <tr key={item.itemId} className="border-t border-theme">
-                    <td className="px-3 py-2 text-muted">{index + 1}</td>
-                    <td className="px-3 py-2 text-main max-w-[320px] truncate" title={item.stem}>
-                      {item.stem}
-                    </td>
-                    <td className="px-3 py-2 text-right text-main">{item.answered}</td>
-                    <td className="px-3 py-2 text-right text-main">
-                      {item.correctRate === null ? '—' : `${item.correctRate}%`}
-                    </td>
-                    <td className="px-3 py-2 text-right text-main">
-                      {item.avgScore === null ? '—' : `${item.avgScore}/${item.maxScore}`}
-                    </td>
+            <AccessibleTableRegion labelledBy="stats-table-caption" className="border border-theme rounded-xl">
+              <table data-testid="stats-table" className="responsive-data-table w-full text-xs overflow-hidden">
+                <caption id="stats-table-caption" className="sr-only">
+                  {zh ? '逐题统计' : 'Per-item statistics'}
+                </caption>
+                <thead className="bg-surface-secondary text-muted">
+                  <tr>
+                    <th scope="col" className="text-left px-3 py-2 font-semibold">
+                      #
+                    </th>
+                    <th scope="col" className="text-left px-3 py-2 font-semibold">
+                      {zh ? '题干' : 'Stem'}
+                    </th>
+                    <th scope="col" className="text-right px-3 py-2 font-semibold">
+                      {zh ? '作答' : 'Answered'}
+                    </th>
+                    <th scope="col" className="text-right px-3 py-2 font-semibold">
+                      {zh ? '正确率' : 'Correct rate'}
+                    </th>
+                    <th scope="col" className="text-right px-3 py-2 font-semibold">
+                      {zh ? '均分' : 'Avg score'}
+                    </th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {stats.items.map((item, index) => (
+                    <tr key={item.itemId} className="border-t border-theme">
+                      <th scope="row" className="px-3 py-2 text-muted font-normal text-left">
+                        {index + 1}
+                      </th>
+                      <td className="px-3 py-2 text-main max-w-[320px] truncate" title={item.stem}>
+                        {item.stem}
+                      </td>
+                      <td className="px-3 py-2 text-right text-main">{item.answered}</td>
+                      <td className="px-3 py-2 text-right text-main">
+                        {item.correctRate === null ? '—' : `${item.correctRate}%`}
+                      </td>
+                      <td className="px-3 py-2 text-right text-main">
+                        {item.avgScore === null ? '—' : `${item.avgScore}/${item.maxScore}`}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </AccessibleTableRegion>
             <p className="text-2xs text-muted">
               {zh
                 ? '待人工批改的题不计入正确率与均分；匿名问卷的导出不含身份信息。'

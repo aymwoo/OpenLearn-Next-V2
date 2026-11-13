@@ -12,6 +12,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixes
 
+- **表单语义校验/可见性切换与全站响应式可访问表格底座（Issue #489）**：
+  - 新增 `src/components/PasswordInput.tsx`（关联 `<label htmlFor>`、输入框上方持久化规则提示、显示/隐藏密码 `aria-pressed` 切换、仅在报错时通过 `aria-describedby` 绑定内联错误）与 `src/components/AccessibleTableRegion.tsx`（`tabIndex={0}`、`role="region"`、`aria-labelledby` 键盘可聚焦横向滚动容器），并在 `src/index.css` 中接入 `.table-scroll-region`、`.responsive-data-table[data-stack-mobile="true"]` `@container` 窄屏卡片化、`.field-sizing-auto` 与 `:user-invalid` / `[aria-invalid="true"]` 样式；
+  - 重构 `ForcedPasswordChangeGate`、`ProfileModal`、`AdminPanel` 教工表单、`AiProvidersPanel` 与 `ClassStudentsPanel` 密码编辑表单使用 `<form noValidate>` 提交校验与首错自动聚焦，并将 `CourseWizardModal`、`AssignmentSubmitDialog`、`QuestionBankPanel`、`AssessmentEditor` 等叙事文本框升级为 `field-sizing-auto`；
+  - 为 `StatsPanel`、`CoursewareHubPanel`、`ClassAssignmentsPanel`、`ImportLessonsModal`、`ExportWeightModal`、`AiProvidersPanel`、`QuizFullscreenView`、`PostClassWrapupView`、`LiveSubmissionsPanel`、`ClassroomBriefingView`、`SemesterGradeManager`、`AdminPanel`、`TimetableCalendarView` 与 `TimetableOcrView` 共 15 处表格补全 `<caption>`（或 `aria-labelledby`）、`<th scope="col|row">` 与键盘可聚焦滚动区域。
+
 - **无障碍语义地标、焦点可见性、跨文档消息安全与可选登出站点清理（Issue #487）**：
   - 为 `App.tsx` 主应用壳、登录页及强制改密页补齐 Skip Link、`lang`/`title` 动态同步与 `<main>`/`<nav>`/`<aside>` 地标；为 `QuickActionsMenu.tsx` 菜单选项与 `RightSidebar.tsx` 折叠触发器、通知列表项等可点击 `<div>` 改用原生 `<button type="button">`；为 `RevealPresentationWrapper.tsx` 演示文稿 PDF `<iframe>` 补充 `title`；补全 `focus-visible:ring-2` 键盘焦点指示并清理表格与表单中的反效 `select-none`；
   - 加固 `lms-bridge.ts`、`PluginSandboxIframeView.tsx` 与 `plugin-host.ts` 的 `postMessage` 校验，显式拒绝 `event.source` 为 `null`/伪造来源的消息；

@@ -16,6 +16,7 @@ import {
   TrendingUp,
   AwardIcon,
 } from 'lucide-react';
+import { AccessibleTableRegion } from './AccessibleTableRegion';
 
 interface Student {
   id: string;
@@ -520,39 +521,92 @@ export function SemesterGradeManager({ classId, className, students, lang }: Sem
 
             {/* Main reports table */}
             <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-2xs bg-white">
-              <div className="max-w-full overflow-x-auto">
-                <table className="w-full text-left border-collapse table-auto text-xs">
+              <AccessibleTableRegion labelledBy="semester-reports-table-caption">
+                <table
+                  className="responsive-data-table w-full text-left border-collapse table-auto text-xs"
+                  data-stack-mobile="true"
+                >
+                  <caption id="semester-reports-table-caption" className="sr-only">
+                    {lang === 'zh' ? '学期总评成绩单' : 'Semester Grade Reports'}
+                  </caption>
                   <thead>
                     <tr className="bg-slate-50 border-b border-slate-200 text-gray-500 font-bold text-xs uppercase tracking-wide">
-                      <th className="p-3 w-[70px]">{lang === 'zh' ? '学号' : 'ID'}</th>
-                      <th className="p-3 w-[90px]">{lang === 'zh' ? '姓名' : 'Name'}</th>
-                      <th className="p-3 text-center w-[75px]">{lang === 'zh' ? '考勤分' : 'Attn'}</th>
-                      <th className="p-3 text-center w-[75px]">{lang === 'zh' ? '进度分' : 'Prog'}</th>
-                      <th className="p-3 text-center w-[75px]">{lang === 'zh' ? '作业分' : 'Assgn'}</th>
-                      <th className="p-3 text-center w-[75px]">{lang === 'zh' ? '测验分' : 'Exam'}</th>
-                      <th className="p-3 text-center w-[80px]">{lang === 'zh' ? '总评得分' : 'Total'}</th>
-                      <th className="p-3 text-center w-[60px]">{lang === 'zh' ? '等级' : 'Grade'}</th>
-                      <th className="p-3">
+                      <th scope="col" className="p-3 w-[70px]">
+                        {lang === 'zh' ? '学号' : 'ID'}
+                      </th>
+                      <th scope="col" className="p-3 w-[90px]">
+                        {lang === 'zh' ? '姓名' : 'Name'}
+                      </th>
+                      <th scope="col" className="p-3 text-center w-[75px]">
+                        {lang === 'zh' ? '考勤分' : 'Attn'}
+                      </th>
+                      <th scope="col" className="p-3 text-center w-[75px]">
+                        {lang === 'zh' ? '进度分' : 'Prog'}
+                      </th>
+                      <th scope="col" className="p-3 text-center w-[75px]">
+                        {lang === 'zh' ? '作业分' : 'Assgn'}
+                      </th>
+                      <th scope="col" className="p-3 text-center w-[75px]">
+                        {lang === 'zh' ? '测验分' : 'Exam'}
+                      </th>
+                      <th scope="col" className="p-3 text-center w-[80px]">
+                        {lang === 'zh' ? '总评得分' : 'Total'}
+                      </th>
+                      <th scope="col" className="p-3 text-center w-[60px]">
+                        {lang === 'zh' ? '等级' : 'Grade'}
+                      </th>
+                      <th scope="col" className="p-3">
                         {lang === 'zh' ? '手写评语 / AI 温馨期末评语' : 'Teacher & AI Evaluation Comments'}
                       </th>
-                      <th className="p-3 text-center w-[100px]">{lang === 'zh' ? 'AI 评价' : 'AI Bot'}</th>
+                      <th scope="col" className="p-3 text-center w-[100px]">
+                        {lang === 'zh' ? 'AI 评价' : 'AI Bot'}
+                      </th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {gradeReports.map((report) => (
                       <tr key={report.studentId} className="hover:bg-slate-50/40 transition-colors">
-                        <td className="p-3 font-mono text-slate-400 text-xs">{report.studentNumber || '-'}</td>
-                        <td className="p-3 font-bold text-slate-800">{report.studentName}</td>
-                        <td className="p-3 text-center font-medium text-slate-600">{report.attendanceScore}分</td>
-                        <td className="p-3 text-center font-medium text-slate-600">
+                        <td data-label={lang === 'zh' ? '学号' : 'ID'} className="p-3 font-mono text-slate-400 text-xs">
+                          {report.studentNumber || '-'}
+                        </td>
+                        <th
+                          scope="row"
+                          data-label={lang === 'zh' ? '姓名' : 'Name'}
+                          className="p-3 font-bold text-slate-800 text-left"
+                        >
+                          {report.studentName}
+                        </th>
+                        <td
+                          data-label={lang === 'zh' ? '考勤分' : 'Attn'}
+                          className="p-3 text-center font-medium text-slate-600"
+                        >
+                          {report.attendanceScore}分
+                        </td>
+                        <td
+                          data-label={lang === 'zh' ? '进度分' : 'Prog'}
+                          className="p-3 text-center font-medium text-slate-600"
+                        >
                           {report.progressScore == null ? '—' : `${report.progressScore}分`}
                         </td>
-                        <td className="p-3 text-center font-medium text-slate-600">{report.assignmentScore}分</td>
-                        <td className="p-3 text-center font-medium text-slate-600">{report.examScore}分</td>
-                        <td className="p-3 text-center font-extrabold text-indigo-700 bg-indigo-50/20">
+                        <td
+                          data-label={lang === 'zh' ? '作业分' : 'Assgn'}
+                          className="p-3 text-center font-medium text-slate-600"
+                        >
+                          {report.assignmentScore}分
+                        </td>
+                        <td
+                          data-label={lang === 'zh' ? '测验分' : 'Exam'}
+                          className="p-3 text-center font-medium text-slate-600"
+                        >
+                          {report.examScore}分
+                        </td>
+                        <td
+                          data-label={lang === 'zh' ? '总评得分' : 'Total'}
+                          className="p-3 text-center font-extrabold text-indigo-700 bg-indigo-50/20"
+                        >
                           {report.totalScore}分
                         </td>
-                        <td className="p-3 text-center">
+                        <td data-label={lang === 'zh' ? '等级' : 'Grade'} className="p-3 text-center">
                           <span
                             className={`inline-block w-6 h-6 leading-6 text-center rounded-lg font-black text-xs ${
                               report.gradeLevel === 'A'
@@ -569,9 +623,13 @@ export function SemesterGradeManager({ classId, className, students, lang }: Sem
                             {report.gradeLevel}
                           </span>
                         </td>
-                        <td className="p-3 space-y-2 text-left">
+                        <td
+                          data-label={lang === 'zh' ? '手写评语 / AI 温馨期末评语' : 'Teacher & AI Evaluation Comments'}
+                          className="p-3 space-y-2 text-left"
+                        >
                           <input
                             type="text"
+                            aria-label={`${report.studentName} ${lang === 'zh' ? '教师评语' : 'Teacher comment'}`}
                             value={report.teacherEvaluation}
                             onChange={(e) => handleTeacherCommentChange(report.studentId, e.target.value)}
                             placeholder={
@@ -589,7 +647,7 @@ export function SemesterGradeManager({ classId, className, students, lang }: Sem
                             </div>
                           )}
                         </td>
-                        <td className="p-3 text-center">
+                        <td data-label={lang === 'zh' ? 'AI 评价' : 'AI Bot'} className="p-3 text-center">
                           <button
                             onClick={() => handleGenerateAIComment(report.studentId)}
                             disabled={aiLoading[report.studentId]}
@@ -614,7 +672,7 @@ export function SemesterGradeManager({ classId, className, students, lang }: Sem
                     )}
                   </tbody>
                 </table>
-              </div>
+              </AccessibleTableRegion>
             </div>
 
             {/* Bottom Actions */}
@@ -659,14 +717,31 @@ export function SemesterGradeManager({ classId, className, students, lang }: Sem
                   </button>
                 </div>
 
-                <div className="max-h-96 overflow-y-auto mb-4 border border-slate-250/60 rounded-xl bg-white">
-                  <table className="w-full text-left border-collapse table-auto text-xs">
+                <AccessibleTableRegion
+                  labelledBy="semester-exam-scores-caption"
+                  className="max-h-96 overflow-y-auto mb-4 border border-slate-250/60 rounded-xl bg-white"
+                >
+                  <table
+                    className="responsive-data-table w-full text-left border-collapse table-auto text-xs"
+                    data-stack-mobile="true"
+                  >
+                    <caption id="semester-exam-scores-caption" className="sr-only">
+                      {lang === 'zh' ? '测验成绩录入明细表' : 'Exam Score Entry Table'}
+                    </caption>
                     <thead>
                       <tr className="bg-slate-50 border-b border-slate-200 text-gray-500 font-semibold text-xs uppercase tracking-wide">
-                        <th className="p-3">{lang === 'zh' ? '学号' : 'Student ID'}</th>
-                        <th className="p-3">{lang === 'zh' ? '姓名' : 'Student Name'}</th>
-                        <th className="p-3 text-center w-[120px]">{lang === 'zh' ? '考试得分' : 'Score'}</th>
-                        <th className="p-3">{lang === 'zh' ? '得分批注 / 备注' : 'Notes'}</th>
+                        <th scope="col" className="p-3">
+                          {lang === 'zh' ? '学号' : 'Student ID'}
+                        </th>
+                        <th scope="col" className="p-3">
+                          {lang === 'zh' ? '姓名' : 'Student Name'}
+                        </th>
+                        <th scope="col" className="p-3 text-center w-[120px]">
+                          {lang === 'zh' ? '考试得分' : 'Score'}
+                        </th>
+                        <th scope="col" className="p-3">
+                          {lang === 'zh' ? '得分批注 / 备注' : 'Notes'}
+                        </th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
@@ -674,12 +749,24 @@ export function SemesterGradeManager({ classId, className, students, lang }: Sem
                         const studentScore = examStudentScores[s.id] || { score: '', notes: '' };
                         return (
                           <tr key={s.id} className="hover:bg-slate-50/20">
-                            <td className="p-3 font-mono text-xs text-slate-400">{s.student_number || '-'}</td>
-                            <td className="p-3 font-bold text-slate-800">{s.name}</td>
-                            <td className="p-3 text-center">
+                            <td
+                              data-label={lang === 'zh' ? '学号' : 'Student ID'}
+                              className="p-3 font-mono text-xs text-slate-400"
+                            >
+                              {s.student_number || '-'}
+                            </td>
+                            <th
+                              scope="row"
+                              data-label={lang === 'zh' ? '姓名' : 'Student Name'}
+                              className="p-3 font-bold text-slate-800 text-left"
+                            >
+                              {s.name}
+                            </th>
+                            <td data-label={lang === 'zh' ? '考试得分' : 'Score'} className="p-3 text-center">
                               <div className="inline-flex items-center gap-1.5 justify-center">
                                 <input
                                   type="number"
+                                  aria-label={`${s.name} ${lang === 'zh' ? '考试得分' : 'Score'}`}
                                   min={0}
                                   max={activeScoreExam.max_score}
                                   value={studentScore.score}
@@ -695,9 +782,10 @@ export function SemesterGradeManager({ classId, className, students, lang }: Sem
                                 <span className="text-xs text-slate-400">/ {activeScoreExam.max_score}</span>
                               </div>
                             </td>
-                            <td className="p-3">
+                            <td data-label={lang === 'zh' ? '得分批注 / 备注' : 'Notes'} className="p-3">
                               <input
                                 type="text"
+                                aria-label={`${s.name} ${lang === 'zh' ? '备注' : 'Notes'}`}
                                 value={studentScore.notes}
                                 onChange={(e) => {
                                   const val = e.target.value;
@@ -719,7 +807,7 @@ export function SemesterGradeManager({ classId, className, students, lang }: Sem
                       })}
                     </tbody>
                   </table>
-                </div>
+                </AccessibleTableRegion>
 
                 <div className="flex justify-end gap-2">
                   <button

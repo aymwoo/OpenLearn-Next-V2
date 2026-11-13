@@ -1,11 +1,15 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
 import { ProfileModal } from '../ProfileModal';
 import type { SessionType } from '../../types/app';
 
 describe('ProfileModal AI Provider Isolation & Settings UI', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+  });
+
+  afterEach(() => {
+    cleanup();
   });
 
   const teacherSession: SessionType = {
@@ -92,5 +96,36 @@ describe('ProfileModal AI Provider Isolation & Settings UI', () => {
     expect((editButtons[0] as HTMLButtonElement).disabled).toBe(true);
     // Second provider is owned by teacher_1 -> enabled
     expect((editButtons[1] as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it('validates display name and change-password fields inline with accessible focus and toggles', () => {
+    render(<ProfileModal open={true} session={studentSession} lang="zh" onClose={vi.fn()} onSaved={vi.fn()} />);
+
+    const displayNameInput = document.getElementById('profile-display-name') as HTMLInputElement;
+    expect(displayNameInput.getAttribute('autocomplete')).toBe('name');
+    expect(displayNameInput.getAttribute('aria-invalid')).toBe('false');
+
+    fireEvent.change(displayNameInput, { target: { value: '   ' } });
+    fireEvent.click(screen.getByRole('button', { name: '保存' }));
+    expect(displayNameInput.getAttribute('aria-invalid')).toBe('true');
+    expect(document.activeElement).toBe(displayNameInput);
+    expect(screen.getByText('显示名称不能为空')).toBeTruthy();
+
+    // Open change-password form
+    fireEvent.click(screen.getByRole('button', { name: '修改' }));
+    const oldPwd = document.getElementById('profile-old-password') as HTMLInputElement;
+    const newPwd = document.getElementById('profile-new-password') as HTMLInputElement;
+    const confirmPwd = document.getElementById('profile-confirm-password') as HTMLInputElement;
+
+    expect(newPwd.getAttribute('aria-describedby')).toBe('profile-new-password-hint');
+
+    fireEvent.change(oldPwd, { target: { value: 'OldPass123' } });
+    fireEvent.change(newPwd, { target: { value: 'NewPass123' } });
+    fireEvent.change(confirmPwd, { target: { value: 'Mismatch123' } });
+    fireEvent.click(screen.getByRole('button', { name: '提交' }));
+
+    expect(confirmPwd.getAttribute('aria-invalid')).toBe('true');
+    expect(confirmPwd.getAttribute('aria-describedby')).toBe('profile-confirm-password-error');
+    expect(document.activeElement).toBe(confirmPwd);
   });
 });

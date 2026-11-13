@@ -27,6 +27,8 @@ import {
 import { AiProvidersPanel, type AIProvider } from '../features/admin/AiProvidersPanel';
 import { DemoDataPanel } from '../features/admin/DemoDataPanel';
 import { ExtensionPointRenderer } from '../plugin-host/extension-point-renderer';
+import { PasswordInput } from './PasswordInput';
+import { AccessibleTableRegion } from './AccessibleTableRegion';
 
 export type { AIProvider };
 
@@ -858,14 +860,26 @@ export function AdminPanel({
                       : 'Failed to retrieve connection parameters.'}
                   </div>
                 ) : (
-                  <div className="overflow-x-auto border border-gray-100 rounded-xl">
-                    <table className="w-full text-left border-collapse min-w-[500px]">
+                  <AccessibleTableRegion
+                    labelledBy="admin-sqlite-stats-caption"
+                    className="border border-gray-100 rounded-xl"
+                  >
+                    <table className="responsive-data-table w-full text-left border-collapse" data-stack-mobile="true">
+                      <caption id="admin-sqlite-stats-caption" className="sr-only">
+                        {lang === 'zh' ? 'SQLite 数据表行数统计' : 'SQLite Table Row Statistics'}
+                      </caption>
                       <thead>
                         <tr className="bg-slate-50/70 border-b border-gray-100 text-gray-500 font-bold text-xs uppercase tracking-wider font-sans">
-                          <th className="py-3 px-4">{lang === 'zh' ? '实体数据表名' : 'Table Name'}</th>
-                          <th className="py-3 px-4">{lang === 'zh' ? '当前承载行数' : 'Active Rows'}</th>
-                          <th className="py-3 px-4">{lang === 'zh' ? '行数比例分布' : 'Distribution Scale'}</th>
-                          <th className="py-3 px-4 font-mono select-none">
+                          <th scope="col" className="py-3 px-4">
+                            {lang === 'zh' ? '实体数据表名' : 'Table Name'}
+                          </th>
+                          <th scope="col" className="py-3 px-4">
+                            {lang === 'zh' ? '当前承载行数' : 'Active Rows'}
+                          </th>
+                          <th scope="col" className="py-3 px-4">
+                            {lang === 'zh' ? '行数比例分布' : 'Distribution Scale'}
+                          </th>
+                          <th scope="col" className="py-3 px-4 font-mono select-none">
                             {lang === 'zh' ? '系统属性类型' : 'Metadata Type'}
                           </th>
                         </tr>
@@ -886,21 +900,31 @@ export function AdminPanel({
 
                           return (
                             <tr key={tbl.name} className="hover:bg-slate-50/40 transition-colors">
-                              <td className="py-3 px-4 text-left">
+                              <th
+                                scope="row"
+                                data-label={lang === 'zh' ? '实体数据表名' : 'Table Name'}
+                                className="py-3 px-4 text-left font-normal"
+                              >
                                 <div className="flex items-center gap-2 justify-start">
                                   <span className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
                                   <span className="font-extrabold text-slate-800 font-mono text-sm">{tbl.name}</span>
                                 </div>
                                 <span className="text-xs text-gray-400 block mt-0.5">{desc}</span>
-                              </td>
-                              <td className="py-3 px-4 font-mono font-bold text-gray-750 text-left">
+                              </th>
+                              <td
+                                data-label={lang === 'zh' ? '当前承载行数' : 'Active Rows'}
+                                className="py-3 px-4 font-mono font-bold text-gray-750 text-left"
+                              >
                                 {tbl.rows >= 0 ? (
                                   tbl.rows.toLocaleString()
                                 ) : (
                                   <span className="text-rose-500 italic font-normal">error</span>
                                 )}
                               </td>
-                              <td className="py-3 px-4 min-w-[150px]">
+                              <td
+                                data-label={lang === 'zh' ? '行数比例分布' : 'Distribution Scale'}
+                                className="py-3 px-4 min-w-[150px]"
+                              >
                                 <div className="flex items-center gap-2">
                                   <div className="w-24 bg-gray-100 rounded-full h-1.5 overflow-hidden border border-gray-200/50 shrink-0">
                                     <div
@@ -913,7 +937,10 @@ export function AdminPanel({
                                   </span>
                                 </div>
                               </td>
-                              <td className="py-3 px-4 text-left">
+                              <td
+                                data-label={lang === 'zh' ? '系统属性类型' : 'Metadata Type'}
+                                className="py-3 px-4 text-left"
+                              >
                                 <span className="bg-slate-100 text-slate-700 font-bold border border-slate-200 text-xs font-mono px-2 py-0.5 rounded uppercase">
                                   {tbl.name === 'vfs_nodes' || tbl.name === 'whiteboard_strokes'
                                     ? 'BLOB_JSON'
@@ -925,7 +952,7 @@ export function AdminPanel({
                         })}
                       </tbody>
                     </table>
-                  </div>
+                  </AccessibleTableRegion>
                 )}
               </div>
             </div>
@@ -1658,69 +1685,99 @@ export function AdminPanel({
               </button>
             </div>
 
-            <form onSubmit={handleUserSubmit}>
+            <form noValidate onSubmit={handleUserSubmit}>
               <div className="p-5 space-y-4">
                 {formError && (
-                  <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 text-xs rounded-xl flex items-center gap-1.5 animate-pulse">
-                    <AlertTriangle size={15} className="shrink-0" />
+                  <div
+                    role="alert"
+                    className="p-3 bg-rose-50 border border-rose-200 text-rose-800 text-xs rounded-xl flex items-center gap-1.5 animate-pulse"
+                  >
+                    <AlertTriangle size={15} className="shrink-0" aria-hidden="true" />
                     <span>{formError}</span>
                   </div>
                 )}
 
                 <div className="space-y-1">
-                  <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide">
+                  <label
+                    htmlFor="admin-staff-name"
+                    className="block text-xs font-bold text-gray-500 uppercase tracking-wide"
+                  >
                     {lang === 'zh' ? '教工姓名 (展示给学生及白板上) *' : 'Staff Real Name (Shown on roster/boards) *'}
                   </label>
                   <input
+                    id="admin-staff-name"
+                    name="name"
                     type="text"
+                    autoComplete="name"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     placeholder={lang === 'zh' ? '例如：李茂峰老师、Mrs. Higgins' : 'e.g. Dr. Higgins, Teacher Chen'}
-                    className="w-full text-xs p-2.5 border border-gray-200 focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 rounded-xl"
+                    className="w-full text-xs pl-2.5 pr-10 py-2.5 border border-gray-200 focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 rounded-xl"
                     required
+                    aria-invalid={formError && !name.trim() ? 'true' : 'false'}
                   />
                 </div>
 
                 <div className="space-y-1">
-                  <label className="block text-xs font-bold text-gray-550 uppercase tracking-wide">
+                  <label
+                    htmlFor="admin-staff-username"
+                    className="block text-xs font-bold text-gray-550 uppercase tracking-wide"
+                  >
                     {lang === 'zh' ? '登录用户名 (唯一标识) *' : 'Access Username (Unique Identifier) *'}
                   </label>
                   <input
+                    id="admin-staff-username"
+                    name="username"
                     type="text"
+                    autoComplete="username"
+                    spellCheck={false}
+                    autoCapitalize="none"
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
                     placeholder={lang === 'zh' ? '输入登录用的拼音或简写' : 'e.g. jclark12'}
-                    className="w-full text-xs p-2.5 border border-gray-200 focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 rounded-xl"
+                    className="w-full text-xs pl-2.5 pr-10 py-2.5 border border-gray-200 focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 rounded-xl"
                     required
+                    aria-invalid={formError && !username.trim() ? 'true' : 'false'}
                   />
                 </div>
 
-                <div className="space-y-1">
-                  <label className="block text-xs font-bold text-gray-555 uppercase tracking-wide">
-                    {lang === 'zh' ? '密码 *' : 'Password *'}
-                  </label>
-                  <input
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder={
-                      editingUserId
-                        ? lang === 'zh'
-                          ? '留空表示不修改密码'
-                          : 'Leave empty to keep existing'
-                        : lang === 'zh'
-                          ? '指定初次登录密码'
-                          : 'Set initial sign in password'
-                    }
-                    className="w-full text-xs p-2.5 border border-gray-200 focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 rounded-xl"
-                    required={!editingUserId}
-                  />
-                </div>
+                <PasswordInput
+                  id="admin-staff-password"
+                  name="password"
+                  label={lang === 'zh' ? '密码 *' : 'Password *'}
+                  hint={
+                    editingUserId
+                      ? lang === 'zh'
+                        ? '留空表示保留原密码'
+                        : 'Leave empty to keep existing password'
+                      : lang === 'zh'
+                        ? '建议至少 8 位，包含字母与数字'
+                        : 'Recommended: at least 8 chars with letters and numbers'
+                  }
+                  value={password}
+                  onChange={setPassword}
+                  autoComplete="new-password"
+                  required={!editingUserId}
+                  lang={lang}
+                  error={formError && !editingUserId && !password ? formError : null}
+                  placeholder={
+                    editingUserId
+                      ? lang === 'zh'
+                        ? '留空表示不修改密码'
+                        : 'Leave empty to keep existing'
+                      : lang === 'zh'
+                        ? '指定初次登录密码'
+                        : 'Set initial sign in password'
+                  }
+                  wrapperClassName="space-y-1"
+                  labelClassName="block text-xs font-bold text-gray-555 uppercase tracking-wide"
+                  className="w-full text-xs pl-2.5 pr-10 py-2.5 border border-gray-200 focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 rounded-xl"
+                />
 
-                <div className="space-y-1">
-                  <label className="block text-xs font-bold text-gray-550 uppercase tracking-wide">
+                <fieldset className="space-y-1">
+                  <legend className="block text-xs font-bold text-gray-550 uppercase tracking-wide">
                     {lang === 'zh' ? '系统角色 (决定设置编辑权限) *' : 'Assign System Role (Determines access level) *'}
-                  </label>
+                  </legend>
                   <div className="flex gap-4 mt-2">
                     <label className="flex items-center gap-1.5 text-xs text-gray-700 cursor-pointer select-none">
                       <input
@@ -1744,12 +1801,12 @@ export function AdminPanel({
                       <span>{lang === 'zh' ? '管理员 (可调整设置)' : 'administrator (Full access)'}</span>
                     </label>
                   </div>
-                </div>
+                </fieldset>
 
-                <div className="space-y-1 pt-2">
-                  <label className="block text-xs font-bold text-gray-550 uppercase tracking-wide">
+                <fieldset className="space-y-1 pt-2">
+                  <legend className="block text-xs font-bold text-gray-550 uppercase tracking-wide">
                     {lang === 'zh' ? '账户状态 (是否允许登录系统) *' : 'Account Status (Active State) *'}
-                  </label>
+                  </legend>
                   <div className="flex gap-4 mt-2">
                     <label className="flex items-center gap-1.5 text-xs text-gray-700 cursor-pointer select-none">
                       <input
@@ -1775,7 +1832,7 @@ export function AdminPanel({
                       </span>
                     </label>
                   </div>
-                </div>
+                </fieldset>
               </div>
 
               <div className="p-4 border-t border-gray-100 bg-gray-50 flex items-center justify-end gap-2 shrink-0">

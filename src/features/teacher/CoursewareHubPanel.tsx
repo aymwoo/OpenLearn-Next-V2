@@ -12,6 +12,7 @@ import {
   RefreshCw,
   FileText,
 } from 'lucide-react';
+import { AccessibleTableRegion } from '../../components/AccessibleTableRegion';
 
 const MANIFEST_ID = '@courseware-hub/plugin';
 const CT = (cmd: string) => `${MANIFEST_ID}.${cmd}`;
@@ -270,34 +271,60 @@ export function CoursewareHubPanel({ onClose, lang }: Props) {
                   {scores.length === 0 ? (
                     <p className="text-sm text-gray-400 italic">{t('暂无成绩记录', 'No scores yet')}</p>
                   ) : (
-                    <div className="overflow-x-auto border border-gray-200 rounded-xl">
-                      <table className="w-full text-sm">
+                    <AccessibleTableRegion
+                      labelledBy="courseware-hub-scores-heading"
+                      className="border border-gray-200 rounded-xl"
+                    >
+                      <table className="responsive-data-table w-full text-sm" data-stack-mobile="true">
+                        <caption id="courseware-hub-scores-heading" className="sr-only">
+                          {t('成绩列表', 'Score List')}
+                        </caption>
                         <thead className="bg-gray-50 text-gray-500 text-xs uppercase">
                           <tr>
-                            <th className="px-4 py-2 text-left">{t('学生', 'Student')}</th>
-                            <th className="px-4 py-2 text-right">{t('分数', 'Score')}</th>
-                            <th className="px-4 py-2 text-right">{t('用时(秒)', 'Time(s)')}</th>
-                            <th className="px-4 py-2 text-right">{t('提交时间', 'Submitted')}</th>
+                            <th scope="col" className="px-4 py-2 text-left">
+                              {t('学生', 'Student')}
+                            </th>
+                            <th scope="col" className="px-4 py-2 text-right">
+                              {t('分数', 'Score')}
+                            </th>
+                            <th scope="col" className="px-4 py-2 text-right">
+                              {t('用时(秒)', 'Time(s)')}
+                            </th>
+                            <th scope="col" className="px-4 py-2 text-right">
+                              {t('提交时间', 'Submitted')}
+                            </th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
                           {scores.map((s) => (
                             <tr key={s.id} className="hover:bg-gray-50">
-                              <td className="px-4 py-2 font-medium text-gray-700">{s.student_name || s.student_id}</td>
+                              <th
+                                scope="row"
+                                data-label={t('学生', 'Student')}
+                                className="px-4 py-2 font-medium text-gray-700 text-left"
+                              >
+                                {s.student_name || s.student_id}
+                              </th>
                               <td
+                                data-label={t('分数', 'Score')}
                                 className={`px-4 py-2 text-right font-mono font-bold ${s.score >= (detail?.pass_score ?? 60) ? 'text-green-600' : 'text-red-500'}`}
                               >
                                 {s.score}/{s.total}
                               </td>
-                              <td className="px-4 py-2 text-right text-gray-500">{s.time_spent}</td>
-                              <td className="px-4 py-2 text-right text-gray-400 text-xs">
+                              <td data-label={t('用时(秒)', 'Time(s)')} className="px-4 py-2 text-right text-gray-500">
+                                {s.time_spent}
+                              </td>
+                              <td
+                                data-label={t('提交时间', 'Submitted')}
+                                className="px-4 py-2 text-right text-gray-400 text-xs"
+                              >
                                 {new Date(s.submitted_at).toLocaleString()}
                               </td>
                             </tr>
                           ))}
                         </tbody>
                       </table>
-                    </div>
+                    </AccessibleTableRegion>
                   )}
                 </div>
               </div>

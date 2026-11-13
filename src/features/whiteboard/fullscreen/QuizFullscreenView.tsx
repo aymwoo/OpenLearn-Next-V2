@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import type { FullscreenRendererProps } from './FullscreenRendererRegistry';
 import { listFromEnvelope } from '../../../utils/listEnvelope.js';
+import { AccessibleTableRegion } from '../../../components/AccessibleTableRegion';
 import {
   gradeQuizSubmission,
   resolveCorrectIndex,
@@ -314,14 +315,29 @@ export const QuizFullscreenView: React.FC<FullscreenRendererProps> = ({ data, le
               </div>
             </div>
 
-            <div className="overflow-x-auto border border-gray-200 rounded-xl">
-              <table className="w-full text-sm" data-testid="quiz-submissions-table">
+            <AccessibleTableRegion labelledBy="quiz-submissions-caption" className="border border-gray-200 rounded-xl">
+              <table
+                className="responsive-data-table w-full text-sm"
+                data-testid="quiz-submissions-table"
+                data-stack-mobile="true"
+              >
+                <caption id="quiz-submissions-caption" className="sr-only">
+                  测验提交成绩明细
+                </caption>
                 <thead className="bg-gray-50 text-gray-500 text-xs uppercase">
                   <tr>
-                    <th className="px-4 py-2 text-left">学生</th>
-                    <th className="px-4 py-2 text-left">答案</th>
-                    <th className="px-4 py-2 text-right">得分</th>
-                    <th className="px-4 py-2 text-right">提交时间</th>
+                    <th scope="col" className="px-4 py-2 text-left">
+                      学生
+                    </th>
+                    <th scope="col" className="px-4 py-2 text-left">
+                      答案
+                    </th>
+                    <th scope="col" className="px-4 py-2 text-right">
+                      得分
+                    </th>
+                    <th scope="col" className="px-4 py-2 text-right">
+                      提交时间
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
@@ -334,21 +350,25 @@ export const QuizFullscreenView: React.FC<FullscreenRendererProps> = ({ data, le
                     const studentName = studentMap[sid] || sid;
                     return (
                       <tr key={sid} className="hover:bg-gray-50" data-testid={`quiz-row-${sid}`}>
-                        <td className="px-4 py-2 font-medium text-gray-700">{studentName}</td>
+                        <th scope="row" data-label="学生" className="px-4 py-2 font-medium text-gray-700 text-left">
+                          {studentName}
+                        </th>
                         <td
+                          data-label="答案"
                           className={`px-4 py-2 font-mono ${isCorrect ? 'text-green-600 font-bold' : 'text-red-500'}`}
                         >
                           {answerLetter}
                           {isCorrect ? ' ✓' : ''}
                         </td>
                         <td
+                          data-label="得分"
                           className={`px-4 py-2 text-right font-mono font-bold ${
                             displayScore >= passScore ? 'text-green-600' : 'text-gray-600'
                           }`}
                         >
                           {displayScore}
                         </td>
-                        <td className="px-4 py-2 text-right text-gray-500 text-xs">
+                        <td data-label="提交时间" className="px-4 py-2 text-right text-gray-500 text-xs">
                           {formatTime(v.time ?? v.timestamp)}
                         </td>
                       </tr>
@@ -356,7 +376,7 @@ export const QuizFullscreenView: React.FC<FullscreenRendererProps> = ({ data, le
                   })}
                 </tbody>
               </table>
-            </div>
+            </AccessibleTableRegion>
           </div>
         ))}
     </div>
