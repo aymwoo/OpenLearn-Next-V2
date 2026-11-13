@@ -12,6 +12,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixes
 
+- **新建课程向导默认阶段名称中文本地化（Issue #493）**：
+  - 将 `src/hooks/useCourseWizard.ts` 初始及重置时间轴抽出为 `getDefaultWizardTimeline(lang, idPrefix)`，中文模式下默认 4 阶段统一显示纯中文名称（`课堂导入`、`核心精讲`、`互动演练`、`课堂总结`）及中文备注，不再出现 `'Course Orientation / 课堂导入'` 等中英混杂文案；
+  - 同步本地化 `src/features/modals/CourseWizardModal.tsx` 中的 3 套预设时间轴模板（经典 5-15-15-5 讲授模式、主题讨论工作坊模式、翻转课堂高强度训练），根据 `lang` 分别输出纯中文或纯英文阶段标题与备注。
 - **无障碍语义地标、焦点可见性、跨文档消息安全与可选登出站点清理（Issue #487）**：
   - 为 `App.tsx` 主应用壳、登录页及强制改密页补齐 Skip Link、`lang`/`title` 动态同步与 `<main>`/`<nav>`/`<aside>` 地标；为 `QuickActionsMenu.tsx` 菜单选项与 `RightSidebar.tsx` 折叠触发器、通知列表项等可点击 `<div>` 改用原生 `<button type="button">`；为 `RevealPresentationWrapper.tsx` 演示文稿 PDF `<iframe>` 补充 `title`；补全 `focus-visible:ring-2` 键盘焦点指示并清理表格与表单中的反效 `select-none`；
   - 加固 `lms-bridge.ts`、`PluginSandboxIframeView.tsx` 与 `plugin-host.ts` 的 `postMessage` 校验，显式拒绝 `event.source` 为 `null`/伪造来源的消息；
