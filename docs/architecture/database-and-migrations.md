@@ -58,7 +58,7 @@ OpenLearn V2 采用 SQLite 作为嵌入式持久化存储，结合 WAL 模式提
 
 ## 3. 当前标准迁移序列
 
-`migrations/` 现有 **`000`–`043` 共 44 个 `.sql` 脚本**（按文件名数字序升序执行）。完整清单以 **`migrations/README.md` 的迁移表**为权威（随每个迁移同步更新）；结构真源是 **`migrations/schema-golden.json`**（82 张表的表 → 列快照）。
+`migrations/` 现有 **`000`–`047` 共 48 个 `.sql` 脚本**（按文件名数字序升序执行）。完整清单以 **`migrations/README.md` 的迁移表**为权威（随每个迁移同步更新）；结构真源是 **`migrations/schema-golden.json`**（85 张表的表 → 列快照）。
 
 早期序列（`000`–`014`）摘要：
 
