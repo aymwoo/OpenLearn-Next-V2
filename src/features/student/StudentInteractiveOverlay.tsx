@@ -515,6 +515,7 @@ export function StudentInteractiveOverlay({
           <button
             type="button"
             disabled={interactionLocked}
+            aria-pressed={currentPacingSignal === 'CLEAR'}
             onClick={() => sendPacingSignal('CLEAR')}
             className={`px-2.5 py-1.5 rounded-xl font-bold text-xs transition-all flex items-center gap-1 cursor-pointer ${
               currentPacingSignal === 'CLEAR'
@@ -531,6 +532,7 @@ export function StudentInteractiveOverlay({
           <button
             type="button"
             disabled={interactionLocked}
+            aria-pressed={currentPacingSignal === 'CONFUSED'}
             onClick={() => sendPacingSignal('CONFUSED')}
             className={`px-2.5 py-1.5 rounded-xl font-bold text-xs transition-all flex items-center gap-1 cursor-pointer ${
               currentPacingSignal === 'CONFUSED'
@@ -547,6 +549,7 @@ export function StudentInteractiveOverlay({
           <button
             type="button"
             disabled={interactionLocked}
+            aria-pressed={currentPacingSignal === 'TOO_FAST'}
             onClick={() => sendPacingSignal('TOO_FAST')}
             className={`px-2.5 py-1.5 rounded-xl font-bold text-xs transition-all flex items-center gap-1 cursor-pointer ${
               currentPacingSignal === 'TOO_FAST'
@@ -563,6 +566,7 @@ export function StudentInteractiveOverlay({
           <button
             type="button"
             disabled={interactionLocked}
+            aria-pressed={currentPacingSignal === 'SLOW'}
             onClick={() => sendPacingSignal('SLOW')}
             className={`px-2.5 py-1.5 rounded-xl font-bold text-xs transition-all flex items-center gap-1 cursor-pointer ${
               currentPacingSignal === 'SLOW'
