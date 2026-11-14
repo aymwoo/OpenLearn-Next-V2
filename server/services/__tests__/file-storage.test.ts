@@ -6,6 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { Readable } from 'node:stream';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { PlatformEvent } from '../../../packages/core/event-bus/index.js';
 import { kernelContainer } from '../../../packages/core/kernel/index.js';
 import { FileStorageExtensionRegistry } from '../../../packages/core/di/file-storage-extension-registry.js';
 import type { FileStorageBackend } from '../../../packages/core/di/interfaces.js';
@@ -22,7 +23,7 @@ import {
   validateLayoutTemplate,
 } from '../file-storage/index.js';
 
-const db = () => kernelContainer.db as any;
+const db = () => kernelContainer.db;
 
 async function drainStream(stream: NodeJS.ReadableStream): Promise<Buffer> {
   const chunks: Buffer[] = [];
@@ -299,11 +300,11 @@ describe('FileStorage 架构核心单元测试', () => {
 
   describe('FileStorageService（去重、引用计数、别名、软删清除与 reorg 重整）', () => {
     it('按 SHA-256 同后端去重、skipDedup 独立落盘、仅归零时物理删除并支持旧路径别名', async () => {
-      const publishedEvents: Array<{ type: string; payload: any }> = [];
+      const publishedEvents: PlatformEvent[] = [];
       const svc = new FileStorageService(db(), {
         localRootDir: path.join(tmpRoot, 'files'),
         eventBus: {
-          publish: async (ev: any) => {
+          publish: async (ev: PlatformEvent) => {
             publishedEvents.push(ev);
           },
         },
@@ -319,7 +320,12 @@ describe('FileStorage 架构核心单元测试', () => {
       });
       createdAssetIds.push(first.assetId);
       expect(first.deduplicated).toBe(false);
-      expect(publishedEvents.some((e) => e.type === 'file.stored' && e.payload.assetId === first.assetId)).toBe(true);
+      expect(
+        publishedEvents.some((e) => {
+          if (e.type !== 'file.stored' || !e.payload || typeof e.payload !== 'object') return false;
+          return (e.payload as { assetId?: string }).assetId === first.assetId;
+        }),
+      ).toBe(true);
 
       const second = await svc.store({
         buffer: payload,

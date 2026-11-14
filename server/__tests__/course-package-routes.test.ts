@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import express from 'express';
 import { createServer, type Server } from 'http';
 import type { AddressInfo } from 'net';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { registerCoursePackageRoutes } from '../routes/course-packages.js';
@@ -57,6 +58,21 @@ async function purgeTestRows() {
 
 const cookie = (token: string) => ({ Cookie: 'edu_os_token=' + token });
 
+/** 目录不存在视为空：统一存储在第一次写入前不会创建 `uploads/`。 */
+function listFilesUnder(dir: string): string[] {
+  if (!fs.existsSync(dir)) return [];
+  const out: string[] = [];
+  const walk = (current: string) => {
+    for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
+      const full = path.join(current, entry.name);
+      if (entry.isDirectory()) walk(full);
+      else if (entry.isFile()) out.push(full);
+    }
+  };
+  walk(dir);
+  return out;
+}
+
 describe('course package routes', () => {
   beforeAll(async () => {
     const now = Date.now();
@@ -76,7 +92,7 @@ describe('course package routes', () => {
     app = express();
     app.use(express.json({ limit: '64mb' }));
     registerCoursePackageRoutes({ app } as any);
-    registerFilesRoutes({ app } as any);
+    registerFilesRoutes({ app });
 
     server = createServer(app);
     await new Promise<void>((resolve) => server.listen(0, resolve));
@@ -505,20 +521,24 @@ describe('course package routes', () => {
     const template = await buildTemplateCoursePackage();
     template.lesson.title = '【CPKG-TEST】孤儿清理';
 
-    // 第一个附件合法（会真的落盘），第二个附件内容与声明类型不符 → 抛错
+    // 第一个附件合法（会真的落盘），第二个附件内容与声明类型不符 → 抛错。
+    // 追加唯一字节，避免与同 worker 里其它课程包用例的模板 PDF 发生哈希去重，
+    // 从而把「引用计数少减一次」误判成没有新文件。
+    const stamp = `orphan-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
     const good = template.assets[0];
+    const uniqueGood = Buffer.concat([Buffer.from(good.base64, 'base64'), Buffer.from(`\n% ${stamp}\n`)]);
+    const goodName = `${stamp}-ok.pdf`;
+    const badName = `${stamp}-broken.pdf`;
     template.assets = [
-      { id: 'good-asset', filename: 'ok.pdf', contentType: 'pdf', base64: good.base64 },
+      { id: 'good-asset', filename: goodName, contentType: 'pdf', base64: uniqueGood.toString('base64') },
       {
         id: 'bad-asset',
-        filename: 'broken.pdf',
+        filename: badName,
         contentType: 'pdf',
         base64: Buffer.from('this is definitely not a pdf').toString('base64'),
       },
     ];
-
-    const uploadsDir = getUploadsDir();
-    const before = new Set(fs.readdirSync(uploadsDir));
+    const goodSha = crypto.createHash('sha256').update(uniqueGood).digest('hex');
 
     const res = await fetch(baseUrl + '/api/course-packages/import', {
       method: 'POST',
@@ -527,11 +547,19 @@ describe('course package routes', () => {
     });
     expect(res.ok).toBe(false);
 
-    // 关键断言：第一个附件已经写盘，但它不能在失败后被遗弃在 uploads 目录里
-    const leaked = fs.readdirSync(uploadsDir).filter((name) => !before.has(name));
+    // 附件现在写入 <data>/files（不再预创建 uploads/）。失败补偿必须删掉物理 blob 与资产行。
+    const storageRoots = [getFileStorageService().localBackend.rootDir, getUploadsDir()];
+    const leaked = storageRoots.flatMap((root) => listFilesUnder(root).filter((file) => file.includes(stamp)));
     expect(leaked, `孤儿附件未被清理: ${leaked.join(', ')}`).toEqual([]);
 
-    // 数据库侧同样不留痕迹
+    const leftoverAssets = db
+      .prepare('SELECT id, original_name FROM file_assets WHERE original_name IN (?, ?)')
+      .all(goodName, badName);
+    expect(leftoverAssets).toEqual([]);
+    const leftoverBlobs = db.prepare('SELECT id, ref_count, storage_key FROM file_blobs WHERE sha256 = ?').all(goodSha);
+    expect(leftoverBlobs).toEqual([]);
+
+    // 数据库侧同样不留课程痕迹
     const lesson = db.prepare("SELECT id FROM lessons WHERE title = '【CPKG-TEST】孤儿清理'").get();
     expect(lesson).toBeUndefined();
   });

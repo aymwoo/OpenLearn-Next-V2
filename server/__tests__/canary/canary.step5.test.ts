@@ -9,6 +9,7 @@ import Database from 'better-sqlite3';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
+import { FileStorageExtensionRegistry } from '../../../packages/core/di/file-storage-extension-registry.js';
 import { ServiceRegistry } from '../../../packages/core/di/service-registry.js';
 import { NodeEsmLoader } from '../../../packages/core/esm-loader/node-loader.js';
 import { PluginHost } from '../../../packages/core/plugin-host/index.js';
@@ -206,7 +207,7 @@ describe('金丝雀第 5 步：生命周期彻底回收断言（9.1 ~ 9.6）', (
     registry.register(IActivityRegistryToken, simpleMock('activity-reg') as any);
     registry.register(IAuthSessionBridgeToken, simpleMock('auth-bridge') as any);
     registry.register(IPluginHostToken, simpleMock('plugin-host') as any);
-    registry.register(IFileStorageExtensionRegistryToken, simpleMock('file-storage-ext') as any);
+    registry.register(IFileStorageExtensionRegistryToken, new FileStorageExtensionRegistry());
 
     bootstrapSharedModules();
 
