@@ -44,6 +44,7 @@ architecture/resource-runtime
 architecture/assignment
 architecture/assessment-model
 architecture/plugin-worker-isolation-l1-proposal
+architecture/file-storage-extension-design
 ```
 
 ```{toctree}

@@ -51,6 +51,9 @@ export const FORBIDDEN_CORE_TABLES = Object.freeze([
   'lianyun_research_groups',
   'lianyun_research_submissions',
   'lianyun_research_reviews',
+  'file_blobs',
+  'file_assets',
+  'file_aliases',
 ]);
 
 const FORBIDDEN_CORE_TABLES_SET = new Set(FORBIDDEN_CORE_TABLES.map((t) => t.toLowerCase()));

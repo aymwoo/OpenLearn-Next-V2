@@ -1,6 +1,4 @@
 import path from 'path';
-import fs from 'fs';
-import { execFile } from 'child_process';
 import crypto from 'crypto';
 import { filterXSS } from 'xss';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
@@ -11,7 +9,7 @@ import { createActivityContext } from '../../packages/activity-ecosystem/index.j
 import { validateMagicBytes, BLOCKED_EXTENSIONS } from './shared.js';
 import { listAIPersonas } from '../ai-persona-registry.js';
 import { sendSafeError } from '../utils/error-handler.js';
-import { getUploadsDir } from '../utils/paths.js';
+import { getFileStorageService } from '../services/file-storage/index.js';
 import { resolveAccessibleAiProvider } from '../services/ai-provider-resolver.js';
 import type { ServerContext, StoredAIProvider, AgentChatAttachment, AgentChatRequest } from '../context.js';
 
@@ -26,7 +24,7 @@ export function registerOsRoutes(ctx: ServerContext) {
 
   app.post('/api/upload', requireAuth('teacher', 'administrator'), async (req, res) => {
     try {
-      const { filename, base64Data } = req.body;
+      const { filename, base64Data, context } = req.body;
       if (!filename || !base64Data) {
         return res.status(400).json({ error: 'Filename and base64Data are required' });
       }
@@ -61,44 +59,51 @@ export function registerOsRoutes(ctx: ServerContext) {
         return res.status(400).json({ error: 'File content does not match the declared file type.' });
       }
 
-      const uploadsDir = getUploadsDir();
-      if (!fs.existsSync(uploadsDir)) {
-        fs.mkdirSync(uploadsDir, { recursive: true });
-      }
+      const session = (req as any).session as { userId?: string } | undefined;
+      const allowedPurposes = new Set(['lesson-asset', 'courseware', 'attachment']);
+      const requestedPurpose =
+        context &&
+        typeof context === 'object' &&
+        typeof context.purpose === 'string' &&
+        allowedPurposes.has(context.purpose)
+          ? context.purpose
+          : 'lesson-asset';
+      const courseId =
+        context && typeof context === 'object' && typeof context.courseId === 'string' && context.courseId.trim()
+          ? context.courseId.trim()
+          : null;
+      const lessonId =
+        context && typeof context === 'object' && typeof context.lessonId === 'string' && context.lessonId.trim()
+          ? context.lessonId.trim()
+          : null;
 
-      const uniqueName = `${Date.now()}-${crypto.randomBytes(4).toString('hex')}${ext}`;
-      const filePath = path.join(uploadsDir, uniqueName);
+      const mime =
+        ext === '.pdf'
+          ? 'application/pdf'
+          : 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
 
-      fs.writeFileSync(filePath, fileBuffer);
+      const stored = await getFileStorageService().store({
+        buffer: fileBuffer,
+        originalName: filename,
+        mime,
+        context: {
+          purpose: requestedPurpose,
+          accessScope: 'authenticated',
+          authorId: session?.userId ?? null,
+          courseId,
+          lessonId,
+        },
+      });
 
-      let slideCount = 1;
-      if (ext === '.pdf') {
-        try {
-          await new Promise<void>((resolve) => {
-            execFile('pdfinfo', [filePath], (error, stdout) => {
-              if (error) {
-                console.error('Error running pdfinfo:', error);
-                return resolve();
-              }
-              const lines = stdout.split('\n');
-              const pagesLine = lines.find((line) => line.startsWith('Pages:'));
-              if (pagesLine) {
-                const match = pagesLine.match(/Pages:\s+(\d+)/);
-                if (match) {
-                  slideCount = parseInt(match[1], 10);
-                }
-              }
-              resolve();
-            });
-          });
-        } catch (pdfErr) {
-          console.error('Failed to parse PDF pages:', pdfErr);
-        }
-      }
+      const slideCount =
+        ext === '.pdf' && typeof stored.metadata?.slideCount === 'number' && stored.metadata.slideCount > 0
+          ? stored.metadata.slideCount
+          : 1;
 
       res.json({
         success: true,
-        fileUrl: `/uploads/${uniqueName}`,
+        assetId: stored.assetId,
+        fileUrl: stored.fileUrl,
         fileName: filename,
         fileType: ext.substring(1),
         slideCount,

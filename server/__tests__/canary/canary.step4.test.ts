@@ -54,6 +54,7 @@ import {
   IInteractionRuntimeServiceToken,
   IAuthSessionBridgeToken,
   IPluginHostToken,
+  IFileStorageExtensionRegistryToken,
 } from '../../../packages/core/di/interfaces.js';
 import { IActivityRegistryToken } from '../../../packages/activity-ecosystem/index.js';
 import { buildPoisonZip } from './canary.builder';
@@ -189,6 +190,7 @@ function createServices(registry: ServiceRegistry, db: Database.Database): void 
   registry.register(IActivityRegistryToken, simpleMock('activity-reg') as any);
   registry.register(IAuthSessionBridgeToken, simpleMock('auth-bridge') as any);
   registry.register(IPluginHostToken, simpleMock('plugin-host') as any);
+  registry.register(IFileStorageExtensionRegistryToken, simpleMock('file-storage-ext') as any);
 }
 
 describe('金丝雀第 4 步：毒丸变体拒绝矩阵（POISON_MATRIX）', () => {

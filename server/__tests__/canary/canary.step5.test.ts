@@ -49,6 +49,7 @@ import {
   IInteractionRuntimeServiceToken,
   IAuthSessionBridgeToken,
   IPluginHostToken,
+  IFileStorageExtensionRegistryToken,
 } from '../../../packages/core/di/interfaces.js';
 import { IActivityRegistryToken } from '../../../packages/activity-ecosystem/index.js';
 import { buildCanaryZip } from './canary.builder';
@@ -205,6 +206,7 @@ describe('金丝雀第 5 步：生命周期彻底回收断言（9.1 ~ 9.6）', (
     registry.register(IActivityRegistryToken, simpleMock('activity-reg') as any);
     registry.register(IAuthSessionBridgeToken, simpleMock('auth-bridge') as any);
     registry.register(IPluginHostToken, simpleMock('plugin-host') as any);
+    registry.register(IFileStorageExtensionRegistryToken, simpleMock('file-storage-ext') as any);
 
     bootstrapSharedModules();
 

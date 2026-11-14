@@ -5,6 +5,8 @@ import type { AddressInfo } from 'net';
 import fs from 'node:fs';
 import path from 'node:path';
 import { registerCoursePackageRoutes } from '../routes/course-packages.js';
+import { registerFilesRoutes } from '../routes/files.js';
+import { getFileStorageService } from '../services/file-storage/index.js';
 import { runStartupMigrations } from '../bootstrap-db.js';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
 import { buildTemplateCoursePackage, COURSE_PACKAGE_FORMAT } from '../services/course-package.js';
@@ -20,40 +22,37 @@ let baseUrl = '';
 
 /** 本次运行导入成功的课程 id（afterAll 里统一清掉）。 */
 const importedLessonIds: string[] = [];
-/** 本次运行落盘的附件文件名（afterAll 里统一删掉）。 */
-const createdAssetFiles: string[] = [];
+/** 本次运行落盘的统一文件资产 ID（afterAll 里统一删掉）。 */
+const createdAssetIds: string[] = [];
 
-/**
- * 删除本文件写入的全部痕迹。
- *
- * 必须显式删 whiteboard_elements：lessons 表上没有级联外键，删课程不会带走白板元素。
- * 漏删的 quiz 元素会被同 worker 内后跑的 legacy-assessment-import.test.ts
- * 当成「存量白板 quiz」统计进去（该测试断言 created.assessments === 2）。
- */
 /** 记录一次成功导入产生的课程与附件，供 afterAll 清理。 */
 function recordImport(body: any) {
   if (body?.result?.lessonId) importedLessonIds.push(body.result.lessonId as string);
   for (const asset of body?.result?.assetFiles ?? []) {
-    if (typeof asset.fileUrl === 'string') createdAssetFiles.push(path.basename(asset.fileUrl));
+    if (typeof asset.assetId === 'string') {
+      createdAssetIds.push(asset.assetId);
+    } else if (typeof asset.fileUrl === 'string' && asset.fileUrl.startsWith('/api/files/')) {
+      createdAssetIds.push(path.basename(asset.fileUrl));
+    }
   }
 }
 
-function purgeTestRows() {
+async function purgeTestRows() {
   for (const id of importedLessonIds) {
     db.prepare('DELETE FROM whiteboard_elements WHERE lesson_id = ?').run(id);
   }
   db.prepare('DELETE FROM whiteboard_elements WHERE lesson_id NOT IN (SELECT id FROM lessons)').run();
   db.prepare("DELETE FROM lessons WHERE title LIKE '【CPKG-TEST】%'").run();
   importedLessonIds.length = 0;
-  for (const name of createdAssetFiles) {
+  const fileStorage = getFileStorageService();
+  for (const assetId of createdAssetIds) {
     try {
-      const target = path.join(getUploadsDir(), name);
-      if (fs.existsSync(target)) fs.unlinkSync(target);
+      await fileStorage.purgeAsset(assetId);
     } catch (err) {
       console.warn('[course-package test] 清理测试附件失败:', (err as Error).message);
     }
   }
-  createdAssetFiles.length = 0;
+  createdAssetIds.length = 0;
 }
 
 const cookie = (token: string) => ({ Cookie: 'edu_os_token=' + token });
@@ -77,6 +76,7 @@ describe('course package routes', () => {
     app = express();
     app.use(express.json({ limit: '64mb' }));
     registerCoursePackageRoutes({ app } as any);
+    registerFilesRoutes({ app } as any);
 
     server = createServer(app);
     await new Promise<void>((resolve) => server.listen(0, resolve));
@@ -86,13 +86,13 @@ describe('course package routes', () => {
 
   afterAll(async () => {
     if (server) await new Promise<void>((resolve) => server.close(() => resolve()));
-    purgeTestRows();
+    await purgeTestRows();
     db.prepare('DELETE FROM client_sessions WHERE id = ?').run(teacherToken);
     db.prepare('DELETE FROM users WHERE id = ?').run(teacherId);
   });
 
-  beforeEach(() => {
-    purgeTestRows();
+  beforeEach(async () => {
+    await purgeTestRows();
   });
 
   it('requires authentication for the template download', async () => {
@@ -141,18 +141,18 @@ describe('course package routes', () => {
       .all(lessonId) as any[];
     expect(elements).toHaveLength(template.elements.length);
 
-    // 附件占位符必须被解析成真实的 /uploads 路径，且文件确实落盘了
+    // 附件占位符必须被解析成真实的 /api/files/:assetId 路径，且文件确实落盘可读
     const uploads = db
       .prepare("SELECT data FROM whiteboard_elements WHERE lesson_id = ? AND type = 'presentation'")
       .all(lessonId) as any[];
     const fileUrls = uploads
       .map((row) => JSON.parse(row.data).fileUrl)
-      .filter((url: string) => typeof url === 'string' && url.startsWith('/uploads/'));
+      .filter((url: string) => typeof url === 'string' && url.startsWith('/api/files/'));
     expect(fileUrls.length).toBe(2);
     for (const url of fileUrls) {
-      const filePath = path.join(getUploadsDir(), path.basename(url));
-      expect(fs.existsSync(filePath), 'asset was not written: ' + url).toBe(true);
-      expect(fs.statSync(filePath).size).toBeGreaterThan(0);
+      const fetchRes = await fetch(baseUrl + url, { headers: cookie(teacherToken) });
+      expect(fetchRes.status, 'asset was not served: ' + url).toBe(200);
+      expect((await fetchRes.arrayBuffer()).byteLength).toBeGreaterThan(0);
     }
   });
 
@@ -182,8 +182,9 @@ describe('course package routes', () => {
     expect(fileUrls.length).toBeGreaterThanOrEqual(2);
     for (const url of fileUrls) {
       expect(typeof url).toBe('string');
-      expect(url.startsWith('/uploads/')).toBe(true);
-      expect(fs.existsSync(path.join(getUploadsDir(), path.basename(url)))).toBe(true);
+      expect(url.startsWith('/api/files/')).toBe(true);
+      const fetchRes = await fetch(baseUrl + url, { headers: cookie(teacherToken) });
+      expect(fetchRes.status).toBe(200);
     }
   });
 
@@ -404,10 +405,11 @@ describe('course package routes', () => {
       .prepare("SELECT data FROM whiteboard_elements WHERE lesson_id = ? AND type = 'presentation'")
       .get(lessonId) as { data: string };
     const data = JSON.parse(row.data);
-    // 引用是真的：URL 指向落盘后的 /uploads 文件
+    // 引用是真的：URL 指向落盘后的 /api/files 资产
     expect(typeof data.fileUrl).toBe('string');
-    expect(data.fileUrl.startsWith('/uploads/')).toBe(true);
-    expect(fs.existsSync(path.join(getUploadsDir(), path.basename(data.fileUrl)))).toBe(true);
+    expect(data.fileUrl.startsWith('/api/files/')).toBe(true);
+    const assetFetch = await fetch(baseUrl + data.fileUrl, { headers: cookie(teacherToken) });
+    expect(assetFetch.status).toBe(200);
     // 且渲染器不会误以为这是 PPTX
     expect(data.fileType).toBe('file');
     expect(data.fileName).toBe('第3章讲义.docx');
@@ -640,11 +642,11 @@ describe('course package routes', () => {
     };
     // 占位符必须被替换成落盘后的真实 URL，而不是原样写进数据库
     expect(lesson.content).not.toContain('${asset:');
-    const urls = Array.from(String(lesson.content).matchAll(/\/uploads\/[^\s)"']+/g)).map((m) => m[0]);
+    const urls = Array.from(String(lesson.content).matchAll(/\/api\/files\/[^\s)"']+/g)).map((m) => m[0]);
     expect(urls).toHaveLength(2);
     for (const url of urls) {
-      const filePath = path.join(getUploadsDir(), path.basename(url));
-      expect(fs.existsSync(filePath), 'content asset was not written: ' + url).toBe(true);
+      const fetchRes = await fetch(baseUrl + url, { headers: cookie(teacherToken) });
+      expect(fetchRes.status, 'content asset was not served: ' + url).toBe(200);
     }
   });
 
@@ -692,10 +694,10 @@ describe('course package routes', () => {
     expect(pkg.lesson.title).toBe('【CPKG-TEST】导出往返');
     expect(pkg.lesson.timeline).toHaveLength(template.lesson.timeline.length);
     expect(pkg.elements).toHaveLength(template.elements.length);
-    // 附件被逆向内联，正文里的 /uploads URL 被换回占位符
+    // 附件被逆向内联，正文里的 /api/files URL 被换回占位符
     expect(pkg.assets).toHaveLength(2);
     expect(pkg.lesson.content).toContain('${asset:');
-    expect(pkg.lesson.content).not.toContain('/uploads/');
+    expect(pkg.lesson.content).not.toContain('/api/files/');
     for (const asset of pkg.assets as Array<{ base64: string }>) {
       expect(Buffer.from(asset.base64, 'base64').length).toBeGreaterThan(0);
     }
@@ -717,7 +719,7 @@ describe('course package routes', () => {
       timeline: string;
     };
     expect(copy.content).not.toContain('${asset:');
-    expect(copy.content).toContain('/uploads/');
+    expect(copy.content).toContain('/api/files/');
     expect(JSON.parse(copy.timeline)).toHaveLength(pkg.lesson.timeline.length);
 
     const presentations = db
@@ -726,7 +728,8 @@ describe('course package routes', () => {
     const fileUrls = presentations.map((row) => JSON.parse(row.data).fileUrl).filter(Boolean);
     expect(fileUrls.length).toBeGreaterThanOrEqual(2);
     for (const url of fileUrls) {
-      expect(fs.existsSync(path.join(getUploadsDir(), path.basename(url)))).toBe(true);
+      const fetchRes = await fetch(baseUrl + url, { headers: cookie(teacherToken) });
+      expect(fetchRes.status).toBe(200);
     }
   });
 

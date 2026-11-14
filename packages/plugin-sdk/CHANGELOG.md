@@ -9,6 +9,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Features
+
+- **文件存储三插槽扩展接口与 DI Token 导出（平台 Issue #504）**：
+  - 在 `packages/plugin-sdk/index.ts` 与 `packages/plugin-sdk/openlearn.d.ts` 新增导出 `IFileStorageExtensionRegistryToken` 及 `IFileStorageExtensionRegistry`、`FileStorageBackend`、`FileStorageBackendCapabilities`、`FileProcessor`、`FileProcessorContext`、`FileProcessorResult`、`FileProcessorStage`、`FileLayoutTokenResolver`、`FileAssetContext`、`FilePurpose`、`FileAccessScope` 等类型（面向内核宿主与同进程可信扩展；`process` 模式隔离插件不跨 IPC 传递字节流）。
+
 ### Deprecated
 
 - **零消费者宿主门面类型导出弃用（Issue #398，Stage 1）**：

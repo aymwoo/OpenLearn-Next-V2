@@ -7,13 +7,14 @@ import fs from 'fs';
 import { registerBridgeRoutes } from '../routes/bridge.js';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
 import { mintCoursewareToken } from '../utils/courseware-access.js';
+import { getStorageDir } from '../utils/paths.js';
 
 describe('Bridge Runtime Routes - Arbitrary HTML & Fallback Discovery', () => {
   let app: express.Express;
   let server: Server;
   let baseUrl: string;
 
-  const testDir = path.resolve(process.cwd(), 'storage', 'courseware');
+  const testDir = path.resolve(getStorageDir(), 'courseware');
   // SEC-AUTH: /runtime 需要 ?ct= token（与 uuid 绑定）或浏览器 Sec-Fetch 元数据；
   // 测试的 fetch 不带 Sec-Fetch 头，统一走 token 通道
   const runtimeUrl = (uuid: string) =>

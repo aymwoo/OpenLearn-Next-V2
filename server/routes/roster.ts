@@ -9,6 +9,8 @@ import { requireScopedAuth } from '../middleware/data-scope.js';
 import { validateMagicBytes, BLOCKED_EXTENSIONS } from './shared.js';
 import { sendSafeError } from '../utils/error-handler.js';
 import { getUploadsDir } from '../utils/paths.js';
+import { extractFileAssetIdFromUrl, getFileStorageService } from '../services/file-storage/index.js';
+import { resolveContentType } from '../../packages/core/assignment/file-preview-policy.js';
 import { isPasswordChangeGateSkipped } from '../utils/password-gate.js';
 import { randomId } from '../utils/id.js';
 import { parsePagination } from '../utils/pagination.js';
@@ -561,8 +563,32 @@ export function registerRosterRoutes(ctx: ServerContext) {
     }
   });
 
-  // P7/Profile: 个人头像上传（base64 图片，存于 uploads/avatars/）
-  app.post('/api/auth/avatar', (req, res) => {
+  async function cleanupOldAvatar(oldAvatar: string | null): Promise<void> {
+    if (!oldAvatar) return;
+    const oldAssetId = extractFileAssetIdFromUrl(oldAvatar);
+    if (oldAssetId) {
+      await getFileStorageService()
+        .purgeAsset(oldAssetId)
+        .catch(() => {});
+      return;
+    }
+    if (oldAvatar.startsWith('/uploads/avatars/')) {
+      const aliased = getFileStorageService().getAssetByAlias(oldAvatar);
+      if (aliased) {
+        await getFileStorageService()
+          .purgeAsset(aliased.id)
+          .catch(() => {});
+      }
+      try {
+        fs.unlinkSync(path.join(getUploadsDir(), oldAvatar.replace(/^\/uploads\//, '')));
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+
+  // P7/Profile: 个人头像上传（统一走 FileStorageService，accessScope = 'public'）
+  app.post('/api/auth/avatar', async (req, res) => {
     try {
       const token = getCookieToken(req);
       if (!token) return res.status(401).json({ error: 'Not authenticated' });
@@ -589,12 +615,18 @@ export function registerRosterRoutes(ctx: ServerContext) {
         return res.status(400).json({ error: 'File content does not match the declared image type' });
       }
 
-      const avatarDir = path.join(getUploadsDir(), 'avatars');
-      fs.mkdirSync(avatarDir, { recursive: true });
-      const uniqueName = `${Date.now()}-${crypto.randomBytes(4).toString('hex')}${ext}`;
-      const filePath = path.join(avatarDir, uniqueName);
-      fs.writeFileSync(filePath, fileBuffer);
-      const avatarUrl = `/uploads/avatars/${uniqueName}`;
+      const authorId = session.role === 'student' ? session.studentId : session.userId;
+      const stored = await getFileStorageService().store({
+        buffer: fileBuffer,
+        originalName: filename,
+        mime: resolveContentType(filename),
+        context: {
+          purpose: 'avatar',
+          accessScope: 'public',
+          authorId,
+        },
+      });
+      const avatarUrl = stored.fileUrl;
 
       // 读取并删除旧头像文件（避免孤儿文件）
       let oldAvatar: string | null = null;
@@ -609,13 +641,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
         oldAvatar = row?.avatar ?? null;
         kernelContainer.db.prepare('UPDATE users SET avatar = ? WHERE id = ?').run(avatarUrl, session.userId);
       }
-      if (oldAvatar && oldAvatar.startsWith('/uploads/avatars/')) {
-        try {
-          fs.unlinkSync(path.join(getUploadsDir(), oldAvatar.replace(/^\/uploads\//, '')));
-        } catch {
-          /* ignore */
-        }
-      }
+      await cleanupOldAvatar(oldAvatar);
 
       // 同步当前 session_data.avatar
       try {
@@ -640,7 +666,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
   });
 
   // P7/Profile: 移除个人头像
-  app.delete('/api/auth/avatar', (req, res) => {
+  app.delete('/api/auth/avatar', async (req, res) => {
     try {
       const token = getCookieToken(req);
       if (!token) return res.status(401).json({ error: 'Not authenticated' });
@@ -659,13 +685,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
         oldAvatar = row?.avatar ?? null;
         kernelContainer.db.prepare('UPDATE users SET avatar = NULL WHERE id = ?').run(session.userId);
       }
-      if (oldAvatar && oldAvatar.startsWith('/uploads/avatars/')) {
-        try {
-          fs.unlinkSync(path.join(getUploadsDir(), oldAvatar.replace(/^\/uploads\//, '')));
-        } catch {
-          /* ignore */
-        }
-      }
+      await cleanupOldAvatar(oldAvatar);
 
       try {
         const row = kernelContainer.db

@@ -11,6 +11,7 @@ import type Database from 'better-sqlite3';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
 import { randomId } from '../utils/id.js';
 import { isPathInsideRoot } from '../utils/path-guard.js';
+import { getStorageDir } from '../utils/paths.js';
 import {
   hasDataSubmission,
   hasScoreDisplay,
@@ -87,7 +88,7 @@ export class ResourceService {
    * 确保课件元数据与物理磁盘 storage/courseware/ 缓存就绪
    */
   public prepareCoursewareCache(resource: SystemResourceItem): string {
-    const storageDir = path.resolve(process.cwd(), 'storage', 'courseware', resource.id);
+    const storageDir = path.resolve(getStorageDir(), 'courseware', resource.id);
 
     if (resource.type === 'html') {
       const entryName =

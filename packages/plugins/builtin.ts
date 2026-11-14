@@ -15,6 +15,7 @@ import {
 import type { PluginContext } from '@openlearn/plugin-sdk';
 import { hasDataSubmission, hasScoreDisplay, injectScoreSubmissionUsingAI } from './ai-submit-injector.js';
 import { SCORE_MONITOR_SCRIPT, SCORE_MONITOR_SCRIPT_ID, SCORE_MONITOR_SCRIPT_OWNER } from './score-monitor-script.js';
+import { resolveDataDir } from '../core/db/backup-paths.js';
 import {
   aggregateAttemptScore,
   describeAggregation,
@@ -1504,7 +1505,7 @@ export const BuiltinPlugin = {
         }
 
         const uuid = uuidv7();
-        const storageDir = path.resolve(process.cwd(), 'storage', 'courseware', uuid);
+        const storageDir = path.resolve(resolveDataDir(), 'storage', 'courseware', uuid);
         if (!fs.existsSync(storageDir)) {
           fs.mkdirSync(storageDir, { recursive: true });
         }
@@ -1570,7 +1571,7 @@ export const BuiltinPlugin = {
               if (modified && modified !== htmlContent) {
                 const newUuid = uuidv7();
                 const newCwId = 'cw_' + crypto.randomBytes(8).toString('hex');
-                const newStorageDir = path.resolve(process.cwd(), 'storage', 'courseware', newUuid);
+                const newStorageDir = path.resolve(resolveDataDir(), 'storage', 'courseware', newUuid);
                 fs.mkdirSync(newStorageDir, { recursive: true });
                 fs.writeFileSync(path.join(newStorageDir, entryName), modified);
                 if (entryName !== 'index.html') {
@@ -1724,7 +1725,7 @@ export const BuiltinPlugin = {
                   if (modified && modified !== htmlContent) {
                     const newUuid = uuidv7();
                     const newCwId = 'cw_' + crypto.randomBytes(8).toString('hex');
-                    const newStorageDir = path.resolve(process.cwd(), 'storage', 'courseware', newUuid);
+                    const newStorageDir = path.resolve(resolveDataDir(), 'storage', 'courseware', newUuid);
                     copyFolderSync(storageDir, newStorageDir);
                     fs.writeFileSync(path.join(newStorageDir, entry), modified);
 
@@ -1808,7 +1809,7 @@ export const BuiltinPlugin = {
 
         // Check for AI version injection
         try {
-          const storageDir = path.resolve(process.cwd(), 'storage', 'courseware', uuid);
+          const storageDir = path.resolve(resolveDataDir(), 'storage', 'courseware', uuid);
           const entryPath = path.join(storageDir, entry);
           if (fs.existsSync(entryPath)) {
             const htmlContent = fs.readFileSync(entryPath, 'utf-8');
@@ -1817,7 +1818,7 @@ export const BuiltinPlugin = {
               if (modified && modified !== htmlContent) {
                 const newUuid = uuidv7();
                 const newCwId = 'cw_' + crypto.randomBytes(8).toString('hex');
-                const newStorageDir = path.resolve(process.cwd(), 'storage', 'courseware', newUuid);
+                const newStorageDir = path.resolve(resolveDataDir(), 'storage', 'courseware', newUuid);
                 copyFolderSync(storageDir, newStorageDir);
                 fs.writeFileSync(path.join(newStorageDir, entry), modified);
 
@@ -2180,7 +2181,7 @@ export const BuiltinPlugin = {
         const courseware = db.prepare('SELECT uuid FROM courseware WHERE id = ?').get(id) as any;
         if (courseware) {
           db.prepare('DELETE FROM courseware WHERE id = ?').run(id);
-          const storageDir = path.resolve(process.cwd(), 'storage', 'courseware', courseware.uuid);
+          const storageDir = path.resolve(resolveDataDir(), 'storage', 'courseware', courseware.uuid);
           if (fs.existsSync(storageDir)) {
             fs.rmSync(storageDir, { recursive: true, force: true });
           }

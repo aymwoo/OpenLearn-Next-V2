@@ -109,6 +109,8 @@ import type {
   StoredAIProvider,
 } from './server/context.js';
 import { registerOsRoutes } from './server/routes/os.js';
+import { registerFilesRoutes, serveFileAsset } from './server/routes/files.js';
+import { getFileStorageService } from './server/services/file-storage/index.js';
 import { registerResourcesRoutes } from './server/routes/resources.js';
 import { registerCoursewareRoutes } from './server/routes/courseware.js';
 import { registerBridgeRoutes } from './server/routes/bridge.js';
@@ -289,10 +291,21 @@ async function startServer() {
       // 禁用目录索引与隐藏文件
       index: false,
       dotfiles: 'ignore',
-      fallthrough: false,
+      fallthrough: true,
       // 敏感文件不做长缓存，避免注销后仍可从缓存读取
       maxAge: 0,
     }),
+    async (req: any, res: any) => {
+      try {
+        const asset = getFileStorageService().getAssetByAlias(`/uploads${req.path || ''}`);
+        if (!asset) {
+          return res.status(404).json({ error: 'File not found' });
+        }
+        await serveFileAsset(req, res, asset);
+      } catch (err) {
+        sendSafeError(res, err);
+      }
+    },
   );
   app.use(
     '/plugins',
@@ -387,6 +400,7 @@ async function startServer() {
   kernelContainer.pluginHost.setSocketIO(io);
   ctx.io = io;
   registerOsRoutes(ctx);
+  registerFilesRoutes(ctx);
 
   // System Resources APIs
   registerResourcesRoutes(ctx);

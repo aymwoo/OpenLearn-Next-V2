@@ -11,6 +11,7 @@ import { registerGradingRoutes } from '../routes/grading.js';
 import { setupRealtimeBridge } from '../realtime-bridge.js';
 import { PRESENCE_STAFF_ROOM } from '../presence.js';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
+import { getStorageDir } from '../utils/paths.js';
 
 /**
  * 端到端集成测试 —— 模拟「教师在课程中添加互动课件 → 学生上课作答 → 平台监测
@@ -81,7 +82,7 @@ describe('Courseware E2E flow — student score captured & promoted to assignmen
 
     // Courseware（落 ZIP 磁盘以满足 /runtime/:uuid/ 服务的硬性要求；
     // 真实上传流程走 /api/courseware/upload，这里走捷径）
-    const cwDir = path.resolve(process.cwd(), 'storage', 'courseware', coursewareUuid);
+    const cwDir = path.resolve(getStorageDir(), 'courseware', coursewareUuid);
     fs.mkdirSync(cwDir, { recursive: true });
     fs.writeFileSync(
       path.resolve(cwDir, 'index.html'),
@@ -177,7 +178,7 @@ describe('Courseware E2E flow — student score captured & promoted to assignmen
     kernelContainer.db.prepare('DELETE FROM courseware WHERE id = ?').run(coursewareId);
     kernelContainer.db.prepare('DELETE FROM users WHERE id = ?').run(teacherId);
     kernelContainer.db.prepare('DELETE FROM client_sessions WHERE id = ?').run(teacherToken);
-    const cwDir = path.resolve(process.cwd(), 'storage', 'courseware', coursewareUuid);
+    const cwDir = path.resolve(getStorageDir(), 'courseware', coursewareUuid);
     if (fs.existsSync(cwDir)) fs.rmSync(cwDir, { recursive: true, force: true });
     if (server) {
       await new Promise<void>((resolve) => server.close(() => resolve()));

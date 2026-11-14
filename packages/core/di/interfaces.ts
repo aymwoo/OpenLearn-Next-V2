@@ -1052,3 +1052,137 @@ export interface OutboundFetchResponse {
   url: string;
 }
 export const INetworkProxyServiceToken = new Token<INetworkProxyService>('@openlearn/core:INetworkProxyService');
+
+// -- File Storage Extension Registry (Kernel / Host & Trusted Inline Plugins) --
+
+export type FilePurpose = 'courseware' | 'avatar' | 'assignment' | 'lesson-asset' | 'theme' | 'attachment';
+
+export type FileAccessScope = 'public' | 'authenticated' | 'assignment';
+
+export interface FileAssetContext {
+  purpose: FilePurpose | (string & {});
+  accessScope?: FileAccessScope;
+  authorId?: string | null;
+  courseId?: string | null;
+  lessonId?: string | null;
+  assignmentId?: string | null;
+  classId?: string | null;
+  metadata?: Record<string, unknown>;
+}
+
+export interface FileStorageBackendCapabilities {
+  supportsRange?: boolean;
+  supportsPresignedUrl?: boolean;
+  externalBacked?: boolean;
+  maxFileSizeBytes?: number;
+}
+
+export interface FileStorageBackend {
+  id: string;
+  displayName: string;
+  description?: string;
+  capabilities?: FileStorageBackendCapabilities;
+  put(key: string, data: Buffer, meta?: { contentType?: string }): Promise<void>;
+  exists(key: string): Promise<boolean>;
+  stat(key: string): Promise<{ sizeBytes: number } | null>;
+  readStream(
+    key: string,
+    range?: { start: number; end: number },
+  ): NodeJS.ReadableStream | Promise<NodeJS.ReadableStream>;
+  delete(key: string): Promise<void>;
+  copy?(fromKey: string, toKey: string): Promise<void>;
+  getSignedUrl?(
+    key: string,
+    opts?: { expiresInSec?: number; filename?: string; inline?: boolean; contentType?: string },
+  ): Promise<string | null>;
+}
+
+export type FileProcessorStage = 'before-store' | 'after-store' | 'before-serve';
+
+export interface FileProcessorContext {
+  stage: FileProcessorStage;
+  assetId?: string;
+  storageKey?: string;
+  backendId?: string;
+  originalName: string;
+  mime: string;
+  sizeBytes: number;
+  sha256?: string;
+  /** Mutable working buffer in `before-store`; read-only / undefined in `after-store` and `before-serve` unless materialized explicitly. */
+  buffer?: Buffer;
+  /** Mutable working copy of asset context metadata. */
+  context: FileAssetContext;
+  /** Metadata accumulated so far (read-only snapshot in later stages; patch via return value). */
+  metadata: Record<string, unknown>;
+  /** Local file path if the active backend is local disk; optional so remote backends work too. */
+  localPath?: string;
+}
+
+export interface FileProcessorResult {
+  /** Only honored in `before-store`. */
+  buffer?: Buffer;
+  /** Only honored in `before-store`. */
+  mime?: string;
+  /** Only honored in `before-store`. */
+  originalName?: string;
+  /** Merged into `file_assets.metadata_json` in `before-store` or `after-store`. */
+  metadataPatch?: Record<string, unknown>;
+  /** Optional response headers in `before-serve`. */
+  headers?: Record<string, string>;
+}
+
+export interface FileProcessor {
+  id: string;
+  displayName?: string;
+  stage: FileProcessorStage;
+  /** Ascending priority; default 100. */
+  priority?: number;
+  /** Run asynchronously without blocking store() return (only valid for `after-store`). */
+  background?: boolean;
+  /** Per-processor timeout in ms (clamped to stage ceiling). */
+  timeoutMs?: number;
+  match?: {
+    mimes?: string[];
+    purposes?: string[];
+    extensions?: string[];
+  };
+  run(ctx: FileProcessorContext): Promise<FileProcessorResult | void>;
+}
+
+export type FileLayoutTokenResolver = (ctx: FileAssetContext & { originalName: string }) => string | undefined;
+
+export interface IRegisteredFileBackend {
+  owner: string;
+  backend: FileStorageBackend;
+}
+
+export interface IRegisteredFileProcessor {
+  owner: string;
+  processor: FileProcessor;
+}
+
+/**
+ * 文件存储三插槽扩展注册表（布局策略 Token 解析器 / 物理存储后端 / 生命周期处理器）。
+ * 仅供内核及宿主同进程可信扩展消费；第三方 process 模式插件不通过此接口传递内存流/回调。
+ */
+export interface IFileStorageExtensionRegistry {
+  registerBackend(owner: string, backend: FileStorageBackend): void;
+  unregisterBackend(owner: string, id: string): boolean;
+  getBackend(id: string): FileStorageBackend | undefined;
+  listBackends(): IRegisteredFileBackend[];
+
+  registerProcessor(owner: string, processor: FileProcessor): void;
+  unregisterProcessor(owner: string, id: string): boolean;
+  listProcessors(stage?: FileProcessorStage): IRegisteredFileProcessor[];
+
+  registerLayoutToken(owner: string, tokenName: string, resolver: FileLayoutTokenResolver): void;
+  unregisterLayoutToken(owner: string, tokenName: string): boolean;
+  getLayoutTokenResolvers(): ReadonlyMap<string, { owner: string; resolver: FileLayoutTokenResolver }>;
+
+  clear(owner?: string): void;
+  listOwners(): string[];
+}
+
+export const IFileStorageExtensionRegistryToken = new Token<IFileStorageExtensionRegistry>(
+  '@openlearn/core:IFileStorageExtensionRegistry',
+);

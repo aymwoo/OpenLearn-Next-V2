@@ -10,6 +10,7 @@ import {
 } from './shared.js';
 import { verifyCoursewareToken } from '../utils/courseware-access.js';
 import { isPathInsideRoot } from '../utils/path-guard.js';
+import { getStorageDir } from '../utils/paths.js';
 import type { ServerContext } from '../context.js';
 import { sendSafeError } from '../utils/error-handler.js';
 
@@ -128,7 +129,7 @@ export function registerBridgeRoutes(ctx: ServerContext) {
         return res.status(404).send('Courseware not found');
       }
 
-      const storageDir = path.resolve(process.cwd(), 'storage', 'courseware', courseware.uuid);
+      const storageDir = path.resolve(getStorageDir(), 'courseware', courseware.uuid);
 
       // 3. 磁盘物理目录检测与自动补全 / 自愈（若存储目录不存在或为空，尝试从 system_resources 还原）
       if (!fs.existsSync(storageDir) || fs.readdirSync(storageDir).length === 0) {

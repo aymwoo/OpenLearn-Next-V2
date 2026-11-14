@@ -15,6 +15,9 @@ import { randomId } from '../utils/id.js';
 import { deriveAcademicYear } from '../utils/academic-year.js';
 import { validateMagicBytes, SIZE_LIMITS, BLOCKED_EXTENSIONS } from '../utils/upload.js';
 import { isPathInsideRoot } from '../utils/path-guard.js';
+import { getDataDir, getStorageDir } from '../utils/paths.js';
+import { FileStorageService, extractFileAssetIdFromUrl, getFileStorageService } from './file-storage/index.js';
+import { resolveContentType } from '../../packages/core/assignment/file-preview-policy.js';
 import {
   ALLOWED_ASSIGNMENT_EXT,
   ZIP_CONTAINER_EXT,
@@ -30,8 +33,38 @@ export function safeSegment(value: string): string {
   return cleaned.length > 0 ? cleaned.slice(0, 96) : 'unknown';
 }
 
+export function getAssignmentsStorageRoot(): string {
+  return path.join(getStorageDir(), 'assignments');
+}
+
+export function getFileStorageLocalRoot(): string {
+  return path.join(getDataDir(), 'files');
+}
+
 export function assignmentStorageDir(assignmentId: string, studentId: string): string {
-  return path.join(process.cwd(), 'storage', 'assignments', safeSegment(assignmentId), safeSegment(studentId));
+  return path.join(getAssignmentsStorageRoot(), safeSegment(assignmentId), safeSegment(studentId));
+}
+
+export function canUserAccessAssignmentFile(
+  db: Database.Database,
+  assignmentId: string,
+  fileId: string,
+  fileStudentId: string,
+  viewerId: string | null,
+  isPrivileged: boolean,
+): boolean {
+  if (isPrivileged) return true;
+  if (!viewerId) return false;
+  if (fileStudentId === viewerId) return true;
+  const assigned = db
+    .prepare(
+      `SELECT 1 AS ok FROM plugin_assignment_files f
+         JOIN plugin_submission_versions v ON v.id = f.version_id
+         JOIN plugin_peer_review_tasks t ON t.submission_id = v.submission_id
+        WHERE f.id = ? AND f.assignment_id = ? AND t.reviewer_id = ? LIMIT 1`,
+    )
+    .get(fileId, assignmentId, viewerId) as { ok: number } | undefined;
+  return Boolean(assigned);
 }
 
 export interface TraditionalAssignmentItem {
@@ -63,6 +96,8 @@ export interface UploadFileResult {
   size: number;
   sha256: string;
   studentId: string;
+  fileUrl?: string;
+  assetId?: string | null;
 }
 
 export class AssignmentService {
@@ -530,15 +565,31 @@ Provide a grade score (0-100) and brief feedback. Ensure you output in this exac
       throw err;
     }
 
-    const dir = assignmentStorageDir(assignmentId, ownerStudentId);
-    fs.mkdirSync(dir, { recursive: true });
-    const storedName = `${crypto.randomUUID()}${ext}`;
-    const storedPath = path.join(dir, storedName);
-
-    await fs.promises.writeFile(storedPath, buffer);
-
     const fileId = 'af-' + crypto.randomUUID();
-    const sha256 = crypto.createHash('sha256').update(buffer).digest('hex');
+    const serverMime = resolveContentType(fileName);
+    const fileStorage =
+      this.db === (kernelContainer.db as unknown as Database.Database)
+        ? getFileStorageService()
+        : new FileStorageService(this.db);
+
+    const storedAsset = await fileStorage.store({
+      buffer,
+      originalName: fileName,
+      mime: contentType || serverMime || 'application/octet-stream',
+      skipDedup: true,
+      context: {
+        purpose: 'assignment',
+        accessScope: 'assignment',
+        authorId: ownerStudentId,
+        assignmentId,
+        metadata: { fileId },
+      },
+    });
+    const sha256 = storedAsset.sha256;
+    const storedPathForDb =
+      storedAsset.backendId === 'local'
+        ? path.relative(process.cwd(), fileStorage.localBackend.resolveLocalPath(storedAsset.storageKey))
+        : `asset://${storedAsset.assetId}`;
 
     try {
       const insertTx = this.db.transaction(() => {
@@ -573,15 +624,16 @@ Provide a grade score (0-100) and brief feedback. Ensure you output in this exac
         this.db
           .prepare(
             `INSERT INTO plugin_assignment_files
-               (id, assignment_id, submission_id, version_id, student_id, original_name, stored_path, size, mime, sha256, uploaded_at)
-             VALUES (?, ?, NULL, NULL, ?, ?, ?, ?, ?, ?, ?)`,
+               (id, assignment_id, submission_id, version_id, student_id, original_name, stored_path, asset_id, size, mime, sha256, uploaded_at)
+             VALUES (?, ?, NULL, NULL, ?, ?, ?, ?, ?, ?, ?, ?)`,
           )
           .run(
             fileId,
             assignmentId,
             ownerStudentId,
             fileName,
-            path.relative(process.cwd(), storedPath),
+            storedPathForDb,
+            storedAsset.assetId,
             buffer.length,
             contentType || null,
             sha256,
@@ -590,15 +642,19 @@ Provide a grade score (0-100) and brief feedback. Ensure you output in this exac
       });
       insertTx();
     } catch (dbErr: any) {
-      try {
-        fs.unlinkSync(storedPath);
-      } catch {
-        /* best effort */
-      }
+      await fileStorage.purgeAsset(storedAsset.assetId).catch(() => {});
       throw dbErr;
     }
 
-    return { id: fileId, name: fileName, size: buffer.length, sha256, studentId: ownerStudentId };
+    return {
+      id: fileId,
+      assetId: storedAsset.assetId,
+      fileUrl: storedAsset.fileUrl,
+      name: fileName,
+      size: buffer.length,
+      sha256,
+      studentId: ownerStudentId,
+    };
   }
 
   public listAssignmentFiles(assignmentId: string, studentId: string | null, isPrivileged: boolean): any[] {
@@ -631,7 +687,7 @@ Provide a grade score (0-100) and brief feedback. Ensure you output in this exac
   ): { absPath: string; originalName: string } {
     const file = this.db
       .prepare(
-        `SELECT id, student_id, original_name, stored_path, mime, deleted_at
+        `SELECT id, student_id, original_name, stored_path, asset_id, mime, deleted_at
            FROM plugin_assignment_files WHERE id = ? AND assignment_id = ?`,
       )
       .get(fileId, assignmentId) as any;
@@ -642,24 +698,26 @@ Provide a grade score (0-100) and brief feedback. Ensure you output in this exac
       throw err;
     }
 
-    if (!isPrivileged && file.student_id !== studentId) {
-      const assigned = this.db
-        .prepare(
-          `SELECT 1 AS ok FROM plugin_assignment_files f
-             JOIN plugin_submission_versions v ON v.id = f.version_id
-             JOIN plugin_peer_review_tasks t ON t.submission_id = v.submission_id
-            WHERE f.id = ? AND t.reviewer_id = ? LIMIT 1`,
-        )
-        .get(fileId, studentId) as { ok: number } | undefined;
-      if (!assigned) {
-        const err: any = new Error('Forbidden: Cannot read another student file');
-        err.status = 403;
-        throw err;
-      }
+    if (!canUserAccessAssignmentFile(this.db, assignmentId, fileId, file.student_id, studentId, isPrivileged)) {
+      const err: any = new Error('Forbidden: Cannot read another student file');
+      err.status = 403;
+      throw err;
     }
 
+    const assetId = file.asset_id || extractFileAssetIdFromUrl(file.stored_path);
     const absPath = path.resolve(process.cwd(), file.stored_path);
-    if (!isPathInsideRoot(path.join(process.cwd(), 'storage', 'assignments'), absPath) || !fs.existsSync(absPath)) {
+    const allowedInsideStorage =
+      isPathInsideRoot(getAssignmentsStorageRoot(), absPath) || isPathInsideRoot(getFileStorageLocalRoot(), absPath);
+    if (!allowedInsideStorage || !fs.existsSync(absPath)) {
+      if (assetId) {
+        const asset = getFileStorageService().getAsset(assetId);
+        if (asset && asset.backendId === 'local') {
+          const resolved = getFileStorageService().localBackend.resolveLocalPath(asset.storageKey);
+          if (fs.existsSync(resolved)) {
+            return { absPath: resolved, originalName: file.original_name };
+          }
+        }
+      }
       const err: any = new Error('File not found on disk');
       err.status = 404;
       throw err;
@@ -676,7 +734,7 @@ Provide a grade score (0-100) and brief feedback. Ensure you output in this exac
   ): void {
     const file = this.db
       .prepare(
-        `SELECT id, student_id, version_id, deleted_at FROM plugin_assignment_files
+        `SELECT id, student_id, version_id, asset_id, deleted_at FROM plugin_assignment_files
           WHERE id = ? AND assignment_id = ?`,
       )
       .get(fileId, assignmentId) as any;
@@ -697,29 +755,70 @@ Provide a grade score (0-100) and brief feedback. Ensure you output in this exac
       throw err;
     }
 
-    this.db.prepare('UPDATE plugin_assignment_files SET deleted_at = ? WHERE id = ?').run(Date.now(), fileId);
+    const now = Date.now();
+    this.db.prepare('UPDATE plugin_assignment_files SET deleted_at = ? WHERE id = ?').run(now, fileId);
+    if (file.asset_id) {
+      this.db
+        .prepare('UPDATE file_assets SET deleted_at = COALESCE(deleted_at, ?) WHERE id = ?')
+        .run(new Date(now).toISOString(), file.asset_id);
+    }
   }
 
   // ── 4. 软删除物理 GC ────────────────────────────────────────────────────
 
   public gcSoftDeletedAssignmentFiles(retentionMs: number = 7 * 24 * 60 * 60 * 1000): number {
     const cutoff = Date.now() - retentionMs;
-    let rows: Array<{ id: string; stored_path: string }> = [];
+    let rows: Array<{ id: string; stored_path: string; asset_id?: string | null }> = [];
     try {
       rows = this.db
         .prepare(
-          'SELECT id, stored_path FROM plugin_assignment_files WHERE deleted_at IS NOT NULL AND deleted_at < ? LIMIT 500',
+          'SELECT id, stored_path, asset_id FROM plugin_assignment_files WHERE deleted_at IS NOT NULL AND deleted_at < ? LIMIT 500',
         )
-        .all(cutoff) as Array<{ id: string; stored_path: string }>;
+        .all(cutoff) as Array<{ id: string; stored_path: string; asset_id?: string | null }>;
     } catch {
       return 0;
     }
 
     let removed = 0;
-    const rootWithSep = path.join(process.cwd(), 'storage', 'assignments') + path.sep;
+    const legacyAssignmentsRoot = getAssignmentsStorageRoot();
+    const legacyCwdAssignmentsRoot = path.join(process.cwd(), 'storage', 'assignments');
+    const unifiedFilesRoot = getFileStorageLocalRoot();
+
     for (const row of rows) {
       const absPath = path.resolve(process.cwd(), row.stored_path);
-      if (!absPath.startsWith(rootWithSep)) continue;
+      const isSafeLocalPath =
+        isPathInsideRoot(legacyAssignmentsRoot, absPath) ||
+        isPathInsideRoot(legacyCwdAssignmentsRoot, absPath) ||
+        isPathInsideRoot(unifiedFilesRoot, absPath);
+
+      if (!isSafeLocalPath) continue;
+
+      let canUnlink = true;
+      if (row.asset_id) {
+        try {
+          const assetRow = this.db.prepare('SELECT blob_id FROM file_assets WHERE id = ?').get(row.asset_id) as
+            { blob_id: string } | undefined;
+          if (assetRow) {
+            this.db.prepare('DELETE FROM file_aliases WHERE asset_id = ?').run(row.asset_id);
+            this.db.prepare('DELETE FROM file_assets WHERE id = ?').run(row.asset_id);
+            this.db
+              .prepare('UPDATE file_blobs SET ref_count = MAX(0, ref_count - 1) WHERE id = ?')
+              .run(assetRow.blob_id);
+            const remaining = this.db
+              .prepare('SELECT COUNT(*) AS cnt FROM file_assets WHERE blob_id = ?')
+              .get(assetRow.blob_id) as { cnt: number };
+            if (remaining.cnt > 0) {
+              canUnlink = false;
+            } else {
+              this.db.prepare('DELETE FROM file_blobs WHERE id = ?').run(assetRow.blob_id);
+            }
+          }
+        } catch {
+          /* ignore metadata GC errors and preserve path safety check */
+        }
+      }
+
+      if (!canUnlink) continue;
       try {
         fs.unlinkSync(absPath);
         removed++;

@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import { AiProvidersPanel, type AIProvider } from '../features/admin/AiProvidersPanel';
 import { DemoDataPanel } from '../features/admin/DemoDataPanel';
+import { FileStoragePanel } from '../features/admin/FileStoragePanel';
 import { ExtensionPointRenderer } from '../plugin-host/extension-point-renderer';
 import { BUILTIN_THEMES, useThemeStore } from '../store/themeStore';
 import { ThemeCenterModal } from './ThemeCenterModal';
@@ -1571,6 +1572,9 @@ export function AdminPanel({
                   </div>
                 </form>
               </div>
+
+              {/* 文件存储与路径布局策略 */}
+              <FileStoragePanel lang={lang} />
 
               {/* 演示数据一键初始化 / 一键清理 */}
               <DemoDataPanel lang={lang} />

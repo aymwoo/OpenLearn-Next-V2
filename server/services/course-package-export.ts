@@ -26,6 +26,7 @@ import type Database from 'better-sqlite3';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
 import { getUploadsDir } from '../utils/paths.js';
 import { validateMagicBytes } from '../utils/upload.js';
+import { FileStorageService, getFileStorageService } from './file-storage/index.js';
 import {
   COURSE_PACKAGE_FORMAT,
   COURSE_PACKAGE_VERSION,
@@ -67,6 +68,8 @@ export interface ExportCoursePackageResult {
 
 /** `/uploads/<文件名>` 引用 —— 允许带站点前缀（绝对 URL）与查询串（匹配到 `?` 为止）。 */
 const UPLOAD_URL_PATTERN = /(?:https?:\/\/[A-Za-z0-9.:[\]_-]+)?\/uploads\/([A-Za-z0-9][A-Za-z0-9._-]*)/g;
+/** `/api/files/<assetId>` 统一文件资产引用。 */
+const FILE_ASSET_URL_PATTERN = /(?:https?:\/\/[A-Za-z0-9.:[\]_-]+)?\/api\/files\/([A-Za-z0-9_-]+)/g;
 
 /** 扩展名 → 课程包资产类型（与 PACKAGE_ASSET_TYPES 对齐，jpeg 归一为 jpg）。 */
 const EXT_TO_ASSET_TYPE: Record<string, PackageAssetType> = {
@@ -168,49 +171,85 @@ export async function exportLessonAsCoursePackage(
     });
   }
 
-  // ── 2. 收集正文与元素里引用的 /uploads 文件 ────────────────────────────────
+  // ── 2. 收集正文与元素里引用的 /uploads 与 /api/files 附件 ────────────────────
   const referenced = new Set<string>();
   collectUploadReferences(lesson.content ?? '', referenced);
   for (const element of elements) collectUploadReferences(element.data, referenced);
 
-  // ── 3. 读盘 + 内联（base64），并记录可替换的占位符 ─────────────────────────
+  // ── 3. 读盘/存储层 + 内联（base64），并记录可替换的占位符 ──────────────────
   const pending: PendingAsset[] = [];
-  /** 存储文件名 → 占位符。 */
-  const placeholderByStoredName = new Map<string, string>();
+  /** 引用键（`upload:<name>` 或 `asset:<assetId>`） → 占位符。 */
+  const placeholderByRefKey = new Map<string, string>();
   let totalBytes = 0;
   const usedIds = new Set<string>();
+  const fileStorage =
+    db === (kernelContainer.db as unknown as Database.Database) ? getFileStorageService() : new FileStorageService(db);
 
-  for (const storedName of referenced) {
-    const ext = path.extname(storedName).toLowerCase();
+  for (const refKey of referenced) {
+    let displayName: string;
+    let rawUrl: string;
+    let buffer: Buffer;
+
+    if (refKey.startsWith('asset:')) {
+      const assetId = refKey.slice('asset:'.length);
+      rawUrl = `/api/files/${assetId}`;
+      const asset = fileStorage.getAsset(assetId);
+      if (!asset) {
+        stats.skipped.push({ url: rawUrl, reason: '文件不存在' });
+        continue;
+      }
+      displayName = preferredFilenames.get(refKey) || asset.originalName;
+      try {
+        buffer = await fileStorage.readBuffer(asset);
+      } catch (err) {
+        stats.skipped.push({ url: rawUrl, reason: `读取失败：${(err as Error).message}` });
+        continue;
+      }
+    } else {
+      const storedName = refKey.slice('upload:'.length);
+      rawUrl = `/uploads/${storedName}`;
+      const aliased = fileStorage.getAssetByAlias(rawUrl);
+      if (aliased) {
+        displayName = preferredFilenames.get(refKey) || aliased.originalName;
+        try {
+          buffer = await fileStorage.readBuffer(aliased);
+        } catch (err) {
+          stats.skipped.push({ url: rawUrl, reason: `读取失败：${(err as Error).message}` });
+          continue;
+        }
+      } else {
+        displayName = preferredFilenames.get(refKey) || storedName;
+        const filePath = resolveUploadsPath(storedName);
+        if (!filePath) {
+          stats.skipped.push({ url: rawUrl, reason: '文件不存在' });
+          continue;
+        }
+        try {
+          buffer = fs.readFileSync(filePath);
+        } catch (err) {
+          stats.skipped.push({ url: rawUrl, reason: `读取失败：${(err as Error).message}` });
+          continue;
+        }
+      }
+    }
+
+    const ext = path.extname(displayName).toLowerCase() || path.extname(rawUrl).toLowerCase();
     const contentType = EXT_TO_ASSET_TYPE[ext];
     if (!contentType || !(PACKAGE_ASSET_TYPES as readonly string[]).includes(contentType)) {
-      stats.skipped.push({ url: `/uploads/${storedName}`, reason: `不支持的文件类型：${ext || '(无扩展名)'}` });
+      stats.skipped.push({ url: rawUrl, reason: `不支持的文件类型：${ext || '(无扩展名)'}` });
       continue;
     }
 
-    const filePath = resolveUploadsPath(storedName);
-    if (!filePath) {
-      stats.skipped.push({ url: `/uploads/${storedName}`, reason: '文件不存在' });
-      continue;
-    }
-
-    let buffer: Buffer;
-    try {
-      buffer = fs.readFileSync(filePath);
-    } catch (err) {
-      stats.skipped.push({ url: `/uploads/${storedName}`, reason: `读取失败：${(err as Error).message}` });
-      continue;
-    }
     if (buffer.length === 0) {
-      stats.skipped.push({ url: `/uploads/${storedName}`, reason: '文件为空' });
+      stats.skipped.push({ url: rawUrl, reason: '文件为空' });
       continue;
     }
     if (!isTextAssetType(contentType) && !validateMagicBytes(buffer, `asset.${contentType}`)) {
-      stats.skipped.push({ url: `/uploads/${storedName}`, reason: '文件签名与扩展名不符' });
+      stats.skipped.push({ url: rawUrl, reason: '文件签名与扩展名不符' });
       continue;
     }
     if (isTextAssetType(contentType) && buffer.includes(0)) {
-      stats.skipped.push({ url: `/uploads/${storedName}`, reason: '文本文件包含二进制内容' });
+      stats.skipped.push({ url: rawUrl, reason: '文本文件包含二进制内容' });
       continue;
     }
 
@@ -224,19 +263,19 @@ export async function exportLessonAsCoursePackage(
       );
     }
 
-    const assetId = buildAssetId(storedName, usedIds);
+    const pkgAssetId = buildAssetId(displayName, usedIds);
     pending.push({
-      id: assetId,
-      filename: preferredFilenames.get(storedName) || storedName,
+      id: pkgAssetId,
+      filename: displayName,
       contentType,
       buffer,
-      storedName,
+      storedName: refKey,
     });
-    placeholderByStoredName.set(storedName, `\${asset:${assetId}}`);
+    placeholderByRefKey.set(refKey, `\${asset:${pkgAssetId}}`);
   }
 
   // ── 4. 把引用替换为占位符 ──────────────────────────────────────────────────
-  const content = replaceUploadReferences(lesson.content ?? '', placeholderByStoredName) as string;
+  const content = replaceUploadReferences(lesson.content ?? '', placeholderByRefKey) as string;
   const validSegmentIds = new Set(timeline.map((segment) => segment.id));
   const resolvedElements = elements.map((element) => {
     const { segmentId: rawSegmentId, ...rest } = element;
@@ -246,7 +285,7 @@ export async function exportLessonAsCoursePackage(
     return {
       ...rest,
       ...(segmentId && validSegmentIds.has(segmentId) ? { segmentId } : {}),
-      data: replaceUploadReferences(element.data, placeholderByStoredName) as Record<string, unknown>,
+      data: replaceUploadReferences(element.data, placeholderByRefKey) as Record<string, unknown>,
     };
   });
 
@@ -304,11 +343,14 @@ export function buildExportFilename(title: string): string {
   return `${safe || 'course'}.openlearn-package.json`;
 }
 
-/** 递归收集字符串中的 `/uploads/<文件名>` 引用。 */
+/** 递归收集字符串中的 `/uploads/<文件名>` 与 `/api/files/<assetId>` 引用。 */
 function collectUploadReferences(value: unknown, out: Set<string>): void {
   if (typeof value === 'string') {
     for (const match of value.matchAll(UPLOAD_URL_PATTERN)) {
-      out.add(match[1]);
+      out.add(`upload:${match[1]}`);
+    }
+    for (const match of value.matchAll(FILE_ASSET_URL_PATTERN)) {
+      out.add(`asset:${match[1]}`);
     }
     return;
   }
@@ -321,10 +363,12 @@ function collectUploadReferences(value: unknown, out: Set<string>): void {
   }
 }
 
-/** 递归替换 `/uploads/<文件名>` 引用为占位符；未内联的引用保持原样。 */
+/** 递归替换 `/uploads/<文件名>` 与 `/api/files/<assetId>` 引用为占位符；未内联的引用保持原样。 */
 function replaceUploadReferences(value: unknown, placeholders: Map<string, string>): unknown {
   if (typeof value === 'string') {
-    return value.replace(UPLOAD_URL_PATTERN, (match, storedName: string) => placeholders.get(storedName) ?? match);
+    return value
+      .replace(UPLOAD_URL_PATTERN, (match, storedName: string) => placeholders.get(`upload:${storedName}`) ?? match)
+      .replace(FILE_ASSET_URL_PATTERN, (match, assetId: string) => placeholders.get(`asset:${assetId}`) ?? match);
   }
   if (Array.isArray(value)) {
     return value.map((item) => replaceUploadReferences(item, placeholders));
@@ -341,9 +385,6 @@ function replaceUploadReferences(value: unknown, placeholders: Map<string, strin
 
 /**
  * 从元素数据里收集 `fileUrl` + `fileName` 配对。
- *
- * uploads 目录里的文件名是「时间戳-随机串.ext」，直接写进课程包会让教师
- * 看到一串无意义的字符；「课件演示」元素本身记录了原文件名，优先采用它。
  */
 function collectPreferredFilenames(value: unknown, out: Map<string, string>): void {
   if (!value || typeof value !== 'object') return;
@@ -354,7 +395,12 @@ function collectPreferredFilenames(value: unknown, out: Map<string, string>): vo
   const obj = value as Record<string, unknown>;
   if (typeof obj.fileUrl === 'string' && typeof obj.fileName === 'string' && obj.fileName.trim()) {
     for (const match of obj.fileUrl.matchAll(UPLOAD_URL_PATTERN)) {
-      if (!out.has(match[1])) out.set(match[1], obj.fileName.trim());
+      const key = `upload:${match[1]}`;
+      if (!out.has(key)) out.set(key, obj.fileName.trim());
+    }
+    for (const match of obj.fileUrl.matchAll(FILE_ASSET_URL_PATTERN)) {
+      const key = `asset:${match[1]}`;
+      if (!out.has(key)) out.set(key, obj.fileName.trim());
     }
   }
   for (const item of Object.values(obj)) collectPreferredFilenames(item, out);
