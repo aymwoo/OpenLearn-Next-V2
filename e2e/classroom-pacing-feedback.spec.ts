@@ -216,8 +216,8 @@ test.describe('在线教学分环节学习节奏晴雨表（Pacing Signals）全
       await expect(tooFastBtn).toBeVisible();
       await tooFastBtn.click();
 
-      // 验证选中反馈提示
-      await expect(page.getByText('已反馈: 🐇 讲太快')).toBeVisible({ timeout: 10_000 });
+      // 验证按钮进入选中态（文案提示仅 2.5s 即自动消失，不能作为断言目标）
+      await expect(tooFastBtn).toHaveAttribute('aria-pressed', 'true');
 
       // 5. 验证后端聚合接口记录了 TOO_FAST 信号
       await expect
@@ -238,10 +238,13 @@ test.describe('在线教学分环节学习节奏晴雨表（Pacing Signals）全
       // 6. 切换点击「❓ 有疑问」按钮
       const confusedBtn = toolbar.locator('button').filter({ hasText: '有疑问' });
       await expect(confusedBtn).toBeVisible();
+      // 前端对工具栏点击有 300ms 去重节流（sendPacingSignal），连续切换信号需先越过窗口
+      await page.waitForTimeout(400);
       await confusedBtn.click();
 
-      // 验证切换为 CONFUSED
-      await expect(page.getByText('已反馈: ❓ 有疑问')).toBeVisible({ timeout: 10_000 });
+      // 验证切换为 CONFUSED（互斥：TOO_FAST 应退出选中态）
+      await expect(confusedBtn).toHaveAttribute('aria-pressed', 'true');
+      await expect(tooFastBtn).toHaveAttribute('aria-pressed', 'false');
 
       await expect
         .poll(
@@ -264,7 +267,10 @@ test.describe('在线教学分环节学习节奏晴雨表（Pacing Signals）全
       expect(fs.existsSync(TOOLBAR_SCREENSHOT)).toBe(true);
 
       // 7. 再次点击「❓ 有疑问」，触发反选取消（Toggle Cancel）
+      //    同样需要越过客户端 300ms 点击去重窗口，否则取消点击会被静默丢弃
+      await page.waitForTimeout(400);
       await confusedBtn.click();
+      await expect(confusedBtn).toHaveAttribute('aria-pressed', 'false');
 
       // 验证恢复为无信号状态
       await expect

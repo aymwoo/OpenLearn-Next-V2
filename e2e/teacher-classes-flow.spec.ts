@@ -102,7 +102,8 @@ test.describe('教务管理端：班级生命周期与学生花名册治理 E2E 
       await createClassBtn.click();
 
       // 4. 等待新班级行在界面上渲染
-      const classRow = page.getByText(className).first();
+      //    同一班级名在其他面板（如课堂入口页）也会有隐藏副本，按 testid 精确命中班级管理行
+      const classRow = page.getByTestId('class-row').filter({ hasText: className }).first();
       await expect(classRow).toBeVisible({ timeout: 15_000 });
 
       // 获取创建后的班级 ID 用于后续 API 辅助验证与清理

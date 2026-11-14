@@ -57,6 +57,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 - **Node 基线从 22 迁移到 24**：`.nvmrc` / `.node-version` / `PINNED_NODE_MAJOR` / `Dockerfile`（`node:24-alpine`）/ CI 主作业 / `AGENTS.md` 与安装、部署、开发指南统一钉住 Node 24；`20.x || 22.x || 24.x` 的受支持范围与 CI 的 node-runtime-compat 矩阵保持不变。起因是本机运行时已是 Node 24（`better-sqlite3` 需 ABI 137），而仓库仍钉 22，跨环境复用 `node_modules` 会反复触发 `ERR_DLOPEN_FAILED`。
 
+### Docs
+
+- **补齐第三方主题系统（#484 / #500）落地后的文档一致性**：
+  - `migrations/README.md` 增加 `047_third_party_theme_system.sql` 台账行 —— 该文件是迁移职责的权威清单，约定「随每个迁移同步更新」，此前遗漏；
+  - 重新生成 `docs/reference/platform-data-tables.md` 的自动表清单（82 → **85** 张表、46 → **48** 个迁移），补齐 `themes`、`theme_versions`、`user_theme_preferences` 三张新表，以及 `site_settings` 新增的 `default_theme_id` / `logout_clear_site_data` 列；
+  - 同步修正 `docs/architecture/database-and-migrations.md` 与 `docs/agent/reference/platform-services.md` 中过期的迁移数 / 表数口径（`000`–`047` 共 48 个脚本、85 张核心表）。
+
 ## [0.7.15] - 2026-11-12
 
 ### Fixes

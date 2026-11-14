@@ -157,42 +157,45 @@ test.describe('教师端中控与白板多环节操控 E2E 测试 (Phase 2)', ()
 
       // 验证课中授课界面与中控导航挂载
       await expect(page.locator('#classroom-interactive-cockpit')).toBeVisible({ timeout: 15_000 });
-      await expect(page.getByText('教学步骤与页面大纲')).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByTestId('classroom-stage-stepper')).toBeVisible({ timeout: 15_000 });
 
       // =========================================================================
       // 5. 测试教学步骤时间轴切换（环节 1 -> 环节 2）
       // =========================================================================
-      // 初始状态下点击广播第 2 环节
-      const broadcastStep2Btn = page.locator('button:has-text("广播此环节")').nth(1);
+      // 初始状态下点击广播第 2 环节（按钮文案现为「广播」，完整语义在 title 上）
+      const broadcastStep2Btn = page.locator('button[title="广播此环节"]').nth(1);
       await expect(broadcastStep2Btn).toBeVisible({ timeout: 10_000 });
       await broadcastStep2Btn.click();
 
-      // 验证第 2 环节变更为“同步演示中”
-      await expect(page.locator('button:has-text("同步演示中")')).toBeVisible({ timeout: 10_000 });
+      // 验证第 2 环节变更为「演示中」徽标
+      await expect(page.locator('[title="当前环节正在同步演示中"]').first()).toBeVisible({ timeout: 10_000 });
 
       // =========================================================================
       // 6. 测试白板页面大纲导航（新增白板页、翻页、大纲折叠）
       // =========================================================================
-      // 点击新增白板页
+      // 点击新增白板页，用侧栏页数（「N 页面」）验证页面确实新增
       const addPageBtn = page.locator('button[title="新建白板页面"]');
       await expect(addPageBtn).toBeVisible();
+      const pageCountLocator = page.getByText(/^\d+ 页面$/).first();
+      await expect(pageCountLocator).toBeVisible({ timeout: 10_000 });
+      const sidebarPageCount = async () => {
+        const text = (await pageCountLocator.innerText()).trim();
+        return Number(text.split(' ')[0]);
+      };
+      const pagesBefore = await sidebarPageCount();
       await addPageBtn.click();
+      await expect.poll(sidebarPageCount, { timeout: 10_000 }).toBe(pagesBefore + 1);
 
-      // 验证页面大纲中出现 P2
-      const page2Item = page.locator('div:has-text("P2")').first();
-      await expect(page2Item).toBeVisible({ timeout: 10_000 });
+      // 通过环节抽屉的折叠/展开按钮验证「白板页面大纲」随之收起与恢复
+      const collapseDrawerBtn = page.locator('button[title="折叠抽屉"]').first();
+      await expect(collapseDrawerBtn).toBeVisible();
+      await collapseDrawerBtn.click();
 
-      // 点击折叠白板页面大纲
-      const outlineToggle = page.locator('button:has-text("白板页面大纲")');
-      await expect(outlineToggle).toBeVisible();
-      await outlineToggle.click();
-
-      // 验证出现“展开”按钮
-      const expandOutlineBtn = page.locator('span:has-text("展开")').first();
-      await expect(expandOutlineBtn).toBeVisible();
-      // 点击恢复展开
-      await expandOutlineBtn.click();
-      await expect(page.locator('div:has-text("P1")').first()).toBeVisible();
+      const expandDrawerBtn = page.locator('button[title="展开抽屉"]').first();
+      await expect(expandDrawerBtn).toBeVisible({ timeout: 5_000 });
+      await expandDrawerBtn.click();
+      await expect(page.locator('button[title="折叠抽屉"]').first()).toBeVisible();
+      await expect.poll(sidebarPageCount, { timeout: 5_000 }).toBe(pagesBefore + 1);
 
       // =========================================================================
       // 7. 测试视野伸缩（收起左侧边栏、收起右侧动态流）
@@ -208,7 +211,7 @@ test.describe('教师端中控与白板多环节操控 E2E 测试 (Phase 2)', ()
 
       // 恢复左侧边栏
       await expandLeftBtn.click();
-      await expect(page.getByText('教学步骤与页面大纲')).toBeVisible();
+      await expect(page.getByTestId('classroom-stage-stepper')).toBeVisible();
 
       // 截图存盘：白板大纲与时间轴操控完成
       const COCKPIT_SHOT1 = path.join(screenshotDir, 'teacher_cockpit_timeline_and_whiteboard.png');
