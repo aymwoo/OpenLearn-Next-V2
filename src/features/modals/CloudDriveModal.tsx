@@ -1,6 +1,7 @@
 import React from 'react';
 import { Folder, FileIcon, X, ChevronRight } from 'lucide-react';
 import { LazyCourseware } from '../../components/LazyCourseware';
+import AccessibleDialog from '../../components/AccessibleDialog';
 import Markdown from 'react-markdown';
 import type { VFSNode } from '../../store/appStore';
 
@@ -142,22 +143,30 @@ interface CloudDriveModalProps {
 export function CloudDriveModal(props: CloudDriveModalProps) {
   if (!props.isOpen) return null;
   return (
-    <div className="fixed inset-0 bg-gray-900/40 backdrop-blur-sm flex items-center justify-center p-6 z-50">
-      <div className="bg-white border text-gray-900 border-gray-200 rounded-2xl shadow-2xl w-full max-w-5xl h-[85vh] flex flex-col overflow-hidden">
-        <div className="p-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/80 shrink-0">
-          <div className="flex items-center gap-3">
-            <Folder size={20} className="text-indigo-600" />
-            <h2 className="font-semibold text-gray-800 text-lg">Cloud Course Resource Browser</h2>
-          </div>
-          <button
-            onClick={props.onClose}
-            className="text-gray-400 hover:text-gray-600 font-bold p-1 hover:bg-gray-200 rounded transition-colors cursor-pointer"
-          >
-            &times;
-          </button>
+    <AccessibleDialog
+      open={props.isOpen}
+      onClose={props.onClose}
+      ariaLabelledBy="cloud-drive-dialog-title"
+      closedBy="any"
+      className="bg-white border text-gray-900 border-gray-200 rounded-2xl shadow-2xl max-w-5xl h-[85vh] overflow-hidden"
+    >
+      <div className="p-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/80 shrink-0">
+        <div className="flex items-center gap-3">
+          <Folder size={20} className="text-indigo-600" />
+          <h2 id="cloud-drive-dialog-title" className="font-semibold text-gray-800 text-lg">
+            Cloud Course Resource Browser
+          </h2>
         </div>
-        <CloudDrivePanel {...props} />
+        <button
+          type="button"
+          onClick={props.onClose}
+          aria-label="Close cloud resource browser"
+          className="text-gray-400 hover:text-gray-600 font-bold p-1 hover:bg-gray-200 rounded transition-colors cursor-pointer"
+        >
+          &times;
+        </button>
       </div>
-    </div>
+      <CloudDrivePanel {...props} />
+    </AccessibleDialog>
   );
 }

@@ -4,6 +4,7 @@
  */
 
 import { TaskPriority, ScheduledTask } from './types.js';
+import { safeRandomUUID } from '../security/safe-uuid.js';
 
 export class RuntimeScheduler {
   private taskQueue: ScheduledTask[] = [];
@@ -22,7 +23,7 @@ export class RuntimeScheduler {
   ): Promise<T> {
     return new Promise<T>((resolve, reject) => {
       const task: ScheduledTask<T> = {
-        id: `tsk_${globalThis.crypto.randomUUID()}`,
+        id: `tsk_${safeRandomUUID()}`,
         name,
         priority,
         taskFn: async () => {

@@ -16,6 +16,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - 新增 `src/components/PasswordInput.tsx`（关联 `<label htmlFor>`、输入框上方持久化规则提示、显示/隐藏密码 `aria-pressed` 切换、仅在报错时通过 `aria-describedby` 绑定内联错误）与 `src/components/AccessibleTableRegion.tsx`（`tabIndex={0}`、`role="region"`、`aria-labelledby` 键盘可聚焦横向滚动容器），并在 `src/index.css` 中接入 `.table-scroll-region`、`.responsive-data-table[data-stack-mobile="true"]` `@container` 窄屏卡片化、`.field-sizing-auto` 与 `:user-invalid` / `[aria-invalid="true"]` 样式；
   - 重构 `ForcedPasswordChangeGate`、`ProfileModal`、`AdminPanel` 教工表单、`AiProvidersPanel` 与 `ClassStudentsPanel` 密码编辑表单使用 `<form noValidate>` 提交校验与首错自动聚焦，并将 `CourseWizardModal`、`AssignmentSubmitDialog`、`QuestionBankPanel`、`AssessmentEditor` 等叙事文本框升级为 `field-sizing-auto`；
   - 为 `StatsPanel`、`CoursewareHubPanel`、`ClassAssignmentsPanel`、`ImportLessonsModal`、`ExportWeightModal`、`AiProvidersPanel`、`QuizFullscreenView`、`PostClassWrapupView`、`LiveSubmissionsPanel`、`ClassroomBriefingView`、`SemesterGradeManager`、`AdminPanel`、`TimetableCalendarView` 与 `TimetableOcrView` 共 15 处表格补全 `<caption>`（或 `aria-labelledby`）、`<th scope="col|row">` 与键盘可聚焦滚动区域。
+- **统一原生 `<dialog>` + `showModal()` 弹窗底座迁移（Issue #488）**：
+  - 新增 `src/components/AccessibleDialog.tsx` 与 `src/index.css` 中 `dialog.openlearn-dialog` 顶层过渡动画样式（原生 `showModal()` 顶层渲染、焦点锁定、背景 `inert`、`Esc` 关闭与焦点自动归还；配置 `closedby` 属性并实现基于 `getBoundingClientRect()` 的 `pointerdown`/`click` 轻量关闭回退及 `prefers-reduced-motion` 减动效动画；同步兼容无 `showModal()` 的 Vitest `jsdom` 测试环境）；
+  - 将 `src/features/modals/` 全部 11 个弹窗组件（`BatchPickerModal`、`CloudDriveModal`、`CourseWizardModal`、`ExportWeightModal`、`ImportLessonsModal`、`ImportModal`、`NotificationDetailModal`、`ProcessLogsModal`、`QuizGeneratorModal`、`SystemErrorCenterModal`、`SystemResourceLibraryModal`）及 `src/components/ProfileModal.tsx` 迁移至 `<AccessibleDialog>`，补全 `aria-labelledby` / `aria-label` 与关闭按钮无障碍标签。
+- **局域网 HTTP 访问被 Chrome 升级为 HTTPS 导致静态资源加载失败（Issue #494）**：
+  - 抽出 `server/security/host-helmet.ts`（`buildHostHelmetOptions`）并在未启用 `ENABLE_HSTS` / 生产 `FORCE_HTTPS` 时显式设置 `upgradeInsecureRequests: null`，修复 Helmet v8 默认 `useDefaults: true` 下省略该键仍下发 `upgrade-insecure-requests`、导致 Chrome 在局域网 HTTP IP 下把 `/assets/*` 强升为 `https://...` 并报 `net::ERR_SSL_PROTOCOL_ERROR` 白屏的问题；
+  - 新增 `packages/core/security/safe-uuid.ts`（`safeRandomUUID`），替换前端可触达模块（`classroom-runtime` / `lesson-engine`）对 `crypto.randomUUID()` 的裸调用（在非安全上下文的局域网 HTTP 下为 `undefined`），并将 `src/` 中 11 处裸用 `navigator.clipboard.writeText` 统一收敛到带 `execCommand` 回退的 `copyToClipboard`；
+  - 新增 `server/__tests__/lan-http-csp.test.ts` 与 `packages/core/__tests__/safe-uuid.test.ts`，并在 [docs/deployment/production-guide.md](docs/deployment/production-guide.md) 补充局域网 HTTP 与可信 HTTPS 配置说明。
+- **新建课程向导默认阶段名称中文本地化（Issue #493）**：
+  - 将 `src/hooks/useCourseWizard.ts` 初始及重置时间轴抽出为 `getDefaultWizardTimeline(lang, idPrefix)`，中文模式下默认 4 阶段统一显示纯中文名称（`课堂导入`、`核心精讲`、`互动演练`、`课堂总结`）及中文备注，不再出现 `'Course Orientation / 课堂导入'` 等中英混杂文案；
+  - 同步本地化 `src/features/modals/CourseWizardModal.tsx` 中的 3 套预设时间轴模板（经典 5-15-15-5 讲授模式、主题讨论工作坊模式、翻转课堂高强度训练），根据 `lang` 分别输出纯中文或纯英文阶段标题与备注。
+
+> > > > > > > origin/main
 
 - **无障碍语义地标、焦点可见性、跨文档消息安全与可选登出站点清理（Issue #487）**：
   - 为 `App.tsx` 主应用壳、登录页及强制改密页补齐 Skip Link、`lang`/`title` 动态同步与 `<main>`/`<nav>`/`<aside>` 地标；为 `QuickActionsMenu.tsx` 菜单选项与 `RightSidebar.tsx` 折叠触发器、通知列表项等可点击 `<div>` 改用原生 `<button type="button">`；为 `RevealPresentationWrapper.tsx` 演示文稿 PDF `<iframe>` 补充 `title`；补全 `focus-visible:ring-2` 键盘焦点指示并清理表格与表单中的反效 `select-none`；

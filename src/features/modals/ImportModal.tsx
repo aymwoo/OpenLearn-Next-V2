@@ -1,5 +1,6 @@
 import React from 'react';
 import { Upload, Download, FileIcon, Check, Loader2 } from 'lucide-react';
+import AccessibleDialog from '../../components/AccessibleDialog';
 
 interface ImportModalProps {
   show: boolean;
@@ -24,154 +25,159 @@ export function ImportModal({
 }: ImportModalProps) {
   if (!show) return null;
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 font-sans text-gray-800">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-lg flex flex-col p-6 relative">
-        <button
-          type="button"
-          onClick={onClose}
-          className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 text-xl font-medium cursor-pointer"
-        >
-          &times;
-        </button>
+    <AccessibleDialog
+      open={show}
+      onClose={onClose}
+      ariaLabelledBy="import-modal-title"
+      closedBy={isImporting ? 'none' : 'any'}
+      className="bg-white rounded-xl shadow-xl max-w-lg p-6 relative font-sans text-gray-800"
+    >
+      <button
+        type="button"
+        onClick={onClose}
+        aria-label={lang === 'zh' ? '关闭弹窗' : 'Close dialog'}
+        className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 text-xl font-medium cursor-pointer"
+      >
+        &times;
+      </button>
 
-        <h3 className="text-base font-semibold text-gray-900 mb-1 flex items-center gap-2">
-          <Upload size={18} className="text-indigo-600" />
-          {lang === 'zh' ? '手动批量导入数据' : 'Manual Bulk Import'}
-        </h3>
-        <p className="text-xs text-gray-500 mb-4 font-sans text-left">
-          {lang === 'zh'
-            ? '支持导入 CSV 或 JSON 文件。CSV 文件需包含标题行（支持中英文标题），仅「学生姓名」为必填，其余列可选：'
-            : 'Supports CSV or JSON files. Only "Student Name" is required; all other columns are optional:'}
-        </p>
+      <h3 id="import-modal-title" className="text-base font-semibold text-gray-900 mb-1 flex items-center gap-2">
+        <Upload size={18} className="text-indigo-600" />
+        {lang === 'zh' ? '手动批量导入数据' : 'Manual Bulk Import'}
+      </h3>
+      <p className="text-xs text-gray-500 mb-4 font-sans text-left">
+        {lang === 'zh'
+          ? '支持导入 CSV 或 JSON 文件。CSV 文件需包含标题行（支持中英文标题），仅「学生姓名」为必填，其余列可选：'
+          : 'Supports CSV or JSON files. Only "Student Name" is required; all other columns are optional:'}
+      </p>
 
-        <div className="bg-gray-50 p-3 rounded-lg border border-gray-100 text-xs font-mono text-gray-600 mb-4 whitespace-pre overflow-x-auto select-all text-left leading-relaxed">
-          {lang === 'zh'
-            ? '班级名称, 班级描述, 学生学号, 学生姓名, 学生邮箱, 初始密码, 学生备注, 性别\n高一A班, 基础英语课程, 20260101, 李明, liming@example.com, , 数学较弱, 男'
-            : 'Class Name, Class Desc, Student Number, Student Name, Student Email, Initial Password, Student Notes, Gender\nClass 101, Introduction to English, 20260101, John Doe, john@example.com, , , Male'}
-        </div>
+      <div className="bg-gray-50 p-3 rounded-lg border border-gray-100 text-xs font-mono text-gray-600 mb-4 whitespace-pre overflow-x-auto select-all text-left leading-relaxed">
+        {lang === 'zh'
+          ? '班级名称, 班级描述, 学生学号, 学生姓名, 学生邮箱, 初始密码, 学生备注, 性别\n高一A班, 基础英语课程, 20260101, 李明, liming@example.com, , 数学较弱, 男'
+          : 'Class Name, Class Desc, Student Number, Student Name, Student Email, Initial Password, Student Notes, Gender\nClass 101, Introduction to English, 20260101, John Doe, john@example.com, , , Male'}
+      </div>
 
-        <ul className="mb-4 text-xs text-gray-500 space-y-1 list-disc pl-5 font-sans text-left">
-          {lang === 'zh' ? (
-            <>
-              <li>
-                <strong className="text-gray-700">学号</strong>：学生登录账号。留空则自动生成； 已存在同
-                <strong className="text-gray-700">邮箱</strong>或同学号的学生会被识别为同一人，不会重复建档。
-              </li>
-              <li>
-                <strong className="text-gray-700">初始密码</strong>：留空则系统生成 12 位随机密码，
-                并在导入成功提示中列出「学号 / 姓名 / 密码」供你分发（仅显示一次，请及时保存）。
-              </li>
-              <li>
-                <strong className="text-gray-700">学生备注</strong>：仅本平台教师可见的私有备注。
-              </li>
-              <li>
-                <strong className="text-gray-700">性别</strong>：选填（男/女 或
-                male/female）。用于课堂头像按性别呈现，留空则显示中性人像。
-              </li>
-            </>
-          ) : (
-            <>
-              <li>
-                <strong className="text-gray-700">Student Number</strong> is the login account. Auto-generated if blank;
-                students already matching by <strong className="text-gray-700">email</strong> or student number are
-                reused instead of duplicated.
-              </li>
-              <li>
-                <strong className="text-gray-700">Initial Password</strong>: leave blank and a 12-character random
-                password is generated and listed once in the success message for you to distribute.
-              </li>
-              <li>
-                <strong className="text-gray-700">Student Notes</strong> is a teacher-only private note.
-              </li>
-              <li>
-                <strong className="text-gray-700">Gender</strong>: optional (Male/Female or 男/女). Used for student
-                avatar rendering in classroom focus monitor; defaults to neutral avatar if blank.
-              </li>
-            </>
-          )}
-        </ul>
-
-        <div className="mb-4 flex flex-col gap-2 p-3 bg-indigo-50/50 border border-indigo-100 rounded-lg text-left select-none">
-          <span className="text-xs font-semibold text-indigo-900 flex items-center gap-1">
-            <Download size={13} className="text-indigo-600" />
-            {lang === 'zh' ? '下载导入数据模板文件：' : 'Download Import Templates:'}
-          </span>
-          <div className="flex flex-col sm:flex-row gap-2 mt-1">
-            <button
-              type="button"
-              onClick={() => downloadCSVTemplate('class')}
-              className="flex-1 flex items-center justify-center gap-1.5 text-xs px-2.5 py-2 bg-white border border-indigo-200 text-indigo-700 rounded-lg hover:bg-indigo-50 transition-colors shadow-sm font-medium cursor-pointer"
-            >
-              <FileIcon size={12} className="text-emerald-600" />
-              {lang === 'zh' ? '下载班级与学生模板' : 'Class & Students Template'}
-            </button>
-            <button
-              type="button"
-              onClick={() => downloadCSVTemplate('student')}
-              className="flex-1 flex items-center justify-center gap-1.5 text-xs px-2.5 py-2 bg-white border border-indigo-200 text-indigo-700 rounded-lg hover:bg-indigo-50 transition-colors shadow-sm font-medium cursor-pointer"
-            >
-              <FileIcon size={12} className="text-emerald-600" />
-              {lang === 'zh' ? '下载独立学生模板' : 'Independent Students Template'}
-            </button>
-          </div>
-        </div>
-
-        <div
-          onDragOver={(e) => e.preventDefault()}
-          onDrop={(e) => {
-            e.preventDefault();
-            if (!e.dataTransfer.files || e.dataTransfer.files.length === 0) return;
-            handleImportFile(e.dataTransfer.files[0]);
-          }}
-          className="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center cursor-pointer hover:border-indigo-500 hover:bg-indigo-50/20 transition-all mb-4"
-          onClick={() => {
-            const input = document.createElement('input');
-            input.type = 'file';
-            input.accept = '.csv,.json';
-            input.onchange = (e: any) => {
-              if (e.target.files?.[0]) handleImportFile(e.target.files[0]);
-            };
-            input.click();
-          }}
-        >
-          <Upload className="mx-auto text-gray-400 mb-2" size={24} />
-          <p className="text-xs font-semibold text-gray-700">
-            {lang === 'zh' ? '点击选择文件 或 拖拽文件到这里' : 'Click to select file or drag it here'}
-          </p>
-          <p className="text-xs text-gray-400 mt-1">CSV or JSON (max 5MB)</p>
-        </div>
-
-        {importError && (
-          <div className="p-3 bg-red-50 border border-red-100 text-red-700 text-xs rounded-lg mb-4 flex items-start gap-2 max-h-32 overflow-y-auto">
-            <span className="font-bold shrink-0">✕</span>
-            <span className="font-sans text-left leading-tight break-all">{importError}</span>
-          </div>
+      <ul className="mb-4 text-xs text-gray-500 space-y-1 list-disc pl-5 font-sans text-left">
+        {lang === 'zh' ? (
+          <>
+            <li>
+              <strong className="text-gray-700">学号</strong>：学生登录账号。留空则自动生成； 已存在同
+              <strong className="text-gray-700">邮箱</strong>或同学号的学生会被识别为同一人，不会重复建档。
+            </li>
+            <li>
+              <strong className="text-gray-700">初始密码</strong>：留空则系统生成 12 位随机密码，
+              并在导入成功提示中列出「学号 / 姓名 / 密码」供你分发（仅显示一次，请及时保存）。
+            </li>
+            <li>
+              <strong className="text-gray-700">学生备注</strong>：仅本平台教师可见的私有备注。
+            </li>
+            <li>
+              <strong className="text-gray-700">性别</strong>：选填（男/女 或
+              male/female）。用于课堂头像按性别呈现，留空则显示中性人像。
+            </li>
+          </>
+        ) : (
+          <>
+            <li>
+              <strong className="text-gray-700">Student Number</strong> is the login account. Auto-generated if blank;
+              students already matching by <strong className="text-gray-700">email</strong> or student number are reused
+              instead of duplicated.
+            </li>
+            <li>
+              <strong className="text-gray-700">Initial Password</strong>: leave blank and a 12-character random
+              password is generated and listed once in the success message for you to distribute.
+            </li>
+            <li>
+              <strong className="text-gray-700">Student Notes</strong> is a teacher-only private note.
+            </li>
+            <li>
+              <strong className="text-gray-700">Gender</strong>: optional (Male/Female or 男/女). Used for student
+              avatar rendering in classroom focus monitor; defaults to neutral avatar if blank.
+            </li>
+          </>
         )}
-        {importSuccess && (
-          <div className="p-3 bg-green-50 border border-green-105 text-green-700 text-xs rounded-lg mb-4 flex items-start gap-2">
-            <Check size={14} className="shrink-0 mt-0.5" />
-            <span className="font-sans text-left leading-tight">{importSuccess}</span>
-          </div>
-        )}
-        {isImporting && (
-          <div className="flex items-center justify-center gap-2 text-indigo-600 text-xs py-2">
-            <Loader2 size={16} className="animate-spin" />
-            <span>
-              {lang === 'zh' ? '正在分析数据并导入系统数据库...' : 'Validating data and transferring records...'}
-            </span>
-          </div>
-        )}
+      </ul>
 
-        <div className="flex justify-end gap-2 mt-2">
+      <div className="mb-4 flex flex-col gap-2 p-3 bg-indigo-50/50 border border-indigo-100 rounded-lg text-left select-none">
+        <span className="text-xs font-semibold text-indigo-900 flex items-center gap-1">
+          <Download size={13} className="text-indigo-600" />
+          {lang === 'zh' ? '下载导入数据模板文件：' : 'Download Import Templates:'}
+        </span>
+        <div className="flex flex-col sm:flex-row gap-2 mt-1">
           <button
             type="button"
-            onClick={onClose}
-            className="px-4 py-2 text-xs font-medium border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer"
+            onClick={() => downloadCSVTemplate('class')}
+            className="flex-1 flex items-center justify-center gap-1.5 text-xs px-2.5 py-2 bg-white border border-indigo-200 text-indigo-700 rounded-lg hover:bg-indigo-50 transition-colors shadow-sm font-medium cursor-pointer"
           >
-            {lang === 'zh' ? '关闭' : 'Close'}
+            <FileIcon size={12} className="text-emerald-600" />
+            {lang === 'zh' ? '下载班级与学生模板' : 'Class & Students Template'}
+          </button>
+          <button
+            type="button"
+            onClick={() => downloadCSVTemplate('student')}
+            className="flex-1 flex items-center justify-center gap-1.5 text-xs px-2.5 py-2 bg-white border border-indigo-200 text-indigo-700 rounded-lg hover:bg-indigo-50 transition-colors shadow-sm font-medium cursor-pointer"
+          >
+            <FileIcon size={12} className="text-emerald-600" />
+            {lang === 'zh' ? '下载独立学生模板' : 'Independent Students Template'}
           </button>
         </div>
       </div>
-    </div>
+
+      <div
+        onDragOver={(e) => e.preventDefault()}
+        onDrop={(e) => {
+          e.preventDefault();
+          if (!e.dataTransfer.files || e.dataTransfer.files.length === 0) return;
+          handleImportFile(e.dataTransfer.files[0]);
+        }}
+        className="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center cursor-pointer hover:border-indigo-500 hover:bg-indigo-50/20 transition-all mb-4"
+        onClick={() => {
+          const input = document.createElement('input');
+          input.type = 'file';
+          input.accept = '.csv,.json';
+          input.onchange = (e: any) => {
+            if (e.target.files?.[0]) handleImportFile(e.target.files[0]);
+          };
+          input.click();
+        }}
+      >
+        <Upload className="mx-auto text-gray-400 mb-2" size={24} />
+        <p className="text-xs font-semibold text-gray-700">
+          {lang === 'zh' ? '点击选择文件 或 拖拽文件到这里' : 'Click to select file or drag it here'}
+        </p>
+        <p className="text-xs text-gray-400 mt-1">CSV or JSON (max 5MB)</p>
+      </div>
+
+      {importError && (
+        <div className="p-3 bg-red-50 border border-red-100 text-red-700 text-xs rounded-lg mb-4 flex items-start gap-2 max-h-32 overflow-y-auto">
+          <span className="font-bold shrink-0">✕</span>
+          <span className="font-sans text-left leading-tight break-all">{importError}</span>
+        </div>
+      )}
+      {importSuccess && (
+        <div className="p-3 bg-green-50 border border-green-105 text-green-700 text-xs rounded-lg mb-4 flex items-start gap-2">
+          <Check size={14} className="shrink-0 mt-0.5" />
+          <span className="font-sans text-left leading-tight">{importSuccess}</span>
+        </div>
+      )}
+      {isImporting && (
+        <div className="flex items-center justify-center gap-2 text-indigo-600 text-xs py-2">
+          <Loader2 size={16} className="animate-spin" />
+          <span>
+            {lang === 'zh' ? '正在分析数据并导入系统数据库...' : 'Validating data and transferring records...'}
+          </span>
+        </div>
+      )}
+
+      <div className="flex justify-end gap-2 mt-2">
+        <button
+          type="button"
+          onClick={onClose}
+          className="px-4 py-2 text-xs font-medium border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer"
+        >
+          {lang === 'zh' ? '关闭' : 'Close'}
+        </button>
+      </div>
+    </AccessibleDialog>
   );
 }

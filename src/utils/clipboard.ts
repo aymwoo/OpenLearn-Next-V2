@@ -4,9 +4,9 @@
 export async function copyToClipboard(text: string): Promise<boolean> {
   if (typeof window === 'undefined') return false;
 
-  // 1. Try modern navigator.clipboard
+  // 1. Try modern navigator.clipboard (falls through on insecure HTTP origins where undefined or rejected)
   try {
-    if (navigator.clipboard && window.isSecureContext) {
+    if (typeof navigator !== 'undefined' && typeof navigator.clipboard?.writeText === 'function') {
       await navigator.clipboard.writeText(text);
       return true;
     }

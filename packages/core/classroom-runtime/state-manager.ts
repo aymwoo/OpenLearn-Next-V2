@@ -4,6 +4,7 @@
  */
 
 import { RuntimeStateTree, RuntimeLifecycleState, UserParticipant } from './types.js';
+import { safeRandomUUID } from '../security/safe-uuid.js';
 
 type StateListener = (state: RuntimeStateTree) => void;
 
@@ -11,7 +12,7 @@ export class RuntimeStateManager {
   private currentState: RuntimeStateTree;
   private listeners = new Set<StateListener>();
 
-  constructor(initialRuntimeId = `rt_${globalThis.crypto.randomUUID()}`) {
+  constructor(initialRuntimeId = `rt_${safeRandomUUID()}`) {
     this.currentState = {
       runtime: {
         id: initialRuntimeId,

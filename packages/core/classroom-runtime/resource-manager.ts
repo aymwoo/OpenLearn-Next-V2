@@ -4,6 +4,7 @@
  */
 
 import { RuntimeResource, ResourceType } from './types.js';
+import { safeRandomUUID } from '../security/safe-uuid.js';
 
 export class RuntimeResourceManager {
   private resources = new Map<string, RuntimeResource>();
@@ -16,7 +17,7 @@ export class RuntimeResourceManager {
     if (existing) return existing;
 
     const resource: RuntimeResource = {
-      id: `res_${globalThis.crypto.randomUUID()}`,
+      id: `res_${safeRandomUUID()}`,
       type,
       url,
       sizeBytes,

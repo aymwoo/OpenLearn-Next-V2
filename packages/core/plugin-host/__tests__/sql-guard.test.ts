@@ -195,5 +195,59 @@ describe('sql-guard 深度安全校验', () => {
         }),
       ).not.toThrow();
     });
+
+    it('允许 ON CONFLICT ... DO UPDATE SET 标准 UPSERT 语法而不误判 "set" 为表名 (#492)', () => {
+      expect(() =>
+        assertPluginSqlAllowed({
+          sql: `INSERT INTO plugin_abc_submissions (id, xml) VALUES (?, ?)
+                ON CONFLICT(id) DO UPDATE SET xml = excluded.xml`,
+          ownPrefix,
+        }),
+      ).not.toThrow();
+
+      expect(() =>
+        assertPluginSqlAllowed({
+          sql: `insert into plugin_abc_submissions (id, xml) values (?, ?)
+                on conflict (id) do/*gap*/update set xml = excluded.xml, updated_at = ?`,
+          ownPrefix,
+        }),
+      ).not.toThrow();
+
+      expect(() =>
+        assertPluginSqlAllowed({
+          sql: 'INSERT OR REPLACE INTO plugin_abc_submissions (id, xml) VALUES (?, ?)',
+          ownPrefix,
+        }),
+      ).not.toThrow();
+
+      const extracted = extractReferencedTables(
+        sanitizeSql('INSERT INTO plugin_abc_submissions (id, xml) VALUES (?, ?) ON CONFLICT(id) DO UPDATE SET xml = ?'),
+      );
+      expect(extracted.has('set')).toBe(false);
+      expect(extracted.has('plugin_abc_submissions')).toBe(true);
+    });
+
+    it('UPSERT 内部或直连 UPDATE SET 仍阻断跨命名空间与核心表访问 (#492)', () => {
+      expect(() =>
+        assertPluginSqlAllowed({
+          sql: 'INSERT INTO users (id, username) VALUES (1, "x") ON CONFLICT(id) DO UPDATE SET username = excluded.username',
+          ownPrefix,
+        }),
+      ).toThrowError(/strictly forbidden/i);
+
+      expect(() =>
+        assertPluginSqlAllowed({
+          sql: 'INSERT INTO plugin_abc_submissions (id, xml) VALUES (1, "x") ON CONFLICT(id) DO UPDATE SET xml = (SELECT password_hash FROM users)',
+          ownPrefix,
+        }),
+      ).toThrowError(/strictly forbidden/i);
+
+      expect(() =>
+        assertPluginSqlAllowed({
+          sql: 'UPDATE "set" SET col = 1',
+          ownPrefix,
+        }),
+      ).toThrowError(/not permitted/i);
+    });
   });
 });
