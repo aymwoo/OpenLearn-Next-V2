@@ -85,6 +85,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Docs
 
+- **归档 Gitee 镜像同步加固（#516）的端到端验证结论**：新增 `docs/ops/gitee-mirror-sync-verification.md`（纳入 `docs/index.md` 的部署与运维 toctree），记录 7 条验证矩阵（缺 Secret 跳过、网络瞬断失败、重试成功、加固成功/失败路径、生产 push 宽松路径、main 上 `strict=true` 最终验收）、5 项加固效果断言、误触发事故与一次性回退修复、最终镜像一致性及运维口径。
 - **补齐第三方主题系统（#484 / #500）落地后的文档一致性**：
   - `migrations/README.md` 增加 `047_third_party_theme_system.sql` 台账行 —— 该文件是迁移职责的权威清单，约定「随每个迁移同步更新」，此前遗漏；
   - 重新生成 `docs/reference/platform-data-tables.md` 的自动表清单（82 → **85** 张表、46 → **48** 个迁移），补齐 `themes`、`theme_versions`、`user_theme_preferences` 三张新表，以及 `site_settings` 新增的 `default_theme_id` / `logout_clear_site_data` 列；
