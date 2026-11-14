@@ -12,6 +12,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Features
 
+- **插件中心「社区」页支持管理员开关「允许从社区注册表安装」**：
+  - 新增迁移 `052_community_install_enabled.sql`（列默认保持 `NULL`，禁止写成 `0`，以免掩盖环境变量回退），同步更新 `migrations/README.md` 与 `schema-golden.json`；
+  - 生效优先级为 **界面显式 1/0（含显式关闭）> 未配置时环境变量 `OPENLEARN_COMMUNITY_INSTALL=1` > 默认关闭**；保存后立即对 `install-from-url`、带下载地址的一键更新，以及 `x-community-install` 直传生效，无需重启；
+  - 管理员可通过 `PUT /api/plugins/community/config` 写入 `installEnabled`（布尔或 `null` 以清除覆盖），`GET /api/plugins/community` 对管理员返回生效状态与来源，非管理员不可写开关，也看不到存储值、环境回退和公钥配置细节；
+  - 此开关不能绕过签名公钥、权限或网络校验；未配置公钥时，即便开启也会拒绝安装并给出中文说明。
+
 - **插件中心「社区」页签支持界面配置注册表 JSON 地址（Issue #514）**：
   - 新增数据库迁移 `051_community_registry_url.sql`（同步更新 `migrations/README.md` 与 `schema-golden.json`），在 `site_settings` 表新增 `community_registry_url` 列，生效优先级为 **UI/数据库配置 > 环境变量 `PLUGIN_COMMUNITY_REGISTRY_URL`**；
   - 扩展 `server/services/community-registry.ts`（`resolveCommunityRegistryConfig`、`setStoredCommunityRegistryUrl` 等），保存时自动校验公网 HTTP(S) URL 与 SSRF 规则并清空注册表缓存；

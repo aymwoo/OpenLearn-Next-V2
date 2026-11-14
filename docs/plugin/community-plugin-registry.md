@@ -149,26 +149,35 @@ npx @openlearn/plugin-sdk sign --key publisher-private.pem --publisher "Alice De
   "cached": false,
   "plugins": [{ "id": "ext-homework-hub", "installedVersion": "1.0.0", "hasUpdate": true, "...": "..." }],
   "skipped": 0,
-  "envVar": "PLUGIN_COMMUNITY_REGISTRY_URL"
+  "envVar": "PLUGIN_COMMUNITY_REGISTRY_URL",
+  "installEnabled": false,
+  "installConfigSource": "default",
+  "storedInstallEnabled": null,
+  "hasInstallEnvFallback": false,
+  "publicKeysConfigured": false
 }
 ```
 
 - `installedVersion` / `hasUpdate` 由服务端对照本地 `plugins` 表中的 `manifest.id` 与版本填充，注册表**无需**提供这两个字段。
+- 社区安装开关字段：`installEnabled` 为对全部门禁生效的最终值。`installConfigSource`、`storedInstallEnabled`、`hasInstallEnvFallback`、`publicKeysConfigured` 仅管理员可见（非管理员为 `null`），且从不返回公钥内容。
 - 拉取失败（超时、非 2xx、JSON 非法）时返回 HTTP 200 + `error` 字段 + 空 `plugins`，前端渲染可重试的错误态；**失败结果不写入缓存**。
 - 缓存按 `(注册表地址 + 已安装插件集合)` 维度隔离，TTL 5 分钟，容量上限 16 条。
 
 ### `PUT /api/plugins/community/config`
 
-**管理员专属** —— 在插件中心「社区」标签页设置或清除远端 JSON 注册表地址，持久化于 `site_settings.community_registry_url`（清空或传 `null` 则回落到 `PLUGIN_COMMUNITY_REGISTRY_URL`）。
+**管理员专属** —— 在插件中心「社区」标签页设置或清除远端 JSON 注册表地址，以及「允许从社区注册表安装」开关。注册表地址持久化于 `site_settings.community_registry_url`（清空或传 `null` 则回落到 `PLUGIN_COMMUNITY_REGISTRY_URL`）；安装开关持久化于 `site_settings.community_install_enabled`（传 `null` 则清除界面覆盖，回退环境变量或默认关闭）。请求体须至少包含 `registryUrl` 或 `installEnabled` 之一，只更新其中一项时不会清除另一项。
 
 ```json
 {
-  "registryUrl": "https://example.com/community-plugins.json"
+  "registryUrl": "https://example.com/community-plugins.json",
+  "installEnabled": true
 }
 ```
 
 - 非空地址必须通过出站安全校验（`isSafeExternalUrl`），否则返回 HTTP 400。
-- 保存成功后自动清空注册表内存缓存，并返回更新后的 `configSource`（`database` / `env` / `none`）、`databaseUrl`、`activeUrl` 与 `hasEnvFallback`。
+- `installEnabled` 必须是布尔值或 `null`。
+- 保存成功后，注册表地址变更会清空注册表内存缓存；安装开关保存后立即对后续安装门禁生效，无需重启。响应包含更新后的 `configSource`（`database` / `env` / `none`）、`databaseUrl`、`activeUrl`、`hasEnvFallback`，以及 `installEnabled`、`installConfigSource`、`storedInstallEnabled`、`hasInstallEnvFallback`、`publicKeysConfigured`。
+- 生效优先级：界面显式 1/0（含显式关闭）> 未配置时环境变量 `OPENLEARN_COMMUNITY_INSTALL=1` > 默认关闭。此开关不能绕过签名公钥、权限或网络校验。
 
 ### `POST /api/plugins/install-from-url`
 
@@ -191,7 +200,7 @@ npx @openlearn/plugin-sdk sign --key publisher-private.pem --publisher "Alice De
 
 1. 校验 `downloadUrl` 通过出站安全校验、`expectedId` 符合插件 id 规范；
 2. 要求 `acknowledgeRisk === true`，否则 400 且不下载；
-3. 要求 `OPENLEARN_COMMUNITY_INSTALL=1`，否则 403，`code` 为 `COMMUNITY_INSTALL_DISABLED`；
+3. 要求社区安装生效值已开启（界面显式开启，或未配置时 `OPENLEARN_COMMUNITY_INSTALL=1`），否则 403，`code` 为 `COMMUNITY_INSTALL_DISABLED`；
 4. 要求请求体同时带 `integrity` 与 `signature`，否则 400，`code` 为 `COMMUNITY_ATTESTATION_REQUIRED`，此时不下载；
 5. 服务端下载 ZIP。下载失败返回 HTTP 400 + `fallbackToClient: true`。下载成功后按 `OPENLEARN_COMMUNITY_PUBKEY` 验签，失败则删除临时包；
 6. 若 `expectedId` 对应的插件已在本机安装 ⇒ 走 `updateFromZip`（`allowDowngrade` 默认 `false`）；否则走 `installFromZip`，并按受信策略落执行模式。
@@ -212,7 +221,7 @@ npx @openlearn/plugin-sdk sign --key publisher-private.pem --publisher "Alice De
 
 `src/components/plugin-center/sub-views/PluginCommunityPanel.tsx`，挂载于插件中心顶部的 **社区 (Community)** 标签页。
 
-- **插件源配置（管理员）**：未配置时在引导卡片内直接提供地址输入表单；已配置或加载失败时可通过工具栏「插件源设置」按钮展开内嵌表单，支持修改注册表 JSON 地址或清除界面覆盖（恢复环境变量默认）；
+- **插件源与安装开关（管理员）**：未配置时在引导卡片内直接提供地址输入表单；已配置或加载失败时可通过工具栏「插件源设置」按钮展开内嵌表单，支持修改注册表 JSON 地址或清除界面覆盖（恢复环境变量默认）。管理员还可开关「允许从社区注册表安装」，保存后立即生效；非管理员只能看到有效状态，不能改开关，也看不到环境回退或公钥配置细节。未配置公钥时，开启开关也会显示无法安装的中文说明；
 - **预览卡片**：图标、名称、作者、版本、认证/精选角标、描述、标签、权限数量、下载量与收藏数、源码与主页外链；
 - **筛选与排序**：关键词搜索（名称/作者/标签/id）、高频标签芯片、推荐 / 下载最多 / 按名称排序、一键隐藏已安装；
 - **安装反馈**：点击安装先打开风险说明（`data-testid="community-install-risk-dialog"`）。确认后请求体带 `acknowledgeRisk: true`；「同时批准公开路由」默认不勾。成功后卡片进入已安装态，并触发插件列表刷新（插件的前端贡献点在启动时注册，故安装完成后需要重新加载页面才会生效）；

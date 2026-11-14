@@ -70,6 +70,11 @@ interface CommunityRegistryResponse {
   configSource?: 'database' | 'env' | 'none';
   databaseUrl?: string | null;
   hasEnvFallback?: boolean;
+  installEnabled?: boolean;
+  installConfigSource?: 'database' | 'env' | 'default' | null;
+  storedInstallEnabled?: boolean | null;
+  hasInstallEnvFallback?: boolean | null;
+  publicKeysConfigured?: boolean | null;
 }
 
 export interface PluginCommunityPanelProps {
@@ -205,6 +210,9 @@ export function PluginCommunityPanel({
   const [configError, setConfigError] = useState<string | null>(null);
   const [configNotice, setConfigNotice] = useState<string | null>(null);
   const [registryInputDirty, setRegistryInputDirty] = useState(false);
+  const [installSaving, setInstallSaving] = useState(false);
+  const [installError, setInstallError] = useState<string | null>(null);
+  const [installNotice, setInstallNotice] = useState<string | null>(null);
 
   const canConfigure = canConfigureProp ?? data?.canConfigure ?? true;
 
@@ -489,6 +497,159 @@ export function PluginCommunityPanel({
     [doFetch, loadRegistry, validateRegistryUrl, zh],
   );
 
+  const submitInstallConfig = useCallback(
+    async (installEnabled: boolean | null) => {
+      if (!canConfigure) return;
+      setInstallSaving(true);
+      setInstallError(null);
+      setInstallNotice(null);
+      try {
+        const res = await doFetch(CONFIG_ENDPOINT, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ installEnabled }),
+        });
+        const body = (await res.json().catch(() => null)) as {
+          success?: boolean;
+          error?: string;
+        } | null;
+        if (!res.ok || !body?.success) {
+          const msg =
+            res.status === 403
+              ? zh
+                ? '仅管理员可修改社区安装开关'
+                : 'Only administrators can change the community install switch'
+              : body?.error || (zh ? '保存社区安装开关失败' : 'Failed to save community install setting');
+          setInstallError(msg);
+          return;
+        }
+        setInstallNotice(
+          installEnabled === null
+            ? zh
+              ? '已清除界面覆盖，将按环境变量或默认关闭生效'
+              : 'Cleared UI override; env or default-off now applies'
+            : installEnabled
+              ? zh
+                ? '已允许从社区注册表安装，立即生效'
+                : 'Community registry install enabled; takes effect immediately'
+              : zh
+                ? '已关闭社区注册表安装，立即生效'
+                : 'Community registry install disabled; takes effect immediately',
+        );
+        await loadRegistry(false);
+      } catch (e) {
+        setInstallError(e instanceof Error ? e.message : String(e));
+      } finally {
+        setInstallSaving(false);
+      }
+    },
+    [canConfigure, doFetch, loadRegistry, zh],
+  );
+
+  const renderInstallToggle = (options: { compact?: boolean } = {}) => {
+    const enabled = Boolean(data?.installEnabled);
+    const source = canConfigure ? data?.installConfigSource : null;
+    const stored = canConfigure ? data?.storedInstallEnabled : null;
+    const hasEnvFallback = canConfigure ? Boolean(data?.hasInstallEnvFallback) : false;
+    const keysConfigured = canConfigure ? data?.publicKeysConfigured : null;
+    const sourceLabel =
+      source === 'database'
+        ? zh
+          ? '当前来源：管理员界面配置（覆盖环境变量）'
+          : 'Source: admin UI setting (overrides env)'
+        : source === 'env'
+          ? zh
+            ? '当前来源：环境变量 OPENLEARN_COMMUNITY_INSTALL=1（未在界面显式配置）'
+            : 'Source: OPENLEARN_COMMUNITY_INSTALL=1 (no explicit UI setting)'
+          : source === 'default'
+            ? zh
+              ? '当前来源：默认关闭（未在界面或环境变量中开启）'
+              : 'Source: default off (not enabled in UI or env)'
+            : null;
+
+    return (
+      <div
+        className={
+          options.compact
+            ? 'mb-4 px-4 py-3 rounded-xl bg-white border border-gray-200 text-left'
+            : 'rounded-lg border border-gray-200 bg-slate-50/70 px-3 py-3 space-y-2'
+        }
+        data-testid="community-install-toggle"
+      >
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-semibold text-gray-800">
+              {zh ? '允许从社区注册表安装' : 'Allow install from community registry'}
+            </p>
+            <p className="text-xs text-gray-500 leading-relaxed mt-1">
+              {canConfigure
+                ? zh
+                  ? '默认关闭。管理员可在此开启或关闭，保存后立即对安装、URL 更新和社区直传生效。未在界面显式配置时，才回退到环境变量 OPENLEARN_COMMUNITY_INSTALL=1；显式关闭会覆盖该环境变量。此开关不能绕过签名公钥、权限或网络校验。'
+                  : 'Off by default. Admins can turn this on or off here; the change applies immediately to install, URL update, and community direct upload. Env OPENLEARN_COMMUNITY_INSTALL=1 is only a fallback when no explicit UI value is stored; an explicit off overrides that env. This switch cannot bypass signature public keys, permission, or network checks.'
+                : zh
+                  ? '社区安装由管理员在插件中心配置，默认关闭。此状态不能绕过签名、权限或网络校验。'
+                  : 'Community install is configured by an administrator and is off by default. This status cannot bypass signature, permission, or network checks.'}
+            </p>
+            <p className="text-xs text-gray-600 mt-1.5">
+              {zh ? `有效状态：${enabled ? '已开启' : '已关闭'}` : `Effective: ${enabled ? 'on' : 'off'}`}
+              {sourceLabel ? ` · ${sourceLabel}` : ''}
+            </p>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={enabled}
+            aria-label={zh ? '允许从社区注册表安装' : 'Allow install from community registry'}
+            disabled={!canConfigure || installSaving}
+            onClick={() => void submitInstallConfig(!enabled)}
+            className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
+              enabled ? 'bg-indigo-600' : 'bg-gray-300'
+            } ${!canConfigure || installSaving ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}
+          >
+            <span
+              className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                enabled ? 'translate-x-6' : 'translate-x-1'
+              }`}
+            />
+          </button>
+        </div>
+        {canConfigure && stored !== null && stored !== undefined && (
+          <button
+            type="button"
+            disabled={installSaving}
+            onClick={() => void submitInstallConfig(null)}
+            className="text-xs font-semibold text-indigo-700 hover:text-indigo-900 disabled:opacity-60 cursor-pointer"
+          >
+            {hasEnvFallback
+              ? zh
+                ? '清除界面覆盖，回退到环境变量'
+                : 'Clear UI override and fall back to env'
+              : zh
+                ? '清除界面覆盖，回退到默认关闭'
+                : 'Clear UI override and fall back to default off'}
+          </button>
+        )}
+        {canConfigure && enabled && keysConfigured === false && (
+          <p role="alert" className="text-xs text-amber-700 leading-relaxed">
+            {zh
+              ? '尚未配置社区验签公钥。即便已开启此开关，也无法从社区注册表安装。请由部署者设置 OPENLEARN_COMMUNITY_PUBKEY 或 OPENLEARN_TRUSTED_PUBKEYS 后重启服务。'
+              : 'No community signing public key is configured. Even with this switch on, community registry installs will be rejected. Set OPENLEARN_COMMUNITY_PUBKEY or OPENLEARN_TRUSTED_PUBKEYS and restart the server.'}
+          </p>
+        )}
+        {installError && (
+          <p role="alert" className="text-xs text-rose-600">
+            {installError}
+          </p>
+        )}
+        {installNotice && !installError && (
+          <p role="status" className="text-xs text-emerald-700">
+            {installNotice}
+          </p>
+        )}
+      </div>
+    );
+  };
+
   const renderRegistryConfigForm = (options: { isUnconfiguredCard?: boolean } = {}) => {
     const isUnconfiguredCard = Boolean(options.isUnconfiguredCard);
     const hasDatabaseOverride = Boolean(data?.databaseUrl) || data?.configSource === 'database';
@@ -564,6 +725,8 @@ export function PluginCommunityPanel({
           )}
         </div>
 
+        {renderInstallToggle()}
+
         <div className="flex flex-wrap items-center gap-2 pt-1">
           <button
             type="submit"
@@ -630,6 +793,7 @@ export function PluginCommunityPanel({
                 : 'The community market reads an installable-plugin list from a remote JSON registry. Ask an administrator to configure it or set the environment variable on the server:'}
           </p>
           {canConfigure && renderRegistryConfigForm({ isUnconfiguredCard: true })}
+          {!canConfigure && renderInstallToggle({ compact: true })}
           <div className="mt-5 pt-4 border-t border-gray-100">
             <p className="text-xs text-gray-400 mb-2">
               {zh ? '也可以通过服务端环境变量配置：' : 'Or configure via server environment variable:'}
@@ -781,6 +945,8 @@ export function PluginCommunityPanel({
           {renderRegistryConfigForm()}
         </section>
       )}
+
+      {!configOpen && renderInstallToggle({ compact: true })}
 
       {/* 来源与统计 */}
       {data?.source && status === 'ready' && (

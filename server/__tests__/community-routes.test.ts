@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
 import express from 'express';
 import { createServer, type Server } from 'http';
 import type { AddressInfo } from 'net';
@@ -8,6 +8,10 @@ import { setAuditSinkForTests, type AuditRecord } from '../../packages/core/obse
 import { registerPluginsRoutes } from '../routes/plugins.js';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
 import { COMMUNITY_REGISTRY_ENV } from '../services/community-registry.js';
+import {
+  COMMUNITY_INSTALL_DISABLED_MESSAGE,
+  COMMUNITY_INSTALL_ENV,
+} from '../services/community-attest.js';
 
 /**
  * 社区市场路由的鉴权与入参门禁契约。
@@ -486,6 +490,256 @@ describe('community plugin registry routes', () => {
       expect(installEvent).toBeDefined();
       expect(installEvent?.signatureStatus).toBe('verified');
       expect(installEvent?.publisher).toBe('Alice Corp');
+    });
+  });
+
+  describe('社区安装开关：持久化、权限与全部门禁', () => {
+    const installPayload = {
+      downloadUrl: 'https://plugins.example.com/plugin.zip',
+      expectedId: 'ext-homework-hub',
+      acknowledgeRisk: true,
+      integrity: 'abc',
+      signature: 'def',
+    };
+
+    function clearStoredInstall() {
+      kernelContainer.db
+        .prepare('UPDATE site_settings SET community_install_enabled = NULL WHERE id = ?')
+        .run('global');
+    }
+
+    function storedInstall(): number | null {
+      const row = kernelContainer.db
+        .prepare('SELECT community_install_enabled FROM site_settings WHERE id = ?')
+        .get('global') as { community_install_enabled?: number | null } | undefined;
+      return row?.community_install_enabled ?? null;
+    }
+
+    let savedInstallEnv: string | undefined;
+    let savedPubkeyEnv: string | undefined;
+
+    beforeEach(() => {
+      savedInstallEnv = process.env[COMMUNITY_INSTALL_ENV];
+      savedPubkeyEnv = process.env.OPENLEARN_COMMUNITY_PUBKEY;
+      delete process.env[COMMUNITY_INSTALL_ENV];
+      clearStoredInstall();
+    });
+
+    afterEach(() => {
+      clearStoredInstall();
+      if (savedInstallEnv === undefined) delete process.env[COMMUNITY_INSTALL_ENV];
+      else process.env[COMMUNITY_INSTALL_ENV] = savedInstallEnv;
+      if (savedPubkeyEnv === undefined) delete process.env.OPENLEARN_COMMUNITY_PUBKEY;
+      else process.env.OPENLEARN_COMMUNITY_PUBKEY = savedPubkeyEnv;
+    });
+
+    const putConfig = (token: string, payload: unknown) =>
+      fetch(`${baseUrl}/api/plugins/community/config`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', ...cookie(token) },
+        body: JSON.stringify(payload),
+      });
+
+    const postInstall = (token: string, payload: unknown = installPayload) =>
+      fetch(`${baseUrl}/api/plugins/install-from-url`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...cookie(token) },
+        body: JSON.stringify(payload),
+      });
+
+    const postUpdate = (token: string) =>
+      fetch(`${baseUrl}/api/plugins/ext-homework-hub/one-click-update`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...cookie(token) },
+        body: JSON.stringify(installPayload),
+      });
+
+    async function communityZipBuf(pluginId: string) {
+      const zip = new JSZip();
+      zip.file(
+        'manifest.json',
+        JSON.stringify({
+          id: pluginId,
+          name: pluginId,
+          version: '1.0.0',
+          description: 'toggle test',
+        }),
+      );
+      zip.file('index.js', 'export default {};');
+      return zip.generateAsync({ type: 'nodebuffer' });
+    }
+
+    const postCommunityZip = async (
+      token: string,
+      pluginId: string,
+      extraHeaders: Record<string, string> = {},
+    ) =>
+      fetch(`${baseUrl}/api/plugins/upload-zip-raw`, {
+        method: 'POST',
+        headers: {
+          ...cookie(token),
+          'Content-Type': 'application/zip',
+          'x-plugin-filename': `${pluginId}.zip`,
+          // headerFlag 只把字面量 "true" 视为开启（与前端直传一致）
+          'x-community-install': 'true',
+          ...extraHeaders,
+        },
+        body: await communityZipBuf(pluginId),
+      });
+
+    it('GET 未配置时默认关闭；管理员可见来源，教师看不到敏感配置', async () => {
+      const adminRes = await fetch(`${baseUrl}/api/plugins/community`, { headers: cookie(adminToken) });
+      expect(adminRes.status).toBe(200);
+      const adminBody = (await adminRes.json()) as Record<string, unknown>;
+      expect(adminBody.installEnabled).toBe(false);
+      expect(adminBody.installConfigSource).toBe('default');
+      expect(adminBody.storedInstallEnabled).toBeNull();
+      expect(adminBody.hasInstallEnvFallback).toBe(false);
+      expect(typeof adminBody.publicKeysConfigured).toBe('boolean');
+
+      const teacherRes = await fetch(`${baseUrl}/api/plugins/community`, { headers: cookie(teacherToken) });
+      const teacherBody = (await teacherRes.json()) as Record<string, unknown>;
+      expect(teacherBody.installEnabled).toBe(false);
+      expect(teacherBody.canConfigure).toBe(false);
+      expect(teacherBody.installConfigSource).toBeNull();
+      expect(teacherBody.storedInstallEnabled).toBeNull();
+      expect(teacherBody.hasInstallEnvFallback).toBeNull();
+      expect(teacherBody.publicKeysConfigured).toBeNull();
+    });
+
+    it('未配置时环境变量 1 可回退开启，显式关闭覆盖后再清除可恢复', async () => {
+      process.env[COMMUNITY_INSTALL_ENV] = '1';
+      const envRes = await fetch(`${baseUrl}/api/plugins/community`, { headers: cookie(adminToken) });
+      const envBody = (await envRes.json()) as Record<string, unknown>;
+      expect(envBody.installEnabled).toBe(true);
+      expect(envBody.installConfigSource).toBe('env');
+      expect(envBody.hasInstallEnvFallback).toBe(true);
+
+      const offRes = await putConfig(adminToken, { installEnabled: false });
+      expect(offRes.status).toBe(200);
+      const offBody = (await offRes.json()) as Record<string, unknown>;
+      expect(offBody).toMatchObject({
+        installEnabled: false,
+        storedInstallEnabled: false,
+        installConfigSource: 'database',
+        hasInstallEnvFallback: true,
+      });
+      expect(storedInstall()).toBe(0);
+
+      const afterOff = await fetch(`${baseUrl}/api/plugins/community`, { headers: cookie(adminToken) });
+      expect(((await afterOff.json()) as { installEnabled: boolean }).installEnabled).toBe(false);
+
+      const clearRes = await putConfig(adminToken, { installEnabled: null });
+      expect(clearRes.status).toBe(200);
+      const clearBody = (await clearRes.json()) as Record<string, unknown>;
+      expect(clearBody).toMatchObject({
+        installEnabled: true,
+        storedInstallEnabled: null,
+        installConfigSource: 'env',
+      });
+      expect(storedInstall()).toBeNull();
+    });
+
+    it('界面显式开启无需环境变量，保存后再次读取仍开启', async () => {
+      const saveRes = await putConfig(adminToken, { installEnabled: true });
+      expect(saveRes.status).toBe(200);
+      expect((await saveRes.json()) as Record<string, unknown>).toMatchObject({
+        success: true,
+        installEnabled: true,
+        storedInstallEnabled: true,
+        installConfigSource: 'database',
+      });
+      expect(storedInstall()).toBe(1);
+
+      const again = await fetch(`${baseUrl}/api/plugins/community`, { headers: cookie(adminToken) });
+      expect(((await again.json()) as { installEnabled: boolean; installConfigSource: string })).toMatchObject({
+        installEnabled: true,
+        installConfigSource: 'database',
+      });
+    });
+
+    it('只更新安装开关时不会清除已保存的注册表地址', async () => {
+      const url = 'https://registry.example.com/community-plugins.json';
+      const saveUrl = await putConfig(adminToken, { registryUrl: url });
+      expect(saveUrl.status).toBe(200);
+      const toggle = await putConfig(adminToken, { installEnabled: true });
+      expect(toggle.status).toBe(200);
+      const body = (await toggle.json()) as { databaseUrl: string | null; installEnabled: boolean };
+      expect(body.databaseUrl).toBe(url);
+      expect(body.installEnabled).toBe(true);
+      await putConfig(adminToken, { registryUrl: null });
+    });
+
+    it('教师不能写入开关，数据库保持未配置', async () => {
+      const res = await putConfig(teacherToken, { installEnabled: true });
+      expect(res.status).toBe(403);
+      expect(storedInstall()).toBeNull();
+    });
+
+    it('install-from-url、URL 更新与 x-community-install 直传均使用同一有效值', async () => {
+      const disabledInstall = await postInstall(adminToken);
+      expect(disabledInstall.status).toBe(403);
+      const disabledBody = (await disabledInstall.json()) as { code?: string; error: string };
+      expect(disabledBody.code).toBe('COMMUNITY_INSTALL_DISABLED');
+      expect(disabledBody.error).toBe(COMMUNITY_INSTALL_DISABLED_MESSAGE);
+
+      const disabledUpdate = await postUpdate(adminToken);
+      expect(disabledUpdate.status).toBe(403);
+      expect(((await disabledUpdate.json()) as { code?: string }).code).toBe('COMMUNITY_INSTALL_DISABLED');
+
+      const disabledZip = await postCommunityZip(adminToken, 'ext-community-toggle-disabled');
+      expect(disabledZip.status).toBe(403);
+      expect(((await disabledZip.json()) as { code?: string }).code).toBe('COMMUNITY_INSTALL_DISABLED');
+
+      await putConfig(adminToken, { installEnabled: true });
+
+      const attested = {
+        downloadUrl: 'https://plugins.example.com/plugin.zip',
+        expectedId: 'ext-homework-hub',
+        acknowledgeRisk: true,
+      };
+      const enabledInstall = await postInstall(adminToken, attested);
+      const enabledInstallBody = (await enabledInstall.json()) as { code?: string };
+      expect(enabledInstall.status).not.toBe(403);
+      expect(enabledInstallBody.code).not.toBe('COMMUNITY_INSTALL_DISABLED');
+      expect(enabledInstall.status).toBe(400);
+      expect(enabledInstallBody.code).toBe('COMMUNITY_ATTESTATION_REQUIRED');
+
+      const enabledUpdate = await fetch(`${baseUrl}/api/plugins/ext-homework-hub/one-click-update`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...cookie(adminToken) },
+        body: JSON.stringify(attested),
+      });
+      const enabledUpdateBody = (await enabledUpdate.json()) as { code?: string };
+      expect(enabledUpdate.status).not.toBe(403);
+      expect(enabledUpdateBody.code).not.toBe('COMMUNITY_INSTALL_DISABLED');
+
+      const enabledZip = await postCommunityZip(adminToken, 'ext-community-toggle-enabled');
+      const enabledZipBody = (await enabledZip.json()) as { code?: string; error?: string };
+      expect(enabledZip.status).not.toBe(403);
+      expect(enabledZipBody.code).not.toBe('COMMUNITY_INSTALL_DISABLED');
+    });
+
+    it('开启开关但未配置公钥时社区直传仍被拒绝，且中文说明不能安装', async () => {
+      delete process.env.OPENLEARN_COMMUNITY_PUBKEY;
+      delete process.env.OPENLEARN_TRUSTED_PUBKEYS;
+      const saveRes = await putConfig(adminToken, { installEnabled: true });
+      const saveBody = (await saveRes.json()) as { publicKeysConfigured: boolean };
+      expect(saveBody.publicKeysConfigured).toBe(false);
+
+      const zipRes = await postCommunityZip(adminToken, 'ext-community-toggle-nopubkey', {
+        'x-integrity': 'a'.repeat(64),
+        'x-signature': 'dGVzdC1zaWduYXR1cmU=',
+      });
+      expect(zipRes.status).toBe(400);
+      const zipBody = (await zipRes.json()) as { code?: string; error: string };
+      expect(zipBody.code).toBe('COMMUNITY_PUBKEY_MISSING');
+      expect(zipBody.error).toMatch(/公钥|OPENLEARN_COMMUNITY_PUBKEY|TRUSTED_PUBKEYS/);
+    });
+
+    it('拒绝非法 installEnabled 类型', async () => {
+      const res = await putConfig(adminToken, { installEnabled: '1' });
+      expect(res.status).toBe(400);
     });
   });
 });

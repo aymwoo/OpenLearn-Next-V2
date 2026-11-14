@@ -43,7 +43,7 @@
 
 ## 社区包认证
 
-- `OPENLEARN_COMMUNITY_INSTALL` 不是 `1` 时，`install-from-url`、带下载地址的一键更新，以及带 `x-community-install` 的浏览器直传（包含超时回退路径）均被统一门禁拦截并拒绝。
+- 社区安装门禁读取生效值（界面显式 1/0 > 未配置时 `OPENLEARN_COMMUNITY_INSTALL=1` > 默认关闭）。未开启时，`install-from-url`、带下载地址的一键更新，以及带 `x-community-install` 的浏览器直传（包含超时回退路径）均被统一拦截并拒绝。该开关不能绕过签名公钥、权限或网络校验。
 - 社区包必须带 `integrity`（sha256 十六进制或 `sha256-` base64）和 `signature`（Ed25519 签名，支持绑定 manifest ID 与版本元数据）。公钥 PEM 放在 `OPENLEARN_COMMUNITY_PUBKEY`。
 - 验签过程支持流式文件分块读取，防止大包占用过多主进程 V8 堆内存。
 

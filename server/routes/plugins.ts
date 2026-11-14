@@ -42,7 +42,14 @@ import {
   type DownloadedPackage,
 } from '../services/community-registry.js';
 import JSZip from 'jszip';
-import { communityInstallEnabled, verifyCommunityPackage, communityPublicKeys } from '../services/community-attest.js';
+import {
+  COMMUNITY_INSTALL_DISABLED_MESSAGE,
+  COMMUNITY_INSTALL_ENV,
+  resolveCommunityInstallConfig,
+  setStoredCommunityInstallEnabled,
+  verifyCommunityPackage,
+  communityPublicKeys,
+} from '../services/community-attest.js';
 import { verifyPluginPackage } from '../../packages/core/security/plugin-signature.js';
 import {
   approvePluginCapabilities,
@@ -213,14 +220,14 @@ async function assertCommunityZipAttestation(
 
   // 如果声明了社区安装，或者包含签名/完整性声明
   if (isCommunityFlag || isSigned || hasExtIntegrity) {
-    if (isCommunityFlag && !communityInstallEnabled()) {
+    if (isCommunityFlag && !resolveCommunityInstallConfig(kernelContainer.db).enabled) {
       return {
         ok: false,
         status: 403,
         body: {
           success: false,
           code: 'COMMUNITY_INSTALL_DISABLED',
-          error: '社区安装默认关闭。设置 OPENLEARN_COMMUNITY_INSTALL=1 后才允许从注册表安装或更新。',
+          error: COMMUNITY_INSTALL_DISABLED_MESSAGE,
         },
       };
     }
@@ -672,6 +679,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
         installed: listInstalledManifestVersions(),
         forceRefresh: String(req.query.refresh || '') === '1',
       });
+      const install = resolveCommunityInstallConfig(kernelContainer.db);
       res.json({
         success: true,
         envVar: COMMUNITY_REGISTRY_ENV,
@@ -679,6 +687,11 @@ export function registerPluginsRoutes(ctx: ServerContext) {
         configSource: config.configSource,
         databaseUrl: isAdmin ? config.databaseUrl : null,
         hasEnvFallback: config.hasEnvFallback,
+        installEnabled: install.enabled,
+        installConfigSource: isAdmin ? install.configSource : null,
+        storedInstallEnabled: isAdmin ? install.storedValue : null,
+        hasInstallEnvFallback: isAdmin ? install.hasEnvFallback : null,
+        publicKeysConfigured: isAdmin ? install.publicKeysConfigured : null,
         ...result,
       });
     } catch (e: any) {
@@ -686,30 +699,66 @@ export function registerPluginsRoutes(ctx: ServerContext) {
     }
   });
 
-  // 在插件中心「社区」标签页设置或清除社区注册表 JSON 地址（仅管理员）
-  // SEC-AUTH: 管理员专属 —— 变更服务端出站拉取的插件注册表来源，须经 SSRF 校验。
+  // 在插件中心「社区」标签页设置或清除社区注册表 JSON 地址，以及社区安装开关（仅管理员）
+  // SEC-AUTH: 管理员专属 —— 变更服务端出站拉取的插件注册表来源或安装门禁，须经 SSRF / 角色校验。
   app.put('/api/plugins/community/config', requireScopedAuth('admin'), (req, res) => {
     try {
-      const { registryUrl } = req.body || {};
-      if (registryUrl === undefined) {
-        return res.status(400).json({ success: false, error: '缺少 registryUrl' });
+      const body = req.body || {};
+      const hasRegistryUrl = Object.prototype.hasOwnProperty.call(body, 'registryUrl');
+      const hasInstallEnabled = Object.prototype.hasOwnProperty.call(body, 'installEnabled');
+      if (!hasRegistryUrl && !hasInstallEnabled) {
+        return res.status(400).json({ success: false, error: '缺少 registryUrl 或 installEnabled' });
       }
-      if (registryUrl !== null && typeof registryUrl !== 'string') {
-        return res.status(400).json({ success: false, error: 'registryUrl 必须是字符串或 null' });
+
+      if (hasRegistryUrl) {
+        const { registryUrl } = body;
+        if (registryUrl !== null && typeof registryUrl !== 'string') {
+          return res.status(400).json({ success: false, error: 'registryUrl 必须是字符串或 null' });
+        }
       }
-      const updated = setStoredCommunityRegistryUrl(kernelContainer.db, registryUrl);
-      recordSecurityAudit('plugin.community_registry.updated', {
-        actorId: getActorId(req),
-        databaseUrl: updated.databaseUrl,
-        configSource: updated.configSource,
-      });
+      if (hasInstallEnabled) {
+        const { installEnabled } = body;
+        if (installEnabled !== null && typeof installEnabled !== 'boolean') {
+          return res.status(400).json({ success: false, error: 'installEnabled 必须是布尔值或 null' });
+        }
+      }
+
+      const registryUpdated = hasRegistryUrl
+        ? setStoredCommunityRegistryUrl(kernelContainer.db, body.registryUrl)
+        : resolveCommunityRegistryConfig(kernelContainer.db);
+      const installUpdated = hasInstallEnabled
+        ? setStoredCommunityInstallEnabled(kernelContainer.db, body.installEnabled)
+        : resolveCommunityInstallConfig(kernelContainer.db);
+
+      if (hasRegistryUrl) {
+        recordSecurityAudit('plugin.community_registry.updated', {
+          actorId: getActorId(req),
+          databaseUrl: registryUpdated.databaseUrl,
+          configSource: registryUpdated.configSource,
+        });
+      }
+      if (hasInstallEnabled) {
+        recordSecurityAudit('plugin.community_install.updated', {
+          actorId: getActorId(req),
+          storedInstallEnabled: installUpdated.storedValue,
+          installEnabled: installUpdated.enabled,
+          installConfigSource: installUpdated.configSource,
+        });
+      }
+
       res.json({
         success: true,
         envVar: COMMUNITY_REGISTRY_ENV,
-        configSource: updated.configSource,
-        databaseUrl: updated.databaseUrl,
-        activeUrl: updated.activeUrl,
-        hasEnvFallback: updated.hasEnvFallback,
+        installEnvVar: COMMUNITY_INSTALL_ENV,
+        configSource: registryUpdated.configSource,
+        databaseUrl: registryUpdated.databaseUrl,
+        activeUrl: registryUpdated.activeUrl,
+        hasEnvFallback: registryUpdated.hasEnvFallback,
+        installEnabled: installUpdated.enabled,
+        installConfigSource: installUpdated.configSource,
+        storedInstallEnabled: installUpdated.storedValue,
+        hasInstallEnvFallback: installUpdated.hasEnvFallback,
+        publicKeysConfigured: installUpdated.publicKeysConfigured,
       });
     } catch (e: any) {
       if (e instanceof CommunityRegistryConfigError) {
@@ -756,11 +805,11 @@ export function registerPluginsRoutes(ctx: ServerContext) {
           error: COMMUNITY_RISK_ACK_MESSAGE,
         });
       }
-      if (!communityInstallEnabled()) {
+      if (!resolveCommunityInstallConfig(kernelContainer.db).enabled) {
         return res.status(403).json({
           success: false,
           code: 'COMMUNITY_INSTALL_DISABLED',
-          error: '社区安装默认关闭。设置 OPENLEARN_COMMUNITY_INSTALL=1 后才允许从注册表安装。',
+          error: COMMUNITY_INSTALL_DISABLED_MESSAGE,
         });
       }
       if (typeof integrity !== 'string' || !integrity.trim() || typeof signature !== 'string' || !signature.trim()) {
@@ -917,11 +966,11 @@ export function registerPluginsRoutes(ctx: ServerContext) {
             error: `安全拦截: 非法下载地址 (${urlCheck.reason})`,
           });
         }
-        if (!communityInstallEnabled()) {
+        if (!resolveCommunityInstallConfig(kernelContainer.db).enabled) {
           return res.status(403).json({
             success: false,
             code: 'COMMUNITY_INSTALL_DISABLED',
-            error: '社区安装默认关闭。设置 OPENLEARN_COMMUNITY_INSTALL=1 后才允许从注册表更新。',
+            error: COMMUNITY_INSTALL_DISABLED_MESSAGE,
           });
         }
         if (typeof integrity !== 'string' || !integrity.trim() || typeof signature !== 'string' || !signature.trim()) {

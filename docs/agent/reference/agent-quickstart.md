@@ -114,8 +114,7 @@ npx @openlearn/plugin-sdk sign --key publisher.pem --publisher "My Team" dist/my
 1. **管理端上传**：插件中心 → 上传 ZIP。（未签名包在 `OPENLEARN_ALLOW_UNSIGNED=0` 时，
    每次上传需带请求头 `x-allow-unsigned: true`。）
 2. **ZIP 直传 API**：`POST /api/plugins/...`（安装/更新走同一路径，签名覆盖 `integrity` 字符串的 UTF-8 字节）。
-3. **社区注册表**：设置 `PLUGIN_COMMUNITY_REGISTRY_URL` + `OPENLEARN_COMMUNITY_INSTALL=1` +
-   `OPENLEARN_COMMUNITY_PUBKEY`，缺一装不上；注册表只接受公网 HTTP(S)，回环与私网段被拒。
+3. **社区注册表**：在插件中心「社区」页配置注册表地址，并由管理员打开「允许从社区注册表安装」（或在未配置时回退 `OPENLEARN_COMMUNITY_INSTALL=1`），同时设置 `OPENLEARN_COMMUNITY_PUBKEY`；缺公钥仍装不上。注册表只接受公网 HTTP(S)，回环与私网段被拒。
 
 验证：
 
