@@ -673,18 +673,20 @@ ExtensionErrorBoundary key=`${pluginId}/${id}`
 
 ### 10.3 特殊匹配规则
 
-| 槽位                      | 额外逻辑                                                                                                                                                                           |
-| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `whiteboard.renderer`     | `targetType` 依次对比 `et.targetType` / `ext.id` / `ext.route` / `` `${pluginId}/${id}` `` / `slotProps.elementType` / `slotProps.targetType`，命中 `slotProps.elementType` 才渲染 |
-| `assignment.file.preview` | 按声明的 `extensions` / `mimeTypes` 过滤（`matchesDeclaredExtension`）                                                                                                             |
-| `anchor:*`                | 按 `placement` 过滤，**默认 `'after'`**                                                                                                                                            |
+| 槽位                           | 额外逻辑                                                                                                                                                                                                                   |
+| ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `whiteboard.renderer`          | `targetType` 依次对比 `et.targetType` / `ext.id` / `ext.route` / `` `${pluginId}/${id}` `` / `slotProps.elementType` / `slotProps.targetType`，命中 `slotProps.elementType` 才渲染；无 React/DOM 时支持 `view` 沙箱 iframe |
+| `whiteboard.selection.toolbar` | 按 `targetType`（支持 `'*'`）过滤当前 `slotProps.elementType`；无 React/DOM/`view` 时若声明 `slotProps.commandType` 自动渲染为命令按钮                                                                                     |
+| `whiteboard.context_menu`      | 按 `targetType` 及 `slotProps.target`（`'element' \| 'canvas' \| '*'`）过滤；无 React/DOM/`view` 时若声明 `slotProps.commandType` 自动渲染并调用 `onClose()`                                                               |
+| `assignment.file.preview`      | 按声明的 `extensions` / `mimeTypes` 过滤（`matchesDeclaredExtension`）                                                                                                                                                     |
+| `anchor:*`                     | 按 `placement` 过滤，**默认 `'after'`**                                                                                                                                                                                    |
 
 ```{warning}
 **未知/未登记的槽位名 → 静默 `null`。**
 `if (!host) return fallback ?? null;`、`if (extensions.length === 0) return null;`
 
 而 `AnyExtensionSlot = ExtensionSlot | AnchorSlot | (string & {})`
-意味着 TypeScript **不会拦你**：`ExtensionSlot` 有 120 个字面量，
+意味着 TypeScript **不会拦你**：`ExtensionSlot` 有 125 个字面量，
 但 `string & {}` 让任何字符串都能通过类型检查。
 拼错 `'classroom.topbar.action'` 为 `'classroom.topbar.actions'`
 不会报错、不会告警、不会渲染 —— 只会让面板空空如也。

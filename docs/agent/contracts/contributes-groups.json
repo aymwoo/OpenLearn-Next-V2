@@ -85,6 +85,11 @@
     "student.classroom.overlay",
     "student.profile.tab",
     "whiteboard.renderer",
+    "whiteboard.selection.toolbar",
+    "whiteboard.context_menu",
+    "whiteboard.pagebar.action",
+    "whiteboard.page_drawer.action",
+    "whiteboard.properties.addon",
     "timetable.tab",
     "admin.tab",
     "workspace.view",
@@ -116,7 +121,7 @@
     "assessment.stats.card"
   ],
   "a_total": 72,
-  "b_total": 38,
+  "b_total": 43,
   "a_not_in_extension_slot": [
     "ai.persona.provider",
     "locales",

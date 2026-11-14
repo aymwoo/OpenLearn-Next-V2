@@ -191,6 +191,11 @@ export type ExtensionSlot =
   | 'statusbar.item' // 全局底部状态栏条目（网络状态 / 离线同步 / 后台任务计数等；无扩展时状态栏不渲染）
   // ── 白板画布核心图元扩展槽位（一等公民图元渲染）──
   | 'whiteboard.renderer' // 白板自定义图元渲染器扩展（如 Desmos 函数图像、分子 3D 结构等自定义一等公民图元）
+  | 'whiteboard.selection.toolbar' // 选中白板图元时附近浮现的上下文快捷操作条扩展
+  | 'whiteboard.context_menu' // 白板画布与图元右键上下文菜单扩展（支持组件与数据型 commandType）
+  | 'whiteboard.pagebar.action' // 白板顶部浮动页面导航栏动作扩展
+  | 'whiteboard.page_drawer.action' // 白板页面大纲与预览抽屉顶部操作扩展
+  | 'whiteboard.properties.addon' // 白板右侧属性面板通用叠加扩展区（跨图元附加配置）
   // ── 全局命令面板与快捷插入扩展槽位 ──
   | 'command_palette.item' // 全局命令面板（Ctrl+K）扩展命令
   | 'quick_insert.item' // 斜杠菜单（/）快速插入项
@@ -676,7 +681,66 @@ export interface WhiteboardRendererSlotProps {
   readOnly?: boolean;
   userRole?: 'teacher' | 'student';
   lessonId?: string;
+  classId?: string | null;
   onElementUpdate?: (elementId: string, patch: Record<string, any>) => Promise<void>;
+  dispatcher?: IHostActionDispatcher;
+}
+
+/** Props passed to whiteboard.selection.toolbar extensions (contextual floating bar near selected element) */
+export interface WhiteboardSelectionToolbarSlotProps {
+  element: any;
+  elementId: string;
+  elementType: string;
+  data: Record<string, any>;
+  lessonId: string;
+  classId?: string | null;
+  onElementUpdate?: (elementId: string, patch: Record<string, any>) => Promise<void>;
+  onOpenProperties?: () => void;
+  onDelete?: (elementId: string) => void | Promise<void>;
+  dispatcher?: IHostActionDispatcher;
+}
+
+/** Props passed to whiteboard.context_menu extensions (canvas/element right-click menu) */
+export interface WhiteboardContextMenuSlotProps {
+  target: 'element' | 'canvas';
+  element: any | null;
+  elementId: string | null;
+  elementType: string | null;
+  data: Record<string, any> | null;
+  point: { x: number; y: number };
+  lessonId: string;
+  classId?: string | null;
+  onElementUpdate?: (elementId: string, patch: Record<string, any>) => Promise<void>;
+  onClose: () => void;
+  dispatcher?: IHostActionDispatcher;
+}
+
+/** Props passed to whiteboard.pagebar.action extensions */
+export interface WhiteboardPagebarActionSlotProps {
+  pages: Array<{ id: string; title: string; order: number; segmentId?: string | null }>;
+  currentPage: number;
+  activeSegmentId?: string | null;
+  onSwitchPage: (idx: number) => void;
+  dispatcher?: IHostActionDispatcher;
+}
+
+/** Props passed to whiteboard.page_drawer.action extensions */
+export interface WhiteboardPageDrawerActionSlotProps {
+  pages: Array<{ id: string; title: string; order: number; segmentId?: string | null }>;
+  currentPage: number;
+  activeSegmentId?: string | null;
+  onCloseDrawer: () => void;
+  dispatcher?: IHostActionDispatcher;
+}
+
+/** Props passed to whiteboard.properties.addon extensions */
+export interface WhiteboardPropertiesAddonSlotProps {
+  elementId: string;
+  elementType: string;
+  data: Record<string, any>;
+  updateData: (partial: Record<string, any>) => void;
+  lessonId: string;
+  isSyncing?: boolean;
   dispatcher?: IHostActionDispatcher;
 }
 
