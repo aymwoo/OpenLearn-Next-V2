@@ -27,6 +27,7 @@ import { v7 as uuidv7 } from 'uuid';
 import type Database from 'better-sqlite3';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
 import { getUploadsDir } from '../utils/paths.js';
+import { getFileStorageService } from './file-storage/index.js';
 import {
   ASSET_PLACEHOLDER_PATTERN,
   materializePackageAssets,
@@ -264,12 +265,12 @@ export async function importCoursePackage(
     // 事务内命中去重：原样抛出，保留 409 状态码与 code（外层 catch 会把它
     // 包成普通 Error，丢掉 409 → 前端就分不出「重复」与「写入失败」）。
     if (err instanceof CoursePackageDuplicateError) {
-      cleanupMaterializedAssets(materialized);
+      await cleanupMaterializedAssets(materialized);
       throw err;
     }
     // 数据库回滚了（或根本没开始写），但文件已经落盘 —— 显式清理，
-    // 避免 uploads 目录留下孤儿文件。
-    cleanupMaterializedAssets(materialized);
+    // 避免留下孤儿文件。
+    await cleanupMaterializedAssets(materialized);
     throw new Error(`课程包写入失败，已回滚：${(err as Error).message}`);
   }
 
@@ -374,17 +375,28 @@ function findReferencedAsset(rawData: unknown, assets: Map<string, MaterializedA
 }
 
 /** 删除已落盘的附件文件（导入失败时的补偿动作）。 */
-function cleanupMaterializedAssets(materialized: Map<string, MaterializedAsset>): void {
+async function cleanupMaterializedAssets(materialized: Map<string, MaterializedAsset>): Promise<void> {
   const uploadsDir = getUploadsDir();
+  const fileStorage = getFileStorageService();
   for (const asset of materialized.values()) {
-    const fileName = path.basename(asset.fileUrl);
-    const target = path.join(uploadsDir, fileName);
-    try {
-      if (fs.existsSync(target)) {
-        fs.unlinkSync(target);
+    if (asset.assetId) {
+      try {
+        await fileStorage.purgeAsset(asset.assetId);
+      } catch (err) {
+        console.warn(`[course-package] 清理孤儿资产失败：${asset.assetId}`, (err as Error).message);
       }
-    } catch (err) {
-      console.warn(`[course-package] 清理孤儿附件失败：${target}`, (err as Error).message);
+      continue;
+    }
+    if (asset.fileUrl.startsWith('/uploads/')) {
+      const fileName = path.basename(asset.fileUrl);
+      const target = path.join(uploadsDir, fileName);
+      try {
+        if (fs.existsSync(target)) {
+          fs.unlinkSync(target);
+        }
+      } catch (err) {
+        console.warn(`[course-package] 清理孤儿附件失败：${target}`, (err as Error).message);
+      }
     }
   }
 }

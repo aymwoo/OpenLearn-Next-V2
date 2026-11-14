@@ -21,6 +21,7 @@ import { EventBus } from '../../core/event-bus/index.js';
 import { ActionRegistry } from '../../core/registry/index.js';
 import { CapabilityGuard } from '../../core/capability/index.js';
 import { createPluginsDir, cleanupPluginsDir } from '../../core/plugin-host/__tests__/helpers/plugins-dir.js';
+import { resolveDataDir } from '../../core/db/backup-paths.js';
 
 describe('AiSubmitInjectorPlugin', () => {
   let db: Database.Database;
@@ -32,7 +33,7 @@ describe('AiSubmitInjectorPlugin', () => {
   let actionRegistry: ActionRegistry;
   let capabilityGuard: CapabilityGuard;
   let mockAIService: any;
-  const tempDir = path.resolve(process.cwd(), 'storage', 'courseware', 'temp-test-uuid');
+  const tempDir = path.resolve(resolveDataDir(), 'storage', 'courseware', 'temp-test-uuid');
 
   beforeEach(async () => {
     pluginsDir = createPluginsDir('ai-submit-injector');
@@ -103,7 +104,7 @@ describe('AiSubmitInjectorPlugin', () => {
       .map((r) => r.uuid)
       .filter((u): u is string => Boolean(u));
     db.close();
-    const coursewareRoot = path.resolve(process.cwd(), 'storage', 'courseware');
+    const coursewareRoot = path.resolve(resolveDataDir(), 'storage', 'courseware');
     for (const uuid of new Set(['temp-test-uuid', ...createdUuids])) {
       fs.rmSync(path.resolve(coursewareRoot, uuid), { recursive: true, force: true });
     }

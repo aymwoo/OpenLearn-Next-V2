@@ -59,6 +59,7 @@ import {
   ICapabilityRegistryToken,
   IAuthSessionBridgeToken,
   ICoursewareRuntimeScriptRegistryToken,
+  IFileStorageExtensionRegistryToken,
 } from '../di/interfaces.js';
 import { StorageService } from '../di/storage-service.js';
 import { AIService } from '../di/ai-service.js';
@@ -68,6 +69,7 @@ import { PointsDimensionRegistry } from '../di/points-dimension-registry.js';
 import { PointsLedgerService } from '../di/points-ledger-service.js';
 import { AuthSessionBridgeService } from '../di/auth-session-bridge-service.js';
 import { CoursewareRuntimeScriptRegistry } from '../di/courseware-runtime-script-registry.js';
+import { FileStorageExtensionRegistry } from '../di/file-storage-extension-registry.js';
 import { PluginHost } from '../plugin-host/index.js';
 import { setPluginNamespaceResolver } from '../observability/plugin-metrics.js';
 import { WorkerManager } from '../worker-runtime/worker-manager.js';
@@ -276,6 +278,7 @@ export class Kernel {
     // 课件运行时脚本扩展点：让插件拥有「跑在互动课件 iframe 内部」的代码
     // （iframe 为 credentialless + 无 allow-same-origin，父窗口无法注入，只能由服务端渲染时拼接）
     this.serviceRegistry.register(ICoursewareRuntimeScriptRegistryToken, new CoursewareRuntimeScriptRegistry());
+    this.serviceRegistry.register(IFileStorageExtensionRegistryToken, new FileStorageExtensionRegistry());
 
     // 教学环节流转门禁（插件可注册守卫，如「随堂测验达标」「前置实验已提交」）。
     // 必须注册**单例** `defaultStageGuardPipeline`：LessonRuntime 在未显式注入时

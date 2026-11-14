@@ -529,3 +529,21 @@ export {
 // 会被 sql-guard 拒绝。需在 manifest 声明 management:read。
 export type { IClassRosterService, RosterClassSummary, RosterStudentRef } from '../core/di/interfaces.js';
 export { IClassRosterServiceToken } from '../core/di/interfaces.js';
+
+// ── 文件存储三插槽扩展（LayoutPolicy / StorageBackend / FileProcessor） ──
+export type {
+  FilePurpose,
+  FileAccessScope,
+  FileAssetContext,
+  FileStorageBackendCapabilities,
+  FileStorageBackend,
+  FileProcessorStage,
+  FileProcessorContext,
+  FileProcessorResult,
+  FileProcessor,
+  FileLayoutTokenResolver,
+  IRegisteredFileBackend,
+  IRegisteredFileProcessor,
+  IFileStorageExtensionRegistry,
+} from '../core/di/interfaces.js';
+export { IFileStorageExtensionRegistryToken } from '../core/di/interfaces.js';

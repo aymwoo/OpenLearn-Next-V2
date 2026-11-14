@@ -34,6 +34,19 @@ export type {
   CoursewareRuntimeScript,
   IRegisteredCoursewareRuntimeScript,
   ICoursewareRuntimeScriptRegistry,
+  FilePurpose,
+  FileAccessScope,
+  FileAssetContext,
+  FileStorageBackendCapabilities,
+  FileStorageBackend,
+  FileProcessorStage,
+  FileProcessorContext,
+  FileProcessorResult,
+  FileProcessor,
+  FileLayoutTokenResolver,
+  IRegisteredFileBackend,
+  IRegisteredFileProcessor,
+  IFileStorageExtensionRegistry,
 } from './interfaces.js';
 
 // ── Token instance exports ──────────────────────────────────────────────
@@ -48,6 +61,7 @@ export {
   IAIServiceToken,
   IPluginHostToken,
   ICoursewareRuntimeScriptRegistryToken,
+  IFileStorageExtensionRegistryToken,
 } from './interfaces.js';
 
 // ── Service implementation class exports ────────────────────────────────
@@ -55,6 +69,7 @@ export {
 export { StorageService } from './storage-service.js';
 export { AIService } from './ai-service.js';
 export { CoursewareRuntimeScriptRegistry } from './courseware-runtime-script-registry.js';
+export { FileStorageExtensionRegistry } from './file-storage-extension-registry.js';
 export * from './ai-provider-resolver.js';
 
 // ── Platform DI Container (PI-008) ──────────────────────────────────────

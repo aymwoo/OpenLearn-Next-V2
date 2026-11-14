@@ -87,6 +87,7 @@
     "db:clean-demo": "npx tsx scripts/seed-demo-data.ts --clean",
     "db:reset": "rm -f packages/core/db/educational_os.db* && echo \"✓ Database deleted. Run npm run dev to regenerate.\"",
     "db:gen-tables": "node scripts/gen-table-inventory.mjs",
+    "file:reorg": "tsx scripts/file-reorg.ts",
     "docs:pdf": "node scripts/export-handbooks-pdf.mjs",
     "docs:pdf:upload": "node scripts/upload-handbooks.mjs"
   },

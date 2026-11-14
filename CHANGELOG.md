@@ -12,6 +12,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Features
 
+- **统一文件持久化层、三插槽可扩展架构、安全读取网关与存储目录治理（Issue #504）**：
+  - 新增迁移 `048_file_storage_extension.sql`（同步更新 `schema-golden.json`、`platform-data-tables.md` 与 `FORBIDDEN_CORE_TABLES` 守卫），建立物理与逻辑分离的三表模型（`file_blobs` 物理去重与 `ref_count` 引用计数、`file_assets` 逻辑资产与访问作用域 `public | authenticated | assignment`、`file_aliases` 旧 `/uploads/*` 路径别名兼容），并在 `site_settings` 与 `plugin_assignment_files` 分别扩展 `file_storage_config` 与 `asset_id`；
+  - 在内核 DI（`IFileStorageExtensionRegistryToken` / `FileStorageExtensionRegistry`）与 `@openlearn/plugin-sdk` 开放文件存储三插槽扩展契约：`LayoutPolicy`（支持 `by-date` / `by-course` / `by-author` / `flat` / `custom` 与扩展 Token，内置路径穿越防线与唯一占位符校验）、`StorageBackend`（内建 `LocalFileStorage` 临时文件原子写与根目录逃逸拦截）与 `FileProcessor`（`before-store` fail-closed、`after-store` fail-open 与有界后台并发、内建 PDF 页数识别、`before-serve` 禁覆写安全响应头）；
+  - 新增 HTTP 安全读取网关 `GET /api/files/:assetId` 与管理员专用配置接口 `GET/PUT /api/admin/file-storage/config`、`POST /api/admin/file-storage/preview`、`GET /api/admin/file-storage/stats`（严格不通过公开 `/api/site-settings` 暴露），`/uploads/*` 支持经 `file_aliases` 回退按同套鉴权与安全头（`nosniff`、`CSP: sandbox`、HTML/SVG 降级与作业 `private, no-store`）输出；
+  - 全面收口 `POST /api/upload`、课程包导入/导出、作业中心附件、用户头像上传至 `FileStorageService`，并将多文件交互课件目录（`builtin.ts`、`ai-submit-injector.ts`、`bridge.ts`、`resource-service.ts`）对齐至 `resolveDataDir()/getStorageDir()`；
+  - 新增管理后台「文件存储与路径布局策略」面板（`src/features/admin/FileStoragePanel.tsx`，挂载于站点设置页）、物理布局离线重整工具 `scripts/file-reorg.ts`（`pnpm file:reorg` 支持 `--dry-run` / `--scheme` / `--template` / `--backend` / `--limit`）与 `scripts/site-backup.mjs` 对 `files/` 目录的备份纳入，同步重写 `docs/architecture/file-storage-extension-design.md` 并更新契约表与单元/集成/金丝雀回归测试。
 - **第三方声明式主题系统、安全沙盒校验、多账号隔离与插件主题适配（Issue #484）**：
   - 新增统一主题清单与 `.zip` 主题包校验器（`packages/core/themes/theme-spec.ts`、`packages/core/themes/theme-package.ts`），支持 CSS Tokens（浅/深双模式）、字体/圆角/密度外观、白名单化作用域 CSS、静态资源（SVG/图片/字体）安全扫描（禁止脚本、外部 `@import`/URL、路径穿越、越界大小与 SVG 脚本），以及声明式全端布局配置（登录页/教师端/学生端/管理后台）自动保留必需功能控件；
   - 新增迁移 `047_third_party_theme_system.sql`（同步更新 `schema-golden.json`）、`server/services/theme-service.ts` 与 `server/routes/themes.ts`：所有登录角色均可上传安装/导出主题包至共享目录，个人主题/版本/深浅模式与外观覆盖按账号严格隔离保存；同一主题仅原上传者可发布更高 SemVer 更新且不静默篡改他人使用版本（支持主题中心点击确认升级）；管理员支持停用/启用/删除主题与设置全站默认主题，`/api/themes/public` 严格零用户数据泄漏；

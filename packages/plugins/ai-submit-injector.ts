@@ -5,6 +5,7 @@ import { v7 as uuidv7 } from 'uuid';
 import { IDatabaseToken } from '@openlearn/plugin-sdk';
 import type { PluginContext } from '@openlearn/plugin-sdk';
 import { decryptApiKey, looksLikeCiphertext } from '../core/di/api-key-crypto.js';
+import { resolveDataDir } from '../core/db/backup-paths.js';
 
 interface StoredAIProvider {
   id: string;
@@ -133,7 +134,7 @@ export const AiSubmitInjectorPlugin = {
         return;
       }
 
-      const baseCoursewareDir = path.resolve(process.cwd(), 'storage', 'courseware');
+      const baseCoursewareDir = path.resolve(resolveDataDir(), 'storage', 'courseware');
       const sourceDir = path.resolve(baseCoursewareDir, String(payload.uuid));
       if (!sourceDir.startsWith(baseCoursewareDir + path.sep)) {
         return;

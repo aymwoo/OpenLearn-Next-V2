@@ -56,7 +56,9 @@ import {
   IAssessmentGraderRegistryToken,
   IPluginHostToken,
   INetworkProxyServiceToken,
+  IFileStorageExtensionRegistryToken,
 } from '../../../packages/core/di/interfaces.js';
+import { FileStorageExtensionRegistry } from '../../../packages/core/di/file-storage-extension-registry.js';
 import { IActivityRegistryToken } from '../../../packages/activity-ecosystem/index.js';
 import { StageGuardPipeline } from '../../../packages/core/lesson-engine/stage-guard-pipeline.js';
 import { buildCanaryZip } from './canary.builder';
@@ -324,6 +326,7 @@ describe('金丝雀插件双模式全链路测试（步骤 3）', () => {
       // 测评题型注册表：生产 kernel 启动时注册（Issue #100）
       [IAssessmentGraderRegistryToken, assessmentGraderRegistry],
       [INetworkProxyServiceToken, extra.networkProxy],
+      [IFileStorageExtensionRegistryToken, new FileStorageExtensionRegistry()],
     ];
 
     pluginsDir = fs.mkdtempSync(path.resolve(__dirname, '.tmp-plugins-'));

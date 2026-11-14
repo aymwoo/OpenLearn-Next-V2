@@ -78,6 +78,8 @@ describe('站点备份与恢复', () => {
     const restoreDir = path.join(root, 'restored');
     fs.mkdirSync(path.join(dataDir, 'storage', 'courseware'), { recursive: true });
     fs.writeFileSync(path.join(dataDir, 'storage', 'courseware', 'note.txt'), '课件正文');
+    fs.mkdirSync(path.join(dataDir, 'files', '2026', '11'), { recursive: true });
+    fs.writeFileSync(path.join(dataDir, 'files', '2026', '11', 'asset.bin'), 'file-blob-data');
     const dbFile = path.join(dataDir, 'educational_os.db');
     makeDb(dbFile);
 
@@ -96,6 +98,7 @@ describe('站点备份与恢复', () => {
     });
     expect(result.extracted).toBe(true);
     expect(fs.readFileSync(path.join(restoreDir, 'storage', 'courseware', 'note.txt'), 'utf8')).toBe('课件正文');
+    expect(fs.readFileSync(path.join(restoreDir, 'files', '2026', '11', 'asset.bin'), 'utf8')).toBe('file-blob-data');
     const db = new Database(restoredDb, { readonly: true });
     try {
       const lesson = db.prepare('SELECT title FROM lessons WHERE id = ?').get('les_1') as { title: string };
@@ -112,6 +115,8 @@ describe('站点备份与恢复', () => {
     const backupDir = path.join(root, 'backups');
     fs.mkdirSync(path.join(dataDir, 'storage', 'courseware'), { recursive: true });
     fs.writeFileSync(path.join(dataDir, 'storage', 'courseware', 'note.txt'), '课件正文');
+    fs.mkdirSync(path.join(dataDir, 'files', '2026', '11'), { recursive: true });
+    fs.writeFileSync(path.join(dataDir, 'files', '2026', '11', 'asset.bin'), 'file-blob-data');
     const keyMaterial = 'offline-key-material-should-stay-out';
     fs.writeFileSync(path.join(dataDir, 'storage', 'encryption-key'), `${keyMaterial}\n`, { mode: 0o600 });
     const dbFile = path.join(dataDir, 'educational_os.db');

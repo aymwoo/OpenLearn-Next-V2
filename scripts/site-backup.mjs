@@ -70,7 +70,7 @@ export function backupSite(options = {}) {
     db.close();
   }
 
-  const parts = ['storage', 'plugins', 'uploads'].filter((name) => fs.existsSync(path.join(dataDir, name)));
+  const parts = ['files', 'storage', 'plugins', 'uploads'].filter((name) => fs.existsSync(path.join(dataDir, name)));
   // 密钥文件与数据库密文分开保管。打进同一个包等于把钥匙和锁放在一起。
   const tarArgs = ['czf', filesArchive, '-C', dataDir, '--exclude', 'storage/encryption-key'];
   if (parts.length > 0) {
@@ -119,7 +119,9 @@ if (isCli()) {
     const result = backupSite(customDir ? { backupDir: customDir } : {});
     const sizeMb = (fs.statSync(result.dbFile).size / 1024 / 1024).toFixed(2);
     console.log('═'.repeat(64));
-    console.log('✓ 站点备份完成（数据库 + storage/plugins/uploads）');
+    console.log(
+      '✓ 站点备份完成（数据库 + files/storage/plugins/uploads；若启用远程对象存储后端，远程对象需由云端快照策略单独备份）',
+    );
     console.log('═'.repeat(64));
     console.log(`  数据库 : ${result.dbFile} (${sizeMb} MB)`);
     console.log(`  文件包 : ${result.filesArchive}`);

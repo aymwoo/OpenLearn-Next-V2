@@ -13,6 +13,7 @@ import { registerGradingRoutes } from '../routes/grading.js';
 import { setupRealtimeBridge } from '../realtime-bridge.js';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
 import { mintCoursewareToken } from '../utils/courseware-access.js';
+import { getStorageDir } from '../utils/paths.js';
 
 /**
  * 业务黄金旅程场景 4：交互式课件沙箱与 Bridge SDK 旅程测试
@@ -186,7 +187,7 @@ describe('Golden Journey 4: Courseware Sandbox & Bridge SDK Lifecycle', () => {
     }
     if (createdCoursewareUuid) {
       db.prepare('DELETE FROM courseware WHERE uuid = ?').run(createdCoursewareUuid);
-      const cwDir = path.resolve(process.cwd(), 'storage', 'courseware', createdCoursewareUuid);
+      const cwDir = path.resolve(getStorageDir(), 'courseware', createdCoursewareUuid);
       if (fs.existsSync(cwDir)) {
         fs.rmSync(cwDir, { recursive: true, force: true });
       }
@@ -305,7 +306,7 @@ describe('Golden Journey 4: Courseware Sandbox & Bridge SDK Lifecycle', () => {
       createdCoursewareId = body.id;
 
       // 验证解压磁盘落地
-      const extractedHtml = path.resolve(process.cwd(), 'storage', 'courseware', createdCoursewareUuid, 'index.html');
+      const extractedHtml = path.resolve(getStorageDir(), 'courseware', createdCoursewareUuid, 'index.html');
       expect(fs.existsSync(extractedHtml)).toBe(true);
       const content = fs.readFileSync(extractedHtml, 'utf8');
       expect(content).toContain("Newton's Second Law Simulation");

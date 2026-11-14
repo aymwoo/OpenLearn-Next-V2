@@ -1330,6 +1330,117 @@ declare interface SegmentTypeMeta {
   pluginId?: string;
 }
 
+declare type FilePurpose = 'courseware' | 'avatar' | 'assignment' | 'lesson-asset' | 'theme' | 'attachment';
+
+declare type FileAccessScope = 'public' | 'authenticated' | 'assignment';
+
+declare interface FileAssetContext {
+  purpose: FilePurpose | (string & {});
+  accessScope?: FileAccessScope;
+  authorId?: string | null;
+  courseId?: string | null;
+  lessonId?: string | null;
+  assignmentId?: string | null;
+  classId?: string | null;
+  metadata?: Record<string, unknown>;
+}
+
+declare interface FileStorageBackendCapabilities {
+  supportsRange?: boolean;
+  supportsPresignedUrl?: boolean;
+  externalBacked?: boolean;
+  maxFileSizeBytes?: number;
+}
+
+declare interface FileStorageBackend {
+  id: string;
+  displayName: string;
+  description?: string;
+  capabilities?: FileStorageBackendCapabilities;
+  put(key: string, data: Buffer, meta?: { contentType?: string }): Promise<void>;
+  exists(key: string): Promise<boolean>;
+  stat(key: string): Promise<{ sizeBytes: number } | null>;
+  readStream(
+    key: string,
+    range?: { start: number; end: number },
+  ): NodeJS.ReadableStream | Promise<NodeJS.ReadableStream>;
+  delete(key: string): Promise<void>;
+  copy?(fromKey: string, toKey: string): Promise<void>;
+  getSignedUrl?(
+    key: string,
+    opts?: { expiresInSec?: number; filename?: string; inline?: boolean; contentType?: string },
+  ): Promise<string | null>;
+}
+
+declare type FileProcessorStage = 'before-store' | 'after-store' | 'before-serve';
+
+declare interface FileProcessorContext {
+  stage: FileProcessorStage;
+  assetId?: string;
+  storageKey?: string;
+  backendId?: string;
+  originalName: string;
+  mime: string;
+  sizeBytes: number;
+  sha256?: string;
+  buffer?: Buffer;
+  context: FileAssetContext;
+  metadata: Record<string, unknown>;
+  localPath?: string;
+}
+
+declare interface FileProcessorResult {
+  buffer?: Buffer;
+  mime?: string;
+  originalName?: string;
+  metadataPatch?: Record<string, unknown>;
+  headers?: Record<string, string>;
+}
+
+declare interface FileProcessor {
+  id: string;
+  displayName?: string;
+  stage: FileProcessorStage;
+  priority?: number;
+  background?: boolean;
+  timeoutMs?: number;
+  match?: {
+    mimes?: string[];
+    purposes?: string[];
+    extensions?: string[];
+  };
+  run(ctx: FileProcessorContext): Promise<FileProcessorResult | void>;
+}
+
+declare type FileLayoutTokenResolver = (ctx: FileAssetContext & { originalName: string }) => string | undefined;
+
+declare interface IRegisteredFileBackend {
+  owner: string;
+  backend: FileStorageBackend;
+}
+
+declare interface IRegisteredFileProcessor {
+  owner: string;
+  processor: FileProcessor;
+}
+
+declare interface IFileStorageExtensionRegistry {
+  registerBackend(owner: string, backend: FileStorageBackend): void;
+  unregisterBackend(owner: string, id: string): boolean;
+  getBackend(id: string): FileStorageBackend | undefined;
+  listBackends(): IRegisteredFileBackend[];
+  registerProcessor(owner: string, processor: FileProcessor): void;
+  unregisterProcessor(owner: string, id: string): boolean;
+  listProcessors(stage?: FileProcessorStage): IRegisteredFileProcessor[];
+  registerLayoutToken(owner: string, tokenName: string, resolver: FileLayoutTokenResolver): void;
+  unregisterLayoutToken(owner: string, tokenName: string): boolean;
+  getLayoutTokenResolvers(): ReadonlyMap<string, { owner: string; resolver: FileLayoutTokenResolver }>;
+  clear(owner?: string): void;
+  listOwners(): string[];
+}
+
+declare const IFileStorageExtensionRegistryToken: Token<IFileStorageExtensionRegistry>;
+
 export type {
   PluginContext,
   PluginDatabaseAPI,
@@ -1423,6 +1534,19 @@ export type {
   SegmentTypeMeta,
   SegmentGateTypeContribution,
   PluginApiRequest,
+  FilePurpose,
+  FileAccessScope,
+  FileAssetContext,
+  FileStorageBackendCapabilities,
+  FileStorageBackend,
+  FileProcessorStage,
+  FileProcessorContext,
+  FileProcessorResult,
+  FileProcessor,
+  FileLayoutTokenResolver,
+  IRegisteredFileBackend,
+  IRegisteredFileProcessor,
+  IFileStorageExtensionRegistry,
   PluginApiResponse,
   PluginApiHandler,
   PluginStreamResponse,
@@ -1476,6 +1600,7 @@ export {
   IActivityRegistryToken,
   IAuthSessionBridgeToken,
   INetworkProxyServiceToken,
+  IFileStorageExtensionRegistryToken,
   // Activity Ecosystem —— 运行时值。index.ts 以具名 value 再导出，,
   // 必须在 d.ts 里同步声明，否则插件 import 即 TS2305 / TS2724。,
   ACTIVITY_EVENTS,

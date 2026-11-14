@@ -11,13 +11,24 @@
  * 1. 生成样例资产（PDF 讲义 / PPTX 课件）——无外部二进制依赖，纯代码产出；
  * 2. 把课程包里的 base64 资产落盘到 uploads 目录并返回可用的 `/uploads/xxx` URL。
  */
-import fs from 'node:fs';
-import path from 'node:path';
-import crypto from 'node:crypto';
 import JSZip from 'jszip';
 import { jsPDF } from 'jspdf';
-import { getUploadsDir } from '../utils/paths.js';
 import { validateMagicBytes } from '../utils/upload.js';
+import { getFileStorageService } from './file-storage/index.js';
+
+const CONTENT_TYPE_MIME: Record<string, string> = {
+  pdf: 'application/pdf',
+  pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  zip: 'application/zip',
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  txt: 'text/plain; charset=utf-8',
+  md: 'text/markdown; charset=utf-8',
+  json: 'application/json; charset=utf-8',
+  csv: 'text/csv; charset=utf-8',
+};
 
 /** 课程包内允许出现的资产类型（与 /api/upload 保持一致）。 */
 /**
@@ -66,6 +77,8 @@ export const ASSET_PLACEHOLDER_PATTERN = /\$\{asset:([A-Za-z0-9_-]+)\}/g;
 export interface MaterializedAsset {
   /** 资产在课程包内的唯一 ID（与占位符中的 id 对应）。 */
   id: string;
+  /** 统一文件存储系统分配的资产 ID。 */
+  assetId?: string;
   /** 落盘后的可访问 URL（相对站点根路径）。 */
   fileUrl: string;
   /** 原始文件名。 */
@@ -474,17 +487,14 @@ export function countPdfPages(buffer: Buffer): number {
  */
 export async function materializePackageAssets(
   assets: Array<{ id: string; filename: string; contentType: PackageAssetType; base64: string }>,
+  context?: { authorId?: string | null; courseId?: string | null; lessonId?: string | null },
 ): Promise<Map<string, MaterializedAsset>> {
   const result = new Map<string, MaterializedAsset>();
   if (assets.length === 0) return result;
 
-  const uploadsDir = getUploadsDir();
-  if (!fs.existsSync(uploadsDir)) {
-    fs.mkdirSync(uploadsDir, { recursive: true });
-  }
-
-  /** 本次已经写盘的绝对路径（失败时逐个删除）。 */
-  const writtenPaths: string[] = [];
+  const fileStorage = getFileStorageService();
+  /** 本次已经写入存储层的 assetId（失败时逐个补偿清理）。 */
+  const createdAssetIds: string[] = [];
 
   try {
     for (const asset of assets) {
@@ -508,33 +518,44 @@ export async function materializePackageAssets(
         throw new Error(`课程包资产 "${asset.id}" 声明为 ${asset.contentType} 但内容是二进制`);
       }
 
-      const uniqueName = `${Date.now()}-${crypto.randomBytes(4).toString('hex')}${ext}`;
-      const filePath = path.join(uploadsDir, uniqueName);
-      fs.writeFileSync(filePath, buffer);
-      writtenPaths.push(filePath);
+      const stored = await fileStorage.store({
+        buffer,
+        originalName: asset.filename || `asset${ext}`,
+        mime: CONTENT_TYPE_MIME[asset.contentType] || 'application/octet-stream',
+        context: {
+          purpose: 'lesson-asset',
+          accessScope: 'authenticated',
+          authorId: context?.authorId ?? null,
+          courseId: context?.courseId ?? null,
+          lessonId: context?.lessonId ?? null,
+        },
+      });
+      createdAssetIds.push(stored.assetId);
 
       // 只有可内联渲染的类型才有页数/幻灯片数；其余记 0，元素侧据 fileType 走下载卡片。
       const slideCount = isEmbeddableAssetType(asset.contentType)
         ? asset.contentType === 'pdf'
-          ? countPdfPages(buffer)
+          ? typeof stored.metadata?.slideCount === 'number' && stored.metadata.slideCount > 0
+            ? stored.metadata.slideCount
+            : countPdfPages(buffer)
           : await countPptxSlides(buffer)
         : 0;
 
       result.set(asset.id, {
         id: asset.id,
-        fileUrl: `/uploads/${uniqueName}`,
+        assetId: stored.assetId,
+        fileUrl: stored.fileUrl,
         fileName: asset.filename,
         fileType: asset.contentType,
         slideCount,
       });
     }
   } catch (err) {
-    // 补偿清理：把本次写盘的文件全部删掉，不留孤儿附件。
-    for (const filePath of writtenPaths) {
+    // 补偿清理：把本次写入的资产全部删掉（ref_count 归零时连带清理物理 blob），不留孤儿附件。
+    for (const assetId of createdAssetIds) {
       try {
-        fs.unlinkSync(filePath);
+        await fileStorage.purgeAsset(assetId);
       } catch (cleanupErr) {
-        // 删不掉就记一笔告警：不能因为清理失败而吞掉原始错误
         console.warn('[course-package] 附件补偿清理失败:', (cleanupErr as Error).message);
       }
     }

@@ -4,6 +4,7 @@ import path from 'path';
 import { kernelContainer } from '../../../packages/core/kernel/index.js';
 import { runStartupMigrations } from '../../bootstrap-db.js';
 import { ResourceService } from '../resource-service.js';
+import { getStorageDir } from '../../utils/paths.js';
 
 describe('ResourceService 领域服务单元测试 (E3 深化)', () => {
   let service: ResourceService;
@@ -56,7 +57,7 @@ describe('ResourceService 领域服务单元测试 (E3 深化)', () => {
   afterAll(() => {
     // 清理生成的磁盘缓存
     for (const id of [testResId1, testResId2]) {
-      const p = path.resolve(process.cwd(), 'storage', 'courseware', id);
+      const p = path.resolve(getStorageDir(), 'courseware', id);
       if (fs.existsSync(p)) {
         fs.rmSync(p, { recursive: true, force: true });
       }
@@ -96,7 +97,7 @@ describe('ResourceService 领域服务单元测试 (E3 深化)', () => {
       expect(cw.type).toBe('html');
 
       // 验证物理磁盘写入
-      const diskFile = path.resolve(process.cwd(), 'storage', 'courseware', testResId1, 'index.html');
+      const diskFile = path.resolve(getStorageDir(), 'courseware', testResId1, 'index.html');
       expect(fs.existsSync(diskFile)).toBe(true);
     });
 
@@ -106,11 +107,11 @@ describe('ResourceService 领域服务单元测试 (E3 深化)', () => {
       expect(entry).toBe('index.html');
 
       // 验证物理磁盘解包
-      const cssFile = path.resolve(process.cwd(), 'storage', 'courseware', testResId2, 'css', 'style.css');
+      const cssFile = path.resolve(getStorageDir(), 'courseware', testResId2, 'css', 'style.css');
       expect(fs.existsSync(cssFile)).toBe(true);
       expect(fs.readFileSync(cssFile, 'utf8')).toContain('color: red');
 
-      const imgFile = path.resolve(process.cwd(), 'storage', 'courseware', testResId2, 'images', 'dot.png');
+      const imgFile = path.resolve(getStorageDir(), 'courseware', testResId2, 'images', 'dot.png');
       expect(fs.existsSync(imgFile)).toBe(true);
     });
   });

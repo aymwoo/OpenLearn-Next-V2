@@ -41,7 +41,10 @@
     "lianyun_research_activities",
     "lianyun_research_groups",
     "lianyun_research_submissions",
-    "lianyun_research_reviews"
+    "lianyun_research_reviews",
+    "file_blobs",
+    "file_assets",
+    "file_aliases"
   ],
-  "total": 40
+  "total": 43
 }

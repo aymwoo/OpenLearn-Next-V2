@@ -475,7 +475,7 @@ MFE 远端登记。MFE 执行边界已移除，表保留作历史数据兼容。
 
 <!-- AUTO-GENERATED:table-inventory BEGIN -->
 
-共 **85** 张表（迁移 48 个，金样生成于 2026-11-13T15:34:59.721Z）。列清单为列名（类型与约束见迁移 SQL）：
+共 **88** 张表（迁移 49 个，金样生成于 2026-11-14T05:14:15.771Z）。列清单为列名（类型与约束见迁移 SQL）：
 
 - `_academic_year_backfill`: backfilled_at, id
 - `_class_passcode_encryption`: id, note
@@ -518,6 +518,9 @@ MFE 远端登记。MFE 执行边界已移除，表保留作历史数据兼容。
 - `events`: correlationId, id, lesson_id, payload, source, timestamp, type
 - `exam_scores`: academic_year, exam_id, notes, recorded_at, score, student_id
 - `exams`: academic_year, class_id, created_at, description, id, max_score, title
+- `file_aliases`: alias, asset_id
+- `file_assets`: access_scope, author_id, blob_id, course_id, created_at, deleted_at, id, lesson_id, metadata_json, mime, original_name, purpose
+- `file_blobs`: backend_id, created_at, id, ref_count, sha256, size_bytes, storage_key
 - `icebreaker_checkins`: checkin_date, class_id, created_at, id, lesson_id, mood, scope_key, student_id, updated_at
 - `lesson_checkins`: checked_in_at, lesson_id, student_id
 - `lesson_preset_polls`: correct_option, created_at, id, lesson_id, options_json, question_type, sort_order, title, updated_at
@@ -525,7 +528,7 @@ MFE 远端登记。MFE 执行边界已移除，表保留作历史数据兼容。
 - `lessons`: content, created_at, creator_id, id, progress_conditions, progress_mode, source_package_hash, source_package_id, source_package_key, timeline, title, updated_at
 - `mfe_remotes`: created_at, entry, meta, name, updated_at
 - `pending_commands`: actor_id, command_type, created_at, id, payload
-- `plugin_assignment_files`: assignment_id, deleted_at, id, mime, original_name, sha256, size, stored_path, student_id, submission_id, uploaded_at, version_id
+- `plugin_assignment_files`: asset_id, assignment_id, deleted_at, id, mime, original_name, sha256, size, stored_path, student_id, submission_id, uploaded_at, version_id
 - `plugin_assignments`: allow_late, allow_link, allow_text, allowed_ext, class_id, created_at, created_by, description, due_at, element_id, id, instructions, lesson_id, max_file_size, max_files, peer_review_count, peer_review_due_at, peer_review_mode, peer_weight, status, teacher_weight, title, updated_at
 - `plugin_capability_grants`: approved_at, capability, plugin_key
 - `plugin_config`: key, plugin_id, scope_id, scope_type, updated_at, value
@@ -544,7 +547,7 @@ MFE 远端登记。MFE 执行边界已移除，表保留作历史数据兼容。
 - `schedules`: academic_year, class_id, created_at, id, lesson_id, notes, scheduled_date, status, time_slot
 - `segment_gate_overrides`: actor_id, created_at, lesson_id, reason, segment_id, student_id
 - `segment_visits`: entered_at, id, left_at, lesson_id, segment_id, student_id
-- `site_settings`: academic_start_month, current_academic_year, default_theme_id, id, logo_url, logout_clear_site_data, site_name, slogan, upload_max_file_mb
+- `site_settings`: academic_start_month, current_academic_year, default_theme_id, file_storage_config, id, logo_url, logout_clear_site_data, site_name, slogan, upload_max_file_mb
 - `student_lesson_progress`: academic_year, assigned_at, completed, completed_segments, lesson_id, progress_percent, student_id, verified, verified_progress_percent
 - `student_point_logs`: class_id, created_at, delta_points, dimension_id, id, plugin_id, reason, student_id
 - `student_read_notifications`: created_at, notification_id, student_id
