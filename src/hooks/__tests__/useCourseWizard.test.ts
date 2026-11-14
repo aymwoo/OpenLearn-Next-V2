@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
-import { useCourseWizard } from '../useCourseWizard';
+import { getDefaultWizardTimeline, useCourseWizard } from '../useCourseWizard';
 
 describe('useCourseWizard —— AI 大纲生成', () => {
   let addToast: ReturnType<typeof vi.fn>;
@@ -148,5 +148,50 @@ describe('useCourseWizard —— AI 大纲生成', () => {
 
     expect(result.current.wizardIsGeneratingOutline).toBe(false);
     expect(result.current.wizardCourseContent).toBe('# 数据结构');
+  });
+
+  it('中文模式下默认课堂阶段名称与备注全部为中文且不含中英混杂斜杠 (#493)', () => {
+    const { result } = renderWizard();
+    expect(result.current.wizardCourseTimeline.map((s) => s.title)).toEqual([
+      '课堂导入',
+      '核心精讲',
+      '互动演练',
+      '课堂总结',
+    ]);
+    expect(result.current.wizardCourseTimeline.every((s) => !s.title.includes('/') && !/[A-Za-z]/.test(s.title))).toBe(
+      true,
+    );
+
+    const enTimeline = getDefaultWizardTimeline('en', 'seg-preset-');
+    expect(enTimeline.map((s) => s.title)).toEqual([
+      'Course Orientation',
+      'Subject Core Lecture',
+      'Interactive Lab Work',
+      'Lesson Wrap-up',
+    ]);
+    expect(enTimeline.every((s) => s.id.startsWith('seg-preset-') && !/[\u4e00-\u9fa5]/.test(s.title))).toBe(true);
+  });
+
+  it('创建课程成功后重置的时间轴仍保持中文阶段名称 (#493)', async () => {
+    mockOutlineResponse({ success: true, id: 'lesson-123' });
+
+    const { result } = renderWizard();
+    act(() => {
+      result.current.setWizardCourseTitle('线性代数');
+      result.current.setWizardCourseTimeline([
+        { id: 'custom-1', title: '自定义阶段', type: 'intro', duration: '10m', color: '#3b82f6', notes: '' },
+      ]);
+    });
+
+    await act(async () => {
+      await result.current.handleDeployWizardCourse();
+    });
+
+    expect(result.current.wizardCourseTimeline.map((s) => s.title)).toEqual([
+      '课堂导入',
+      '核心精讲',
+      '互动演练',
+      '课堂总结',
+    ]);
   });
 });

@@ -170,9 +170,22 @@ function extractFlatTables(flatSql: string, tables: Set<string>): void {
   const simpleClauseRegex =
     /\b(?:INTO|UPDATE(?:\s+OR\s+(?:ROLLBACK|ABORT|REPLACE|FAIL|IGNORE))?|JOIN)\s+([a-zA-Z_][\w]*)/gi;
   for (const m of flatSql.matchAll(simpleClauseRegex)) {
-    if (m[1] && m[1].toLowerCase() !== SUBQUERY_PLACEHOLDER) {
-      tables.add(m[1].toLowerCase());
+    const matchedClause = m[0];
+    const captured = m[1];
+    if (!captured) continue;
+    const capturedLower = captured.toLowerCase();
+    if (capturedLower === SUBQUERY_PLACEHOLDER) continue;
+
+    // SQLite UPSERT 语法 `ON CONFLICT(...) DO UPDATE SET ...` 中 `UPDATE` 后紧跟的是关键字 `SET`，
+    // 不是目标表名；仅在 `UPDATE` 前紧邻 `DO` 时忽略该关键字，仍拦截 `UPDATE "set" SET ...` 这类表访问。
+    if (capturedLower === 'set' && /^UPDATE\s+/i.test(matchedClause)) {
+      const beforeMatch = flatSql.slice(0, m.index ?? 0);
+      if (/\bDO\s+$/i.test(beforeMatch)) {
+        continue;
+      }
     }
+
+    tables.add(capturedLower);
   }
 
   // 3. FROM 子句处理（支持逗号多表: FROM table1, table2 alias, table3 ...）
