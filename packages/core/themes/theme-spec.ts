@@ -1,4 +1,5 @@
 import semver from 'semver';
+import { isBlockedExternalFontUrl } from '../security/font-sanitizer.js';
 
 export const DEFAULT_PLATFORM_VERSION = '0.7.15';
 
@@ -739,7 +740,9 @@ export function buildRuntimeThemeCss(
 
   const fontFaceBlocks: string[] = [];
   for (const ff of bundle.typography.fontFaces || []) {
+    if (isBlockedExternalFontUrl(ff.src)) continue;
     const resolvedSrc = assetUrlResolver ? assetUrlResolver(ff.src) : ff.src;
+    if (isBlockedExternalFontUrl(resolvedSrc)) continue;
     const ext = ff.src.split('.').pop()?.toLowerCase();
     const format = ext === 'woff2' ? 'woff2' : ext === 'woff' ? 'woff' : ext === 'otf' ? 'opentype' : 'truetype';
     fontFaceBlocks.push(

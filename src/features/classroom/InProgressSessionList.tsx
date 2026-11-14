@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Activity, Archive, Clock, Loader2, Play, Plus, RefreshCw, Users } from 'lucide-react';
 import type { ClassroomSessionItem } from './ClassroomSessionManager';
+import { isTerminalAuthStatus } from '../../utils/polling-guard';
 
 /**
  * Issue #91：进入「互动课堂」后的第一屏 —— 进行中的课堂会话列表。
@@ -95,11 +96,32 @@ export function InProgressSessionList({
     onEmptyRef.current = onEmpty;
   }, [onEmpty]);
 
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const stopPolling = useCallback(() => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+  }, []);
+
   const fetchSessions = useCallback(
     async (isRefresh = false) => {
       if (isRefresh) setRefreshing(true);
       try {
         const res = await fetch('/api/classroom/sessions?status=active&pageSize=all');
+        if (isTerminalAuthStatus(res.status)) {
+          stopPolling();
+          setLoadError(
+            res.status === 401
+              ? zh
+                ? '登录已失效（401），已停止刷新。'
+                : 'Session expired (401). Auto-refresh stopped.'
+              : zh
+                ? '当前账号无权查看课堂会话（403），已停止刷新。'
+                : 'Not authorized to view classroom sessions (403). Auto-refresh stopped.',
+          );
+          return false;
+        }
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
         const items: ClassroomSessionItem[] = Array.isArray(data?.items) ? data.items : [];
@@ -109,20 +131,28 @@ export function InProgressSessionList({
           emptyReportedRef.current = true;
           onEmptyRef.current();
         }
+        return true;
       } catch (err: any) {
         setLoadError(err?.message || (zh ? '网络请求异常' : 'Network error'));
+        return true;
       } finally {
         setRefreshing(false);
       }
     },
-    [zh],
+    [zh, stopPolling],
   );
 
   useEffect(() => {
-    void fetchSessions();
-    const timer = setInterval(() => void fetchSessions(), 15000);
-    return () => clearInterval(timer);
-  }, [fetchSessions]);
+    let active = true;
+    void fetchSessions().then((keepPolling) => {
+      if (!active || !keepPolling) return;
+      timerRef.current = setInterval(() => void fetchSessions(), 15000);
+    });
+    return () => {
+      active = false;
+      stopPolling();
+    };
+  }, [fetchSessions, stopPolling]);
 
   const handleArchive = async (session: ClassroomSessionItem) => {
     setArchivingId(session.id);

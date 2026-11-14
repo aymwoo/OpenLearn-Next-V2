@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { onSocketInstance } from '../../services/socket-service';
 import type { Lesson, ClassType, ScheduleType, StudentType } from '../../store/appStore';
+import { isTerminalResourceStatus } from '../../utils/polling-guard';
 
 export interface TopPerformerStudent {
   rank: number;
@@ -88,10 +89,12 @@ export function TopPerformersWidget({
     averageScore: 0,
   });
   const [lastLiveEventTime, setLastLiveEventTime] = useState<number | null>(null);
+  const blockedLessonRef = React.useRef<string | null>(null);
 
   // Sync prop changes
   useEffect(() => {
     if (lessonId && lessonId !== selectedLessonId) {
+      blockedLessonRef.current = null;
       setSelectedLessonId(lessonId);
     }
   }, [lessonId]);
@@ -114,7 +117,7 @@ export function TopPerformersWidget({
   const fetchTopPerformers = useCallback(
     async (targetLessonId?: string) => {
       const activeId = targetLessonId || selectedLessonId;
-      if (!activeId) return;
+      if (!activeId || blockedLessonRef.current === activeId) return;
 
       setLoading(true);
       try {
@@ -122,6 +125,12 @@ export function TopPerformersWidget({
         const res = await fetch(
           `/api/classroom/sessions/${encodeURIComponent(activeId)}/top-performers?limit=5${classQuery}`,
         );
+        if (isTerminalResourceStatus(res.status)) {
+          blockedLessonRef.current = activeId;
+          setTopPerformers([]);
+          setSummary({ totalParticipants: 0, totalResponses: 0, averageScore: 0 });
+          return;
+        }
         if (res.ok) {
           const data = await res.json();
           if (data.success && Array.isArray(data.topPerformers) && data.topPerformers.length > 0) {

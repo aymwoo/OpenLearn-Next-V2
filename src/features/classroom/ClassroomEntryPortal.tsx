@@ -1241,11 +1241,14 @@ export function ClassroomEntryPortal({
   } | null>(null);
   const classLockRef = useRef<{ lessonId: string; classId: string } | null>(null);
   const [resuming, setResuming] = useState(false);
+  const isSelectedLessonAccessible = Boolean(
+    selectedLesson && (lessons.length === 0 || lessons.some((l) => l.id === selectedLesson)),
+  );
   useEffect(() => {
     let cancelled = false;
     setActiveSession(null);
     classLockRef.current = null;
-    if (!selectedLesson) return;
+    if (!selectedLesson || !isSelectedLessonAccessible) return;
     const doFetch = fetcher ?? ((...args: Parameters<typeof fetch>) => fetch(...args));
     doFetch(`/api/classroom/sessions/${encodeURIComponent(selectedLesson)}`)
       .then((res) => (res && res.ok ? res.json() : null))
@@ -1265,7 +1268,7 @@ export function ClassroomEntryPortal({
     return () => {
       cancelled = true;
     };
-  }, [selectedLesson, fetcher, setLiveClassSelectedClassId]);
+  }, [selectedLesson, isSelectedLessonAccessible, fetcher, setLiveClassSelectedClassId]);
 
   const currentLesson = useMemo(() => lessons.find((l) => l.id === selectedLesson) ?? null, [lessons, selectedLesson]);
   const currentClass = useMemo(

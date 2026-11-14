@@ -25,7 +25,7 @@ export interface StageDisplayViewProps {
 }
 
 export function StageDisplayView({ lessonId, lessonTitle = '互动课堂', lang = 'zh' }: StageDisplayViewProps) {
-  const { data, health, lastSyncedAt } = useStageDisplayFeed(lessonId);
+  const { data, health, terminalError, lastSyncedAt } = useStageDisplayFeed(lessonId);
   const { notices, push, dismiss } = useNoticeQueue(lang);
 
   // 互评赏析：接入真实数据源（此前展台只传 lessonTitle，整个模块是空壳）
@@ -71,7 +71,8 @@ export function StageDisplayView({ lessonId, lessonTitle = '互动课堂', lang 
 
   const peerReview = usePeerReviewData({
     lessonId,
-    enabled: peerReviewOpen,
+    enabled: peerReviewOpen && !terminalError,
+    topPerformersEnabled: Boolean(lessonId) && !terminalError,
     attempts,
     studentCount: data.attendance?.expected ?? 0,
     lang,
@@ -136,6 +137,53 @@ export function StageDisplayView({ lessonId, lessonTitle = '互动课堂', lang 
           {lang === 'zh'
             ? '请在教师端「在线课堂」中选择要授课的课节，这里会自动接入对应课堂的实时数据。'
             : 'Select a lesson in the teacher console; the stage will connect to it automatically.'}
+        </p>
+      </div>
+    );
+  }
+
+  const effectiveTerminalError =
+    terminalError ||
+    (peerReview.authErrorStatus
+      ? {
+          status: peerReview.authErrorStatus,
+          message:
+            peerReview.authErrorStatus === 401
+              ? lang === 'zh'
+                ? '登录状态已失效（401）'
+                : 'Session expired (401)'
+              : lang === 'zh'
+                ? '当前账号无权查看该课节的课堂数据（403）'
+                : 'You do not have permission to view this classroom stage (403)',
+        }
+      : null);
+
+  if (effectiveTerminalError) {
+    return (
+      <div
+        role="alert"
+        data-testid="stage-display-access-error"
+        className="fixed inset-0 z-[9999] bg-slate-950 text-slate-100 flex flex-col items-center justify-center gap-3 px-6 text-center"
+      >
+        <div className="text-5xl">🔒</div>
+        <h1 className="text-2xl font-extrabold">
+          {effectiveTerminalError.status === 401
+            ? lang === 'zh'
+              ? '大屏展台 · 登录已失效'
+              : 'Stage Display · Session Expired'
+            : effectiveTerminalError.status === 404
+              ? lang === 'zh'
+                ? '大屏展台 · 课节不存在'
+                : 'Stage Display · Lesson Not Found'
+              : lang === 'zh'
+                ? '大屏展台 · 无访问权限'
+                : 'Stage Display · Access Denied'}
+        </h1>
+        <p className="text-slate-300 text-sm max-w-md">{effectiveTerminalError.message}</p>
+        <p className="text-slate-400 text-xs max-w-md">
+          {lang === 'zh'
+            ? '已自动停止轮询。请使用授课教师账号登录后重新打开对应课节的大屏展台。'
+            : 'Polling has stopped automatically. Sign in with the assigned teacher account and reopen Stage Display for this lesson.'}
         </p>
       </div>
     );

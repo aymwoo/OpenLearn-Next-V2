@@ -4,6 +4,7 @@ import { kernelContainer } from '../../packages/core/kernel/index.js';
 import { ICoursewareRuntimeScriptRegistryToken } from '../../packages/core/di/interfaces.js';
 import { getCookieToken, getValidSession } from '../middleware/auth.js';
 import { BRIDGE_SDK_CODE } from '../utils/bridge-sdk.js';
+import { sanitizeExternalFontsInHtml } from '../../packages/core/security/font-sanitizer.js';
 
 export { validateMagicBytes, BLOCKED_EXTENSIONS } from '../utils/upload.js';
 
@@ -203,6 +204,9 @@ window.__LMS_COURSEWARE__ = {
   // 移除导航逃逸向量：<base> 可重定向相对资源、<meta http-equiv=refresh> 可跳转（沙箱内已隔离，仍防御性去除）
   html = html.replace(/<base\b[^>]*>/gi, '<!-- Removed base tag -->');
   html = html.replace(/<meta[^>]*http-equiv\s*=\s*["']?refresh["']?[^>]*>/gi, '<!-- Removed meta refresh -->');
+
+  // Issue #518：移除外部 Google Fonts 引用，避免违反宿主/沙箱 CSP 或内网离线阻塞，并注入系统回退字体
+  html = sanitizeExternalFontsInHtml(html).html;
 
   if (html.toLowerCase().includes('<head>')) {
     html = html.replace(/<head>/i, `<head>${injection}`);

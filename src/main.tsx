@@ -11,6 +11,9 @@ import * as Recharts from 'recharts';
 import * as LucideReact from 'lucide-react';
 import * as JsxRuntime from 'react/jsx-runtime';
 import './index.css';
+import { installExternalFontCspGuard } from './utils/font-csp-guard';
+
+installExternalFontCspGuard();
 
 (window as any).React = React;
 (window as any).ReactDOM = ReactDOM;
