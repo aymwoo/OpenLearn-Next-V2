@@ -2,16 +2,21 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } 
 import http from 'node:http';
 import fs from 'node:fs';
 import { Readable } from 'node:stream';
+import Database from 'better-sqlite3';
 import {
   COMMUNITY_REGISTRY_ENV,
+  CommunityRegistryConfigError,
   __resetCommunityRegistryCache,
   annotateInstallState,
   downloadPluginPackage,
   fetchCommunityRegistry,
+  getStoredCommunityRegistryUrl,
   isValidPluginId,
   normalizeCommunityEntry,
   normalizeCommunityRegistry,
+  resolveCommunityRegistryConfig,
   resolveCommunityRegistryUrl,
+  setStoredCommunityRegistryUrl,
   type CommunityPluginEntry,
   type FetchLike,
 } from '../services/community-registry.js';
@@ -319,6 +324,79 @@ describe('resolveCommunityRegistryUrl', () => {
   it('prefers an explicit url over the environment', () => {
     process.env[COMMUNITY_REGISTRY_ENV] = 'https://env.example.com/r.json';
     expect(resolveCommunityRegistryUrl(REGISTRY_URL)).toBe(REGISTRY_URL);
+  });
+});
+
+describe('site_settings community_registry_url persistence', () => {
+  let db: Database.Database;
+
+  beforeEach(() => {
+    delete process.env[COMMUNITY_REGISTRY_ENV];
+    __resetCommunityRegistryCache();
+    db = new Database(':memory:');
+    db.exec('CREATE TABLE site_settings (id TEXT PRIMARY KEY, community_registry_url TEXT);');
+  });
+
+  afterEach(() => {
+    delete process.env[COMMUNITY_REGISTRY_ENV];
+    __resetCommunityRegistryCache();
+    db.close();
+  });
+
+  it('returns configSource=none when neither database nor env is configured', () => {
+    expect(getStoredCommunityRegistryUrl(db)).toBeNull();
+    expect(resolveCommunityRegistryConfig(db)).toEqual({
+      activeUrl: null,
+      databaseUrl: null,
+      envUrl: null,
+      configSource: 'none',
+      hasEnvFallback: false,
+    });
+  });
+
+  it('falls back to env when database setting is empty', () => {
+    process.env[COMMUNITY_REGISTRY_ENV] = 'https://env.example.com/plugins.json';
+    expect(resolveCommunityRegistryConfig(db)).toEqual({
+      activeUrl: 'https://env.example.com/plugins.json',
+      databaseUrl: null,
+      envUrl: 'https://env.example.com/plugins.json',
+      configSource: 'env',
+      hasEnvFallback: true,
+    });
+  });
+
+  it('persists a safe URL in site_settings and overrides env, then falls back on clear', () => {
+    process.env[COMMUNITY_REGISTRY_ENV] = 'https://env.example.com/plugins.json';
+    const saved = setStoredCommunityRegistryUrl(db, `  ${REGISTRY_URL}  `);
+    expect(saved).toEqual({
+      activeUrl: REGISTRY_URL,
+      databaseUrl: REGISTRY_URL,
+      envUrl: 'https://env.example.com/plugins.json',
+      configSource: 'database',
+      hasEnvFallback: true,
+    });
+    expect(getStoredCommunityRegistryUrl(db)).toBe(REGISTRY_URL);
+
+    const cleared = setStoredCommunityRegistryUrl(db, null);
+    expect(cleared).toEqual({
+      activeUrl: 'https://env.example.com/plugins.json',
+      databaseUrl: null,
+      envUrl: 'https://env.example.com/plugins.json',
+      configSource: 'env',
+      hasEnvFallback: true,
+    });
+  });
+
+  it.each([
+    'http://127.0.0.1/plugins.json',
+    'http://192.168.1.20/plugins.json',
+    'http://169.254.169.254/latest/meta-data/',
+    'file:///etc/passwd',
+    'not-a-url',
+    `https://example.com/${'a'.repeat(2050)}.json`,
+  ])('rejects unsafe or invalid URL %s without mutating site_settings', (badUrl) => {
+    expect(() => setStoredCommunityRegistryUrl(db, badUrl)).toThrow(CommunityRegistryConfigError);
+    expect(getStoredCommunityRegistryUrl(db)).toBeNull();
   });
 });
 

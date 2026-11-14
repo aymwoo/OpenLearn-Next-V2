@@ -43,11 +43,16 @@ export function PluginView(props: PluginViewProps = {}) {
   const onZipUpload = props.onZipUpload ?? appData?.handleZipPluginUpload ?? (async () => {});
   const onToggle = props.onToggle ?? appData?.handleTogglePlugin ?? (async () => {});
   const onDelete = props.onDelete ?? appData?.handleDeletePlugin ?? (async () => {});
+  const session = appData?.session;
+  const isAdmin = session
+    ? (session.role as string) === 'administrator' || session.subRole === 'administrator'
+    : undefined;
 
   return (
     <PluginCenter
       plugins={plugins}
       lang={lang}
+      isAdmin={isAdmin}
       storeTab={storeTab}
       setStoreTab={(tab) => setStoreTab(tab as PluginStoreTab)}
       pluginCode={pluginCode}

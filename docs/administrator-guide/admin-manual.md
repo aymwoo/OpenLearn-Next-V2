@@ -180,6 +180,7 @@
 | GET    | `/api/plugins/by-manifest/:manifestId` | 公开                           | 按 manifest id 查                               |
 | GET    | `/api/plugins/market`                  | `requireAuth()`                | 市场列表                                        |
 | GET    | `/api/plugins/community`               | `requireAuth()`                | 社区插件列表                                    |
+| PUT    | `/api/plugins/community/config`        | `requireAuth('administrator')` | 设置或清除社区插件注册表 JSON 地址              |
 | POST   | `/api/plugins`                         | `requireAuth('administrator')` | 以源码安装（`plugin.install`）                  |
 | POST   | `/api/plugins/upload-zip`              | `requireAuth('administrator')` | ZIP 安装（`plugin.install_zip`）                |
 | POST   | `/api/plugins/upload-zip-raw`          | `requireAuth('administrator')` | 原始 ZIP 流式安装（上限 400mb）                 |

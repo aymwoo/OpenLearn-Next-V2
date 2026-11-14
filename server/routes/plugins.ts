@@ -33,9 +33,12 @@ import {
 import { buildOpenAIChatUrl, validateAiProviderUrl } from '../../packages/core/ai/utils/redirect-guard.js';
 import {
   COMMUNITY_REGISTRY_ENV,
+  CommunityRegistryConfigError,
   fetchCommunityRegistry,
   downloadPluginPackage,
   isValidPluginId,
+  resolveCommunityRegistryConfig,
+  setStoredCommunityRegistryUrl,
   type DownloadedPackage,
 } from '../services/community-registry.js';
 import JSZip from 'jszip';
@@ -658,16 +661,60 @@ export function registerPluginsRoutes(ctx: ServerContext) {
   });
 
   // 社区插件市场（Community Registry）
-  // SEC-AUTH: 该端点会代表服务端向运维配置的社区注册表发起出站请求，
-  // 必须要求有效会话；仅管理员可安装，因此列表对教师开放、安装动作受限于 install-from-url。
+  // SEC-AUTH: 该端点会代表服务端向运维或管理员配置的社区注册表发起出站请求，
+  // 必须要求有效会话；仅管理员可修改配置与安装，列表对教师开放。
   app.get('/api/plugins/community', requireScopedAuth('authenticated'), async (req, res) => {
     try {
+      const config = resolveCommunityRegistryConfig(kernelContainer.db);
+      const isAdmin = isAdministrator((req as any).session);
       const result = await fetchCommunityRegistry({
+        url: config.activeUrl,
         installed: listInstalledManifestVersions(),
         forceRefresh: String(req.query.refresh || '') === '1',
       });
-      res.json({ success: true, envVar: COMMUNITY_REGISTRY_ENV, ...result });
+      res.json({
+        success: true,
+        envVar: COMMUNITY_REGISTRY_ENV,
+        canConfigure: isAdmin,
+        configSource: config.configSource,
+        databaseUrl: isAdmin ? config.databaseUrl : null,
+        hasEnvFallback: config.hasEnvFallback,
+        ...result,
+      });
     } catch (e: any) {
+      sendSafeError(res, e);
+    }
+  });
+
+  // 在插件中心「社区」标签页设置或清除社区注册表 JSON 地址（仅管理员）
+  // SEC-AUTH: 管理员专属 —— 变更服务端出站拉取的插件注册表来源，须经 SSRF 校验。
+  app.put('/api/plugins/community/config', requireScopedAuth('admin'), (req, res) => {
+    try {
+      const { registryUrl } = req.body || {};
+      if (registryUrl === undefined) {
+        return res.status(400).json({ success: false, error: '缺少 registryUrl' });
+      }
+      if (registryUrl !== null && typeof registryUrl !== 'string') {
+        return res.status(400).json({ success: false, error: 'registryUrl 必须是字符串或 null' });
+      }
+      const updated = setStoredCommunityRegistryUrl(kernelContainer.db, registryUrl);
+      recordSecurityAudit('plugin.community_registry.updated', {
+        actorId: getActorId(req),
+        databaseUrl: updated.databaseUrl,
+        configSource: updated.configSource,
+      });
+      res.json({
+        success: true,
+        envVar: COMMUNITY_REGISTRY_ENV,
+        configSource: updated.configSource,
+        databaseUrl: updated.databaseUrl,
+        activeUrl: updated.activeUrl,
+        hasEnvFallback: updated.hasEnvFallback,
+      });
+    } catch (e: any) {
+      if (e instanceof CommunityRegistryConfigError) {
+        return res.status(400).json({ success: false, error: e.message });
+      }
       sendSafeError(res, e);
     }
   });

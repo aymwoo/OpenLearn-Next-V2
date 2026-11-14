@@ -20,6 +20,7 @@ describe('community plugin registry routes', () => {
   let server: Server;
   let baseUrl: string;
   let savedRegistryEnv: string | undefined;
+  let savedDbRegistryUrl: string | null = null;
 
   const adminId = 'usr-community-admin';
   const teacherId = 'usr-community-teacher';
@@ -30,6 +31,15 @@ describe('community plugin registry routes', () => {
   beforeAll(async () => {
     savedRegistryEnv = process.env[COMMUNITY_REGISTRY_ENV];
     delete process.env[COMMUNITY_REGISTRY_ENV];
+    try {
+      const existing = kernelContainer.db
+        .prepare('SELECT community_registry_url FROM site_settings WHERE id = ?')
+        .get('global') as { community_registry_url?: string | null } | undefined;
+      savedDbRegistryUrl = existing?.community_registry_url ?? null;
+      kernelContainer.db.prepare('UPDATE site_settings SET community_registry_url = NULL WHERE id = ?').run('global');
+    } catch {
+      savedDbRegistryUrl = null;
+    }
 
     const now = Date.now();
     const insertUser = kernelContainer.db.prepare(
@@ -70,6 +80,13 @@ describe('community plugin registry routes', () => {
     } else {
       process.env[COMMUNITY_REGISTRY_ENV] = savedRegistryEnv;
     }
+    try {
+      kernelContainer.db
+        .prepare('UPDATE site_settings SET community_registry_url = ? WHERE id = ?')
+        .run(savedDbRegistryUrl, 'global');
+    } catch {
+      /* ignore */
+    }
     kernelContainer.db.prepare('DELETE FROM client_sessions WHERE id IN (?, ?)').run(adminToken, teacherToken);
     kernelContainer.db.prepare('DELETE FROM users WHERE id IN (?, ?)').run(adminId, teacherId);
     if (server) {
@@ -92,12 +109,94 @@ describe('community plugin registry routes', () => {
         configured: boolean;
         plugins: unknown[];
         envVar: string;
+        canConfigure: boolean;
+        configSource: string;
       };
       expect(body.success).toBe(true);
       expect(body.envVar).toBe(COMMUNITY_REGISTRY_ENV);
+      expect(body.canConfigure).toBe(false);
+      expect(body.configSource).toBe('none');
       // 未配置注册表地址：明确返回 configured=false 而不是报错
       expect(body.configured).toBe(false);
       expect(body.plugins).toEqual([]);
+    });
+
+    it('reports canConfigure=true for an administrator', async () => {
+      const res = await fetch(`${baseUrl}/api/plugins/community`, { headers: cookie(adminToken) });
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as { canConfigure: boolean; configSource: string };
+      expect(body.canConfigure).toBe(true);
+      expect(body.configSource).toBe('none');
+    });
+  });
+
+  describe('PUT /api/plugins/community/config', () => {
+    const putConfig = (token: string | null, payload: unknown) =>
+      fetch(`${baseUrl}/api/plugins/community/config`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', ...(token ? cookie(token) : {}) },
+        body: JSON.stringify(payload),
+      });
+
+    it('rejects an anonymous caller', async () => {
+      const res = await putConfig(null, { registryUrl: 'https://registry.example.com/community.json' });
+      expect(res.status).toBe(401);
+    });
+
+    it('is administrator-only — a teacher cannot modify registry settings', async () => {
+      const res = await putConfig(teacherToken, { registryUrl: 'https://registry.example.com/community.json' });
+      expect(res.status).toBe(403);
+    });
+
+    it('rejects missing or non-string registryUrl', async () => {
+      const missing = await putConfig(adminToken, {});
+      expect(missing.status).toBe(400);
+      const badType = await putConfig(adminToken, { registryUrl: 123 });
+      expect(badType.status).toBe(400);
+    });
+
+    it.each([
+      'http://127.0.0.1/community.json',
+      'http://169.254.169.254/latest/meta-data/',
+      'http://192.168.1.10/community.json',
+      'file:///etc/passwd',
+    ])('blocks unsafe URL %s with 400', async (badUrl) => {
+      const res = await putConfig(adminToken, { registryUrl: badUrl });
+      expect(res.status).toBe(400);
+      expect(((await res.json()) as { error: string }).error).toMatch(/安全拦截: 非法注册表地址/);
+    });
+
+    it('persists and clears a valid registry URL in site_settings', async () => {
+      const url = 'https://registry.example.com/community-plugins.json';
+      const saveRes = await putConfig(adminToken, { registryUrl: url });
+      expect(saveRes.status).toBe(200);
+      const saveBody = (await saveRes.json()) as {
+        success: boolean;
+        configSource: string;
+        databaseUrl: string | null;
+        activeUrl: string | null;
+      };
+      expect(saveBody).toMatchObject({
+        success: true,
+        configSource: 'database',
+        databaseUrl: url,
+        activeUrl: url,
+      });
+
+      const clearRes = await putConfig(adminToken, { registryUrl: null });
+      expect(clearRes.status).toBe(200);
+      const clearBody = (await clearRes.json()) as {
+        success: boolean;
+        configSource: string;
+        databaseUrl: string | null;
+        activeUrl: string | null;
+      };
+      expect(clearBody).toMatchObject({
+        success: true,
+        configSource: 'none',
+        databaseUrl: null,
+        activeUrl: null,
+      });
     });
   });
 

@@ -29,6 +29,7 @@ export type { PluginType, PluginCenterProps } from './plugin-center/types';
 export function PluginCenter({
   plugins,
   lang,
+  isAdmin,
   storeTab,
   setStoreTab,
   pluginCode,
@@ -395,7 +396,12 @@ export function PluginCenter({
               onDelete={requestDelete}
             />
           ) : storeTab === 'community' ? (
-            <PluginCommunityPanel installedPlugins={plugins} lang={lang} onInstalled={handleCommunityInstalled} />
+            <PluginCommunityPanel
+              installedPlugins={plugins}
+              lang={lang}
+              canConfigure={isAdmin}
+              onInstalled={handleCommunityInstalled}
+            />
           ) : storeTab === 'logs' ? (
             <PluginLogsPanel lang={lang} />
           ) : storeTab === 'data' ? (
