@@ -56,9 +56,8 @@ export function communityInstallEnabled(env: NodeJS.ProcessEnv = process.env): b
  */
 export function getStoredCommunityInstallEnabled(db: CommunityInstallDbLike): boolean | null {
   try {
-    const row = db
-      .prepare('SELECT community_install_enabled FROM site_settings WHERE id = ?')
-      .get('global') as { community_install_enabled?: number | boolean | null } | undefined;
+    const row = db.prepare('SELECT community_install_enabled FROM site_settings WHERE id = ?').get('global') as
+      { community_install_enabled?: number | boolean | null } | undefined;
     const raw = row?.community_install_enabled;
     if (raw === 1 || raw === true) return true;
     if (raw === 0 || raw === false) return false;

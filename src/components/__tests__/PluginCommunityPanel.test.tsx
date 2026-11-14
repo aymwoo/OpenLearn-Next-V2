@@ -789,7 +789,7 @@ describe('PluginCommunityPanel', () => {
         expect(JSON.parse(String(body?.init?.body))).toEqual({ installEnabled: true });
       });
       await waitFor(() => {
-        expect((screen.getByTestId('community-install-toggle').textContent || '')).toMatch(/有效状态：已开启/);
+        expect(screen.getByTestId('community-install-toggle').textContent || '').toMatch(/有效状态：已开启/);
       });
     });
 

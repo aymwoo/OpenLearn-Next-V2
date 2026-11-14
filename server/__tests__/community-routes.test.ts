@@ -8,10 +8,7 @@ import { setAuditSinkForTests, type AuditRecord } from '../../packages/core/obse
 import { registerPluginsRoutes } from '../routes/plugins.js';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
 import { COMMUNITY_REGISTRY_ENV } from '../services/community-registry.js';
-import {
-  COMMUNITY_INSTALL_DISABLED_MESSAGE,
-  COMMUNITY_INSTALL_ENV,
-} from '../services/community-attest.js';
+import { COMMUNITY_INSTALL_DISABLED_MESSAGE, COMMUNITY_INSTALL_ENV } from '../services/community-attest.js';
 
 /**
  * 社区市场路由的鉴权与入参门禁契约。
@@ -569,11 +566,7 @@ describe('community plugin registry routes', () => {
       return zip.generateAsync({ type: 'nodebuffer' });
     }
 
-    const postCommunityZip = async (
-      token: string,
-      pluginId: string,
-      extraHeaders: Record<string, string> = {},
-    ) =>
+    const postCommunityZip = async (token: string, pluginId: string, extraHeaders: Record<string, string> = {}) =>
       fetch(`${baseUrl}/api/plugins/upload-zip-raw`, {
         method: 'POST',
         headers: {
@@ -652,7 +645,7 @@ describe('community plugin registry routes', () => {
       expect(storedInstall()).toBe(1);
 
       const again = await fetch(`${baseUrl}/api/plugins/community`, { headers: cookie(adminToken) });
-      expect(((await again.json()) as { installEnabled: boolean; installConfigSource: string })).toMatchObject({
+      expect((await again.json()) as { installEnabled: boolean; installConfigSource: string }).toMatchObject({
         installEnabled: true,
         installConfigSource: 'database',
       });
