@@ -129,6 +129,8 @@ PYTHONPATH=$HOME/.cache/pylibs bash scripts/build-docs.sh $HOME/.cache/docs-buil
 >
 > **镜像快进已自动化**：`.github/workflows/sync-gitee-mirror.yml` 在 `main` 推送后自动同步（单向、只快进，发现分叉就停下并报错，绝不 force-push）；未配 `GITEE_USERNAME` / `GITEE_TOKEN` 时自动跳过，不阻塞主干 CI。
 >
+> **判断同步是否成功**：该 job 设置了 `continue-on-error`（失败不阻塞主干），所以 run 结论显示 success **不代表同步成功**。请查看 run 页面的 **Step Summary「Gitee 镜像同步结果」**（区分「已跳过 / 成功 / 失败」）与 ANNOTATIONS。手动触发 `workflow_dispatch` 时可选 `strict=true`，让失败直接反映到 run 结论，便于维护者核验 Secret 与网络配置。
+>
 > 需要手动兜底时（维护者，需 Gitee 写权限）：
 >
 > ```bash
