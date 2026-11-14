@@ -180,3 +180,40 @@ describe('CourseWizardModal 底部步骤指示器', () => {
     expect(screen.getByText(text)).toBeTruthy();
   });
 });
+
+describe('CourseWizardModal 预设阶段名称本地化 (#493)', () => {
+  it('中文界面下 3 套预设时间轴均使用纯中文阶段名称与备注，不再中英混杂', () => {
+    const setWizardCourseTimeline = vi.fn();
+    render(<CourseWizardModal {...makeProps({ wizardStep: 2, lang: 'zh', setWizardCourseTimeline })} />);
+
+    fireEvent.click(screen.getByText(/经典 5-15-15-5 讲授模式/));
+    const standardSegs = setWizardCourseTimeline.mock.calls.at(-1)?.[0] as WizardSegment[];
+    expect(standardSegs.map((s) => s.title)).toEqual(['课堂导入', '核心精讲', '互动演练', '课堂总结']);
+    expect(standardSegs.every((s) => !s.title.includes('/') && !/[A-Za-z]/.test(s.title))).toBe(true);
+
+    fireEvent.click(screen.getByText(/主题讨论工作坊模式/));
+    const seminarSegs = setWizardCourseTimeline.mock.calls.at(-1)?.[0] as WizardSegment[];
+    expect(seminarSegs.map((s) => s.title)).toEqual(['讨论导入', '小组白板协作', '小组交流汇报', '点评与反馈']);
+    expect(seminarSegs.every((s) => !s.title.includes('/') && !/[A-Za-z]/.test(s.title))).toBe(true);
+
+    fireEvent.click(screen.getByText(/翻转课堂高强度训练/));
+    const flippedSegs = setWizardCourseTimeline.mock.calls.at(-1)?.[0] as WizardSegment[];
+    expect(flippedSegs.map((s) => s.title)).toEqual(['自学效果自测', '重难点拆解', '核心习题演练', '知识梳理总结']);
+    expect(flippedSegs.every((s) => !s.title.includes('/') && !/[A-Za-z]/.test(s.title))).toBe(true);
+  });
+
+  it('英文界面下预设时间轴使用纯英文阶段名称，不夹杂中文字符', () => {
+    const setWizardCourseTimeline = vi.fn();
+    render(<CourseWizardModal {...makeProps({ wizardStep: 2, lang: 'en', setWizardCourseTimeline })} />);
+
+    fireEvent.click(screen.getByText(/Traditional 5-15-15-5 Lecture Paradigm/));
+    const standardSegs = setWizardCourseTimeline.mock.calls.at(-1)?.[0] as WizardSegment[];
+    expect(standardSegs.map((s) => s.title)).toEqual([
+      'Course Orientation',
+      'Subject Core Lecture',
+      'Interactive Lab Work',
+      'Lesson Wrap-up',
+    ]);
+    expect(standardSegs.every((s) => !/[\u4e00-\u9fa5]/.test(s.title))).toBe(true);
+  });
+});

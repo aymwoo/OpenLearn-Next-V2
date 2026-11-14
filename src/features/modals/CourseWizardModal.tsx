@@ -3,6 +3,7 @@ import { motion } from 'motion/react';
 import Markdown from 'react-markdown';
 import { BookOpen, Sparkles, Activity, Plus, CheckCircle2, ChevronRight, Database, Loader2 } from 'lucide-react';
 import { ExtensionPointRenderer } from '../../plugin-host/extension-point-renderer';
+import { getDefaultWizardTimeline } from '../../hooks/useCourseWizard';
 
 export interface WizardSegment {
   id: string;
@@ -309,40 +310,7 @@ export function CourseWizardModal(props: CourseWizardModalProps) {
                             lang === 'zh'
                               ? '由浅入深：先通过场景导入，后精讲，接着在白板配合大屏进行演练。'
                               : 'Perfect dynamic for most standard classes.',
-                          segments: [
-                            {
-                              id: 'seg-preset-1',
-                              title: 'Course Orientation / 课堂导入',
-                              type: 'intro',
-                              duration: '5m',
-                              color: 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100',
-                              notes: 'Warm up topic',
-                            },
-                            {
-                              id: 'seg-preset-2',
-                              title: 'Subject Core Lecture / 核心理论精讲',
-                              type: 'lecture',
-                              duration: '15m',
-                              color: 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100',
-                              notes: 'Main content slide',
-                            },
-                            {
-                              id: 'seg-preset-3',
-                              title: 'Interactive Lab Work / 随堂协同演练',
-                              type: 'practice',
-                              duration: '15m',
-                              color: 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100',
-                              notes: 'Exercises & questions',
-                            },
-                            {
-                              id: 'seg-preset-4',
-                              title: 'Wrap up / 课堂成果总结与答疑',
-                              type: 'summary',
-                              duration: '5m',
-                              color: 'bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100',
-                              notes: 'Check answer notes',
-                            },
-                          ],
+                          segments: getDefaultWizardTimeline(lang, 'seg-preset-'),
                         },
                         {
                           id: 'preset_seminar',
@@ -354,35 +322,35 @@ export function CourseWizardModal(props: CourseWizardModalProps) {
                           segments: [
                             {
                               id: 'seg-preset-5',
-                              title: 'Debate Scenario Brief / 讨论情境简述',
+                              title: lang === 'zh' ? '讨论导入' : 'Debate Scenario Brief',
                               type: 'intro',
                               duration: '5m',
                               color: 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100',
-                              notes: 'Define debate metrics',
+                              notes: lang === 'zh' ? '明确议题与分组评价标准' : 'Define debate metrics',
                             },
                             {
                               id: 'seg-preset-6',
-                              title: 'Cooperative Ideation / 精英白板协作设计',
+                              title: lang === 'zh' ? '小组白板协作' : 'Cooperative Ideation',
                               type: 'practice',
                               duration: '13m',
                               color: 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100',
-                              notes: 'Joint workspace analysis',
+                              notes: lang === 'zh' ? '分组在协作画板上共同探究推导' : 'Joint workspace analysis',
                             },
                             {
                               id: 'seg-preset-7',
-                              title: 'Student Team Presentation / 各小组交互汇报',
+                              title: lang === 'zh' ? '小组交流汇报' : 'Student Team Presentation',
                               type: 'lecture',
                               duration: '12m',
                               color: 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100',
-                              notes: 'Group screen sharing',
+                              notes: lang === 'zh' ? '各小组代表展示并交流成果' : 'Group screen sharing',
                             },
                             {
                               id: 'seg-preset-8',
-                              title: 'Review & Grade Feedback / 教师深度对标点评',
+                              title: lang === 'zh' ? '点评与反馈' : 'Review & Grade Feedback',
                               type: 'summary',
                               duration: '10m',
                               color: 'bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100',
-                              notes: 'Score reviews',
+                              notes: lang === 'zh' ? '教师集中点评并总结评分维度' : 'Score reviews',
                             },
                           ],
                         },
@@ -396,35 +364,35 @@ export function CourseWizardModal(props: CourseWizardModalProps) {
                           segments: [
                             {
                               id: 'seg-preset-9',
-                              title: 'Blind Spot Evaluation / 温史自学效果自测',
+                              title: lang === 'zh' ? '自学效果自测' : 'Blind Spot Evaluation',
                               type: 'intro',
                               duration: '8m',
                               color: 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100',
-                              notes: 'Scan quiz',
+                              notes: lang === 'zh' ? '快速诊断前置预习薄弱环节' : 'Scan quiz',
                             },
                             {
                               id: 'seg-preset-10',
-                              title: 'Advanced Principle Explores / 重难考点极限拆解',
+                              title: lang === 'zh' ? '重难点拆解' : 'Advanced Principle Explores',
                               type: 'lecture',
                               duration: '14m',
                               color: 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100',
-                              notes: 'Analyse weak metrics',
+                              notes: lang === 'zh' ? '聚焦高频错题与难点深度拆解' : 'Analyse weak metrics',
                             },
                             {
                               id: 'seg-preset-11',
-                              title: 'Mock Solving Battle / 核心精选题实操对抗',
+                              title: lang === 'zh' ? '核心习题演练' : 'Mock Solving Battle',
                               type: 'practice',
                               duration: '13m',
                               color: 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100',
-                              notes: 'Sprint workout',
+                              notes: lang === 'zh' ? '限时完成专项梯度训练题' : 'Sprint workout',
                             },
                             {
                               id: 'seg-preset-12',
-                              title: 'Anchor Recap / 知识网架构网节点固化',
+                              title: lang === 'zh' ? '知识梳理总结' : 'Anchor Recap',
                               type: 'summary',
                               duration: '5m',
                               color: 'bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100',
-                              notes: 'Highlight checklist',
+                              notes: lang === 'zh' ? '总结思维导图与易错清单' : 'Highlight checklist',
                             },
                           ],
                         },
