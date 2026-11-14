@@ -23,6 +23,7 @@ import { TeacherAssignmentGradePanel } from '../../components/TeacherAssignmentG
 import type { StudentType } from '../../types/app';
 import { ConceptWordcloudPanel } from './exit-ticket/ConceptWordcloudPanel';
 import { KnowledgeTreeLightingModal } from './exit-ticket/KnowledgeTreeLightingModal';
+import { AccessibleTableRegion } from '../../components/AccessibleTableRegion';
 import { clusterPuzzledConcepts } from './exit-ticket/concept-clustering-engine';
 import { onSocketInstance } from '../../services/socket-service';
 
@@ -431,68 +432,97 @@ export function PostClassWrapupView({
                   {lang === 'zh' ? '暂无匹配的随堂提交记录' : 'No matching submissions found'}
                 </div>
               ) : (
-                <table className="w-full border-collapse text-left text-xs text-main">
-                  <thead>
-                    <tr className="bg-surface-secondary border-b border-theme font-bold text-muted">
-                      <th className="p-3">{lang === 'zh' ? '学生姓名' : 'Student'}</th>
-                      <th className="p-3">{lang === 'zh' ? '课件项目' : 'Courseware'}</th>
-                      <th className="p-3">{lang === 'zh' ? '状态' : 'Status'}</th>
-                      <th className="p-3 text-center">{lang === 'zh' ? '成绩 / 得分' : 'Score'}</th>
-                      <th className="p-3 text-right">{lang === 'zh' ? '操作' : 'Actions'}</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border/60">
-                    {displayAttempts.map((a) => (
-                      <tr
-                        key={a.attemptId || Math.random()}
-                        className="hover:bg-surface-secondary/40 transition-colors"
-                      >
-                        <td className="p-3 font-bold text-main">{a.studentName || 'Unknown Student'}</td>
-                        <td className="p-3 text-muted">{a.coursewareName || 'Interactive Exercise'}</td>
-                        <td className="p-3">
-                          <span
-                            className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
-                              a.status === 'completed' || a.status === 'finished' || a.status === 'submitted'
-                                ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30'
-                                : 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30'
-                            }`}
-                          >
-                            {a.status === 'completed' || a.status === 'finished' || a.status === 'submitted'
-                              ? lang === 'zh'
-                                ? '已提交'
-                                : 'Submitted'
-                              : lang === 'zh'
-                                ? '作答中'
-                                : 'In Progress'}
-                          </span>
-                        </td>
-                        <td className="p-3 text-center font-mono font-bold text-main">
-                          {a.score !== undefined && a.score !== null ? `${a.score} 分` : '--'}
-                        </td>
-                        <td className="p-3 text-right">
-                          <div className="flex items-center justify-end gap-1.5">
-                            <button
-                              type="button"
-                              onClick={() => onViewRaw(a)}
-                              className="px-2 py-1 text-[11px] font-bold rounded-lg border border-theme bg-surface hover:bg-surface-secondary text-main transition-colors flex items-center gap-1 cursor-pointer"
-                            >
-                              <Eye size={11} />
-                              <span>{lang === 'zh' ? '查看明细' : 'Details'}</span>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => onPromoteAttempt(a.attemptId)}
-                              className="px-2 py-1 text-[11px] font-bold rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white transition-colors flex items-center gap-1 cursor-pointer"
-                            >
-                              <Database size={11} />
-                              <span>{lang === 'zh' ? '录入成绩' : 'Record'}</span>
-                            </button>
-                          </div>
-                        </td>
+                <AccessibleTableRegion labelledBy="postclass-attempts-caption">
+                  <table
+                    className="responsive-data-table w-full border-collapse text-left text-xs text-main"
+                    data-stack-mobile="true"
+                  >
+                    <caption id="postclass-attempts-caption" className="sr-only">
+                      {lang === 'zh' ? '随堂提交明细' : 'In-class Submission Records'}
+                    </caption>
+                    <thead>
+                      <tr className="bg-surface-secondary border-b border-theme font-bold text-muted">
+                        <th scope="col" className="p-3">
+                          {lang === 'zh' ? '学生姓名' : 'Student'}
+                        </th>
+                        <th scope="col" className="p-3">
+                          {lang === 'zh' ? '课件项目' : 'Courseware'}
+                        </th>
+                        <th scope="col" className="p-3">
+                          {lang === 'zh' ? '状态' : 'Status'}
+                        </th>
+                        <th scope="col" className="p-3 text-center">
+                          {lang === 'zh' ? '成绩 / 得分' : 'Score'}
+                        </th>
+                        <th scope="col" className="p-3 text-right">
+                          {lang === 'zh' ? '操作' : 'Actions'}
+                        </th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody className="divide-y divide-border/60">
+                      {displayAttempts.map((a) => (
+                        <tr
+                          key={a.attemptId || Math.random()}
+                          className="hover:bg-surface-secondary/40 transition-colors"
+                        >
+                          <th
+                            scope="row"
+                            data-label={lang === 'zh' ? '学生姓名' : 'Student'}
+                            className="p-3 font-bold text-main text-left"
+                          >
+                            {a.studentName || 'Unknown Student'}
+                          </th>
+                          <td data-label={lang === 'zh' ? '课件项目' : 'Courseware'} className="p-3 text-muted">
+                            {a.coursewareName || 'Interactive Exercise'}
+                          </td>
+                          <td data-label={lang === 'zh' ? '状态' : 'Status'} className="p-3">
+                            <span
+                              className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
+                                a.status === 'completed' || a.status === 'finished' || a.status === 'submitted'
+                                  ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30'
+                                  : 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30'
+                              }`}
+                            >
+                              {a.status === 'completed' || a.status === 'finished' || a.status === 'submitted'
+                                ? lang === 'zh'
+                                  ? '已提交'
+                                  : 'Submitted'
+                                : lang === 'zh'
+                                  ? '作答中'
+                                  : 'In Progress'}
+                            </span>
+                          </td>
+                          <td
+                            data-label={lang === 'zh' ? '成绩 / 得分' : 'Score'}
+                            className="p-3 text-center font-mono font-bold text-main"
+                          >
+                            {a.score !== undefined && a.score !== null ? `${a.score} 分` : '--'}
+                          </td>
+                          <td data-label={lang === 'zh' ? '操作' : 'Actions'} className="p-3 text-right">
+                            <div className="flex items-center justify-end gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => onViewRaw(a)}
+                                className="px-2 py-1 text-[11px] font-bold rounded-lg border border-theme bg-surface hover:bg-surface-secondary text-main transition-colors flex items-center gap-1 cursor-pointer"
+                              >
+                                <Eye size={11} aria-hidden="true" />
+                                <span>{lang === 'zh' ? '查看明细' : 'Details'}</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => onPromoteAttempt(a.attemptId)}
+                                className="px-2 py-1 text-[11px] font-bold rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white transition-colors flex items-center gap-1 cursor-pointer"
+                              >
+                                <Database size={11} aria-hidden="true" />
+                                <span>{lang === 'zh' ? '录入成绩' : 'Record'}</span>
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </AccessibleTableRegion>
               )}
             </div>
           </div>
@@ -591,7 +621,7 @@ export function PostClassWrapupView({
                   value={homeworkReq}
                   onChange={(e) => setHomeworkReq(e.target.value)}
                   rows={4}
-                  className="w-full bg-surface-secondary border border-theme rounded-xl p-3 text-xs text-main outline-none focus:ring-1 focus:ring-primary-theme resize-none"
+                  className="w-full bg-surface-secondary border border-theme rounded-xl p-3 text-xs text-main outline-none focus:ring-1 focus:ring-primary-theme field-sizing-auto"
                 />
               </div>
 
@@ -626,7 +656,7 @@ export function PostClassWrapupView({
                     : 'Notes on what went well, pacing, student engagement, and next steps...'
                 }
                 rows={7}
-                className="w-full flex-1 bg-surface-secondary border border-theme rounded-xl p-3 text-xs text-main outline-none focus:ring-1 focus:ring-primary-theme resize-none"
+                className="w-full flex-1 bg-surface-secondary border border-theme rounded-xl p-3 text-xs text-main outline-none focus:ring-1 focus:ring-primary-theme field-sizing-auto"
               />
 
               <div className="flex justify-end pt-1">

@@ -559,7 +559,7 @@ export function TeacherAssignmentGradePanel({ lessonId, lang, addToast }: Teache
                         }
                         onChange={(e) => setComments((prev) => ({ ...prev, [sub.id]: e.target.value }))}
                         rows={2}
-                        className="w-full bg-white border border-slate-250 rounded-lg text-xs p-2 focus:ring-1 focus:ring-indigo-500 outline-none shadow-4xs disabled:opacity-50 disabled:bg-slate-50 resize-none font-medium text-slate-700"
+                        className="w-full bg-white border border-slate-250 rounded-lg text-xs p-2 focus:ring-1 focus:ring-indigo-500 outline-none shadow-4xs disabled:opacity-50 disabled:bg-slate-50 field-sizing-auto font-medium text-slate-700"
                       />
                     </div>
 

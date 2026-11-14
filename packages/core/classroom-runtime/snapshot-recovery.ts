@@ -4,6 +4,7 @@
  */
 
 import { RuntimeSnapshot, RuntimeStateTree, RuntimeResource } from './types.js';
+import { safeRandomUUID } from '../security/safe-uuid.js';
 
 export class RuntimeSnapshotManager {
   private snapshots = new Map<string, RuntimeSnapshot>();
@@ -19,7 +20,7 @@ export class RuntimeSnapshotManager {
     resources: ReadonlyArray<RuntimeResource>,
   ): RuntimeSnapshot {
     const snapshot: RuntimeSnapshot = {
-      snapshotId: `snap_${globalThis.crypto.randomUUID()}`,
+      snapshotId: `snap_${safeRandomUUID()}`,
       timestamp: Date.now(),
       stateTree: JSON.parse(JSON.stringify(stateTree)),
       activeServices: [...activeServices],

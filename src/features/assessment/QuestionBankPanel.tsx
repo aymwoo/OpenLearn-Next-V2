@@ -102,7 +102,7 @@ export function QuestionBankPanel({ lang }: { lang: 'zh' | 'en' }) {
               rows={2}
               value={stem}
               onChange={(e) => setStem(e.target.value)}
-              className={`${INPUT} resize-none`}
+              className={`${INPUT} field-sizing-auto`}
             />
           </div>
           {Editor && (

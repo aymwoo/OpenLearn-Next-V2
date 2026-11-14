@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import type { StudentType } from '../../types/app';
 import { escapeCSV } from '../../utils/csv';
+import { AccessibleTableRegion } from '../../components/AccessibleTableRegion';
 import {
   generateCoPilotReflection,
   buildFollowupTiers,
@@ -864,39 +865,79 @@ export function ClassroomBriefingView({
           </div>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse text-left text-xs text-main">
+        <AccessibleTableRegion labelledBy="briefing-records-caption">
+          <table
+            className="responsive-data-table w-full border-collapse text-left text-xs text-main"
+            data-stack-mobile="true"
+          >
+            <caption id="briefing-records-caption" className="sr-only">
+              {lang === 'zh' ? '全员学情与考勤明细' : 'Student Learning & Attendance Records'}
+            </caption>
             <thead>
               <tr className="bg-surface-secondary border-b border-theme font-bold text-muted">
-                <th className="p-3">{lang === 'zh' ? '学号' : 'ID'}</th>
-                <th className="p-3">{lang === 'zh' ? '学生姓名' : 'Student Name'}</th>
-                <th className="p-3">{lang === 'zh' ? '考勤' : 'Attendance'}</th>
-                <th className="p-3 text-center">{lang === 'zh' ? '随堂得分' : 'Quiz Score'}</th>
-                <th className="p-3 text-center">{lang === 'zh' ? '互动次数' : 'Interactions'}</th>
-                <th className="p-3 text-center">{lang === 'zh' ? '掌握度评分' : 'Rating'}</th>
-                <th className="p-3">{lang === 'zh' ? '学情评定' : 'Rating Tier'}</th>
-                <th className="p-3">{lang === 'zh' ? '个性化建议' : 'Recommendation'}</th>
-                <th className="p-3 text-center">{lang === 'zh' ? '个人报告' : 'Digest'}</th>
+                <th scope="col" className="p-3">
+                  {lang === 'zh' ? '学号' : 'ID'}
+                </th>
+                <th scope="col" className="p-3">
+                  {lang === 'zh' ? '学生姓名' : 'Student Name'}
+                </th>
+                <th scope="col" className="p-3">
+                  {lang === 'zh' ? '考勤' : 'Attendance'}
+                </th>
+                <th scope="col" className="p-3 text-center">
+                  {lang === 'zh' ? '随堂得分' : 'Quiz Score'}
+                </th>
+                <th scope="col" className="p-3 text-center">
+                  {lang === 'zh' ? '互动次数' : 'Interactions'}
+                </th>
+                <th scope="col" className="p-3 text-center">
+                  {lang === 'zh' ? '掌握度评分' : 'Rating'}
+                </th>
+                <th scope="col" className="p-3">
+                  {lang === 'zh' ? '学情评定' : 'Rating Tier'}
+                </th>
+                <th scope="col" className="p-3">
+                  {lang === 'zh' ? '个性化建议' : 'Recommendation'}
+                </th>
+                <th scope="col" className="p-3 text-center">
+                  {lang === 'zh' ? '个人报告' : 'Digest'}
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border/60">
               {filteredRecords.map((r) => (
                 <tr key={r.id} className="hover:bg-surface-secondary/40 transition-colors">
-                  <td className="p-3 font-mono text-muted">{r.studentNumber}</td>
-                  <td className="p-3 font-bold text-main">{r.name}</td>
-                  <td className="p-3">
+                  <td data-label={lang === 'zh' ? '学号' : 'ID'} className="p-3 font-mono text-muted">
+                    {r.studentNumber}
+                  </td>
+                  <th
+                    scope="row"
+                    data-label={lang === 'zh' ? '学生姓名' : 'Student Name'}
+                    className="p-3 font-bold text-main text-left"
+                  >
+                    {r.name}
+                  </th>
+                  <td data-label={lang === 'zh' ? '考勤' : 'Attendance'} className="p-3">
                     <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30">
                       {r.attendance}
                     </span>
                   </td>
-                  <td className="p-3 text-center font-mono font-bold text-main">
+                  <td
+                    data-label={lang === 'zh' ? '随堂得分' : 'Quiz Score'}
+                    className="p-3 text-center font-mono font-bold text-main"
+                  >
                     {r.quizScore === null ? '—' : `${r.quizScore} 分`}
                   </td>
-                  <td className="p-3 text-center font-mono">{r.pollsAnswered} 次</td>
-                  <td className="p-3 text-center font-bold text-amber-700 dark:text-amber-400">
+                  <td data-label={lang === 'zh' ? '互动次数' : 'Interactions'} className="p-3 text-center font-mono">
+                    {r.pollsAnswered} 次
+                  </td>
+                  <td
+                    data-label={lang === 'zh' ? '掌握度评分' : 'Rating'}
+                    className="p-3 text-center font-bold text-amber-700 dark:text-amber-400"
+                  >
                     {r.rating === null ? '—' : `${r.rating} ★`}
                   </td>
-                  <td className="p-3">
+                  <td data-label={lang === 'zh' ? '学情评定' : 'Rating Tier'} className="p-3">
                     <span
                       className={`px-2 py-0.5 rounded-lg text-[11px] font-bold ${
                         r.status === '优秀'
@@ -909,8 +950,13 @@ export function ClassroomBriefingView({
                       {r.status}
                     </span>
                   </td>
-                  <td className="p-3 text-muted text-[11px] truncate max-w-xs">{r.note}</td>
-                  <td className="p-3 text-center">
+                  <td
+                    data-label={lang === 'zh' ? '个性化建议' : 'Recommendation'}
+                    className="p-3 text-muted text-[11px] truncate max-w-xs"
+                  >
+                    {r.note}
+                  </td>
+                  <td data-label={lang === 'zh' ? '个人报告' : 'Digest'} className="p-3 text-center">
                     <button
                       type="button"
                       onClick={() =>
@@ -926,7 +972,7 @@ export function ClassroomBriefingView({
               ))}
             </tbody>
           </table>
-        </div>
+        </AccessibleTableRegion>
       </div>
 
       {/* 学生个人课节报告与家长同步卡片弹窗 */}

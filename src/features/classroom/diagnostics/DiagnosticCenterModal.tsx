@@ -10,6 +10,7 @@ import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { X, Copy, Trash2, AlertTriangle, AlertOctagon, Info, RefreshCw, Cpu, Users } from 'lucide-react';
 import { ExtensionPointRenderer } from '../../../plugin-host/extension-point-renderer';
 import { useErrorStore } from '../../../store/errorStore';
+import { copyToClipboard } from '../../../utils/clipboard';
 import type { SystemErrorItem, StudentErrorItem, SystemErrorType } from '../../../types/error';
 
 // ── 类型 ────────────────────────────────────────────────────────────
@@ -70,10 +71,13 @@ export const DiagnosticCenterModal: React.FC<DiagnosticCenterModalProps> = ({
       addToast(lang === 'zh' ? '暂无学生 ID' : 'No student IDs', '', 'warning');
       return;
     }
-    navigator.clipboard.writeText(ids).then(
-      () => addToast(lang === 'zh' ? '已复制学生 ID 列表' : 'Copied student IDs', '', 'success'),
-      () => addToast(lang === 'zh' ? '复制失败' : 'Copy failed', '', 'error'),
-    );
+    void copyToClipboard(ids).then((ok) => {
+      if (ok) {
+        addToast(lang === 'zh' ? '已复制学生 ID 列表' : 'Copied student IDs', '', 'success');
+      } else {
+        addToast(lang === 'zh' ? '复制失败' : 'Copy failed', '', 'error');
+      }
+    });
   }, [studentErrors, addToast, lang]);
 
   if (!isOpen) return null;

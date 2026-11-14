@@ -16,6 +16,7 @@ import type { ClassType } from '../types';
 import { formatLocalYMD } from '../../../utils/date';
 import { asyncTaskStore } from '../../../store';
 import { ExtensionPointRenderer } from '../../../plugin-host/extension-point-renderer';
+import { AccessibleTableRegion } from '../../AccessibleTableRegion';
 
 export interface TimetableOcrViewProps {
   lang: 'zh' | 'en';
@@ -311,18 +312,43 @@ export const TimetableOcrView: React.FC<TimetableOcrViewProps> = ({
           </div>
 
           {/* Entries Table */}
-          <div className="border border-slate-200 rounded-xl overflow-hidden shadow-2xs">
-            <table className="w-full text-left border-collapse table-auto text-xs bg-white">
+          <AccessibleTableRegion
+            labelledBy="timetable-ocr-caption"
+            className="border border-slate-200 rounded-xl shadow-2xs"
+          >
+            <table
+              className="responsive-data-table w-full text-left border-collapse table-auto text-xs bg-white"
+              data-stack-mobile="true"
+            >
+              <caption id="timetable-ocr-caption" className="sr-only">
+                {lang === 'zh' ? 'OCR 识别课表条目' : 'Recognized Timetable Entries'}
+              </caption>
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200 text-gray-600 font-semibold text-xs uppercase tracking-wide">
-                  <th className="p-2.5 w-[40px] text-center">✓</th>
-                  <th className="p-2.5">{lang === 'zh' ? '星期' : 'Day'}</th>
-                  <th className="p-2.5">{lang === 'zh' ? '节次' : 'Period'}</th>
-                  <th className="p-2.5">{lang === 'zh' ? '班级' : 'Class'}</th>
-                  <th className="p-2.5">{lang === 'zh' ? '科目' : 'Subject'}</th>
-                  <th className="p-2.5">{lang === 'zh' ? '时间段' : 'Time'}</th>
-                  <th className="p-2.5">{lang === 'zh' ? '教室' : 'Room'}</th>
-                  <th className="p-2.5">{lang === 'zh' ? '教师' : 'Teacher'}</th>
+                  <th scope="col" className="p-2.5 w-[40px] text-center">
+                    ✓
+                  </th>
+                  <th scope="col" className="p-2.5">
+                    {lang === 'zh' ? '星期' : 'Day'}
+                  </th>
+                  <th scope="col" className="p-2.5">
+                    {lang === 'zh' ? '节次' : 'Period'}
+                  </th>
+                  <th scope="col" className="p-2.5">
+                    {lang === 'zh' ? '班级' : 'Class'}
+                  </th>
+                  <th scope="col" className="p-2.5">
+                    {lang === 'zh' ? '科目' : 'Subject'}
+                  </th>
+                  <th scope="col" className="p-2.5">
+                    {lang === 'zh' ? '时间段' : 'Time'}
+                  </th>
+                  <th scope="col" className="p-2.5">
+                    {lang === 'zh' ? '教室' : 'Room'}
+                  </th>
+                  <th scope="col" className="p-2.5">
+                    {lang === 'zh' ? '教师' : 'Teacher'}
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -334,39 +360,56 @@ export const TimetableOcrView: React.FC<TimetableOcrViewProps> = ({
                     }`}
                     onClick={() => toggleOcrEntry(idx)}
                   >
-                    <td className="p-2.5 text-center">
+                    <td data-label={lang === 'zh' ? '选择' : 'Select'} className="p-2.5 text-center">
                       <input
                         type="checkbox"
+                        aria-label={
+                          lang === 'zh'
+                            ? `选择第 ${idx + 1} 条：${entry.subject || ''} ${entry.className || ''}`
+                            : `Select row ${idx + 1}`
+                        }
                         checked={ocrSelectedEntries.has(idx)}
                         onChange={() => toggleOcrEntry(idx)}
                         onClick={(e) => e.stopPropagation()}
                         className="accent-violet-600 cursor-pointer"
                       />
                     </td>
-                    <td className="p-2.5 font-medium">
+                    <td data-label={lang === 'zh' ? '星期' : 'Day'} className="p-2.5 font-medium">
                       <span className="inline-block bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded-md text-xs font-bold">
                         {dayNames[entry.dayOfWeek] || `Day${entry.dayOfWeek}`}
                       </span>
                     </td>
-                    <td className="p-2.5">
+                    <td data-label={lang === 'zh' ? '节次' : 'Period'} className="p-2.5">
                       <span className="inline-block bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded-md text-xs font-bold">
                         {lang === 'zh' ? `第${entry.periodNumber}节` : `P${entry.periodNumber}`}
                       </span>
                     </td>
-                    <td className="p-2.5 font-semibold text-slate-800">{entry.className || '-'}</td>
-                    <td className="p-2.5">
+                    <th
+                      scope="row"
+                      data-label={lang === 'zh' ? '班级' : 'Class'}
+                      className="p-2.5 font-semibold text-slate-800 text-left"
+                    >
+                      {entry.className || '-'}
+                    </th>
+                    <td data-label={lang === 'zh' ? '科目' : 'Subject'} className="p-2.5">
                       <span className="inline-block bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded-md text-xs font-bold">
                         {entry.subject || '-'}
                       </span>
                     </td>
-                    <td className="p-2.5 font-mono text-slate-600">{entry.timeSlot || '-'}</td>
-                    <td className="p-2.5 text-slate-600">{entry.location || '-'}</td>
-                    <td className="p-2.5 text-slate-600">{entry.teacherName || '-'}</td>
+                    <td data-label={lang === 'zh' ? '时间段' : 'Time'} className="p-2.5 font-mono text-slate-600">
+                      {entry.timeSlot || '-'}
+                    </td>
+                    <td data-label={lang === 'zh' ? '教室' : 'Room'} className="p-2.5 text-slate-600">
+                      {entry.location || '-'}
+                    </td>
+                    <td data-label={lang === 'zh' ? '教师' : 'Teacher'} className="p-2.5 text-slate-600">
+                      {entry.teacherName || '-'}
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          </div>
+          </AccessibleTableRegion>
         </div>
       )}
 

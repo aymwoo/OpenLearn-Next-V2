@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { copyToClipboard } from '../../../utils/clipboard';
 import {
   Sparkles,
   AlertTriangle,
@@ -38,7 +39,7 @@ export const ConceptWordcloudPanel: React.FC<ConceptWordcloudPanelProps> = ({
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
 
   const handleCopyAdvice = (text: string, idx: number) => {
-    navigator.clipboard.writeText(text);
+    void copyToClipboard(text);
     setCopiedIndex(idx);
     setTimeout(() => setCopiedIndex(null), 2000);
   };

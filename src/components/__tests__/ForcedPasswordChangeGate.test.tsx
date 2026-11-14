@@ -77,4 +77,34 @@ describe('ForcedPasswordChangeGate', () => {
     );
     expect(onDone).not.toHaveBeenCalled();
   });
+
+  it('显示/隐藏密码按钮切换 aria-pressed 与 input type，校验失败聚焦首个无效字段并设置 aria-invalid', () => {
+    render(<ForcedPasswordChangeGate lang="zh" onDone={vi.fn()} onLogout={vi.fn()} />);
+
+    const oldInput = document.getElementById('force-old-password') as HTMLInputElement;
+    const newInput = document.getElementById('force-new-password') as HTMLInputElement;
+    const confirmInput = document.getElementById('force-confirm-password') as HTMLInputElement;
+
+    expect(oldInput.getAttribute('aria-invalid')).toBe('false');
+    expect(newInput.getAttribute('aria-invalid')).toBe('false');
+    expect(confirmInput.getAttribute('aria-describedby')).toBeNull();
+
+    const toggleButtons = screen.getAllByRole('button', { name: '显示密码' });
+    expect(toggleButtons.length).toBe(3);
+    expect(toggleButtons[0].getAttribute('aria-pressed')).toBe('false');
+
+    fireEvent.click(toggleButtons[0]);
+    expect(oldInput.type).toBe('text');
+    expect(toggleButtons[0].getAttribute('aria-pressed')).toBe('true');
+
+    // Fill old & weak new password, submit -> focuses newInput and sets aria-invalid + aria-describedby error
+    fireEvent.change(oldInput, { target: { value: 'admin' } });
+    fireEvent.change(newInput, { target: { value: 'abc' } });
+    fireEvent.change(confirmInput, { target: { value: 'abc' } });
+    fireEvent.click(screen.getByTestId('force-change-submit'));
+
+    expect(document.activeElement).toBe(newInput);
+    expect(newInput.getAttribute('aria-invalid')).toBe('true');
+    expect(newInput.getAttribute('aria-describedby')).toContain('force-new-password-error');
+  });
 });
