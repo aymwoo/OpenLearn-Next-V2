@@ -271,17 +271,32 @@ describe('Security Hardening Suite (P0 Vulnerabilities)', () => {
      */
 
     const readServerSource = () => fs.readFileSync(path.resolve(__dirname, '../../server.ts'), 'utf-8');
+    const readHostHelmetSource = () => fs.readFileSync(path.resolve(__dirname, '../security/host-helmet.ts'), 'utf-8');
 
-    it('server.ts 的 scriptSrcAttr 必须是 "\'none\'"', () => {
-      const src = readServerSource();
+    it('Host Helmet CSP 的 scriptSrcAttr 必须是 "\'none\'" 且 server.ts 不可绕过覆盖', async () => {
+      const serverSrc = readServerSource();
+      const helmetSrc = readHostHelmetSource();
+
       expect(
-        src,
-        "server.ts 必须收紧 scriptSrcAttr 为 'none'（G-4a）。\n" +
+        helmetSrc,
+        "server/security/host-helmet.ts 必须收紧 scriptSrcAttr 为 'none'（G-4a）。\n" +
           '若确需放开，请先确认没有内联事件处理器依赖，并在此处写明理由。',
       ).toMatch(/scriptSrcAttr:\s*\["'none'"\]/);
-      // 防止同时又出现一份 'unsafe-inline' 的 scriptSrcAttr
-      const attrLines = src.split('\n').filter((l) => l.includes('scriptSrcAttr'));
-      expect(attrLines).toHaveLength(1);
+
+      // 防止 host-helmet.ts 或 server.ts 同时又出现一份 'unsafe-inline' 的 scriptSrcAttr
+      const helmetAttrLines = helmetSrc.split('\n').filter((l) => l.includes('scriptSrcAttr'));
+      expect(helmetAttrLines).toHaveLength(1);
+      const serverAttrLines = serverSrc.split('\n').filter((l) => l.includes('scriptSrcAttr'));
+      expect(serverAttrLines).toHaveLength(0);
+      expect(serverSrc).toMatch(/helmet\(\s*buildHostHelmetOptions\(/);
+
+      // 动态验证 dev 与 prod 模式下输出的 directives 同样收紧
+      const { buildHostHelmetOptions } = await import('../security/host-helmet.js');
+      for (const isProd of [false, true]) {
+        const opts = buildHostHelmetOptions({}, isProd);
+        const csp = opts.contentSecurityPolicy as { directives: Record<string, unknown> };
+        expect(csp.directives.scriptSrcAttr).toEqual(["'none'"]);
+      }
     });
 
     it('SPA 构建产物不依赖内联事件处理器（收紧的前提）', () => {

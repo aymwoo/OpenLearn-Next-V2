@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { copyToClipboard } from '../../utils/clipboard';
 import { HelpCircle, Terminal, Puzzle, BookOpen, FileText } from 'lucide-react';
 import { useAppStore } from '../../store/appStore';
 import { CommandBusPlayground } from './help/CommandBusPlayground';
@@ -46,7 +47,7 @@ export function HelpView(props: HelpViewProps = {}) {
   }, [activeTab, pluginGuideMd]);
 
   const handleCopy = (id: string, text: string) => {
-    navigator.clipboard.writeText(text);
+    void copyToClipboard(text);
     setCopiedId(id);
     setTimeout(() => setCopiedId(null), 1500);
   };

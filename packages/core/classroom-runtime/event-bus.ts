@@ -4,6 +4,7 @@
  */
 
 import { RuntimeEventType, RuntimeEventMap, RuntimeEventEnvelope, RuntimeEventSubscriber } from './types.js';
+import { safeRandomUUID } from '../security/safe-uuid.js';
 
 export class RuntimeEventBus {
   private subscribers = new Map<string, Set<RuntimeEventSubscriber<any>>>();
@@ -33,7 +34,7 @@ export class RuntimeEventBus {
     source = 'runtime.system',
   ): Promise<RuntimeEventEnvelope<K>> {
     const envelope: RuntimeEventEnvelope<K> = {
-      id: `evt_${globalThis.crypto.randomUUID()}`,
+      id: `evt_${safeRandomUUID()}`,
       type,
       payload,
       source,

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { copyToClipboard } from '../../../utils/clipboard';
 import {
   Users,
   LayoutGrid,
@@ -127,7 +128,7 @@ export function ClassStudentsPanel({
   const handleCopyStudentNumber = (e: React.MouseEvent, text: string, stId: string) => {
     e.stopPropagation();
     if (!text) return;
-    navigator.clipboard?.writeText(text);
+    void copyToClipboard(text);
     setCopiedStudentId(stId);
     setTimeout(() => setCopiedStudentId(null), 1500);
   };

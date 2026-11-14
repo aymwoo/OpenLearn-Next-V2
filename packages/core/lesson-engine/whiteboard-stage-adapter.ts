@@ -4,6 +4,8 @@
  * Each Stage owns an independent Canvas slice with cross-stage object sharing.
  */
 
+import { safeRandomUUID } from '../security/safe-uuid.js';
+
 export interface CanvasElementData {
   id: string;
   type: string;
@@ -115,7 +117,7 @@ export class WhiteboardStageAdapter {
     const source = this.getStageView(sourceStageId);
     const targetElements = source.elements.map((el) => ({
       ...el,
-      id: el.isShared ? el.id : `elem_${globalThis.crypto.randomUUID()}`,
+      id: el.isShared ? el.id : `elem_${safeRandomUUID()}`,
       sourceStageId: targetStageId,
     }));
 

@@ -92,6 +92,37 @@ sudo systemctl enable --now openlearn
 
 ---
 
+## 2.6 局域网 HTTP 部署与可信 HTTPS 配置
+
+学校机房/校园网内网直接按 `http://<服务器局域网IP>:9000` 访问时，需区分「普通局域网 HTTP」与「可信 HTTPS」两类场景：
+
+### 场景 A：无证书校园网 / 机房直连（HTTP，开箱即用）
+
+- **默认关闭强制 HTTPS 升级**：服务端 `ENABLE_HSTS` 与 `FORCE_HTTPS` 默认均为关闭状态，响应头**不会**下发 `upgrade-insecure-requests` 与 `Strict-Transport-Security`，Cookie 也不会强加 `Secure` 标记，局域网 Chrome 可直接加载所有前端脚本与样式。
+- **注意浏览器策略差异**：
+  - 若浏览器开启了「一律使用安全连接（HTTPS-First Mode）」，浏览器在访问内网 HTTP 地址前会先提示非加密连接确认；校园网内网可点击「继续访问 HTTP 站点」或为内网域配置受信任证书（见场景 B），无需禁用全局安全防护。
+  - 若从生产模式（`NODE_ENV=production`）的**其他来源域名**跨域访问该地址，需配置 `ALLOWED_ORIGINS=http://<前端来源>:9000`；同源直接打开 `http://<服务器IP>:9000` 无需额外放宽 CORS。
+- **非安全上下文（Non-Secure Context）的能力降级说明**：
+  - 浏览器的异步剪贴板 API（`navigator.clipboard`）与部分 Web Crypto API（`crypto.randomUUID()`）仅在 HTTPS 或 `localhost` 可用；平台已在剪贴板工具（回落 `document.execCommand('copy')`）和核心运行时 UUID 生成中做自动降级，基础教学、点名、作业、白板均可在局域网 HTTP 下正常工作。
+
+### 场景 B：需要浏览器完整安全上下文时（可信 HTTPS）
+
+当需要浏览器授予 `window.isSecureContext`（或避免内网浏览器地址栏提示“不安全” / 使用仅限 HTTPS 的未来扩展能力）时，**请通过受信任证书终止 TLS**，切勿教导用户忽略浏览器证书错误：
+
+1. 在校园内网使用自建内部 CA（如企业级 PKI 或开发/内网工具 `mkcert`）为内网域名签发证书，并将**根证书统一导入学校机房终端 / 系统受信任根证书存储区**（不要直接点击「继续前往不安全站点」）。
+2. 在 OpenLearn 服务器前放置反向代理（如 Nginx / Caddy）终止 HTTPS 并转发至本机 `127.0.0.1:9000`。
+3. 启用对应环境变量并重启服务：
+
+```ini
+NODE_ENV=production
+TRUST_PROXY=loopback
+ENABLE_HTTPS=true
+ENABLE_HSTS=true
+ALLOWED_ORIGINS=https://openlearn.school.internal
+```
+
+---
+
 ## 3. 生产运维与容灾保障 (CLI Toolchain)
 
 OpenLearn 内置了免启动服务、免 Web 界面的完整命令行数据运维能力。
