@@ -3,8 +3,13 @@
  * 重定向复检：不把 Bearer 跟到回环 / 链路本地；公网 https 仅在检查器放行时跟随。
  */
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { fetchWithRetry, AIFetchTimeoutError } from '../ai/utils/fetch-with-retry.js';
-import { assessAiProviderHop } from '../ai/utils/redirect-guard.js';
+import {
+  fetchWithRetry,
+  fetchAiProviderResponse,
+  AIFetchTimeoutError,
+  AiProviderBlockedError,
+} from '../ai/utils/fetch-with-retry.js';
+import { assessAiProviderHop, buildOpenAIChatUrl, validateAiProviderUrl } from '../ai/utils/redirect-guard.js';
 
 const BEARER = 'Bearer secret-token';
 
@@ -254,6 +259,83 @@ describe('assessAiProviderHop', () => {
     expect(assessAiProviderHop('http://127.0.0.1:11434/v1').allowed).toBe(true);
     expect(assessAiProviderHop('http://10.0.0.8:8000/v1').allowed).toBe(true);
     expect(assessAiProviderHop('http://169.254.169.254/').allowed).toBe(false);
+    expect(assessAiProviderHop('http://[::169.254.169.254]/').allowed).toBe(false);
     expect(assessAiProviderHop('http://metadata.google.internal/computeMetadata/v1/').allowed).toBe(false);
+  });
+});
+
+describe('validateAiProviderUrl & buildOpenAIChatUrl (Issue #508)', () => {
+  it('允许合法公网域名、公网 IP、内网私网 IP、本机回环、自定义端口与基础路径', () => {
+    const validUrls = [
+      'https://api.deepseek.com/v1',
+      'https://8.8.8.8:8443/v1',
+      'http://192.168.1.100:11434/v1',
+      'http://10.0.0.8:8000/openai/v1/',
+      'http://172.16.10.5:8080',
+      'http://127.0.0.1:11434/v1',
+      'http://localhost:11434/v1',
+      'http://[::1]:11434/v1',
+      'http://[fd00::1]:8000/v1',
+      'http://ollama.local:11434/v1',
+    ];
+    for (const url of validUrls) {
+      const res = validateAiProviderUrl(url);
+      expect(res.valid, `expected ${url} to be valid, got ${res.code}: ${res.reason}`).toBe(true);
+    }
+  });
+
+  it('拒绝缺失协议、非 HTTP(S) 协议、内嵌凭据与安全策略禁止地址', () => {
+    expect(validateAiProviderUrl('').code).toBe('EMPTY_URL');
+    expect(validateAiProviderUrl('192.168.1.100:11434/v1').code).toBe('MISSING_PROTOCOL');
+    expect(validateAiProviderUrl('localhost:11434/v1').code).toBe('MISSING_PROTOCOL');
+    expect(validateAiProviderUrl('ftp://192.168.1.100/v1').code).toBe('UNSUPPORTED_PROTOCOL');
+    expect(validateAiProviderUrl('http://user:pass@192.168.1.100/v1').code).toBe('CREDENTIALS_NOT_ALLOWED');
+    expect(validateAiProviderUrl('http://169.254.169.254/latest/meta-data/').code).toBe('BLOCKED_LINK_LOCAL');
+    expect(validateAiProviderUrl('http://[fe80::1]/v1').code).toBe('BLOCKED_LINK_LOCAL');
+    expect(validateAiProviderUrl('http://[::169.254.169.254]/v1').code).toBe('BLOCKED_LINK_LOCAL');
+    expect(validateAiProviderUrl('http://metadata.google.internal/v1').code).toBe('BLOCKED_METADATA');
+    expect(validateAiProviderUrl('http://0.0.0.0:11434/v1').code).toBe('BLOCKED_RESERVED');
+    expect(validateAiProviderUrl('http://224.0.0.1/v1').code).toBe('BLOCKED_RESERVED');
+    expect(validateAiProviderUrl('http://192.0.2.1/v1').code).toBe('BLOCKED_RESERVED');
+    expect(validateAiProviderUrl('http://192.168.1.999/v1').code).toBe('INVALID_URL');
+  });
+
+  it('buildOpenAIChatUrl 正确拼接 /chat/completions 并保留端口、路径与查询参数', () => {
+    expect(buildOpenAIChatUrl('http://192.168.1.100:11434/v1')).toBe('http://192.168.1.100:11434/v1/chat/completions');
+    expect(buildOpenAIChatUrl('http://192.168.1.100:11434/v1/')).toBe('http://192.168.1.100:11434/v1/chat/completions');
+    expect(buildOpenAIChatUrl('http://192.168.1.100:11434')).toBe('http://192.168.1.100:11434/chat/completions');
+    expect(buildOpenAIChatUrl('http://192.168.1.100:11434/v1/chat/completions')).toBe(
+      'http://192.168.1.100:11434/v1/chat/completions',
+    );
+    expect(buildOpenAIChatUrl('http://[::1]:11434/v1')).toBe('http://[::1]:11434/v1/chat/completions');
+    expect(buildOpenAIChatUrl('https://example.com/openai/deployments/gpt4?api-version=2024-02-01')).toBe(
+      'https://example.com/openai/deployments/gpt4/chat/completions?api-version=2024-02-01',
+    );
+  });
+});
+
+describe('fetchAiProviderResponse', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  it('保留非 2xx 响应供探活接口诊断具体 HTTP 错误，并在跨主机私网重定向时抛出 AiProviderBlockedError', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 401,
+        text: async () => 'invalid api key',
+        headers: { get: () => null },
+      }),
+    );
+    const res = await fetchAiProviderResponse('http://192.168.1.100:11434/v1/chat/completions');
+    expect(res.status).toBe(401);
+
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(redirectResponse('http://127.0.0.1/secret')));
+    await expect(fetchAiProviderResponse('https://ai.example.com/v1/chat/completions')).rejects.toThrow(
+      AiProviderBlockedError,
+    );
   });
 });

@@ -275,6 +275,7 @@ export function usePluginManagement(options: UsePluginManagementOptions) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          id: provider.id,
           api_url: provider.api_url,
           api_key: provider.api_key,
           model_name: provider.model_name,

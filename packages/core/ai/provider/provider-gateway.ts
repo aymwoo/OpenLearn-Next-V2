@@ -6,6 +6,7 @@
 import { AIProviderConfig, AIGenerateOptions } from '../types/index.js';
 import { AIEventBus } from '../event/ai-event-bus.js';
 import { fetchWithRetry } from '../utils/fetch-with-retry.js';
+import { buildOpenAIChatUrl } from '../utils/redirect-guard.js';
 import { stripReasoningArtifacts } from '../strip-reasoning.js';
 
 export class AIProviderGateway {
@@ -51,10 +52,7 @@ export class AIProviderGateway {
     options?: AIGenerateOptions,
     config?: AIProviderConfig,
   ): Promise<string> {
-    let cleanUrl = config!.apiUrl.trim();
-    if (!cleanUrl.endsWith('/chat/completions')) {
-      cleanUrl = cleanUrl.endsWith('/') ? cleanUrl + 'chat/completions' : cleanUrl + '/chat/completions';
-    }
+    const cleanUrl = buildOpenAIChatUrl(config!.apiUrl);
 
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
