@@ -4,7 +4,7 @@
  * 由 packages/plugin-sdk/generate-dts.mts 从 packages/core/ 源码抽取。
  * 手写契约请改 openlearn.d.ts —— 本文件会在 build 时被覆盖。
  *
- * 覆盖符号：273 个（入口导出但手写 d.ts 未声明的 273 项及其类型引用闭包）
+ * 覆盖符号：274 个（入口导出但手写 d.ts 未声明的 274 项及其类型引用闭包）
  */
 
 /** @see packages/core/analytics-engine/types.ts */
@@ -1296,7 +1296,7 @@ declare class PluginDistributionManager implements IPluginDistributionManager {
   registerRepository(repo: IPluginRepositoryAdapter): void;
   listRepositories(): ReadonlyArray<IPluginRepositoryAdapter>;
   listAvailablePackages(): Promise<ReadonlyArray<PluginPackageMetadata>>;
-  installFromZip(zipPath: string, executionMode?: PluginExecutionMode): Promise<{
+  installFromZip(zipPath: string, executionMode?: PluginExecutionMode, options?: PluginInstallOptions): Promise<{
     pluginId: string;
     manifest: Manifest;
 }>;
@@ -1339,6 +1339,11 @@ type PluginExecutionMode = 'inline' | 'worker' | 'process';
 /** @see packages/core/plugin-host/errors.ts */
 declare class PluginHostError extends Error {
   constructor(message: string);
+}
+
+/** @see packages/core/plugin-host/plugin-distribution-manager.ts */
+interface PluginInstallOptions {
+    communityOfficial?: boolean;
 }
 
 /** @see packages/core/plugin-host/errors.ts */

@@ -300,10 +300,7 @@ describe('PluginCommunityPanel', () => {
       await screen.findByTestId(HOMEWORK_CARD);
 
       fireEvent.click(screen.getByRole('button', { name: '安装' }));
-      expect(await screen.findByTestId('community-install-risk-dialog')).toBeTruthy();
-      expect(calls.find((c) => c.url === '/api/plugins/install-from-url')).toBeUndefined();
-
-      fireEvent.click(screen.getByRole('button', { name: '确认风险并安装' }));
+      expect(screen.queryByTestId('community-install-risk-dialog')).toBeNull();
 
       expect(await screen.findByText('安装完成，请在「发现」页启用')).toBeTruthy();
 
@@ -312,8 +309,7 @@ describe('PluginCommunityPanel', () => {
       expect(JSON.parse(String(installCall?.init?.body))).toEqual({
         downloadUrl: 'https://plugins.example.com/ext-homework-hub-1.2.0.zip',
         expectedId: 'ext-homework-hub',
-        acknowledgeRisk: true,
-        approvePublicRoutes: false,
+        approvePublicRoutes: true,
       });
       expect(onInstalled).toHaveBeenCalledTimes(1);
 
@@ -337,8 +333,6 @@ describe('PluginCommunityPanel', () => {
       await screen.findByTestId(HOMEWORK_CARD);
 
       fireEvent.click(screen.getByRole('button', { name: '安装' }));
-      fireEvent.click(await screen.findByLabelText('同时批准清单中声明为公开的路由（auth: false）'));
-      fireEvent.click(screen.getByRole('button', { name: '确认风险并安装' }));
 
       expect(await screen.findByText('安装完成，请在「发现」页启用')).toBeTruthy();
 
@@ -364,13 +358,12 @@ describe('PluginCommunityPanel', () => {
       await screen.findByTestId(HOMEWORK_CARD);
 
       fireEvent.click(screen.getByRole('button', { name: '安装' }));
-      fireEvent.click(screen.getByRole('button', { name: '确认风险并安装' }));
 
       expect(await screen.findByText('仅管理员可安装社区插件，请联系管理员。')).toBeTruthy();
     });
 
     it('surfaces the server error when 403 carries a specific error code such as COMMUNITY_INSTALL_DISABLED', async () => {
-      const disabledMsg = '社区安装默认关闭。设置 OPENLEARN_COMMUNITY_INSTALL=1 后才允许从注册表安装。';
+      const disabledMsg = '社区安装已被关闭。请由管理员在插件中心「社区」页开启「允许从社区注册表安装」。';
       const { fetcher } = makeFetcher([
         (url) => (url.startsWith('/api/plugins/community') ? json(registryBody()) : undefined),
         (url) =>
@@ -383,14 +376,13 @@ describe('PluginCommunityPanel', () => {
       await screen.findByTestId(HOMEWORK_CARD);
 
       fireEvent.click(screen.getByRole('button', { name: '安装' }));
-      fireEvent.click(screen.getByRole('button', { name: '确认风险并安装' }));
 
       expect(await screen.findByText(disabledMsg)).toBeTruthy();
       expect(screen.queryByText('仅管理员可安装社区插件，请联系管理员。')).toBeNull();
     });
 
     it('handles 403 code distinction properly during browser upload fallback', async () => {
-      const disabledMsg = '社区安装默认关闭。设置 OPENLEARN_COMMUNITY_INSTALL=1 后才允许从注册表安装。';
+      const disabledMsg = '社区安装已被关闭。请由管理员在插件中心「社区」页开启「允许从社区注册表安装」。';
       const { fetcher } = makeFetcher([
         (url) => (url.startsWith('/api/plugins/community') ? json(registryBody()) : undefined),
         (url) =>
@@ -407,7 +399,6 @@ describe('PluginCommunityPanel', () => {
       await screen.findByTestId(HOMEWORK_CARD);
 
       fireEvent.click(screen.getByRole('button', { name: '安装' }));
-      fireEvent.click(screen.getByRole('button', { name: '确认风险并安装' }));
 
       expect(await screen.findByText(disabledMsg)).toBeTruthy();
       expect(screen.queryByText('仅管理员可安装社区插件，请联系管理员。')).toBeNull();
@@ -427,13 +418,12 @@ describe('PluginCommunityPanel', () => {
       await screen.findByTestId(HOMEWORK_CARD);
 
       fireEvent.click(screen.getByRole('button', { name: '安装' }));
-      fireEvent.click(screen.getByRole('button', { name: '确认风险并安装' }));
 
       expect(await screen.findByText('仅管理员可安装社区插件，请联系管理员。')).toBeTruthy();
     });
 
     it('reports the server error message when installation fails', async () => {
-      const { fetcher, calls } = makeFetcher([
+      const { fetcher } = makeFetcher([
         (url) => (url.startsWith('/api/plugins/community') ? json(registryBody()) : undefined),
         (url) =>
           url === '/api/plugins/install-from-url'
@@ -445,11 +435,6 @@ describe('PluginCommunityPanel', () => {
       await screen.findByTestId(HOMEWORK_CARD);
 
       fireEvent.click(screen.getByRole('button', { name: '安装' }));
-      fireEvent.click(screen.getByRole('button', { name: '取消' }));
-      expect(calls.find((c) => c.url === '/api/plugins/install-from-url')).toBeUndefined();
-
-      fireEvent.click(screen.getByRole('button', { name: '安装' }));
-      fireEvent.click(screen.getByRole('button', { name: '确认风险并安装' }));
 
       expect(await screen.findByText('插件包超过 200MB 上限')).toBeTruthy();
     });
@@ -793,7 +778,7 @@ describe('PluginCommunityPanel', () => {
       });
     });
 
-    it('warns in Chinese when the switch is on but no public key is configured', async () => {
+    it('does not warn about missing community public keys even when publicKeysConfigured is false', async () => {
       const { fetcher } = makeFetcher([
         (url) =>
           url.startsWith('/api/plugins/community')
@@ -812,8 +797,7 @@ describe('PluginCommunityPanel', () => {
       renderPanel({ fetcher });
       await screen.findByText('作业中心');
       const toggle = screen.getByTestId('community-install-toggle');
-      expect(toggle.textContent || '').toMatch(/尚未配置社区验签公钥/);
-      expect(toggle.textContent || '').toMatch(/即便已开启此开关，也无法从社区注册表安装/);
+      expect(toggle.textContent || '').not.toMatch(/尚未配置社区验签公钥/);
     });
 
     it('disables the switch for non-administrators and does not submit', async () => {

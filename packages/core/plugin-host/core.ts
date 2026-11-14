@@ -630,7 +630,7 @@ export abstract class PluginHostCore extends PluginHostBase {
         // execution_mode 历史字段表示加载器代际（esm / legacy），前端旧徽章仍读它。
         // isolation_mode 才是落库的沙箱模式，并按信任策略显示实际会用的值。
         execution_mode: row.loader_version === 'vm' ? 'legacy' : 'esm',
-        isolation_mode: resolvePluginExecutionMode(parsed.id, row.execution_mode).mode,
+        isolation_mode: resolvePluginExecutionMode(parsed.id, row.execution_mode, process.env, pluginDir).mode,
         manifest: row.manifest,
         created_at: row.created_at,
         has_frontend,
