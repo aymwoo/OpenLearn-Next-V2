@@ -172,6 +172,7 @@ export class ServiceHost {
   >();
   private readonly registeredCommandTypes = new Set<string>();
   private readonly registeredActionIds = new Set<string>();
+  private readonly registeredPersonaIds = new Set<string>();
   /**
    * actionId → commandType：本插件经 RPC 登记的 ActionDescriptor 清单（Issue #71）。
    * 仅用于在 registerHandler 时做「是否声明了描述符」的本地预检（无需额外 RPC）。
@@ -501,6 +502,26 @@ export class ServiceHost {
       }
       this.registeredActionIds.clear();
       this.registeredActionCommandTypes.clear();
+    }
+
+    // Clean up worker-registered AI personas
+    if (this.registeredPersonaIds.size > 0) {
+      const ownerId = this.pluginId || this.pluginActorId.replace(/^plugin:/, '');
+      try {
+        const aiService = (await this.resolveService('@openlearn/core:IAIService')) as any;
+        if (aiService?.unregisterAIPersona) {
+          for (const personaId of this.registeredPersonaIds) {
+            try {
+              aiService.unregisterAIPersona(personaId, ownerId);
+            } catch (err) {
+              console.error(`[ServiceHost] Failed to unregister AI persona "${personaId}" on dispose:`, err);
+            }
+          }
+        }
+      } catch (err) {
+        console.error(`[ServiceHost] Failed to resolve aiService on dispose:`, err);
+      }
+      this.registeredPersonaIds.clear();
     }
 
     // Clean up pending HTTP requests (reject with termination error)
@@ -989,6 +1010,43 @@ export class ServiceHost {
           msg.token,
           `Plugin "${this.pluginId || this.pluginActorId}" cannot ${msg.method} capabilities`,
         );
+      }
+
+      // ── Intercept IAIService persona methods (ownership & cleanup) ───
+      if (msg.token === '@openlearn/core:IAIService') {
+        const aiService = service as any;
+        const ownerId = this.pluginId || this.pluginActorId.replace(/^plugin:/, '');
+        if (msg.method === 'registerAIPersona') {
+          const [persona] = effectiveArgs as [Record<string, unknown>];
+          const personaId = typeof persona?.id === 'string' ? persona.id : '';
+          const digest = crypto
+            .createHash('sha256')
+            .update(`${String(persona?.instructionZh ?? '')}\n${String(persona?.instructionEn ?? '')}`)
+            .digest('hex')
+            .slice(0, 16);
+          recordSecurityAudit('plugin.ai_persona_access', {
+            pluginId: ownerId,
+            method: 'registerAIPersona',
+            targetId: personaId,
+            mode: typeof persona?.mode === 'string' ? persona.mode : 'overlay',
+            instructionHash: digest,
+            hasCapability: true,
+          });
+          await aiService.registerAIPersona?.({ ...(persona ?? {}), registeredBy: ownerId });
+          if (personaId) {
+            this.registeredPersonaIds.add(personaId);
+          }
+          transport.postMessage({ type: 'result', invokeId: msg.invokeId, value: undefined });
+          return;
+        } else if (msg.method === 'unregisterAIPersona') {
+          const [personaId] = effectiveArgs as [string];
+          await aiService.unregisterAIPersona?.(personaId, ownerId);
+          if (typeof personaId === 'string') {
+            this.registeredPersonaIds.delete(personaId);
+          }
+          transport.postMessage({ type: 'result', invokeId: msg.invokeId, value: undefined });
+          return;
+        }
       }
 
       // ── Intercept IActionRegistryService helper methods ──────────────

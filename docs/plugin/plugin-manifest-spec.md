@@ -258,6 +258,44 @@
 - **级联回退与防裸键泄露**：查找遵循 `当前语言 -> 默认语言 (zh) -> defaultValue -> 友好格式化`，杜绝未翻译的代码级键名直接暴露给终端用户。
 - **运行时 API**：插件可在 `activate(ctx)` 中通过 `ctx.i18n.t(key, defaultValue?, params?)` 和 `ctx.i18n.getLanguage()` 消费多语言能力。
 
+#### 2.4.2 AI 扩展贡献槽位 (`ai.skill.provider` / `ai.prompt.template` / `ai.persona.provider`)
+
+除前端 UI 插槽外，`contributes` 还支持三类由服务端解析的 AI 扩展槽位：
+
+- **`ai.skill.provider`**: 声明式 AI 工具/技能描述（`id`, `name`, `description`, `commandType`, `parametersSchema?`, `requiresConfirm?`）。
+- **`ai.prompt.template`**: 声明式提示词模板（`id`, `name`, `template`, `variables?`）。
+- **`ai.persona.provider`**: 声明式内核 AI 助手机器人/角色定义。插件激活时由 `PluginHostLifecycle` 自动注册至 AI Persona 注册表并纳入 `ResourceTracker` 生命周期管理；**要求插件已在 `capabilitiesProposed` 中声明并获批 `ai:persona` 能力**。支持字段：
+  - `id` (`string`, 必填): Persona 唯一标识符（建议带插件命名空间前缀，如 `"@myteam/prep/coach"`；不可覆盖宿主内置或管理员创建的 Persona）
+  - `nameZh` / `nameEn` (`string`, 必填): 中英文显示名称
+  - `instructionZh` / `instructionEn` (`string`, 必填): 中英文系统提示词
+  - `icon` (`string`, 可选): Lucide 图标名或简短图标字符
+  - `mode` (`"overlay" | "replace"`, 可选): `"overlay"`（默认）在宿主基础人设上叠加；`"replace"` 替换宿主人设层
+  - `basePolicy` (`"inherit" | "drop"`, 可选): 仅 `mode="replace"` 时生效；`"inherit"`（默认）保留工具链编排基础规则，`"drop"` 完全移除基础规则
+  - `visibility` (`Array<"administrator" | "teacher" | "student">`, 可选): 允许使用该 Persona 的用户角色；缺省对 `teacher` 与 `administrator` 可见
+  - `defaultForRole` (`Array<"administrator" | "teacher" | "student">`, 可选): 设为指定角色的默认选中角色
+  - `toolPolicy` (`{ allow?: string[]; deny?: string[] }`, 可选): 允许/禁止的工具名称或通配模式（如 `"vfs.*"`、`"*_delete"`），学生请求时仍叠加后端 SEC-01 角色白名单交集裁剪
+  - `maxTurns` (`number`, 可选): 最大 ReAct 工具轮次，服务端统一裁剪到 `1..20`（默认 `5`）
+
+```json
+"capabilitiesProposed": ["ai:persona"],
+"contributes": {
+  "ai.persona.provider": [
+    {
+      "id": "math-socratic-tutor",
+      "nameZh": "苏格拉底数学导师",
+      "nameEn": "Socratic Math Tutor",
+      "instructionZh": "通过循序渐进的提问引导思考，不直接给出最终答案。",
+      "instructionEn": "Guide learners with Socratic questions without giving away final answers.",
+      "mode": "replace",
+      "basePolicy": "drop",
+      "visibility": ["student", "teacher"],
+      "toolPolicy": { "allow": ["lesson_list"] },
+      "maxTurns": 3
+    }
+  ]
+}
+```
+
 ---
 
 ### 2.5 配置项声明 (`configuration`)

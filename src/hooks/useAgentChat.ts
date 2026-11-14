@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 
+export const AGENT_PERSONA_STORAGE_KEY = 'openlearn_agent_persona_id';
+
 export interface ChatMessage {
   role: 'user' | 'agent';
   content: string;
@@ -45,8 +47,27 @@ export function useAgentChat(options: UseAgentChatOptions) {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [chatAttachments, setChatAttachments] = useState<ChatAttachment[]>([]);
-  /** P2: ai.agent.persona —— 当前选定的角色模板 id（空 = 默认助教） */
-  const [personaId, setPersonaId] = useState<string>('');
+  /** P2: ai.agent.persona —— 当前选定的角色模板 id（持久化在 localStorage；空 = 默认助教） */
+  const [personaId, setPersonaIdState] = useState<string>(() => {
+    try {
+      return localStorage.getItem(AGENT_PERSONA_STORAGE_KEY) || '';
+    } catch {
+      return '';
+    }
+  });
+
+  const setPersonaId = useCallback((nextId: string) => {
+    setPersonaIdState(nextId);
+    try {
+      if (nextId) {
+        localStorage.setItem(AGENT_PERSONA_STORAGE_KEY, nextId);
+      } else {
+        localStorage.removeItem(AGENT_PERSONA_STORAGE_KEY);
+      }
+    } catch {
+      /* ignore localStorage quota/privacy errors */
+    }
+  }, []);
 
   // Update initial message when language changes if no other messages
   useEffect(() => {
@@ -65,9 +86,9 @@ export function useAgentChat(options: UseAgentChatOptions) {
         const msgs = Array.isArray(data.messages) ? data.messages : [];
         if (msgs.length > 0) {
           setChatLog(
-            msgs.map((m: any) => ({
+            msgs.map((m: { role?: string; content?: string }) => ({
               role: m.role === 'assistant' ? 'agent' : 'user',
-              content: m.content,
+              content: m.content ?? '',
             })),
           );
         } else {
@@ -98,7 +119,7 @@ export function useAgentChat(options: UseAgentChatOptions) {
 
   const handleChatFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files) return;
-    Array.from(e.target.files).forEach((file: any) => {
+    Array.from(e.target.files).forEach((file: File) => {
       const reader = new FileReader();
       reader.onload = (event) => {
         if (event.target?.result) {
@@ -116,7 +137,7 @@ export function useAgentChat(options: UseAgentChatOptions) {
   const handleChatDrop = (e: React.DragEvent) => {
     e.preventDefault();
     if (!e.dataTransfer.files) return;
-    Array.from(e.dataTransfer.files).forEach((file: any) => {
+    Array.from(e.dataTransfer.files).forEach((file: File) => {
       const reader = new FileReader();
       reader.onload = (event) => {
         if (event.target?.result) {

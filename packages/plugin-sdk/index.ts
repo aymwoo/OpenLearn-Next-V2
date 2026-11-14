@@ -38,7 +38,7 @@ export type {
 export { PluginState } from '../core/plugin-host/types.js';
 
 export { PluginHttpRouter } from '../core/plugin-host/http-router.js';
-export { CAP_STUDENT_DATA_READ, CAP_STUDENT_DATA_WRITE } from '../core/plugin-host/method-policy.js';
+export { CAP_STUDENT_DATA_READ, CAP_STUDENT_DATA_WRITE, CAP_AI_PERSONA } from '../core/plugin-host/method-policy.js';
 
 // ── Unified Foundation Layer (P7 Sprints) ──────────────────────────────
 
@@ -133,6 +133,7 @@ export type {
   QuickInsertItemConfig,
   AIPromptTemplateConfig,
   AISkillProviderConfig,
+  AIPersonaProviderConfig,
   ClassTabConfig,
   ClassBatchActionConfig,
   StudentRowPanelConfig,
@@ -233,6 +234,8 @@ export type {
   IProcessService,
   IStorageService,
   IAIService,
+  AIPersonaRole,
+  AIPersonaToolPolicy,
   AIPersonaDefinition,
   ILessonEngineService,
   IClassroomRuntimeService,

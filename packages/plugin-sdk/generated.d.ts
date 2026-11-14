@@ -4,7 +4,7 @@
  * 由 packages/plugin-sdk/generate-dts.mts 从 packages/core/ 源码抽取。
  * 手写契约请改 openlearn.d.ts —— 本文件会在 build 时被覆盖。
  *
- * 覆盖符号：271 个（入口导出但手写 d.ts 未声明的 271 项及其类型引用闭包）
+ * 覆盖符号：273 个（入口导出但手写 d.ts 未声明的 273 项及其类型引用闭包）
  */
 
 /** @see packages/core/analytics-engine/types.ts */
@@ -14,6 +14,26 @@ interface AIAnalyticsModel {
     readonly teacherAdoptionRate: number;
     readonly studentUsageRate: number;
     readonly averageResponseTimeMs: number;
+}
+
+/** @see packages/core/plugin-host/contribution-registry.ts */
+/** A contribution to the ai.persona.provider slot (declarative AI persona templates). */
+interface AIPersonaProviderConfig {
+    id: string;
+    nameZh: string;
+    nameEn: string;
+    instructionZh: string;
+    instructionEn: string;
+    icon?: string;
+    mode?: 'overlay' | 'replace';
+    basePolicy?: 'inherit' | 'drop';
+    visibility?: Array<'administrator' | 'teacher' | 'student'>;
+    defaultForRole?: Array<'administrator' | 'teacher' | 'student'>;
+    toolPolicy?: {
+        allow?: string[];
+        deny?: string[];
+    };
+    maxTurns?: number;
 }
 
 /** @see packages/core/plugin-host/contribution-registry.ts */
@@ -175,6 +195,9 @@ declare const CAP: any; // 初始化器非字面量，未收敛
 
 /** @see packages/core/capability/catalog.ts */
 declare const CAPABILITIES: readonly Capability[];
+
+/** @see packages/core/capability/catalog.ts */
+declare const CAP_AI_PERSONA: 'ai:persona';
 
 /** @see packages/core/capability/catalog.ts */
 declare const CAP_STUDENT_DATA_READ: 'student-data:read';
@@ -2476,6 +2499,9 @@ declare function writeBufferToTempZip(buffer: Buffer, prefix: any): string;
 
 export type {
   AIAnalyticsModel,
+  AIPersonaProviderConfig,
+  AIPersonaRole,
+  AIPersonaToolPolicy,
   AIPromptTemplateConfig,
   AISidebarTabConfig,
   AISkillProviderConfig,
@@ -2703,6 +2729,7 @@ export type {
 export {
   CAP,
   CAPABILITIES,
+  CAP_AI_PERSONA,
   CAP_STUDENT_DATA_READ,
   CAP_STUDENT_DATA_WRITE,
   KNOWN_CAPABILITIES,

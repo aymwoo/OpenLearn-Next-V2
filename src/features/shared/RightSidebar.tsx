@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { useOptionalAppData } from '../../context/AppDataContext';
 import { ExtensionPointRenderer } from '../../plugin-host/extension-point-renderer';
+import { AGENT_PERSONA_STORAGE_KEY } from '../../hooks/useAgentChat';
 import { AiPromptTemplatePicker } from './AiPromptTemplatePicker';
 
 export interface RightSidebarProps {
@@ -72,22 +73,75 @@ export function RightSidebar(props: RightSidebarProps = {}) {
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    chatEndRef.current?.scrollIntoView?.({ behavior: 'smooth' });
   }, [chatLog]);
 
-  // P2: ai.agent.persona —— 拉取角色模板列表（侧栏可见时）
+  // P2: ai.agent.persona —— 拉取角色模板列表，并结合 localStorage 与 defaultForRole 兜底选择
   const [personaList, setPersonaList] = useState<
-    Array<{ id: string; nameZh: string; nameEn: string; icon?: string; source: string }>
+    Array<{
+      id: string;
+      nameZh: string;
+      nameEn: string;
+      icon?: string;
+      source: string;
+      defaultForRole?: string[];
+    }>
   >([]);
+  const [personaRefreshTick, setPersonaRefreshTick] = useState(0);
+
   useEffect(() => {
-    if (!showRightSidebar || personaList.length > 0) return;
+    const onPersonasUpdated = () => setPersonaRefreshTick((n) => n + 1);
+    window.addEventListener('openlearn:personas-updated', onPersonasUpdated);
+    return () => window.removeEventListener('openlearn:personas-updated', onPersonasUpdated);
+  }, []);
+
+  useEffect(() => {
+    if (!showRightSidebar) return;
+    let cancelled = false;
     fetch('/api/agent/personas')
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
-        if (d?.success && Array.isArray(d.personas)) setPersonaList(d.personas);
+        if (cancelled || !d?.success || !Array.isArray(d.personas)) return;
+        const list = d.personas as Array<{
+          id: string;
+          nameZh: string;
+          nameEn: string;
+          icon?: string;
+          source: string;
+          defaultForRole?: string[];
+        }>;
+        setPersonaList(list);
+        if (!setPersonaId) return;
+        const hasPlain = list.some((p) => p.id === 'plain_assistant');
+        const defaultId = typeof d.defaultPersonaId === 'string' ? d.defaultPersonaId : '';
+        let saved = '';
+        try {
+          saved = localStorage.getItem(AGENT_PERSONA_STORAGE_KEY) || '';
+        } catch {
+          // ignore localStorage read failures in sandboxed contexts
+        }
+        const effectiveSaved = saved || personaId;
+        if (effectiveSaved) {
+          if (!list.some((p) => p.id === effectiveSaved)) {
+            const fallback =
+              defaultId && (defaultId !== 'plain_assistant' || !hasPlain)
+                ? defaultId
+                : hasPlain
+                  ? ''
+                  : list[0]?.id || '';
+            setPersonaId(fallback);
+          } else if (effectiveSaved !== personaId) {
+            setPersonaId(effectiveSaved);
+          }
+        } else if (defaultId && (defaultId !== 'plain_assistant' || !hasPlain)) {
+          setPersonaId(defaultId);
+        }
       })
       .catch(() => {});
-  }, [showRightSidebar]);
+    return () => {
+      cancelled = true;
+    };
+  }, [showRightSidebar, personaRefreshTick]);
 
   return (
     <aside
@@ -204,15 +258,22 @@ export function RightSidebar(props: RightSidebarProps = {}) {
                 </div>
               </div>
 
-              {/* P2: ai.agent.persona —— 角色下拉选择器（personaList 由 /api/agent/personas 提供） */}
+              {/* P2: ai.agent.persona —— 角色下拉选择器（personaList 由 /api/agent/personas 按当前角色过滤返回） */}
               {setPersonaId && personaList.length > 0 && (
                 <div className="mx-4 mb-3">
+                  <label htmlFor="right-sidebar-persona-select" className="sr-only">
+                    {lang === 'zh' ? '选择 AI 助教角色' : 'Select AI Assistant Persona'}
+                  </label>
                   <select
+                    id="right-sidebar-persona-select"
+                    name="personaId"
                     value={personaId || ''}
                     onChange={(e) => setPersonaId(e.target.value)}
                     className="w-full appearance-none rounded-xl border border-gray-200 bg-gradient-to-b from-white to-gray-50 px-3 py-2 text-xs font-medium text-gray-700 shadow-xs outline-none transition-colors focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
                   >
-                    <option value="">{lang === 'zh' ? '🤖 助教角色：默认' : '🤖 Persona: Default'}</option>
+                    {personaList.some((p) => p.id === 'plain_assistant') && (
+                      <option value="">{lang === 'zh' ? '🤖 助教角色：默认' : '🤖 Persona: Default'}</option>
+                    )}
                     {personaList
                       .filter((p) => p.id !== 'plain_assistant')
                       .map((p) => (

@@ -340,6 +340,13 @@ interface IAIService {
   unregisterAIPersona?(id: string): void;
 }
 
+type AIPersonaRole = 'administrator' | 'teacher' | 'student';
+
+interface AIPersonaToolPolicy {
+  allow?: string[];
+  deny?: string[];
+}
+
 interface AIPersonaDefinition {
   id: string;
   nameZh: string;
@@ -347,38 +354,51 @@ interface AIPersonaDefinition {
   instructionZh: string;
   instructionEn: string;
   icon?: string;
+  /** 'overlay' 在宿主基础指令之上叠加（默认）；'replace' 完全替换人设层 */
+  mode?: 'overlay' | 'replace';
+  /** 仅 mode='replace' 生效：'inherit' 继承工具使用规则（默认）；'drop' 连基础规则一并移除 */
+  basePolicy?: 'inherit' | 'drop';
+  /** 允许使用/列出该 Persona 的角色；省略时仅教师/管理员可见 */
+  visibility?: AIPersonaRole[];
+  /** 将此 Persona 设为一个或多个角色的默认选中 */
+  defaultForRole?: AIPersonaRole[];
+  /** 工具白/黑名单（支持精确工具名、前缀通配 *，如 'vfs.*' 或 'class_*'） */
+  toolPolicy?: AIPersonaToolPolicy;
+  /** ReAct 最大工具循环轮次（平台裁剪区间 1..20，默认 5） */
+  maxTurns?: number;
 }
 ```
 
 全部为**可选方法** —— mock 或旧部署可缺省，包装层用 `(aiService as any).xxx?.()` 调用。
 所以调用前请判 `typeof ai.registerAIPersona === 'function'`。
+此外，第三方插件在运行期调用 `registerAIPersona` / `registerAIContextProvider`，或在 manifest 中声明 `contributes['ai.persona.provider']`，均需在 `capabilitiesProposed` 中声明并获批 `ai:persona` 能力（fail-closed；未授权将抛出 `PluginCapabilityDeniedError`）。
 
-| 能力                        | 可达性                         | 说明                                                                                 |
-| :-------------------------- | :----------------------------- | :----------------------------------------------------------------------------------- |
-| `generateText`              | inline / worker / process 均可 | 委托数据库里配置的 OpenAI 兼容提供商，返回 `trim()` 后的文本                         |
-| `registerAIContextProvider` | ⚠ **仅 Inline**                | `fn` 是**服务端闭包**，Worker 序列化边界无法传递函数。Agent 对话时按 `lessonId` 调用 |
-| `registerAIPersona`         | inline / worker 均可           | `persona` 是可序列化静态模板；教师聊天面板可选；宿主内置角色**可被同名覆盖**         |
-| `listAIPersonas`            | —                              | 返回 builtin + plugin 全部                                                           |
-| `unregisterAIPersona`       | —                              | builtin 不可注销；仅注册者可注销自身模板（包装层自动带 `pluginId`）                  |
+| 能力                        | 可达性                         | 能力门槛     | 说明                                                                                                             |
+| :-------------------------- | :----------------------------- | :----------- | :--------------------------------------------------------------------------------------------------------------- |
+| `generateText`              | inline / worker / process 均可 | `ai:invoke`  | 委托数据库里配置的 OpenAI 兼容提供商，返回 `trim()` 后的文本                                                     |
+| `registerAIContextProvider` | ⚠ **仅 Inline**                | `ai:persona` | `fn` 是**服务端闭包**，Worker 序列化边界无法传递函数。Agent 对话时按 `lessonId` 调用（学生角色自动跳过插件切片） |
+| `registerAIPersona`         | inline / worker 均可           | `ai:persona` | `persona` 持久化到 `ai_personas` 表；支持 `overlay` / `replace`、角色可见性与 `toolPolicy`；宿主内置不可覆盖删除 |
+| `listAIPersonas`            | —                              | —            | 返回 builtin + plugin（含管理员覆盖后的）角色定义                                                                |
+| `unregisterAIPersona`       | —                              | —            | builtin 不可注销；仅注册者（`registeredBy === pluginId`）可注销自身模板（Worker/Inline 包装层自动绑定归属）      |
 
-`registerAIPersona` 会把 `registeredBy: pluginId` 注入 persona，用于归属判定。
+`registerAIPersona` 会把 `registeredBy: pluginId` 强制注入 persona，用于归属判定，并在插件停用/卸载或 Worker `dispose()` 时自动清理。插件亦可在管理端 **AI 提供商与助手角色** 面板中由管理员覆写其 `visibility` / `defaultForRole` / `toolPolicy` / `maxTurns` 或启用状态，并支持声明式 `manifest.contributes['ai.persona.provider']` 自动注册。
 
 ```{note} 审计 D-1：这两类注册此前没有 disposer
 - persona → `server/ai-persona-registry` 全局单例 → `routes/os.ts` 返回前端
   → **停用插件的 AI 角色模板仍出现在 Agent 面板的角色下拉里**；
 - context provider → **每次 AI 请求都会被注入已停用插件的上下文**。
-且 `uninstallPlugin` 也不调注销。现在两者都登记 disposer 到 `ResourceTracker`。
+且 `uninstallPlugin` 也不调注销。现在两者都登记 disposer 到 `ResourceTracker`（Worker 侧在 `ServiceHost.dispose()` 统一回收）。
 ```
 
-### 7.1 Agent 系统指令随角色变
+### 7.1 Agent 系统指令随角色与 Persona 变化
 
 `buildAgentSystemInstruction(lang, currentLessonId?, pluginSlices?, persona?, callerRole?)`：
 
-- `callerRole === 'student'` → 学生助教人格，明确声明"你没有管理班级、修改成绩或操作系统底层的权限"。
-- 其他 → OS Agent 人格，提示使用 `process.spawn/kill/list`、`vfs.*`、
-  `class_create` / `student_create` / `class_add_student` 工具链式调用
-  （先创建拿到 ID，下一轮 `functionCall` 引用这些 ID）。
-- `pluginSlices` 来自各插件注册的 context provider 返回值。
+- `persona.mode === 'replace'`：直接以 Persona 自身 `instructionZh/En` 替代宿主内置人设；若 `basePolicy !== 'drop'`，继续附带基础工具编排规则（不含人设描述），否则仅保留用户附加要求与上下文切片。
+- `persona.mode === 'overlay'`（默认）：保留宿主内置人设，并将 `persona.instructionZh/En` 作为附加要求拼入。
+- `callerRole === 'student'` → 学生助教人格，明确声明"你没有管理班级、修改成绩或操作系统底层的权限"，且**强制屏蔽所有 `pluginSlices`**；Persona `toolPolicy` 会再与 `isActionAllowedForRole` 取交集，并在每轮 `functionCall` 前做运行期 `allowedToolNames` 校验。
+- 其他（教师/管理员） → OS Agent 人格，提示使用 `process.spawn/kill/list`、`vfs.*`、`class_create` / `student_create` / `class_add_student` 工具链式调用（先创建拿到 ID，下一轮 `functionCall` 引用这些 ID）。
+- `pluginSlices` 来自各插件注册的 context provider 返回值（仅非学生角色注入）。
 
 ---
 
@@ -390,7 +410,7 @@ import type { Manifest } from '@openlearn/plugin-sdk';
 export const manifest: Manifest = {
   id: '@myteam/lesson-prep-ai',
   version: '1.0.0',
-  capabilitiesProposed: ['lesson:write'],
+  capabilitiesProposed: ['lesson:write', 'ai:persona'],
   contributes: {
     'ai.skill.provider': [
       {
@@ -451,15 +471,20 @@ export async function activate(ctx) {
     },
   });
 
-  // 3) 角色模板（可序列化，worker 也能注册）
+  // 3) 角色模板（可序列化，worker 也能注册；或改用 manifest.contributes['ai.persona.provider'] 声明式注册）
   if (typeof ai?.registerAIPersona === 'function') {
     ai.registerAIPersona({
       id: '@myteam/lesson-prep-ai/prep-coach',
       nameZh: '备课教练',
       nameEn: 'Prep Coach',
-      instructionZh: '你帮助教师把模糊想法拆成可执行的课时结构。',
+      instructionZh: '你帮助教师把模糊想法拆成可执行的课时结构，并优先产出分层活动。',
       instructionEn: 'You help teachers turn rough ideas into runnable lesson structure.',
       icon: 'book-open',
+      mode: 'replace',
+      basePolicy: 'inherit',
+      visibility: ['teacher', 'administrator'],
+      toolPolicy: { allow: ['lesson_*', 'prep.*'] },
+      maxTurns: 6,
     });
   }
 
@@ -483,25 +508,27 @@ export async function activate(ctx) {
 - [ ] 不希望 AI 自主决策的命令显式 `exposeToAgent: false`（`isHighRisk` 不算）
 - [ ] `commandType` 在 `registerHandler` / `actionRegistry` / manifest 里都写**短名**
 - [ ] `ai.skill.provider[].commandType` 与自注册的 descriptor 能对上（第三方会被强制前缀化）
-- [ ] 调 `ai.registerAIContextProvider` 前判 `typeof === 'function'`，并在文档里注明仅 inline 可用
+- [ ] 同时提供了 `ai.registerAIPersona` 与/或 `contributes['ai.persona.provider']` 所需能力 `ai:persona`
+- [ ] `replace` 模式角色明确指定 `basePolicy`（`'inherit'` 或 `'drop'`）与合理 `toolPolicy` / `maxTurns`（`1..20`）
+- [ ] 调 `ai.registerAIContextProvider` 前判 `typeof === 'function'`，并在文档里注明仅 inline 可用且不对学生请求生效
 - [ ] `id` 全局唯一（建议 `"<插件短名>.<动作>"`），避免与内置 action 撞 `id`
 
 ---
 
 ## 取证
 
-| 论断                                                                                                                                             | 来源                                                                      |
-| :----------------------------------------------------------------------------------------------------------------------------------------------- | :------------------------------------------------------------------------ |
-| `ActionDescriptor` 全字段与 `exposeToAgent` 契约注释                                                                                             | `packages/core/registry/index.ts`                                         |
-| `register` 重复 id 抛错、`getAgentTools()` 的 Gemini 格式与过滤、tool name sanitization                                                          | 同上                                                                      |
-| `wrapActionRegistry` 前缀规则、`__raw_alias` 与 `exposeToAgent: false`                                                                           | `packages/core/plugin-host/context-builder.ts`                            |
-| default-deny 与 `COMMAND_NOT_REGISTERED`                                                                                                         | `packages/core/kernel/index.ts`（`setInterceptor`）                       |
-| `validateJsonSchema` 仅认 5 个大写类型                                                                                                           | `packages/core/kernel/index.ts`（`validateJsonSchema`）                   |
-| `normalizeToolSchema` 大写→小写映射、递归 `properties`/`items`、保留未知键                                                                       | `server/ai-agent.ts`                                                      |
-| `buildOpenAITools` 双过滤（`exposeToAgent` + 学生角色剔除清单）与「运行时生效的是本函数」注释                                                    | `server/ai-agent.ts`                                                      |
-| `executeAgentToolCall` 的 actor 选择（SEC-01）、白板 segment 回填                                                                                | `server/ai-agent.ts`                                                      |
-| `PluginSkillTool` / `SKILL_TOOL_PREFIX` / `collectPluginSkills` 绑定面收严 / `executePluginSkillToolCall` fail-closed / `loadActivePluginSkills` | `server/ai-agent.ts`                                                      |
-| `buildAgentSystemInstruction` 角色分支                                                                                                           | `server/ai-agent.ts`                                                      |
-| `IAIService` / `AIPersonaDefinition` 与「仅 Inline」注释                                                                                         | `packages/core/di/interfaces.ts`                                          |
-| `wrapAI` 的 disposer 登记（审计 D-1）                                                                                                            | `packages/core/plugin-host/context-builder.ts`                            |
-| `exposeToAgent` / `isHighRisk` 正交的回归断言                                                                                                    | `packages/core/registry/__tests__/action-registry-agent-exposure.test.ts` |
+| 论断                                                                                                                                             | 来源                                                                              |
+| :----------------------------------------------------------------------------------------------------------------------------------------------- | :-------------------------------------------------------------------------------- |
+| `ActionDescriptor` 全字段与 `exposeToAgent` 契约注释                                                                                             | `packages/core/registry/index.ts`                                                 |
+| `register` 重复 id 抛错、`getAgentTools()` 的 Gemini 格式与过滤、tool name sanitization                                                          | 同上                                                                              |
+| `wrapActionRegistry` 前缀规则、`__raw_alias` 与 `exposeToAgent: false`                                                                           | `packages/core/plugin-host/context-builder.ts`                                    |
+| default-deny 与 `COMMAND_NOT_REGISTERED`                                                                                                         | `packages/core/kernel/index.ts`（`setInterceptor`）                               |
+| `validateJsonSchema` 仅认 5 个大写类型                                                                                                           | `packages/core/kernel/index.ts`（`validateJsonSchema`）                           |
+| `normalizeToolSchema` 大写→小写映射、递归 `properties`/`items`、保留未知键                                                                       | `server/ai-agent.ts`                                                              |
+| `buildOpenAITools` / `resolveToolsForPersona` 过滤与工具策略（SEC-01 与运行期 `allowedToolNames` 二次拦截）                                      | `server/ai-agent.ts`                                                              |
+| `executeAgentToolCall` 的 actor 选择（SEC-01）、白板 segment 回填                                                                                | `server/ai-agent.ts`                                                              |
+| `PluginSkillTool` / `SKILL_TOOL_PREFIX` / `collectPluginSkills` 绑定面收严 / `executePluginSkillToolCall` fail-closed / `loadActivePluginSkills` | `server/ai-agent.ts`                                                              |
+| `buildAgentSystemInstruction` 角色与 `mode` / `basePolicy` 分支                                                                                  | `server/ai-agent.ts`                                                              |
+| `IAIService` / `AIPersonaDefinition` 扩展字段与「仅 Inline」注释                                                                                 | `packages/core/di/interfaces.ts`                                                  |
+| `CAP_AI_PERSONA` 方法与清单门禁（Inline `wrapAI` / Worker `ServiceHost` / `PluginHostLifecycle`）                                                | `packages/core/plugin-host/context-builder.ts`、`lifecycle.ts`、`service-host.ts` |
+| `exposeToAgent` / `isHighRisk` 正交的回归断言                                                                                                    | `packages/core/registry/__tests__/action-registry-agent-exposure.test.ts`         |

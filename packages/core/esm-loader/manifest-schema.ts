@@ -224,6 +224,28 @@ const aiSkillProviderSchema = z.object({
   commandType: z.string().optional(),
 });
 
+const aiPersonaRoleSchema = z.enum(['administrator', 'teacher', 'student']);
+
+const aiPersonaProviderSchema = z.object({
+  id: z.string().min(1),
+  nameZh: z.string().min(1),
+  nameEn: z.string().min(1),
+  instructionZh: z.string().min(1),
+  instructionEn: z.string().min(1),
+  icon: z.string().optional(),
+  mode: z.enum(['overlay', 'replace']).optional(),
+  basePolicy: z.enum(['inherit', 'drop']).optional(),
+  visibility: z.array(aiPersonaRoleSchema).optional(),
+  defaultForRole: z.array(aiPersonaRoleSchema).optional(),
+  toolPolicy: z
+    .object({
+      allow: z.array(z.string().min(1)).optional(),
+      deny: z.array(z.string().min(1)).optional(),
+    })
+    .optional(),
+  maxTurns: z.number().int().min(1).max(20).optional(),
+});
+
 const classTabSchema = z.object({
   id: z.string().min(1),
   label: z.string().min(1),
@@ -664,6 +686,7 @@ const contributesSchema = z
     'quick_insert.item': z.array(quickInsertItemSchema).optional(),
     'ai.prompt.template': z.array(aiPromptTemplateSchema).optional(),
     'ai.skill.provider': z.array(aiSkillProviderSchema).optional(),
+    'ai.persona.provider': z.array(aiPersonaProviderSchema).optional(),
     // 补齐宿主 UI 槽位
     'class.tab': z.array(classTabSchema).optional(),
     'class.batch.action': z.array(classBatchActionSchema).optional(),

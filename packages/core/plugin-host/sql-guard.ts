@@ -54,6 +54,7 @@ export const FORBIDDEN_CORE_TABLES = Object.freeze([
   'file_blobs',
   'file_assets',
   'file_aliases',
+  'ai_personas',
 ]);
 
 const FORBIDDEN_CORE_TABLES_SET = new Set(FORBIDDEN_CORE_TABLES.map((t) => t.toLowerCase()));
