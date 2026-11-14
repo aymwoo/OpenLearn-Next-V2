@@ -28,6 +28,7 @@ import { ExtensionPointRenderer } from '../../plugin-host/extension-point-render
 import { StageDisplayModal } from './StageDisplayModal';
 import { useStageDisplayWindow } from './stage-display/useStageDisplayWindow';
 import { PacingDashboardModal } from './PacingDashboardModal';
+import { isTerminalResourceStatus } from '../../utils/polling-guard';
 import { ClassroomAttributionModal } from './ClassroomAttributionModal';
 import { ClassroomLeaderboardModal } from './ClassroomLeaderboardModal';
 import { getOptionalSocket } from '../../services/socket-service';
@@ -159,13 +160,27 @@ export function ClassroomInteractiveCockpit({
     if (!lessonId) return;
 
     let mounted = true;
+    let stopped = false;
+    let interval: ReturnType<typeof setInterval> | null = null;
+    const stopPolling = () => {
+      stopped = true;
+      if (interval) {
+        clearInterval(interval);
+        interval = null;
+      }
+    };
     // v0.6.1 审计 R-2：代次守卫 —— 慢的旧响应不得覆盖新响应已写入的状态
     // （与教师端阶段推进乐观更新叠加时曾造成阶段视图抖动）
     let pollSeq = 0;
     const fetchSession = async () => {
+      if (stopped) return;
       const seq = ++pollSeq;
       try {
         const res = await fetch(`/api/classroom/sessions/${lessonId}`);
+        if (isTerminalResourceStatus(res.status)) {
+          stopPolling();
+          return;
+        }
         if (res.ok && mounted && seq === pollSeq) {
           const json = await res.json();
           if (json.hasActiveSession) {
@@ -179,6 +194,10 @@ export function ClassroomInteractiveCockpit({
         }
 
         const stageRes = await fetch(`/api/classroom/stage/${lessonId}/data`);
+        if (isTerminalResourceStatus(stageRes.status)) {
+          stopPolling();
+          return;
+        }
         if (stageRes.ok && mounted && seq === pollSeq) {
           const stageJson = await stageRes.json();
           setPacingSignals(stageJson.pacing || { TOO_FAST: 0, SLOW: 0, CONFUSED: 0, CLEAR: 0 });
@@ -191,11 +210,13 @@ export function ClassroomInteractiveCockpit({
       }
     };
 
-    fetchSession();
-    const interval = setInterval(fetchSession, 3000);
+    void fetchSession();
+    if (!stopped) {
+      interval = setInterval(() => void fetchSession(), 3000);
+    }
     return () => {
       mounted = false;
-      clearInterval(interval);
+      stopPolling();
     };
   }, [lessonId]);
 

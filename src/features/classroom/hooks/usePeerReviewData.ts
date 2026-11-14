@@ -12,7 +12,8 @@
  *   - 焦点作品的 `rating` 平台无来源 → 不填（UI 显示「—」）。
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { isTerminalAuthStatus, isTerminalResourceStatus } from '../../../utils/polling-guard';
 import type {
   PeerMatchingItem,
   LivePeerBadge,
@@ -60,9 +61,12 @@ export interface UsePeerReviewDataInput {
   lessonId: string | null;
   /** 互评秀场是否可见（可见时才轮询，避免无谓请求） */
   enabled: boolean;
+  /** 是否允许拉取/轮询积分榜（入口/会话管理阶段应关闭） */
+  topPerformersEnabled?: boolean;
   attempts: CoursewareAttemptLike[];
   studentCount: number;
   addToast?: (title: string, message: string, type?: 'info' | 'success' | 'warning' | 'error') => void;
+  onTerminalError?: (status: number, endpoint: string) => void;
   lang?: 'zh' | 'en';
 }
 
@@ -76,6 +80,7 @@ export interface UsePeerReviewDataResult {
   autoAssigning: boolean;
   autoAssign: () => Promise<void>;
   refresh: () => Promise<void>;
+  authErrorStatus: number | null;
 }
 
 /**
@@ -261,9 +266,11 @@ function showcaseWorkToSpotlightItem(
 export function usePeerReviewData({
   lessonId,
   enabled,
+  topPerformersEnabled = true,
   attempts,
   studentCount,
   addToast,
+  onTerminalError,
   lang = 'zh',
 }: UsePeerReviewDataInput): UsePeerReviewDataResult {
   const [topPerformers, setTopPerformers] = useState<TopPerformerRow[]>([]);
@@ -272,6 +279,27 @@ export function usePeerReviewData({
   const [selectedWorkAId, setSelectedWorkAId] = useState<string | null>(null);
   const [selectedWorkBId, setSelectedWorkBId] = useState<string | null>(null);
   const [autoAssigning, setAutoAssigning] = useState(false);
+  const [authErrorStatus, setAuthErrorStatus] = useState<number | null>(null);
+  const onTerminalErrorRef = useRef(onTerminalError);
+  onTerminalErrorRef.current = onTerminalError;
+  const notifiedKeyRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    setAuthErrorStatus(null);
+    notifiedKeyRef.current = null;
+  }, [lessonId, topPerformersEnabled, enabled]);
+
+  const reportTerminalError = useCallback(
+    (status: number, endpoint: string) => {
+      setAuthErrorStatus(status);
+      const notifyKey = `${lessonId ?? ''}:${status}`;
+      if (notifiedKeyRef.current !== notifyKey) {
+        notifiedKeyRef.current = notifyKey;
+        onTerminalErrorRef.current?.(status, endpoint);
+      }
+    },
+    [lessonId],
+  );
 
   const setSpotlightWork = useCallback((slot: 'A' | 'B', workId: string | null) => {
     if (slot === 'A') {
@@ -283,18 +311,35 @@ export function usePeerReviewData({
 
   // ── 真实积分榜 ──────────────────────────────────────────────────────
   useEffect(() => {
-    if (!lessonId) {
+    if (!lessonId || !topPerformersEnabled) {
       setTopPerformers([]);
       return;
     }
     let mounted = true;
+    let stopped = false;
+    let timer: ReturnType<typeof setInterval> | null = null;
+    const stopPolling = () => {
+      stopped = true;
+      if (timer) {
+        clearInterval(timer);
+        timer = null;
+      }
+    };
     const load = async () => {
+      if (stopped) return;
       try {
         const res = await fetch(`/api/classroom/sessions/${lessonId}/top-performers?limit=50`);
-        if (!res.ok || !mounted) return;
+        if (!mounted || stopped) return;
+        if (isTerminalResourceStatus(res.status)) {
+          stopPolling();
+          setTopPerformers([]);
+          reportTerminalError(res.status, 'top-performers');
+          return;
+        }
+        if (!res.ok) return;
         const body = await res.json();
         const rows = Array.isArray(body?.topPerformers) ? body.topPerformers : [];
-        if (!mounted) return;
+        if (!mounted || stopped) return;
         setTopPerformers(
           rows.map((r: any) => ({
             studentId: String(r.studentId ?? ''),
@@ -308,12 +353,14 @@ export function usePeerReviewData({
       }
     };
     void load();
-    const timer = setInterval(() => void load(), 20000);
+    if (!stopped) {
+      timer = setInterval(() => void load(), 20000);
+    }
     return () => {
       mounted = false;
-      clearInterval(timer);
+      stopPolling();
     };
-  }, [lessonId]);
+  }, [lessonId, topPerformersEnabled, reportTerminalError]);
 
   // ── 焦点作品真实作答内容 ────────────────────────────────────────────
   // 大屏「作品可视化预览」原先是一段写死的五边形 SVG，与任何真实作品无关。
@@ -346,17 +393,25 @@ export function usePeerReviewData({
   }, [attempts, workContents, loadWorkContent]);
 
   // ── 真实互评数据与统一作品池 ─────────────────────────────────────────
-  const refresh = useCallback(async () => {
+  const fetchReviewData = useCallback(async (): Promise<boolean> => {
     if (!lessonId) {
       setServerData(null);
       setShowcaseWorks([]);
-      return;
+      return false;
     }
     try {
       const [reviewRes, worksRes] = await Promise.all([
         fetch(`/api/classroom/sessions/${lessonId}/peer-review`),
         fetch(`/api/classroom/sessions/${lessonId}/showcase-works`),
       ]);
+      if (isTerminalAuthStatus(reviewRes.status)) {
+        reportTerminalError(reviewRes.status, 'peer-review');
+        return false;
+      }
+      if (isTerminalAuthStatus(worksRes.status)) {
+        reportTerminalError(worksRes.status, 'showcase-works');
+        return false;
+      }
       if (reviewRes.ok) {
         const body = await reviewRes.json();
         setServerData(body);
@@ -373,14 +428,39 @@ export function usePeerReviewData({
     } catch {
       /* 静默：教师未开启互评时该接口可能 404 */
     }
-  }, [lessonId]);
+    return true;
+  }, [lessonId, reportTerminalError]);
+
+  const refresh = useCallback(async () => {
+    await fetchReviewData();
+  }, [fetchReviewData]);
 
   useEffect(() => {
     if (!enabled) return;
-    void refresh();
-    const t = setInterval(() => void refresh(), 5000);
-    return () => clearInterval(t);
-  }, [enabled, refresh]);
+    let cancelled = false;
+    let timer: ReturnType<typeof setInterval> | null = null;
+    const stopPolling = () => {
+      cancelled = true;
+      if (timer) {
+        clearInterval(timer);
+        timer = null;
+      }
+    };
+    const tick = async () => {
+      if (cancelled) return;
+      const keepPolling = await fetchReviewData();
+      if (!keepPolling) {
+        stopPolling();
+      }
+    };
+    void tick();
+    if (!cancelled) {
+      timer = setInterval(() => void tick(), 5000);
+    }
+    return () => {
+      stopPolling();
+    };
+  }, [enabled, fetchReviewData]);
 
   // ── 教师一键分配 ────────────────────────────────────────────────────
   const autoAssign = useCallback(async () => {
@@ -521,5 +601,6 @@ export function usePeerReviewData({
     autoAssigning,
     autoAssign,
     refresh,
+    authErrorStatus,
   };
 }

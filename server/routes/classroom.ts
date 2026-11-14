@@ -632,6 +632,10 @@ export function registerClassroomRoutes(
         const session = detail.session;
 
         if (!session) {
+          const readAuth = readDecision(req, lessonId, null);
+          if (!readAuth.ok && readAuth.status === 403) {
+            return res.status(403).json({ error: readAuth.error });
+          }
           return res.json({
             hasActiveSession: false,
             stage: 'PRE_CLASS_READY',

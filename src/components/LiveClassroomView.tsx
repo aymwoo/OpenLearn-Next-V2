@@ -55,6 +55,7 @@ import { ClassroomEntryPortal } from '../features/classroom/ClassroomEntryPortal
 import { ClassroomSessionManager, type ClassroomSessionItem } from '../features/classroom/ClassroomSessionManager';
 import { InProgressSessionList } from '../features/classroom/InProgressSessionList';
 import { readRememberedActiveLesson, rememberActiveLesson } from '../features/classroom/live-class-resume-memory';
+import { isTerminalResourceStatus } from '../utils/polling-guard';
 import { PostClassWrapupView } from '../features/classroom/PostClassWrapupView';
 import { ClassroomBriefingView } from '../features/classroom/ClassroomBriefingView';
 import { useClassroomLiveData } from '../features/classroom/hooks/useClassroomLiveData';
@@ -402,6 +403,45 @@ export function LiveClassroomView({
   const [hasActiveSession, setHasActiveSession] = useState(false);
   /** 真实课件作答记录（用于成绩/完成度/行为标签派生） */
   const [attempts, setAttempts] = useState<any[]>([]);
+  /** 课程/会话鉴权或资源缺失（401/403/404）后立即停止轮询并向教师展示清晰提示 */
+  const [lessonAccessError, setLessonAccessError] = useState<{ status: number; endpoint: string } | null>(null);
+  const notifiedAccessErrorKeyRef = useRef<string | null>(null);
+  const isActiveClassroomView =
+    Boolean(selectedLesson) && !showSessionManager && !showSessionPicker && !showEntryPortal;
+
+  const reportLessonAccessError = useCallback(
+    (status: number, endpoint: string) => {
+      setLessonAccessError({ status, endpoint });
+      if (status === 403 || status === 404) {
+        rememberActiveLesson(null);
+      }
+      const key = `${selectedLesson ?? ''}:${status}`;
+      if (notifiedAccessErrorKeyRef.current !== key) {
+        notifiedAccessErrorKeyRef.current = key;
+        const message =
+          status === 401
+            ? lang === 'zh'
+              ? '登录状态已失效，已停止课堂数据同步，请重新登录。'
+              : 'Session expired. Classroom polling stopped; please sign in again.'
+            : status === 403
+              ? lang === 'zh'
+                ? '当前账号无权访问该课节的课堂数据，已停止轮询。请切换为授课教师账号或重新选择课节。'
+                : 'You do not have permission to access this lesson. Polling stopped; select another lesson or sign in with an authorized account.'
+              : lang === 'zh'
+                ? '目标课节或课堂会话不存在，已停止数据轮询。'
+                : 'Target lesson or session was not found. Polling stopped.';
+        addToast(lang === 'zh' ? '课堂同步已暂停' : 'Classroom sync paused', message, 'warning');
+      }
+    },
+    [selectedLesson, lang, addToast],
+  );
+
+  useEffect(() => {
+    if (selectedLesson) {
+      setLessonAccessError(null);
+      notifiedAccessErrorKeyRef.current = null;
+    }
+  }, [selectedLesson]);
 
   // 轮询课堂会话：真实 stage + 真实开课时间（驱动 elapsedMin / AI 预测 / 家校通知）
   useEffect(() => {
@@ -412,6 +452,15 @@ export function LiveClassroomView({
       return;
     }
     let mounted = true;
+    let stopped = false;
+    let timer: ReturnType<typeof setInterval> | null = null;
+    const stopPolling = () => {
+      stopped = true;
+      if (timer) {
+        clearInterval(timer);
+        timer = null;
+      }
+    };
     if (!userReturnedToPortalRef.current) {
       setEntryDecisionReady(false);
     }
@@ -420,11 +469,29 @@ export function LiveClassroomView({
       setClassroomStage('PRE_CLASS_READY');
     }
     const fetchSession = () => {
+      if (stopped) return;
       fetch(`/api/classroom/sessions/${selectedLesson}`)
-        .then((res) => (res.ok ? res.json() : null))
+        .then((res) => {
+          if (isTerminalResourceStatus(res.status)) {
+            stopPolling();
+            if (mounted) {
+              setHasActiveSession(false);
+              setSessionStartedAt(null);
+              reportLessonAccessError(res.status, 'session');
+              if (initialPortalOpen && (res.status === 403 || res.status === 404)) {
+                setShowSessionPicker(false);
+                setShowEntryPortal(true);
+                setSelectedLesson(null);
+              }
+            }
+            return null;
+          }
+          return res.ok ? res.json() : null;
+        })
         .then((data) => {
-          if (!mounted) return;
+          if (!mounted || stopped) return;
           if (!data) return;
+          setLessonAccessError(null);
           setHasActiveSession(Boolean(data.hasActiveSession));
           if (viewingSpecificReportRef.current) {
             setClassroomStage('ARCHIVED_REPORT');
@@ -480,39 +547,63 @@ export function LiveClassroomView({
         });
     };
     fetchSession();
-    const timer = setInterval(fetchSession, 15000);
+    if (!stopped) {
+      timer = setInterval(fetchSession, 15000);
+    }
     return () => {
       mounted = false;
-      clearInterval(timer);
+      stopPolling();
     };
-  }, [selectedLesson]);
+  }, [selectedLesson, initialPortalOpen, reportLessonAccessError]);
 
   // Issue #243：归因弹窗「今日抽中 N 次」改为真实计数 —— 手动抽问与白板
   // rollcall 写侧早已落库 student_rollcalls，此处按会话轮询同节奏（15s）
-  // 拉取按日聚合，抽问后计数随之增长。
+  // 拉取按日聚合，抽问后计数随之增长。仅在真正进入授课视图后才轮询，避免门户页误触发 403。
   const [rollcallCounts, setRollcallCounts] = React.useState<Map<string, number>>(new Map());
   React.useEffect(() => {
-    if (!selectedLesson) {
+    if (!isActiveClassroomView || !selectedLesson) {
       setRollcallCounts(new Map());
       return;
     }
     let mounted = true;
+    let stopped = false;
+    let timer: ReturnType<typeof setInterval> | null = null;
+    const stopPolling = () => {
+      stopped = true;
+      if (timer) {
+        clearInterval(timer);
+        timer = null;
+      }
+    };
     const fetchCounts = () => {
+      if (stopped) return;
       fetch(`/api/lessons/${selectedLesson}/rollcall-counts`)
-        .then((res) => (res.ok ? res.json() : null))
+        .then((res) => {
+          if (isTerminalResourceStatus(res.status)) {
+            stopPolling();
+            if (mounted) {
+              setRollcallCounts(new Map());
+              reportLessonAccessError(res.status, 'rollcall-counts');
+            }
+            return null;
+          }
+          return res.ok ? res.json() : null;
+        })
         .then((data) => {
-          if (!mounted || !data?.counts) return;
+          if (!mounted || stopped || !data?.counts) return;
           setRollcallCounts(new Map(Object.entries(data.counts as Record<string, number>)));
         })
         .catch(() => {});
     };
     fetchCounts();
-    const timer = setInterval(fetchCounts, 15000);
+    if (!stopped) {
+      timer = setInterval(fetchCounts, 15000);
+    }
     return () => {
       mounted = false;
-      clearInterval(timer);
+      stopPolling();
     };
-  }, [selectedLesson]);
+  }, [isActiveClassroomView, selectedLesson, reportLessonAccessError]);
 
   // 课堂真实数据派生层：把已有 props/state 统一派生为 AI/报表可用的真实指标
   const liveData = useClassroomLiveData({
@@ -546,7 +637,9 @@ export function LiveClassroomView({
     autoAssign: handleAutoAssignPeerReview,
   } = usePeerReviewData({
     lessonId: selectedLesson,
-    enabled: isPeerReviewShowcaseOpen,
+    enabled: isPeerReviewShowcaseOpen && isActiveClassroomView,
+    topPerformersEnabled: isActiveClassroomView,
+    onTerminalError: reportLessonAccessError,
     attempts,
     studentCount: students.length,
     addToast,
@@ -1905,6 +1998,55 @@ export function LiveClassroomView({
     );
   }
 
+  const accessErrorBanner = lessonAccessError ? (
+    <div
+      role="alert"
+      data-testid="live-classroom-access-error"
+      className="mx-4 mt-3 mb-1 flex items-center justify-between gap-3 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-2.5 text-xs text-main shrink-0"
+    >
+      <div className="flex items-center gap-2 min-w-0">
+        <AlertTriangle size={16} className="text-amber-600 shrink-0" />
+        <span className="font-medium">
+          {lessonAccessError.status === 401
+            ? lang === 'zh'
+              ? '当前登录会话已失效（401），已停止自动轮询。请重新登录后继续使用互动课堂。'
+              : 'Your sign-in session has expired (401). Automatic polling stopped; please sign in again.'
+            : lessonAccessError.status === 403
+              ? lang === 'zh'
+                ? '当前账号无权访问该课节的课堂会话与统计数据（403），已停止重复轮询。请切换到有权限的课节或账号。'
+                : 'You do not have permission to access this lesson or its classroom telemetry (403). Polling stopped; select a different lesson or switch account.'
+              : lang === 'zh'
+                ? '目标课节或课堂会话不存在（404），已停止重复轮询。'
+                : 'Target lesson or classroom session was not found (404). Polling stopped.'}
+        </span>
+      </div>
+      <div className="flex items-center gap-2 shrink-0">
+        {lessonAccessError.status === 403 && !showEntryPortal && (
+          <button
+            type="button"
+            onClick={() => {
+              userReturnedToPortalRef.current = true;
+              enteredClassroomRef.current = false;
+              rememberActiveLesson(null);
+              setShowEntryPortal(true);
+            }}
+            className="px-2.5 py-1 rounded-lg bg-amber-600 text-white font-semibold hover:bg-amber-700 cursor-pointer"
+          >
+            {lang === 'zh' ? '返回选课' : 'Back to portal'}
+          </button>
+        )}
+        <button
+          type="button"
+          aria-label={lang === 'zh' ? '关闭提示' : 'Dismiss'}
+          onClick={() => setLessonAccessError(null)}
+          className="p-1 rounded hover:bg-amber-500/20 text-muted hover:text-main cursor-pointer"
+        >
+          <X size={14} />
+        </button>
+      </div>
+    </div>
+  ) : null;
+
   if (showEntryPortal && !entryDecisionReady) {
     return (
       <div
@@ -1917,23 +2059,26 @@ export function LiveClassroomView({
   }
   if (showEntryPortal) {
     return (
-      <ClassroomEntryPortal
-        lessons={lessons}
-        classes={classes}
-        students={students}
-        selectedLesson={selectedLesson}
-        setSelectedLesson={setSelectedLesson}
-        liveClassSelectedClassId={liveClassSelectedClassId}
-        setLiveClassSelectedClassId={setLiveClassSelectedClassId}
-        timelineSegments={timelineSegments}
-        onlineStudentIds={onlineStudentIds}
-        lang={lang}
-        addToast={addToast}
-        onEnterClassroom={handlePortalEnter}
-        onEditLesson={handleEditLesson}
-        onGoToTimetable={handleGoToTimetable}
-        onOpenSessionManager={() => setShowSessionManager(true)}
-      />
+      <div className="flex-1 flex flex-col min-h-0">
+        {accessErrorBanner}
+        <ClassroomEntryPortal
+          lessons={lessons}
+          classes={classes}
+          students={students}
+          selectedLesson={selectedLesson}
+          setSelectedLesson={setSelectedLesson}
+          liveClassSelectedClassId={liveClassSelectedClassId}
+          setLiveClassSelectedClassId={setLiveClassSelectedClassId}
+          timelineSegments={timelineSegments}
+          onlineStudentIds={onlineStudentIds}
+          lang={lang}
+          addToast={addToast}
+          onEnterClassroom={handlePortalEnter}
+          onEditLesson={handleEditLesson}
+          onGoToTimetable={handleGoToTimetable}
+          onOpenSessionManager={() => setShowSessionManager(true)}
+        />
+      </div>
     );
   }
 
@@ -2235,6 +2380,8 @@ export function LiveClassroomView({
           />
         </div>
       </div>
+
+      {accessErrorBanner}
 
       {/* Interactive Classroom Cockpit (Stages, Polls, Buzzers, Exit Tickets, Stage Display) */}
       <ClassroomInteractiveCockpit

@@ -14,6 +14,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { getOptionalSocket, onSocketInstance } from '../../../services/socket-service';
+import { isTerminalResourceStatus } from '../../../utils/polling-guard';
 
 export interface StageAttendance {
   /** 全平台在线学生数（不限本班） */
@@ -79,6 +80,8 @@ export type FeedHealth = 'live' | 'reconnecting' | 'polling' | 'error';
 export interface StageFeed {
   data: StageDisplayData;
   health: FeedHealth;
+  /** 不可恢复鉴权/资源终止错误（如 401/403/404） */
+  terminalError: { status: number; message: string } | null;
   /** 最近一次成功取数的时刻（null = 从未成功） */
   lastSyncedAt: number | null;
   /** 手动触发一次同步 */
@@ -119,11 +122,26 @@ export function useStageDisplayFeed(
 
   const [data, setData] = useState<StageDisplayData>(EMPTY_STAGE_DATA);
   const [health, setHealth] = useState<FeedHealth>('polling');
+  const [terminalError, setTerminalError] = useState<{ status: number; message: string } | null>(null);
   const [lastSyncedAt, setLastSyncedAt] = useState<number | null>(null);
 
   // 请求代次：避免慢响应覆盖新响应（展台在高频事件下会出现并发拉取）
   const seqRef = useRef(0);
   const mountedRef = useRef(true);
+  const terminalStoppedRef = useRef(false);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const stopPolling = useCallback(() => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => {
+    terminalStoppedRef.current = false;
+    setTerminalError(null);
+  }, [lessonId]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -133,32 +151,61 @@ export function useStageDisplayFeed(
   }, []);
 
   const refresh = useCallback(async () => {
-    if (!lessonId) return;
+    if (!lessonId || terminalStoppedRef.current) return;
     const seq = ++seqRef.current;
     try {
       const res = await fetch(`/api/classroom/stage/${encodeURIComponent(lessonId)}/data`);
+      if (isTerminalResourceStatus(res.status)) {
+        terminalStoppedRef.current = true;
+        stopPolling();
+        if (!mountedRef.current) return;
+        setHealth('error');
+        setTerminalError({
+          status: res.status,
+          message:
+            res.status === 401
+              ? '登录状态已失效（401）'
+              : res.status === 403
+                ? '当前账号无权查看该课节的大屏展台（403）'
+                : '目标课节或展台数据不存在（404）',
+        });
+        return;
+      }
       if (!res.ok) throw new Error(`stage data HTTP ${res.status}`);
       const json = (await res.json()) as StageDisplayData;
       if (!mountedRef.current || seq !== seqRef.current) return;
       // 接口可能省略 pacing 字段，合并默认值避免右侧栏渲染时读到 undefined
       setData({ ...EMPTY_STAGE_DATA, ...json, pacing: { ...EMPTY_STAGE_DATA.pacing, ...(json.pacing || {}) } });
       setLastSyncedAt(Date.now());
+      setTerminalError(null);
       setHealth((h) => (h === 'reconnecting' ? 'live' : h === 'error' ? 'polling' : h));
     } catch (e) {
-      if (!mountedRef.current) return;
+      if (!mountedRef.current || terminalStoppedRef.current) return;
       // 拉取失败不抛给 UI：展台要继续展示上一次的好数据，同时用 health 暴露异常
       setHealth((h) => (h === 'live' ? 'reconnecting' : h));
       console.warn('[StageDisplay] sync failed:', e);
     }
-  }, [lessonId]);
+  }, [lessonId, stopPolling]);
 
   // 首次 + 低频对账
   useEffect(() => {
     if (!enabled || !lessonId) return;
-    void refresh();
-    const timer = setInterval(() => void refresh(), reconcileMs);
-    return () => clearInterval(timer);
-  }, [enabled, lessonId, reconcileMs, refresh]);
+    let active = true;
+    void refresh().then(() => {
+      if (!active || terminalStoppedRef.current) return;
+      timerRef.current = setInterval(() => {
+        if (terminalStoppedRef.current) {
+          stopPolling();
+          return;
+        }
+        void refresh();
+      }, reconcileMs);
+    });
+    return () => {
+      active = false;
+      stopPolling();
+    };
+  }, [enabled, lessonId, reconcileMs, refresh, stopPolling]);
 
   // Socket 主导的实时通道
   useEffect(() => {
@@ -167,10 +214,10 @@ export function useStageDisplayFeed(
     // 合并多个事件的同一次刷新，避免事件密集时打出一串请求
     let pending: ReturnType<typeof setTimeout> | null = null;
     const scheduleRefresh = () => {
-      if (pending) return;
+      if (pending || terminalStoppedRef.current) return;
       pending = setTimeout(() => {
         pending = null;
-        void refresh();
+        if (!terminalStoppedRef.current) void refresh();
       }, 120);
     };
 
@@ -194,6 +241,7 @@ export function useStageDisplayFeed(
       });
 
       const onConnect = () => {
+        if (terminalStoppedRef.current) return;
         setHealth('live');
         void refresh();
       };
@@ -223,5 +271,5 @@ export function useStageDisplayFeed(
     };
   }, [enabled, lessonId, refresh]);
 
-  return { data, health, lastSyncedAt, refresh };
+  return { data, health, terminalError, lastSyncedAt, refresh };
 }

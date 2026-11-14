@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import {
   X,
   ShieldCheck,
+  ShieldAlert,
   Zap,
   HardDrive,
   Network,
@@ -11,6 +12,7 @@ import {
   AlertCircle,
   Activity,
 } from 'lucide-react';
+import { inspectSecureContext } from '../../utils/secure-context';
 
 export interface PreflightHealthModalProps {
   isOpen: boolean;
@@ -194,6 +196,44 @@ export function PreflightHealthModal({ isOpen, onClose, classId, className, lang
               </div>
               <CheckCircle2 size={15} className="text-emerald-500 shrink-0" />
             </div>
+
+            {/* Item 5: Browser Secure Context (LAN HTTP vs HTTPS) */}
+            {(() => {
+              const sec = inspectSecureContext(lang === 'en' ? 'en' : 'zh');
+              return (
+                <div
+                  data-testid="preflight-secure-context-row"
+                  className="p-3 rounded-xl bg-surface-secondary/50 border border-theme/60 flex items-center justify-between gap-2"
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    {sec.isSecureContext ? (
+                      <ShieldCheck size={15} className="text-emerald-500 shrink-0" />
+                    ) : (
+                      <ShieldAlert size={15} className="text-amber-500 shrink-0" />
+                    )}
+                    <div className="min-w-0">
+                      <div className="font-bold text-main">
+                        {lang === 'zh' ? '浏览器安全上下文与传输能力' : 'Browser Secure Context'}
+                      </div>
+                      <div className="text-2xs text-muted">
+                        {sec.isSecureContext
+                          ? lang === 'zh'
+                            ? '当前处于 HTTPS / localhost 安全上下文，所有浏览器特性已启用'
+                            : 'HTTPS / localhost secure context active; all browser APIs available'
+                          : lang === 'zh'
+                            ? `当前通过局域网 HTTP 访问 (${sec.origin || 'HTTP'})：白板、课件与课堂同步正常运行；音视频采集、屏幕共享等特权能力需开启 HTTPS`
+                            : `Plain LAN HTTP context (${sec.origin || 'HTTP'}): core classroom features work normally; camera/mic/screen capture require HTTPS`}
+                      </div>
+                    </div>
+                  </div>
+                  {sec.isSecureContext ? (
+                    <CheckCircle2 size={15} className="text-emerald-500 shrink-0" />
+                  ) : (
+                    <AlertCircle size={15} className="text-amber-500 shrink-0" />
+                  )}
+                </div>
+              );
+            })()}
           </div>
         </div>
 

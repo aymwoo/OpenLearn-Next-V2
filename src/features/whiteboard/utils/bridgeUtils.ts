@@ -1,3 +1,5 @@
+import { sanitizeExternalFontsInHtml } from '../../../../packages/core/security/font-sanitizer.js';
+
 /**
  * 为 srcDoc 模式的 HTML Applet 注入 LMS 上下文和 bridge.js。
  * 服务端渲染路径（/runtime/ 或 /api/resources/）由 injectLmsSdk 处理；
@@ -6,6 +8,7 @@
 let _srcDocAttemptCounter = 0;
 
 export function wrapSrcDocWithBridge(rawCode: string, lessonId: string): string {
+  const { html: sanitizedRawCode } = sanitizeExternalFontsInHtml(rawCode || '');
   const attemptId = `att_srcdoc_${lessonId}_${Date.now()}_${++_srcDocAttemptCounter}`;
   const context = {
     student_id: 'teacher_preview',
@@ -56,6 +59,6 @@ export function wrapSrcDocWithBridge(rawCode: string, lessonId: string): string 
 <\/script>
 <script src="/bridge.js?cw=${encodeURIComponent(lessonId || '')}"><\/script>
 </head><body>
-${rawCode || ''}
+${sanitizedRawCode}
 </body></html>`;
 }
