@@ -82,7 +82,21 @@ describe('IKVA8R · 前端 Persona 持久化、defaultForRole 与后台 CRUD', (
   });
 
   it('AiPersonasSection 渲染角色表并支持新建与删除自定义角色模板', async () => {
-    let serverPersonas = [
+    let serverPersonas: Array<{
+      id: string;
+      nameZh: string;
+      nameEn: string;
+      descriptionZh?: string;
+      descriptionEn?: string;
+      instructionZh: string;
+      instructionEn: string;
+      source: string;
+      enabled?: boolean;
+      mode: string;
+      basePolicy: string;
+      defaultForRole?: string[];
+      references?: { defaultForRoles: string[] };
+    }> = [
       {
         id: 'plain_assistant',
         nameZh: '普通助教',
@@ -130,5 +144,102 @@ describe('IKVA8R · 前端 Persona 持久化、defaultForRole 与后台 CRUD', (
     fireEvent.click(delBtn);
 
     await waitFor(() => expect(screen.queryByText('物理导师')).toBeNull());
+  });
+
+  it('Issue #510 · AiPersonasSection 展示用途说明、过滤仅共享模型绑定，并在停用默认角色时弹出引用确认框', async () => {
+    let serverPersonas: Array<{
+      id: string;
+      nameZh: string;
+      nameEn: string;
+      descriptionZh?: string;
+      descriptionEn?: string;
+      instructionZh: string;
+      instructionEn: string;
+      source: string;
+      enabled?: boolean;
+      mode: string;
+      basePolicy: string;
+      defaultForRole?: string[];
+      references?: { defaultForRoles: string[] };
+    }> = [
+      {
+        id: 'plain_assistant',
+        nameZh: '普通助教（默认）',
+        nameEn: 'Plain Assistant (Default)',
+        descriptionZh: '系统兜底助教',
+        descriptionEn: 'Fallback assistant',
+        instructionZh: '',
+        instructionEn: '',
+        source: 'builtin',
+        enabled: true,
+        mode: 'overlay',
+        basePolicy: 'inherit',
+      },
+      {
+        id: 'socratic_questioner',
+        nameZh: '苏格拉底追问者',
+        nameEn: 'Socratic Questioner',
+        descriptionZh: '通过分层追问引导学生思考',
+        descriptionEn: 'Guides students via Socratic questions',
+        instructionZh: '追问引导',
+        instructionEn: 'Socratic guidance',
+        source: 'builtin',
+        enabled: true,
+        defaultForRole: ['student'],
+        references: { defaultForRoles: ['student'] },
+        mode: 'overlay',
+        basePolicy: 'inherit',
+      },
+    ];
+
+    const patchCalls: Array<{ url: string; body: Record<string, unknown> }> = [];
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      if (url === '/api/agent/personas?scope=all' && (!init?.method || init.method === 'GET')) {
+        return { ok: true, json: async () => ({ success: true, personas: serverPersonas }) } as Response;
+      }
+      if (url.startsWith('/api/agent/personas/socratic_questioner') && init?.method === 'PATCH') {
+        const body = JSON.parse(String(init.body)) as Record<string, unknown>;
+        patchCalls.push({ url, body });
+        serverPersonas = serverPersonas.map((p) =>
+          p.id === 'socratic_questioner'
+            ? { ...p, enabled: false, defaultForRole: undefined, references: { defaultForRoles: [] } }
+            : p,
+        );
+        return { ok: true, json: async () => ({ success: true, persona: serverPersonas[1] }) } as Response;
+      }
+      return { ok: false, status: 404, json: async () => ({ success: false }) } as Response;
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(
+      <AiPersonasSection
+        lang="zh"
+        aiProviders={[
+          { id: 'prov_shared_1', name: '平台共享 DeepSeek', model_name: 'deepseek-chat', is_shared: 1 },
+          { id: 'prov_private_1', name: '个人私有 Key', model_name: 'gpt-4o', is_shared: 0 },
+        ]}
+      />,
+    );
+
+    // 列表直接展示用途说明
+    await screen.findByText('通过分层追问引导学生思考');
+
+    // 打开新建窗口校验共享模型下拉仅包含平台共享提供商，不含个人私有提供商
+    fireEvent.click(screen.getByRole('button', { name: /新建角色模板/i }));
+    const providerSelect = screen.getByLabelText(/绑定平台共享 AI 提供商/i) as HTMLSelectElement;
+    const optionTexts = Array.from(providerSelect.options).map((o) => o.textContent || '');
+    expect(optionTexts.some((t) => t.includes('平台共享 DeepSeek'))).toBe(true);
+    expect(optionTexts.some((t) => t.includes('个人私有 Key'))).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: /取消/i }));
+
+    // 点击停用已设为学生默认的苏格拉底角色 -> 弹出引用确认 Dialog 而非直接提交
+    fireEvent.click(screen.getByRole('button', { name: /停用角色模板 苏格拉底追问者 \(socratic_questioner\)/i }));
+    expect(patchCalls).toHaveLength(0);
+    expect(await screen.findByText(/确认停用正在引用的助教角色/)).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: /确认停用并自动回退/ }));
+    await waitFor(() => expect(patchCalls).toHaveLength(1));
+    expect(patchCalls[0].url).toContain('?force=true');
+    expect(patchCalls[0].body.enabled).toBe(false);
   });
 });

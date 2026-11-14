@@ -186,7 +186,18 @@ export function useAgentChat(options: UseAgentChatOptions) {
       if (!res.ok || data.success === false) {
         replyContent = `⚠️ ${data.message || data.error || (lang === 'zh' ? '未知系统错误' : 'Unknown System Error')}`;
       } else {
-        replyContent = data.agentText || '';
+        if (data.personaFallback) {
+          const nextFallback =
+            typeof data.personaFallback.fallbackPersonaId === 'string' ? data.personaFallback.fallbackPersonaId : '';
+          setPersonaId(nextFallback);
+          window.dispatchEvent(new CustomEvent('openlearn:personas-updated'));
+          const fallbackNotice =
+            lang === 'zh'
+              ? 'ℹ️ 当前选定的助教角色已停用或被删除，系统已自动回退至可用默认角色继续为您服务。\n\n'
+              : 'ℹ️ The previously selected assistant persona was disabled or removed. Automatically switched to an active default persona.\n\n';
+          replyContent += fallbackNotice;
+        }
+        replyContent += data.agentText || '';
         if (data.toolResults && data.toolResults.length > 0) {
           replyContent += `\n\n${t.executedCommands}` + data.toolResults.map((r: any) => r.callName).join(', ');
         }

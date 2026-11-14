@@ -25,6 +25,14 @@ export interface AIPersonaConfig {
   nameZh: string;
   /** 角色名称（en） */
   nameEn: string;
+  /** 用途说明（zh），用于管理后台与选择器展示 */
+  descriptionZh?: string;
+  /** 用途说明（en） */
+  descriptionEn?: string;
+  /** 是否启用（默认 true；停用后对侧栏与普通角色隐藏，保留配置） */
+  enabled?: boolean;
+  /** 可选绑定的平台共享 AI 模型提供商 ID（不可绑定个人私有提供商） */
+  preferredProviderId?: string;
   /** 角色系统指令（zh） */
   instructionZh: string;
   /** 角色系统指令（en） */
@@ -52,11 +60,18 @@ export interface AIPersona extends AIPersonaConfig {
   updatedAt?: number;
 }
 
+export interface AIPersonaReferenceSummary {
+  defaultForRoles: AIPersonaRole[];
+  preferredProviderId?: string;
+  isFallback: boolean;
+}
+
 export class AdminPersonaError extends Error {
   constructor(
     public readonly status: number,
     public readonly code: string,
     message: string,
+    public readonly details?: Record<string, unknown>,
   ) {
     super(message);
     this.name = 'AdminPersonaError';
@@ -86,6 +101,10 @@ interface AiPersonaRow {
   default_for_role_json: string | null;
   tool_policy_json: string | null;
   max_turns: number | null;
+  description_zh?: string | null;
+  description_en?: string | null;
+  enabled?: number | null;
+  preferred_provider_id?: string | null;
   created_at: number;
   updated_at: number;
 }
@@ -101,10 +120,53 @@ const registry: { personas: Map<string, AIPersona> } = {
 
 let boundDb: DbLike | null = null;
 
-function hasAiPersonasTable(db: DbLike): boolean {
+function getAiPersonaColumns(db: DbLike): Set<string> {
   try {
-    const row = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'ai_personas'").get() as
-      { name?: string } | undefined;
+    const cols = db.prepare('PRAGMA table_info(ai_personas)').all() as Array<{ name?: string }>;
+    return new Set(cols.map((c) => String(c.name || '')).filter(Boolean));
+  } catch {
+    return new Set();
+  }
+}
+
+function validatePreferredProvider(db: DbLike | null, preferredProviderId: string | undefined): void {
+  if (!preferredProviderId) return;
+  if (!db) return;
+  try {
+    const hasProviders = db
+      .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'ai_providers'")
+      .get() as { name?: string } | undefined;
+    if (!hasProviders?.name) return;
+    const provider = db.prepare('SELECT id, is_shared FROM ai_providers WHERE id = ?').get(preferredProviderId) as
+      { id: string; is_shared?: number | boolean | null } | undefined;
+    if (!provider) {
+      throw new AdminPersonaError(
+        400,
+        'INVALID_PREFERRED_PROVIDER',
+        `Preferred AI provider "${preferredProviderId}" was not found`,
+      );
+    }
+    if (!Number(provider.is_shared)) {
+      throw new AdminPersonaError(
+        403,
+        'PRIVATE_PROVIDER_FORBIDDEN',
+        'AI personas can only bind platform-shared AI providers; personal private providers cannot be exposed',
+      );
+    }
+  } catch (err) {
+    if (err instanceof AdminPersonaError) throw err;
+  }
+}
+
+function hasAiPersonasTable(db: DbLike): boolean {
+  return getAiPersonaColumns(db).size > 0;
+}
+
+function hasAiPersonaGovernanceTable(db: DbLike): boolean {
+  try {
+    const row = db
+      .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'ai_persona_governance'")
+      .get() as { name?: string } | undefined;
     return Boolean(row?.name);
   } catch {
     return false;
@@ -167,10 +229,22 @@ export function normalizePersonaConfig<T extends Partial<AIPersonaConfig>>(confi
       ? Math.min(MAX_PERSONA_TURNS, Math.max(1, Math.trunc(rawMaxTurns)))
       : undefined;
 
+  const preferredProviderId =
+    typeof config.preferredProviderId === 'string' && config.preferredProviderId.trim()
+      ? config.preferredProviderId.trim()
+      : undefined;
+  const enabled = config.enabled === false ? false : true;
+  const descriptionZh = typeof config.descriptionZh === 'string' ? config.descriptionZh.trim() : undefined;
+  const descriptionEn = typeof config.descriptionEn === 'string' ? config.descriptionEn.trim() : undefined;
+
   return {
     id: String(config.id ?? '').trim(),
     nameZh: String(config.nameZh ?? '').trim(),
     nameEn: String(config.nameEn ?? '').trim(),
+    ...(descriptionZh ? { descriptionZh } : {}),
+    ...(descriptionEn ? { descriptionEn } : {}),
+    enabled,
+    ...(preferredProviderId ? { preferredProviderId } : {}),
     instructionZh: typeof config.instructionZh === 'string' ? config.instructionZh : '',
     instructionEn: typeof config.instructionEn === 'string' ? config.instructionEn : '',
     icon: typeof config.icon === 'string' && config.icon.trim() ? config.icon.trim() : undefined,
@@ -202,6 +276,8 @@ function getBuiltinSeeds(): AIPersona[] {
       id: 'socratic_questioner',
       nameZh: '苏格拉底追问者',
       nameEn: 'Socratic Questioner',
+      descriptionZh: '通过 1-2 个分层追问引导学生自主推理，不直接给出标准答案，适合习题探究辅导。',
+      descriptionEn: 'Guides students via 1-2 layered follow-up questions without revealing direct answers.',
       instructionZh:
         '你现在切换为「苏格拉底追问者」角色：不直接给出答案，而是通过一连串有层次的追问引导学生自己发现结论。每次回复最多提出 1-2 个问题，聚焦学生表述中的模糊点或未经验证的假设。保持友善但坚持让学生自己推理。',
       instructionEn:
@@ -214,6 +290,8 @@ function getBuiltinSeeds(): AIPersona[] {
       id: 'debate_opponent',
       nameZh: '反方辩论助手',
       nameEn: 'Debate Opponent',
+      descriptionZh: '围绕课堂观点给出简练有力的反方论据并附引导问题，锻炼批判性思维与思辨能力。',
+      descriptionEn: 'Presents concise counterarguments and perspective-shifting questions for classroom debate.',
       instructionZh:
         '你现在切换为「反方辩论助手」角色：针对老师或学生提出的观点，始终站在反方立场给出有理有据的反驳，每次反驳控制在 3 句话以内，并在最后提出一个引导学生换位思考的问题。',
       instructionEn:
@@ -226,6 +304,8 @@ function getBuiltinSeeds(): AIPersona[] {
       id: 'historical_figure',
       nameZh: '历史名人模拟对话',
       nameEn: 'Historical Figure Roleplay',
+      descriptionZh: '以指定历史人物第一人称口吻与时代背景开展情境互动对话，增强沉浸式人文学习。',
+      descriptionEn: 'Roleplays named historical figures in first person with period-accurate context.',
       instructionZh:
         '你现在切换为「历史名人模拟对话」角色：根据对话中出现的历史人物名称，以该人物的第一人称视角、用语习惯与时代背景进行对话，对话中自然融入该时代的历史事实，并在结尾以人物口吻提出一个反思问题。',
       instructionEn:
@@ -238,6 +318,9 @@ function getBuiltinSeeds(): AIPersona[] {
       id: 'plain_assistant',
       nameZh: '普通助教（默认）',
       nameEn: 'Plain Assistant (Default)',
+      descriptionZh: '系统基准全功能助教，遵循宿主默认教学规范并在其他角色停用或移除时作为安全回退。',
+      descriptionEn:
+        'Baseline system assistant serving as the safe fallback when custom personas are disabled or removed.',
       instructionZh: '',
       instructionEn: '',
       icon: '🤖',
@@ -271,6 +354,10 @@ function rowToPersona(row: AiPersonaRow): AIPersona {
     id: row.id,
     nameZh: row.name_zh,
     nameEn: row.name_en,
+    descriptionZh: row.description_zh ?? undefined,
+    descriptionEn: row.description_en ?? undefined,
+    enabled: row.enabled === undefined || row.enabled === null ? true : Boolean(row.enabled),
+    preferredProviderId: row.preferred_provider_id ?? undefined,
     instructionZh: row.instruction_zh,
     instructionEn: row.instruction_en,
     icon: row.icon ?? undefined,
@@ -292,10 +379,12 @@ function rowToPersona(row: AiPersonaRow): AIPersona {
 }
 
 function persistPersonaToDb(persona: AIPersona): void {
-  if (!boundDb || !hasAiPersonasTable(boundDb)) return;
+  if (!boundDb) return;
+  if (!hasAiPersonasTable(boundDb)) return;
   const now = Date.now();
   const createdAt = persona.createdAt ?? now;
   const updatedAt = persona.updatedAt ?? now;
+
   boundDb
     .prepare(
       `INSERT INTO ai_personas (
@@ -337,22 +426,48 @@ function persistPersonaToDb(persona: AIPersona): void {
       createdAt,
       updatedAt,
     );
+
+  if (hasAiPersonaGovernanceTable(boundDb)) {
+    boundDb
+      .prepare(
+        `INSERT INTO ai_persona_governance (
+          persona_id, description_zh, description_en, enabled, preferred_provider_id
+        ) VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT(persona_id) DO UPDATE SET
+          description_zh = excluded.description_zh,
+          description_en = excluded.description_en,
+          enabled = excluded.enabled,
+          preferred_provider_id = excluded.preferred_provider_id`,
+      )
+      .run(
+        persona.id,
+        persona.descriptionZh ?? '',
+        persona.descriptionEn ?? '',
+        persona.enabled === false ? 0 : 1,
+        persona.preferredProviderId ?? null,
+      );
+  }
 }
 
 /**
  * 在服务器迁移完成后绑定 SQLite 数据库：
- * 1. 清理上次进程异常退出可能残留的 `source = 'plugin'` 孤儿行；
- * 2. 补齐缺失的内置种子行（INSERT OR IGNORE）；
- * 3. 从 `ai_personas` 加载全部 `builtin` 与 `admin` Persona（保留管理员持久化定制）。
+ * 1. 清理上次进程异常退出可能残留的 `source = 'plugin'` 孤儿行及伴生治理孤儿行；
+ * 2. 补齐缺失的内置种子行（INSERT OR IGNORE），并为伴生治理表回填内置用途说明；
+ * 3. 从 `ai_personas` LEFT JOIN `ai_persona_governance` 加载全部 `builtin` 与 `admin` Persona（保留管理员持久化定制）。
  */
 export function initAIPersonaPersistence(db: DbLike | null): void {
   boundDb = db;
   registry.personas.clear();
   seedBuiltins();
 
-  if (!db || !hasAiPersonasTable(db)) return;
+  if (!db) return;
+  if (!hasAiPersonasTable(db)) return;
 
   db.prepare("DELETE FROM ai_personas WHERE source = 'plugin'").run();
+  const hasGovTable = hasAiPersonaGovernanceTable(db);
+  if (hasGovTable) {
+    db.prepare('DELETE FROM ai_persona_governance WHERE persona_id NOT IN (SELECT id FROM ai_personas)').run();
+  }
 
   const now = Date.now();
   const insertIgnore = db.prepare(
@@ -384,11 +499,46 @@ export function initAIPersonaPersistence(db: DbLike | null): void {
     );
   }
 
-  const rows = db
-    .prepare("SELECT * FROM ai_personas WHERE source IN ('builtin', 'admin') ORDER BY created_at ASC")
-    .all() as AiPersonaRow[];
+  if (hasGovTable) {
+    const insertGovIgnore = db.prepare(
+      `INSERT OR IGNORE INTO ai_persona_governance (
+        persona_id, description_zh, description_en, enabled, preferred_provider_id
+      ) VALUES (?, ?, ?, 1, NULL)`,
+    );
+    const backfillGovDesc = db.prepare(
+      `UPDATE ai_persona_governance
+       SET description_zh = CASE WHEN description_zh = '' THEN ? ELSE description_zh END,
+           description_en = CASE WHEN description_en = '' THEN ? ELSE description_en END
+       WHERE persona_id = ? AND (description_zh = '' OR description_en = '')`,
+    );
+    for (const seed of getBuiltinSeeds()) {
+      insertGovIgnore.run(seed.id, seed.descriptionZh ?? '', seed.descriptionEn ?? '');
+      backfillGovDesc.run(seed.descriptionZh ?? '', seed.descriptionEn ?? '', seed.id);
+    }
+  }
+
+  const rows = (
+    hasGovTable
+      ? db
+          .prepare(
+            `SELECT p.*, g.description_zh, g.description_en, g.enabled, g.preferred_provider_id
+             FROM ai_personas p
+             LEFT JOIN ai_persona_governance g ON g.persona_id = p.id
+             WHERE p.source IN ('builtin', 'admin')
+             ORDER BY p.created_at ASC`,
+          )
+          .all()
+      : db.prepare("SELECT * FROM ai_personas WHERE source IN ('builtin', 'admin') ORDER BY created_at ASC").all()
+  ) as AiPersonaRow[];
+  const builtinDescMap = new Map(getBuiltinSeeds().map((s) => [s.id, s]));
   for (const row of rows) {
-    registry.personas.set(row.id, rowToPersona(row));
+    const parsed = rowToPersona(row);
+    const seed = builtinDescMap.get(parsed.id);
+    if (seed) {
+      if (!parsed.descriptionZh && seed.descriptionZh) parsed.descriptionZh = seed.descriptionZh;
+      if (!parsed.descriptionEn && seed.descriptionEn) parsed.descriptionEn = seed.descriptionEn;
+    }
+    registry.personas.set(row.id, parsed);
   }
 }
 
@@ -453,10 +603,36 @@ export function registerAIPersona(
   });
 }
 
+/** 查询 Persona 的默认角色引用与绑定状态 */
+export function getPersonaReferences(id: string): AIPersonaReferenceSummary {
+  const existing = registry.personas.get(id);
+  return {
+    defaultForRoles: Array.isArray(existing?.defaultForRole) ? [...existing!.defaultForRole!] : [],
+    preferredProviderId: existing?.preferredProviderId,
+    isFallback: id === 'plain_assistant',
+  };
+}
+
+/** 当 AI 模型提供商被删除或改为个人私有时，清理所有关联的角色绑定避免悬空引用或越权泄露 */
+export function clearPersonaProviderReferences(providerId: string): number {
+  const trimmed = providerId.trim();
+  if (!trimmed) return 0;
+  let cleared = 0;
+  for (const [id, persona] of registry.personas.entries()) {
+    if (persona.preferredProviderId === trimmed) {
+      const updated: AIPersona = { ...persona, preferredProviderId: undefined, updatedAt: Date.now() };
+      registry.personas.set(id, updated);
+      persistPersonaToDb(updated);
+      cleared += 1;
+    }
+  }
+  return cleared;
+}
+
 /** 管理员创建或更新 Persona（持久化到 ai_personas 表） */
 export function upsertAdminPersona(
   input: Partial<AIPersonaConfig>,
-  options: { isUpdate?: boolean; actorId?: string } = {},
+  options: { isUpdate?: boolean; actorId?: string; force?: boolean } = {},
 ): AIPersona {
   const id = String(input.id ?? '').trim();
   if (!id || !PERSONA_ID_PATTERN.test(id)) {
@@ -480,6 +656,10 @@ export function upsertAdminPersona(
 
   const nameZh = String(input.nameZh ?? existing?.nameZh ?? '').trim();
   const nameEn = String(input.nameEn ?? existing?.nameEn ?? '').trim();
+  const descriptionZh =
+    input.descriptionZh !== undefined ? String(input.descriptionZh).trim() : (existing?.descriptionZh ?? '');
+  const descriptionEn =
+    input.descriptionEn !== undefined ? String(input.descriptionEn).trim() : (existing?.descriptionEn ?? '');
   const instructionZh = typeof input.instructionZh === 'string' ? input.instructionZh : (existing?.instructionZh ?? '');
   const instructionEn = typeof input.instructionEn === 'string' ? input.instructionEn : (existing?.instructionEn ?? '');
 
@@ -505,19 +685,63 @@ export function upsertAdminPersona(
     }
   }
 
+  const nextEnabled = input.enabled !== undefined ? Boolean(input.enabled) : (existing?.enabled ?? true);
+  if (!nextEnabled && id === 'plain_assistant') {
+    throw new AdminPersonaError(
+      400,
+      'BUILTIN_FALLBACK_PROTECTED',
+      'Default baseline persona (plain_assistant) cannot be deactivated because it serves as system fallback',
+    );
+  }
+
+  const nextPreferredProviderId =
+    input.preferredProviderId !== undefined
+      ? typeof input.preferredProviderId === 'string' && input.preferredProviderId.trim()
+        ? input.preferredProviderId.trim()
+        : undefined
+      : existing?.preferredProviderId;
+
+  validatePreferredProvider(boundDb, nextPreferredProviderId);
+
+  let nextDefaultForRole = input.defaultForRole !== undefined ? input.defaultForRole : existing?.defaultForRole;
+  const previousDefaults = Array.isArray(existing?.defaultForRole) ? [...existing!.defaultForRole!] : [];
+  if (!nextEnabled && previousDefaults.length > 0 && !options.force) {
+    throw new AdminPersonaError(
+      409,
+      'PERSONA_IN_USE',
+      `Persona "${id}" is currently set as default for roles: ${previousDefaults.join(', ')}. Confirm deactivation with force=true to clear defaults and fall back.`,
+      {
+        references: {
+          defaultForRoles: previousDefaults,
+        },
+      },
+    );
+  }
+
+  // 停用时自动解除默认角色绑定，保证 getDefaultPersonaIdForRole 立即回退到激活角色
+  let clearedDefaultForRoles: AIPersonaRole[] = [];
+  if (!nextEnabled && Array.isArray(nextDefaultForRole) && nextDefaultForRole.length > 0) {
+    clearedDefaultForRoles = [...nextDefaultForRole];
+    nextDefaultForRole = undefined;
+  }
+
   const targetSource: AIPersonaSource = existing?.source === 'builtin' ? 'builtin' : 'admin';
   const now = Date.now();
   const normalized = normalizePersonaConfig({
     id,
     nameZh,
     nameEn,
+    descriptionZh,
+    descriptionEn,
+    enabled: nextEnabled,
+    preferredProviderId: nextPreferredProviderId,
     instructionZh,
     instructionEn,
     icon: input.icon !== undefined ? input.icon : existing?.icon,
     mode: input.mode ?? existing?.mode,
     basePolicy: input.basePolicy ?? existing?.basePolicy,
     visibility: input.visibility !== undefined ? input.visibility : existing?.visibility,
-    defaultForRole: input.defaultForRole !== undefined ? input.defaultForRole : existing?.defaultForRole,
+    defaultForRole: nextDefaultForRole,
     toolPolicy: input.toolPolicy !== undefined ? input.toolPolicy : existing?.toolPolicy,
     maxTurns: input.maxTurns !== undefined ? input.maxTurns : existing?.maxTurns,
   });
@@ -537,6 +761,9 @@ export function upsertAdminPersona(
     personaId: saved.id,
     source: saved.source,
     mode: saved.mode,
+    enabled: saved.enabled !== false,
+    preferredProviderId: saved.preferredProviderId ?? null,
+    clearedDefaultForRoles,
     instructionHash: computeInstructionDigest(saved),
   });
 
@@ -544,7 +771,11 @@ export function upsertAdminPersona(
 }
 
 /** 管理员删除自定义 Persona（内置与插件托管不可通过此入口删除） */
-export function deleteAdminPersona(id: string, actorId?: string): void {
+export function deleteAdminPersona(
+  id: string,
+  actorId?: string,
+  options: { force?: boolean } = {},
+): { deletedId: string; clearedDefaultForRoles: AIPersonaRole[]; fallbackPersonaId: string | null } {
   const existing = registry.personas.get(id);
   if (!existing) {
     throw new AdminPersonaError(404, 'PERSONA_NOT_FOUND', `Persona "${id}" not found`);
@@ -556,15 +787,39 @@ export function deleteAdminPersona(id: string, actorId?: string): void {
     throw new AdminPersonaError(400, 'PLUGIN_PERSONA_READONLY', 'Deactivate the owning plugin to remove its persona');
   }
 
+  const defaultRoles = Array.isArray(existing.defaultForRole) ? [...existing.defaultForRole] : [];
+  if (defaultRoles.length > 0 && !options.force) {
+    throw new AdminPersonaError(
+      409,
+      'PERSONA_IN_USE',
+      `Persona "${id}" is currently set as default for roles: ${defaultRoles.join(', ')}. Confirm deletion with force=true to fall back safely.`,
+      {
+        references: {
+          defaultForRoles: defaultRoles,
+        },
+      },
+    );
+  }
+
   registry.personas.delete(id);
   if (boundDb && hasAiPersonasTable(boundDb)) {
     boundDb.prepare("DELETE FROM ai_personas WHERE id = ? AND source = 'admin'").run(id);
+    if (hasAiPersonaGovernanceTable(boundDb)) {
+      boundDb.prepare('DELETE FROM ai_persona_governance WHERE persona_id = ?').run(id);
+    }
   }
 
   recordSecurityAudit('admin.ai_persona_delete', {
     actorId: actorId ?? null,
     personaId: id,
+    clearedDefaultForRoles: defaultRoles,
   });
+
+  return {
+    deletedId: id,
+    clearedDefaultForRoles: defaultRoles,
+    fallbackPersonaId: getDefaultPersonaIdForRole(),
+  };
 }
 
 export function getAIPersona(id: string | null | undefined): AIPersona | undefined {
@@ -572,23 +827,30 @@ export function getAIPersona(id: string | null | undefined): AIPersona | undefin
   return registry.personas.get(id);
 }
 
-/** 判断某角色是否有权使用该 Persona */
-export function isPersonaVisibleToRole(persona: Pick<AIPersona, 'visibility'>, callerRole?: string): boolean {
+/** 判断某角色是否有权使用该 Persona（含启用态检查） */
+export function isPersonaVisibleToRole(
+  persona: Pick<AIPersona, 'visibility' | 'enabled'>,
+  callerRole?: string,
+  options: { includeDisabled?: boolean } = {},
+): boolean {
+  if (!options.includeDisabled && persona.enabled === false) return false;
   if (persona.visibility === undefined) return true;
   if (!callerRole) return false;
   return persona.visibility.includes(callerRole as AIPersonaRole);
 }
 
-/** 列出 Persona：传入 role 时按 visibility 过滤；不传则返回全量 */
-export function listAIPersonas(callerRole?: string): AIPersona[] {
+/** 列出 Persona：传入 role 时按启用状态 + visibility 过滤；不传则按 includeDisabled 控制 */
+export function listAIPersonas(callerRole?: string, options: { includeDisabled?: boolean } = {}): AIPersona[] {
   const all = Array.from(registry.personas.values());
-  if (!callerRole) return all;
-  return all.filter((p) => isPersonaVisibleToRole(p, callerRole));
+  if (!callerRole) {
+    return options.includeDisabled ? all : all.filter((p) => p.enabled !== false);
+  }
+  return all.filter((p) => isPersonaVisibleToRole(p, callerRole, options));
 }
 
-/** 解析某角色的默认 Persona ID（优先匹配 defaultForRole，回退 plain_assistant 或首个可见项） */
+/** 解析某角色的默认 Persona ID（优先匹配启用的 defaultForRole，回退 plain_assistant 或首个启用且可见项） */
 export function getDefaultPersonaIdForRole(callerRole?: string): string | null {
-  const visible = listAIPersonas(callerRole);
+  const visible = listAIPersonas(callerRole, { includeDisabled: false });
   if (visible.length === 0) return null;
   if (callerRole) {
     const matched = visible.find(
@@ -608,6 +870,9 @@ export function unregisterAIPersona(id: string, registeredBy?: string): void {
   registry.personas.delete(id);
   if (boundDb && hasAiPersonasTable(boundDb)) {
     boundDb.prepare("DELETE FROM ai_personas WHERE id = ? AND source = 'plugin'").run(id);
+    if (hasAiPersonaGovernanceTable(boundDb)) {
+      boundDb.prepare('DELETE FROM ai_persona_governance WHERE persona_id = ?').run(id);
+    }
   }
 }
 

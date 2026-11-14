@@ -23,6 +23,7 @@ import { isValidAcademicYear, getCurrentAcademicYear } from '../utils/academic-y
 import { isBuiltinThemeId } from '../../packages/core/themes/theme-spec.js';
 import { ThemeService } from '../services/theme-service.js';
 import { pluginApiGatewayMiddleware } from './plugin-api-gateway.js';
+import { clearPersonaProviderReferences } from '../ai-persona-registry.js';
 import { isSafeExternalUrl, fetchWithSafeRedirects } from '../utils/url-safety.js';
 import {
   AIFetchTimeoutError,
@@ -1862,6 +1863,9 @@ export function registerPluginsRoutes(ctx: ServerContext) {
           'UPDATE ai_providers SET name = ?, api_url = ?, api_key = ?, model_name = ?, is_shared = ?, updated_at = ? WHERE id = ?',
         )
         .run(name.trim(), urlCheck.normalizedUrl!, finalKey, model_name.trim(), nextShared, now, req.params.id);
+      if (!nextShared) {
+        clearPersonaProviderReferences(req.params.id);
+      }
       res.json({ success: true });
     } catch (e: any) {
       sendSafeError(res, e);
@@ -1894,6 +1898,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
       }
 
       kernelContainer.db.prepare('DELETE FROM ai_providers WHERE id = ?').run(req.params.id);
+      clearPersonaProviderReferences(req.params.id);
       res.json({ success: true });
     } catch (e: any) {
       sendSafeError(res, e);

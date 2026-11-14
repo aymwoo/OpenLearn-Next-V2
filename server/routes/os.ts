@@ -12,15 +12,46 @@ import {
   deleteAdminPersona,
   getAIPersona,
   getDefaultPersonaIdForRole,
+  getPersonaReferences,
   isPersonaVisibleToRole,
   listAIPersonas,
   upsertAdminPersona,
+  type AIPersona,
 } from '../ai-persona-registry.js';
 import { sendSafeError } from '../utils/error-handler.js';
 import { getFileStorageService } from '../services/file-storage/index.js';
 import { resolveAccessibleAiProvider } from '../services/ai-provider-resolver.js';
 import type { Request } from 'express';
 import type { ServerContext, StoredAIProvider, AgentChatAttachment, AgentChatRequest } from '../context.js';
+
+function getSharedProviderInfoMap(): Map<string, { name: string; modelName: string }> {
+  const map = new Map<string, { name: string; modelName: string }>();
+  try {
+    const rows = kernelContainer.db
+      .prepare('SELECT id, name, model_name FROM ai_providers WHERE is_shared = 1')
+      .all() as Array<{ id: string; name: string; model_name: string }>;
+    for (const row of rows) {
+      map.set(row.id, { name: row.name, modelName: row.model_name });
+    }
+  } catch {
+    /* db table may be absent in minimal unit tests */
+  }
+  return map;
+}
+
+function decoratePersonaForResponse(
+  persona: AIPersona,
+  sharedProviders: Map<string, { name: string; modelName: string }>,
+  includeAdminMetadata: boolean,
+) {
+  const bound = persona.preferredProviderId ? sharedProviders.get(persona.preferredProviderId) : undefined;
+  return {
+    ...persona,
+    ...(persona.preferredProviderId && !bound ? { preferredProviderMissing: true } : {}),
+    ...(bound ? { preferredProviderName: bound.name, preferredProviderModel: bound.modelName } : {}),
+    ...(includeAdminMetadata ? { references: getPersonaReferences(persona.id) } : {}),
+  };
+}
 
 export function registerOsRoutes(ctx: ServerContext) {
   const { app, runOpenAIAgentChat, activityRegistry, aiLimiter } = ctx;
@@ -297,17 +328,37 @@ export function registerOsRoutes(ctx: ServerContext) {
   });
 
   // OS Agent interaction
-  // P2: ai.agent.persona —— 角色模板列表（按当前用户角色过滤 visibility；管理员传 scope=all 查看全量）
+  // P2: ai.agent.persona —— 角色模板列表（按当前用户角色过滤 visibility 与启用态；管理员传 scope=all 查看全量）
   app.get('/api/agent/personas', requireScopedAuth('authenticated'), (req, res) => {
     try {
       const session = (req as any).session || (getCookieToken(req) ? getValidSession(getCookieToken(req)!) : null);
       const callerRole = session?.role as string | undefined;
       const includeAll = req.query.scope === 'all' && callerRole === 'administrator';
-      const personas = includeAll ? listAIPersonas() : listAIPersonas(callerRole);
+      const rawPersonas = includeAll
+        ? listAIPersonas(undefined, { includeDisabled: true })
+        : listAIPersonas(callerRole, { includeDisabled: false });
+      const sharedProviders = getSharedProviderInfoMap();
+      const personas = rawPersonas.map((p) => decoratePersonaForResponse(p, sharedProviders, includeAll));
       res.json({
         success: true,
         personas,
         defaultPersonaId: getDefaultPersonaIdForRole(callerRole),
+      });
+    } catch (e: any) {
+      sendSafeError(res, e, 500);
+    }
+  });
+
+  app.get('/api/agent/personas/:id/references', requireScopedAuth('admin'), (req, res) => {
+    try {
+      const persona = getAIPersona(req.params.id);
+      if (!persona) {
+        return res.status(404).json({ success: false, error: 'PERSONA_NOT_FOUND', message: 'Persona not found' });
+      }
+      res.json({
+        success: true,
+        personaId: persona.id,
+        references: getPersonaReferences(persona.id),
       });
     } catch (e: any) {
       sendSafeError(res, e, 500);
@@ -320,10 +371,18 @@ export function registerOsRoutes(ctx: ServerContext) {
         isUpdate: false,
         actorId: getActorId(req),
       });
-      res.status(201).json({ success: true, persona });
+      res.status(201).json({
+        success: true,
+        persona: decoratePersonaForResponse(persona, getSharedProviderInfoMap(), true),
+      });
     } catch (e: any) {
       if (e instanceof AdminPersonaError) {
-        return res.status(e.status).json({ success: false, error: e.code, message: e.message });
+        return res.status(e.status).json({
+          success: false,
+          error: e.code,
+          message: e.message,
+          ...(e.details ?? {}),
+        });
       }
       sendSafeError(res, e, 500);
     }
@@ -331,14 +390,23 @@ export function registerOsRoutes(ctx: ServerContext) {
 
   app.patch('/api/agent/personas/:id', requireScopedAuth('admin'), (req, res) => {
     try {
+      const force = req.query.force === 'true' || req.body?.force === true;
       const persona = upsertAdminPersona(
         { ...(req.body ?? {}), id: req.params.id },
-        { isUpdate: true, actorId: getActorId(req) },
+        { isUpdate: true, actorId: getActorId(req), force },
       );
-      res.json({ success: true, persona });
+      res.json({
+        success: true,
+        persona: decoratePersonaForResponse(persona, getSharedProviderInfoMap(), true),
+      });
     } catch (e: any) {
       if (e instanceof AdminPersonaError) {
-        return res.status(e.status).json({ success: false, error: e.code, message: e.message });
+        return res.status(e.status).json({
+          success: false,
+          error: e.code,
+          message: e.message,
+          ...(e.details ?? {}),
+        });
       }
       sendSafeError(res, e, 500);
     }
@@ -346,11 +414,17 @@ export function registerOsRoutes(ctx: ServerContext) {
 
   app.delete('/api/agent/personas/:id', requireScopedAuth('admin'), (req, res) => {
     try {
-      deleteAdminPersona(req.params.id, getActorId(req));
-      res.json({ success: true });
+      const force = req.query.force === 'true' || req.body?.force === true;
+      const result = deleteAdminPersona(req.params.id, getActorId(req), { force });
+      res.json({ success: true, ...result });
     } catch (e: any) {
       if (e instanceof AdminPersonaError) {
-        return res.status(e.status).json({ success: false, error: e.code, message: e.message });
+        return res.status(e.status).json({
+          success: false,
+          error: e.code,
+          message: e.message,
+          ...(e.details ?? {}),
+        });
       }
       sendSafeError(res, e, 500);
     }
@@ -400,16 +474,14 @@ export function registerOsRoutes(ctx: ServerContext) {
         typeof (req.body as AgentChatRequest)?.personaId === 'string'
           ? (req.body as AgentChatRequest).personaId!.trim()
           : '';
+      let effectivePersonaId: string | null = requestedPersonaId || getDefaultPersonaIdForRole(callerRole);
+      let personaFallback:
+        | { requestedPersonaId: string; fallbackPersonaId: string | null; reason: 'disabled' | 'deleted_or_missing' }
+        | undefined;
+
       if (requestedPersonaId) {
         const persona = getAIPersona(requestedPersonaId);
-        if (!persona) {
-          return res.status(404).json({
-            success: false,
-            error: 'PERSONA_NOT_FOUND',
-            message: lang === 'zh' ? '指定的 AI 角色模板不存在。' : 'Requested AI persona was not found.',
-          });
-        }
-        if (!isPersonaVisibleToRole(persona, callerRole)) {
+        if (persona && !isPersonaVisibleToRole(persona, callerRole, { includeDisabled: true })) {
           return res.status(403).json({
             success: false,
             error: 'PERSONA_FORBIDDEN',
@@ -418,6 +490,15 @@ export function registerOsRoutes(ctx: ServerContext) {
                 ? '当前角色无权使用该 AI 角色模板。'
                 : 'Current role is not allowed to use this AI persona.',
           });
+        }
+        if (!persona || persona.enabled === false) {
+          const fallbackId = getDefaultPersonaIdForRole(callerRole);
+          effectivePersonaId = fallbackId;
+          personaFallback = {
+            requestedPersonaId,
+            fallbackPersonaId: fallbackId,
+            reason: !persona ? 'deleted_or_missing' : 'disabled',
+          };
         }
       }
 
@@ -434,14 +515,32 @@ export function registerOsRoutes(ctx: ServerContext) {
 
       // Resolve which AI backend handles this request:
       //   1. An explicit provider chosen in the UI (providerId, checked for ownership / shared)
-      //   2. Fallback to current user's accessible active provider (private > shared)
+      //   2. Active persona's preferredProviderId (only if still is_shared = 1), else user's default accessible provider
+      const explicitProviderId = typeof providerId === 'string' && providerId.trim() ? providerId.trim() : undefined;
+      const effectivePersona = effectivePersonaId ? getAIPersona(effectivePersonaId) : undefined;
       let provider: StoredAIProvider;
       try {
-        provider = resolveAccessibleAiProvider(kernelContainer.db, {
-          providerId,
-          userId,
-          lang,
-        });
+        if (explicitProviderId) {
+          provider = resolveAccessibleAiProvider(kernelContainer.db, {
+            providerId: explicitProviderId,
+            userId,
+            lang,
+          });
+        } else if (effectivePersona?.preferredProviderId) {
+          const boundShared = kernelContainer.db
+            .prepare('SELECT id FROM ai_providers WHERE id = ? AND is_shared = 1')
+            .get(effectivePersona.preferredProviderId) as { id?: string } | undefined;
+          provider = resolveAccessibleAiProvider(kernelContainer.db, {
+            providerId: boundShared?.id,
+            userId,
+            lang,
+          });
+        } else {
+          provider = resolveAccessibleAiProvider(kernelContainer.db, {
+            userId,
+            lang,
+          });
+        }
       } catch (err: unknown) {
         const errObj = err as { status?: number; code?: string; message?: string };
         return res.status(errObj.status || 400).json({
@@ -460,7 +559,7 @@ export function registerOsRoutes(ctx: ServerContext) {
         callerRole,
         actorId,
         history,
-        personaId: (req.body as AgentChatRequest)?.personaId ?? null,
+        personaId: effectivePersonaId,
       });
 
       // Persist this exchange so the kernel assistant remembers it next time
@@ -478,6 +577,8 @@ export function registerOsRoutes(ctx: ServerContext) {
         success: true,
         ...result,
         providerUsed: { id: provider.id, name: provider.name, model_name: provider.model_name },
+        personaUsedId: effectivePersonaId,
+        ...(personaFallback ? { personaFallback } : {}),
       });
     } catch (err: unknown) {
       console.error(err);

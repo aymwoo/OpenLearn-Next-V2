@@ -554,7 +554,7 @@ export function AdminPanel({
               }`}
             >
               <Server size={14} />
-              <span>{lang === 'zh' ? 'AI 模型提供商' : 'AI Providers'}</span>
+              <span>{lang === 'zh' ? 'AI 配置' : 'AI Config'}</span>
             </button>
             <button
               onClick={() => setActiveAdminTab('sqlite')}

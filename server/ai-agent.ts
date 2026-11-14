@@ -486,14 +486,15 @@ export const runGeminiAgentChat = async (request: AgentChatRequest) => {
   const { lang = 'zh' } = request;
   throw new Error(
     lang === 'zh'
-      ? '未检测到可用的 AI 提供商。请前往「系统管理 -> AI 提供商管理」添加并配置大模型服务。'
-      : 'No active AI Provider configured. Please add and configure an AI Provider in "System Management -> AI Provider Management".',
+      ? '未检测到可用的 AI 提供商。请前往「系统管理 -> AI 配置」添加并配置大模型服务。'
+      : 'No active AI Provider configured. Please add and configure an AI Provider in "System Management -> AI Config".',
   );
 };
 
 export const runOpenAIAgentChat = async (provider: StoredAIProvider, request: AgentChatRequest) => {
   const { message, lang = 'zh', currentLessonId, attachments, callerRole, actorId, history } = request;
-  const persona = getAIPersona(request.personaId);
+  const rawPersona = getAIPersona(request.personaId);
+  const persona = rawPersona && rawPersona.enabled !== false ? rawPersona : undefined;
   const pluginContextSlices = callerRole === 'student' ? [] : collectAIContextSlices(currentLessonId ?? null);
   const systemInstruction = buildAgentSystemInstruction(
     lang,

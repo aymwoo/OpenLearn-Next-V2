@@ -147,7 +147,7 @@ export class AIService implements IAIService {
       // 发给上游后得到一个难以定位的 401。
       throw new Error(
         'AI Provider API Key 解密失败：ENCRYPTION_KEY 与加密时不一致（常见于 PM2 将 ENCRYPTION_KEY 置空或密钥被轮换）。' +
-          '请恢复原 ENCRYPTION_KEY，或前往「系统管理 -> AI 提供商管理」重新保存 API Key。',
+          '请恢复原 ENCRYPTION_KEY，或前往「系统管理 -> AI 配置」重新保存 API Key。',
       );
     }
 
