@@ -85,6 +85,7 @@ import { createCorsMiddleware, createSocketIoCors } from './server/middleware/co
 import { registerHealthRoutes } from './server/routes/health.js';
 import { assertRouteDataScopes } from './server/security/route-scope.js';
 import { ROUTE_SCOPE_WHITELIST } from './server/security/route-scope-whitelist.js';
+import { buildHostHelmetOptions } from './server/security/host-helmet.js';
 import { getNetworkIps, openBrowser, formatTerminalHyperlink } from './server/utils/host-network.js';
 import { getUploadsDir, getPluginsDir, getStorageDir } from './server/utils/paths.js';
 import { mountLargeBodyParsers } from './server/middleware/body-limits.js';
@@ -193,87 +194,22 @@ async function startServer() {
   // SEC-NET-02: HTTP 安全头（helmet）— CSP 与自适应 HSTS（C-1）
   const isProduction = process.env.NODE_ENV === 'production';
 
-  // P0-1: 生产环境未显式配置 ALLOWED_FRAME_ORIGINS 时，仅允许同源嵌入
-  // （"'self'" 已在下方的 frameAncestors / frameSrc 数组首位）。早期实现无条件回退到
-  // localhost:*，会让任何能起本地 Web 服务的进程（被攻陷 sidecar、恶意插件起的静态
-  // 服务器、共租户邻居）把 LMS 嵌进 click-jacking 页面。开发环境保留 localhost 便于调试。
-  const frameAllowedOrigins = process.env.ALLOWED_FRAME_ORIGINS
-    ? process.env.ALLOWED_FRAME_ORIGINS.split(',')
-        .map((s) => s.trim())
-        .filter(Boolean)
-    : isProduction
-      ? []
-      : ['http://localhost:*', 'http://127.0.0.1:*'];
-
-  const ltiAllowedOrigins = process.env.LTI_ALLOWED_LMS_ORIGINS
-    ? process.env.LTI_ALLOWED_LMS_ORIGINS.split(',')
-        .map((s) => s.trim())
-        .filter(Boolean)
-    : [];
-
-  const enableHsts = process.env.ENABLE_HSTS === 'true' || (isProduction && process.env.FORCE_HTTPS === 'true');
-
+  // P0-1 & LAN HTTP: 统一经 buildHostHelmetOptions 生成策略：
+  // 生产未设 ALLOWED_FRAME_ORIGINS 仅同源嵌入；未启用 ENABLE_HSTS/FORCE_HTTPS 时显式禁用
+  // `upgrade-insecure-requests`，避免机房局域网 HTTP 部署被 Chrome 强升 HTTPS 导致白屏。
   app.use(
-    helmet({
-      // 允许在 AI Studio 及外部受信任环境 iframe 中嵌入
-      xFrameOptions: { action: 'sameorigin' },
-      contentSecurityPolicy: {
-        directives: {
-          defaultSrc: ["'self'"],
-          // blob: — 浏览器 Worker 与内联单测加载器仍可能使用 Blob URL。
-          // 远程插件前端不再在父页面 import()，而是进 /plugin-sandbox/frame
-          // （sandbox=allow-scripts、不透明源、postMessage 桥）。
-          //
-          // SEC-NET-02: 生产 scriptSrc 不再含 'unsafe-inline' —— SPA 构建产物无内联
-          // 脚本；第三方课件 HTML 由独立路由直出并用自有宽松 CSP 覆盖
-          // （setCoursewareDocumentCsp，见 server/routes/shared.ts），不再继承全局头。
-          // 手写 HTML 课件已改经 POST /api/courseware/inline 落库走 /runtime 加载
-          // （srcdoc 会继承父页面 CSP，是此前无法收紧的根因）。
-          scriptSrc: isProduction ? ["'self'", 'blob:'] : ["'self'", "'unsafe-inline'", "'unsafe-eval'", 'blob:'],
-          // G-4a：收紧 script-src-attr。'unsafe-inline' 在此仅覆盖 **HTML 属性里的
-          // 内联事件处理器**（onclick="..." / javascript: URL），不覆盖 <script> 块
-          //（那是 script-src 管）—— 所以它对 SPA 构建产物毫无作用，却能让任何被
-          // 注入的 HTML 属性直接执行代码。
-          //
-          // 收紧前的前置实测（2026-10-07，全部为「实际执行路径」而非源码猜测）：
-          //   ① 全新 `pnpm build` 后扫描 dist/：内联 handler 属性 **0 处**、
-          //      `javascript:` 协议 **0 处**（唯一命中在 vendor-react 的
-          //      "React has blocked a javascript: URL" 报错文案里，不是真实用法）
-          //   ② 源码 dangerouslySetInnerHTML：**0 处** —— 1788 个 JSX on* 属性
-          //      全部经 React 合成事件绑定到 addEventListener，**不进 HTML 属性**
-          //   ③ 三条服务端直出 HTML 的路径（routes/courseware.ts:236、
-          //      routes/resources.ts:28、routes/bridge.ts:265）**各自调用
-          //      setCoursewareDocumentCsp() 覆盖本头**，用的是宽松的
-          //      COURSEWARE_DOCUMENT_CSP（含 script-src-attr 'unsafe-inline'）
-          //      —— 第三方课件 HTML 不受本次收紧影响
-          //   ④ index.html 无任何内联 <script> 内容，只有一个 type="module" src
-          //
-          // 结论：SPA 侧可以安全收紧为 'none'。
-          //
-          // **不影响 script-src 的开发态宽松**：非生产环境 scriptSrc 仍含
-          // 'unsafe-eval'（Vite HMR 需要），那只影响 <script> 块，与本指令正交。
-          scriptSrcAttr: ["'none'"],
-          styleSrc: ["'self'", "'unsafe-inline'"],
-          styleSrcAttr: ["'unsafe-inline'"],
-          imgSrc: ["'self'", 'data:', 'blob:'],
-          fontSrc: ["'self'", 'data:'],
-          // SEC-NET-02: 去掉 'http: https:'（等于无出站限制，前端可外传任意数据）。
-          // 前端所有 API 调用均走同源相对路径，WebSocket 同源（ws:/wss: 兜底旧浏览器
-          // 对 'self' 覆盖 ws 协议的实现差异）。
-          connectSrc: ["'self'", 'ws:', 'wss:'],
-          frameSrc: ["'self'", 'blob:', 'data:', ...frameAllowedOrigins, ...ltiAllowedOrigins],
-          frameAncestors: ["'self'", ...frameAllowedOrigins, ...ltiAllowedOrigins],
-          objectSrc: ["'none'"],
-          baseUri: ["'self'"],
-          ...(enableHsts ? { upgradeInsecureRequests: [] } : {}),
+    helmet(
+      buildHostHelmetOptions(
+        {
+          NODE_ENV: process.env.NODE_ENV,
+          ALLOWED_FRAME_ORIGINS: process.env.ALLOWED_FRAME_ORIGINS,
+          LTI_ALLOWED_LMS_ORIGINS: process.env.LTI_ALLOWED_LMS_ORIGINS,
+          ENABLE_HSTS: process.env.ENABLE_HSTS,
+          FORCE_HTTPS: process.env.FORCE_HTTPS,
         },
-      },
-      crossOriginOpenerPolicy: false,
-      crossOriginEmbedderPolicy: false,
-      crossOriginResourcePolicy: { policy: 'cross-origin' }, // 允许沙箱 iframe（opaque origin）加载静态资源
-      originAgentCluster: false,
-      strictTransportSecurity: enableHsts ? { maxAge: 31536000, includeSubDomains: true, preload: true } : false, // 针对 HTTP / 局域网部署不锁死 HSTS，避免无证书机房被浏览器强制 HTTPS
-    }),
+        isProduction,
+      ),
+    ),
   );
 
   // 登录按账号分桶（含学号），写请求按 trust proxy 解析后的客户端地址分桶。

@@ -1,4 +1,5 @@
 import React, { useState, useId } from 'react';
+import { copyToClipboard } from '../utils/clipboard';
 import {
   X,
   Palette,
@@ -210,7 +211,7 @@ export function ThemeDesignerModal({ isOpen, onClose, lang = 'zh' }: ThemeDesign
   };
 
   const handleCopyExportJson = () => {
-    navigator.clipboard.writeText(jsonText);
+    void copyToClipboard(jsonText);
     setCopyStatus(true);
     setTimeout(() => setCopyStatus(false), 2000);
   };

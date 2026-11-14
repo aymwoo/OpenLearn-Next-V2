@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { copyToClipboard } from '../utils/clipboard';
 import {
   Users,
   Shield,
@@ -169,9 +170,7 @@ export function AdminPanel({
   };
 
   const handleCopyCommand = (text: string, key: string) => {
-    if (navigator?.clipboard?.writeText) {
-      navigator.clipboard.writeText(text);
-    }
+    void copyToClipboard(text);
     setCopiedKey(key);
     setTimeout(() => setCopiedKey(null), 2000);
   };

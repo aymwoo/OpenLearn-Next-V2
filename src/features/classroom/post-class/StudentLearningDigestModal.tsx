@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { X, Award, Star, Copy, Check, Share2, Sparkles, BookOpen, MessageSquare, UserCheck } from 'lucide-react';
 import type { StudentPersonalDigest } from './types';
+import { copyToClipboard } from '../../../utils/clipboard';
 
 export interface StudentLearningDigestModalProps {
   digest: StudentPersonalDigest | null;
@@ -15,24 +16,15 @@ export function StudentLearningDigestModal({ digest, onClose, addToast }: Studen
   if (!digest) return null;
 
   const handleCopy = () => {
-    if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
-      navigator.clipboard
-        .writeText(reportText)
-        .then(() => {
-          setCopied(true);
-          addToast('✓ 已复制到剪贴板', '家长同步报告文案已复制，可直接发送微信群或家长私信。', 'success');
-          setTimeout(() => setCopied(false), 2000);
-        })
-        .catch(() => {
-          setCopied(true);
-          addToast('✓ 内容已就绪', '请直接在文本框中全选复制。', 'info');
-          setTimeout(() => setCopied(false), 2000);
-        });
-    } else {
+    void copyToClipboard(reportText).then((ok) => {
       setCopied(true);
-      addToast('✓ 已复制到剪贴板', '家长同步报告文案已复制。', 'success');
+      if (ok) {
+        addToast('✓ 已复制到剪贴板', '家长同步报告文案已复制，可直接发送微信群或家长私信。', 'success');
+      } else {
+        addToast('✓ 内容已就绪', '请直接在文本框中全选复制。', 'info');
+      }
       setTimeout(() => setCopied(false), 2000);
-    }
+    });
   };
 
   return (

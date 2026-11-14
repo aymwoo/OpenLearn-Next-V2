@@ -15,6 +15,7 @@ import { EventBusPort, PlatformEvent } from '../event-bus/index.js';
 import { LessonStateMachine, InvalidLessonStateTransitionError } from './state-machine.js';
 import { LessonStatus } from './types.js';
 import { StageGuardPipeline, defaultStageGuardPipeline } from './stage-guard-pipeline.js';
+import { safeRandomUUID } from '../security/safe-uuid.js';
 
 export interface LessonEngineOptions {
   eventBus?: EventBusPort;
@@ -210,7 +211,7 @@ export class LessonRuntime {
 
     const state = this.timeline.getState();
     const snapshot: LessonSnapshot = {
-      id: `snap_${globalThis.crypto.randomUUID()}`,
+      id: `snap_${safeRandomUUID()}`,
       lessonId: this.currentLesson.id,
       timestamp: Date.now(),
       lessonState: JSON.parse(JSON.stringify(this.currentLesson)),
@@ -320,7 +321,7 @@ export class LessonRuntime {
 
     const cloned: Flow = {
       ...JSON.parse(JSON.stringify(target)),
-      id: `flw_${globalThis.crypto.randomUUID()}`,
+      id: `flw_${safeRandomUUID()}`,
       name: newName || `${target.name} (副本)`,
       version: 1,
       createdAt: Date.now(),
@@ -369,7 +370,7 @@ export class LessonRuntime {
     const source = flow.stages[idx];
     const cloned: Stage = {
       ...JSON.parse(JSON.stringify(source)),
-      id: `stg_${globalThis.crypto.randomUUID()}`,
+      id: `stg_${safeRandomUUID()}`,
       title: `${source.title} (副本)`,
       completionStatus: 'pending',
     };
@@ -410,7 +411,7 @@ export class LessonRuntime {
 
   private async publishEvent(eventType: string, payload: unknown): Promise<void> {
     const event: PlatformEvent = {
-      id: globalThis.crypto.randomUUID(),
+      id: safeRandomUUID(),
       type: eventType,
       source: 'lesson.runtime',
       payload,

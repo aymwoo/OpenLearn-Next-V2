@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { copyToClipboard } from '../../utils/clipboard';
 import {
   Play,
   Users,
@@ -184,7 +185,7 @@ export function PreClassReadyView({
   // 复制密码
   const handleCopyPasscode = () => {
     if (!passcode) return;
-    navigator.clipboard.writeText(passcode);
+    void copyToClipboard(passcode);
     setIsCopied(true);
     setTimeout(() => setIsCopied(false), 2000);
     addToast(
