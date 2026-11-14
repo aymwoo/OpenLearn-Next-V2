@@ -23,8 +23,13 @@ import { isValidAcademicYear, getCurrentAcademicYear } from '../utils/academic-y
 import { isBuiltinThemeId } from '../../packages/core/themes/theme-spec.js';
 import { ThemeService } from '../services/theme-service.js';
 import { pluginApiGatewayMiddleware } from './plugin-api-gateway.js';
-import { isSafeExternalUrl, fetchWithSafeRedirects, type SafeFetchOptions } from '../utils/url-safety.js';
-import { AIFetchTimeoutError } from '../../packages/core/ai/utils/fetch-with-retry.js';
+import { isSafeExternalUrl, fetchWithSafeRedirects } from '../utils/url-safety.js';
+import {
+  AIFetchTimeoutError,
+  AiProviderBlockedError,
+  fetchAiProviderResponse,
+} from '../../packages/core/ai/utils/fetch-with-retry.js';
+import { buildOpenAIChatUrl, validateAiProviderUrl } from '../../packages/core/ai/utils/redirect-guard.js';
 import {
   COMMUNITY_REGISTRY_ENV,
   fetchCommunityRegistry,
@@ -1768,6 +1773,11 @@ export function registerPluginsRoutes(ctx: ServerContext) {
         return res.status(403).json({ error: 'Only administrators can create platform shared providers' });
       }
 
+      const urlCheck = validateAiProviderUrl(api_url);
+      if (!urlCheck.valid) {
+        return res.status(400).json({ error: urlCheck.reason, code: urlCheck.code });
+      }
+
       const id = 'prov_' + Date.now();
       const now = Date.now();
       // SEC-DATA-01: 加密存储 API Key
@@ -1779,7 +1789,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
         .run(
           id,
           name.trim(),
-          api_url.trim(),
+          urlCheck.normalizedUrl!,
           encryptedKey,
           model_name.trim(),
           currentUserId,
@@ -1834,6 +1844,11 @@ export function registerPluginsRoutes(ctx: ServerContext) {
         }
       }
 
+      const urlCheck = validateAiProviderUrl(api_url);
+      if (!urlCheck.valid) {
+        return res.status(400).json({ error: urlCheck.reason, code: urlCheck.code });
+      }
+
       const now = Date.now();
       // SEC-DATA-01: 对 **** 的掩码密码，保留原值；纯明文加密存储
       let finalKey: string;
@@ -1846,7 +1861,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
         .prepare(
           'UPDATE ai_providers SET name = ?, api_url = ?, api_key = ?, model_name = ?, is_shared = ?, updated_at = ? WHERE id = ?',
         )
-        .run(name.trim(), api_url.trim(), finalKey, model_name.trim(), nextShared, now, req.params.id);
+        .run(name.trim(), urlCheck.normalizedUrl!, finalKey, model_name.trim(), nextShared, now, req.params.id);
       res.json({ success: true });
     } catch (e: any) {
       sendSafeError(res, e);
@@ -2059,41 +2074,46 @@ export function registerPluginsRoutes(ctx: ServerContext) {
           api_key = providedKey.includes(':') ? decryptApiKey(providedKey) : providedKey;
         }
 
-        let cleanUrl = api_url.trim();
-        if (!cleanUrl.endsWith('/chat/completions')) {
-          cleanUrl = cleanUrl.endsWith('/') ? cleanUrl + 'chat/completions' : cleanUrl + '/chat/completions';
+        const urlCheck = validateAiProviderUrl(api_url);
+        if (!urlCheck.valid) {
+          return res.status(400).json({
+            success: false,
+            stage: 'url_validation',
+            code: urlCheck.code,
+            error: `Blocked or invalid AI provider URL: ${urlCheck.reason}`,
+          });
         }
 
-        const urlSafety = isSafeExternalUrl(cleanUrl);
-        if (!urlSafety.safe) {
-          return res.status(400).json({ error: `Blocked unsafe AI provider URL: ${urlSafety.reason}` });
+        const cleanUrl = buildOpenAIChatUrl(urlCheck.normalizedUrl!);
+        const headers: Record<string, string> = {
+          'Content-Type': 'application/json',
+        };
+        if (api_key && api_key.trim()) {
+          headers.Authorization = `Bearer ${api_key.trim()}`;
         }
 
         let response: Response;
         try {
-          // G-4c：fetchWithRetry 内部用裸 fetch（默认 redirect:'follow'），对
-          // 已过字面量校验的 URL 同样不做 DNS 校验与重定向复检 —— 同一类 SSRF。
-          // 这里改用 fetchWithSafeRedirects；该端点仅管理员可访问，风险面较小，
-          // 但修法一致，避免留一个「管理员可探测内网」的通道。
-          response = await fetchWithSafeRedirects(cleanUrl, {
+          // 与 AI 对话/Gateway/批改/课表共用 assessAiProviderHop：
+          // 允许显式配置的公网、内网私网与本机回环首跳，同时阻止链路本地、云元数据及跨主机跳往私网。
+          response = await fetchAiProviderResponse(cleanUrl, {
             method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${api_key || ''}`,
-            },
+            headers,
             body: JSON.stringify({
               model: model_name,
               messages: [{ role: 'user', content: 'Say connected' }],
               max_tokens: 5,
             }),
             timeoutMs: 10_000,
-          } as SafeFetchOptions);
+          });
         } catch (err: any) {
-          // 超时判定不能只认 AIFetchTimeoutError —— G-4c 换成 fetchWithSafeRedirects 后，
-          // 超时由 AbortSignal.timeout 产生，错误形态是 DOMException：
-          //   · name === 'TimeoutError'（AbortSignal.timeout）
-          //   · name === 'AbortError'（测试注入的形态 / 手动 abort）
-          // 按错误形态判定比按错误类判定更稳，也保留了原有 504 契约。
+          if (err instanceof AiProviderBlockedError) {
+            return res.status(400).json({
+              success: false,
+              stage: 'redirect_guard',
+              error: err.message,
+            });
+          }
           const isTimeout =
             err instanceof AIFetchTimeoutError ||
             err?.name === 'TimeoutError' ||
@@ -2102,21 +2122,66 @@ export function registerPluginsRoutes(ctx: ServerContext) {
           if (isTimeout) {
             return res.status(504).json({
               success: false,
+              stage: 'network',
               error: 'AI Provider request timed out after 10000ms. Please verify the URL or provider availability.',
             });
           }
-          throw err;
+          const causeCode = err?.cause?.code || err?.code;
+          const detail = causeCode
+            ? `${causeCode}: ${err?.message || 'Connection failed'}`
+            : err?.message || 'Connection failed';
+          return res.status(502).json({
+            success: false,
+            stage: 'network',
+            error: `Network connection failed (${detail}). Please verify the host, port, and service status.`,
+          });
         }
 
         const responseText = await response.text();
-        if (response.ok) {
-          res.json({ success: true, message: 'Successfully connected and received response.' });
-        } else {
-          res.status(response.status).json({
+        if (!response.ok) {
+          const snippet = responseText.slice(0, 200);
+          let detail: string;
+          if (response.status === 401 || response.status === 403) {
+            detail = `Endpoint reachable, but authentication failed (HTTP ${response.status}). Please verify the API Key: ${snippet}`;
+          } else if (response.status === 404) {
+            detail = `Endpoint reachable, but chat completions path or model "${model_name}" was not found (HTTP 404). Please verify the API base path (e.g. /v1) and model identifier: ${snippet}`;
+          } else {
+            detail = `Endpoint reachable, but chat completion check responded with status ${response.status}: ${snippet}`;
+          }
+          return res.status(response.status).json({
             success: false,
-            error: `API responded with status ${response.status}: ${responseText.slice(0, 200)}`,
+            stage: 'chat_completion',
+            status: response.status,
+            error: detail,
           });
         }
+
+        const trimmedBody = responseText.trim();
+        if (/^<(?:!doctype|html)\b/i.test(trimmedBody)) {
+          return res.status(422).json({
+            success: false,
+            stage: 'response_format',
+            error:
+              'Endpoint reachable, but returned HTML instead of an OpenAI JSON response. Please verify the API base path (e.g. /v1).',
+          });
+        }
+
+        try {
+          const parsed = JSON.parse(trimmedBody) as { error?: { message?: string } | string };
+          if (parsed && typeof parsed === 'object' && parsed.error) {
+            const apiErr =
+              typeof parsed.error === 'string' ? parsed.error : parsed.error.message || JSON.stringify(parsed.error);
+            return res.status(422).json({
+              success: false,
+              stage: 'response_format',
+              error: `Endpoint reachable, but API returned an error payload: ${apiErr.slice(0, 200)}`,
+            });
+          }
+        } catch {
+          // 非 JSON 且非 HTML 的 200 响应（兼容轻量探活或自定义代理），不误判为失败
+        }
+
+        res.json({ success: true, message: 'Successfully connected and received response.' });
       } catch (e: any) {
         sendSafeError(res, e, 500, 'Connection failed');
       }

@@ -9,8 +9,8 @@ import { kernelContainer } from '../../packages/core/kernel/index.js';
 import { randomId } from '../utils/id.js';
 import { deriveAcademicYear, deriveAcademicYearFromSemesterName } from '../utils/academic-year.js';
 import { resolveAccessibleAiProvider } from './ai-provider-resolver.js';
-import { isSafeExternalUrl } from '../utils/url-safety.js';
 import { fetchWithRetry } from '../../packages/core/ai/utils/fetch-with-retry.js';
+import { buildOpenAIChatUrl, validateAiProviderUrl } from '../../packages/core/ai/utils/redirect-guard.js';
 import type { StoredAIProvider } from '../context.js';
 
 export interface AttendanceSummaryItem {
@@ -717,14 +717,11 @@ ${examsText}
       userId,
     });
 
-    let chatUrl = provider.api_url.trim();
-    if (!chatUrl.endsWith('/chat/completions')) {
-      chatUrl = chatUrl.endsWith('/') ? chatUrl + 'chat/completions' : chatUrl + '/chat/completions';
-    }
-    const urlCheck = isSafeExternalUrl(chatUrl);
-    if (!urlCheck.safe) {
+    const urlCheck = validateAiProviderUrl(provider.api_url);
+    if (!urlCheck.valid) {
       throw new Error(`Unsafe AI Provider URL: ${urlCheck.reason || 'Blocked'}`);
     }
+    const chatUrl = buildOpenAIChatUrl(provider.api_url);
 
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',

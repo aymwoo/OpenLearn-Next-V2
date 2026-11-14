@@ -6,6 +6,8 @@ import { IDatabaseToken } from '@openlearn/plugin-sdk';
 import type { PluginContext } from '@openlearn/plugin-sdk';
 import { decryptApiKey, looksLikeCiphertext } from '../core/di/api-key-crypto.js';
 import { resolveDataDir } from '../core/db/backup-paths.js';
+import { fetchAiProviderResponse } from '../core/ai/utils/fetch-with-retry.js';
+import { buildOpenAIChatUrl, validateAiProviderUrl } from '../core/ai/utils/redirect-guard.js';
 
 interface StoredAIProvider {
   id: string;
@@ -51,7 +53,7 @@ Here is the original HTML code:
 ${htmlContent}
 `;
 
-  let text = '';
+  let text: string;
   const provider = db
     .prepare(
       'SELECT id, name, api_url, api_key, model_name FROM ai_providers WHERE api_key IS NOT NULL AND api_key != "" LIMIT 1',
@@ -64,26 +66,18 @@ ${htmlContent}
       throw new Error('AI 提供商密钥解密失败，请检查 ENCRYPTION_KEY 配置或重新保存密钥。');
     }
 
-    let chatUrl = provider.api_url.trim();
-    if (!chatUrl.endsWith('/chat/completions')) {
-      chatUrl = chatUrl.endsWith('/') ? chatUrl + 'chat/completions' : chatUrl + '/chat/completions';
+    const urlCheck = validateAiProviderUrl(provider.api_url);
+    if (!urlCheck.valid) {
+      throw new Error(`Unsafe AI provider API URL: ${urlCheck.reason || 'Blocked'}`);
     }
-    let parsedUrl: URL;
-    try {
-      parsedUrl = new URL(chatUrl);
-    } catch {
-      throw new Error('Invalid AI provider API URL');
-    }
-    if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
-      throw new Error(`Unsupported AI provider protocol: ${parsedUrl.protocol}`);
-    }
+    const chatUrl = buildOpenAIChatUrl(provider.api_url);
 
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${apiKey.trim()}`,
     };
 
-    const response = await fetch(chatUrl, {
+    const response = await fetchAiProviderResponse(chatUrl, {
       method: 'POST',
       headers,
       body: JSON.stringify({
@@ -92,7 +86,7 @@ ${htmlContent}
         temperature: 0.2,
         max_tokens: 8192,
       }),
-      signal: AbortSignal.timeout(60_000),
+      timeoutMs: 60_000,
     });
 
     if (!response.ok) {

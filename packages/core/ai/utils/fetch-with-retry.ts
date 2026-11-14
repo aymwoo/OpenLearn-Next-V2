@@ -42,6 +42,13 @@ export class AIFetchTimeoutError extends Error {
   }
 }
 
+export class AiProviderBlockedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'AiProviderBlockedError';
+  }
+}
+
 /** 是否值得重试：网络错误 / 429 / 5xx */
 function isRetryableStatus(status: number): boolean {
   return status === 429 || (status >= 500 && status <= 599);
@@ -75,13 +82,11 @@ function releaseBody(response: Response): void {
   }
 }
 
-/** 单次尝试的三种结局 */
-type AttemptOutcome =
-  | { kind: 'success'; response: Response }
-  | { kind: 'fatal'; error: Error } // 不重试（确定失败：4xx 非 429 / 不安全重定向）
-  | { kind: 'retryable'; error: Error }; // 网络错误 / 429 / 5xx / 超时
-
-async function attemptOnce(url: string, options: FetchWithRetryOptions, timeoutMs: number): Promise<AttemptOutcome> {
+async function followAiProviderRedirects(
+  url: string,
+  options: FetchWithRetryOptions,
+  timeoutMs: number,
+): Promise<Response> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   const check = options.hopCheck ?? assessAiProviderHop;
@@ -93,10 +98,7 @@ async function attemptOnce(url: string, options: FetchWithRetryOptions, timeoutM
       const decision = check(current, previous);
       if (!decision.allowed) {
         const prefix = previous ? 'AI provider redirect blocked' : 'AI provider request blocked';
-        return {
-          kind: 'fatal',
-          error: new Error(`${prefix}: ${decision.reason ?? 'unsafe target'}`),
-        };
+        throw new AiProviderBlockedError(`${prefix}: ${decision.reason ?? 'unsafe target'}`);
       }
 
       const response = await fetch(current, {
@@ -111,34 +113,60 @@ async function attemptOnce(url: string, options: FetchWithRetryOptions, timeoutM
       if (isRedirectStatus(response.status) && location) {
         releaseBody(response);
         if (hop === MAX_REDIRECTS) {
-          return { kind: 'fatal', error: new Error('AI provider redirect blocked: too many redirects') };
+          throw new AiProviderBlockedError('AI provider redirect blocked: too many redirects');
         }
         let next: string;
         try {
           next = new URL(location, current).href;
         } catch {
-          return { kind: 'fatal', error: new Error('AI provider redirect blocked: invalid redirect target') };
+          throw new AiProviderBlockedError('AI provider redirect blocked: invalid redirect target');
         }
         previous = current;
         current = next;
         continue;
       }
 
-      if (response.ok) return { kind: 'success', response };
-
-      releaseBody(response);
-      const error = new Error(`AI Provider Request Failed (${response.status})`);
-      return isRetryableStatus(response.status) ? { kind: 'retryable', error } : { kind: 'fatal', error };
+      return response;
     }
 
-    return { kind: 'fatal', error: new Error('AI provider redirect blocked: too many redirects') };
+    throw new AiProviderBlockedError('AI provider redirect blocked: too many redirects');
   } catch (err: unknown) {
-    if (err instanceof Error && err.name === 'AbortError') {
-      return { kind: 'retryable', error: new AIFetchTimeoutError(timeoutMs) };
+    if (err instanceof Error && (err.name === 'AbortError' || err.name === 'TimeoutError')) {
+      throw new AIFetchTimeoutError(timeoutMs);
     }
-    return { kind: 'retryable', error: err instanceof Error ? err : new Error(String(err)) };
+    throw err instanceof Error ? err : new Error(String(err));
   } finally {
     clearTimeout(timer);
+  }
+}
+
+/**
+ * 单次带重定向安全复检的 AI Provider 请求（不自动重试、保留非 2xx 响应供探活/诊断使用）。
+ */
+export async function fetchAiProviderResponse(url: string, options: FetchWithRetryOptions = {}): Promise<Response> {
+  const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  return followAiProviderRedirects(url, options, timeoutMs);
+}
+
+/** 单次尝试的三种结局 */
+type AttemptOutcome =
+  | { kind: 'success'; response: Response }
+  | { kind: 'fatal'; error: Error } // 不重试（确定失败：4xx 非 429 / 不安全重定向）
+  | { kind: 'retryable'; error: Error }; // 网络错误 / 429 / 5xx / 超时
+
+async function attemptOnce(url: string, options: FetchWithRetryOptions, timeoutMs: number): Promise<AttemptOutcome> {
+  try {
+    const response = await followAiProviderRedirects(url, options, timeoutMs);
+    if (response.ok) return { kind: 'success', response };
+
+    releaseBody(response);
+    const error = new Error(`AI Provider Request Failed (${response.status})`);
+    return isRetryableStatus(response.status) ? { kind: 'retryable', error } : { kind: 'fatal', error };
+  } catch (err: unknown) {
+    if (err instanceof AiProviderBlockedError) {
+      return { kind: 'fatal', error: err };
+    }
+    return { kind: 'retryable', error: err instanceof Error ? err : new Error(String(err)) };
   }
 }
 

@@ -1,8 +1,21 @@
-import React, { useState } from 'react';
-import { Blocks, Check, Globe, Loader2, Plus, Puzzle, Settings2, X, ShieldCheck, User } from 'lucide-react';
+import React, { useRef, useState } from 'react';
+import {
+  Blocks,
+  Check,
+  Globe,
+  Loader2,
+  Plus,
+  Puzzle,
+  Settings2,
+  X,
+  ShieldCheck,
+  User,
+  AlertCircle,
+} from 'lucide-react';
 import { PasswordInput } from '../../components/PasswordInput';
 import { AccessibleTableRegion } from '../../components/AccessibleTableRegion';
 import { AiPersonasSection } from './AiPersonasSection';
+import { formatAiProviderUrlError, validateAiProviderUrl } from '../../../packages/core/ai/utils/redirect-guard.js';
 
 export interface AIProvider {
   id: string;
@@ -39,6 +52,22 @@ export function AiProvidersPanel({
   const [providerModelName, setProviderModelName] = useState('');
   const [providerIsShared, setProviderIsShared] = useState(false);
   const [providerSaving, setProviderSaving] = useState(false);
+  const [testingProviderId, setTestingProviderId] = useState<string | null>(null);
+  const [nameError, setNameError] = useState<string | null>(null);
+  const [urlError, setUrlError] = useState<string | null>(null);
+  const [modelError, setModelError] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
+
+  const nameInputRef = useRef<HTMLInputElement>(null);
+  const urlInputRef = useRef<HTMLInputElement>(null);
+  const modelInputRef = useRef<HTMLInputElement>(null);
+
+  const clearValidationErrors = () => {
+    setNameError(null);
+    setUrlError(null);
+    setModelError(null);
+    setFormError(null);
+  };
 
   const handleAddProvider = () => {
     setEditingAIProvider(null);
@@ -47,6 +76,7 @@ export function AiProvidersPanel({
     setProviderApiKey('');
     setProviderModelName('');
     setProviderIsShared(false);
+    clearValidationErrors();
     setIsAIProviderModalOpen(true);
   };
 
@@ -57,15 +87,49 @@ export function AiProvidersPanel({
     setProviderApiKey(provider.api_key || '');
     setProviderModelName(provider.model_name);
     setProviderIsShared(Boolean(provider.is_shared));
+    clearValidationErrors();
     setIsAIProviderModalOpen(true);
+  };
+
+  const validateUrlField = (value: string): string | null => {
+    const result = validateAiProviderUrl(value);
+    if (result.valid) return null;
+    return formatAiProviderUrlError(result, lang);
   };
 
   const handleSaveProvider = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!providerName.trim() || !providerApiUrl.trim() || !providerModelName.trim()) {
-      alert(lang === 'zh' ? '名称、API URL 和模型名称不可为空' : 'Name, API URL and Model Name are required.');
+    setFormError(null);
+
+    const nextNameErr = !providerName.trim()
+      ? lang === 'zh'
+        ? '服务商名称不可为空。'
+        : 'Provider name is required.'
+      : null;
+    const nextUrlErr = validateUrlField(providerApiUrl);
+    const nextModelErr = !providerModelName.trim()
+      ? lang === 'zh'
+        ? '模型代号不可为空。'
+        : 'Model identifier is required.'
+      : null;
+
+    setNameError(nextNameErr);
+    setUrlError(nextUrlErr);
+    setModelError(nextModelErr);
+
+    if (nextNameErr) {
+      nameInputRef.current?.focus();
       return;
     }
+    if (nextUrlErr) {
+      urlInputRef.current?.focus();
+      return;
+    }
+    if (nextModelErr) {
+      modelInputRef.current?.focus();
+      return;
+    }
+
     try {
       setProviderSaving(true);
       const isEditing = !!editingAIProvider;
@@ -88,14 +152,16 @@ export function AiProvidersPanel({
       if (res.ok) {
         setIsAIProviderModalOpen(false);
         setEditingAIProvider(null);
+        clearValidationErrors();
         onAIProvidersChanged();
       } else {
         const errData = await res.json().catch(() => ({}));
-        alert(errData.error || 'Server error');
+        const msg = errData.error || (lang === 'zh' ? '保存失败，请检查配置参数。' : 'Failed to save provider.');
+        setFormError(msg);
       }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
-      alert(message || 'Error');
+      setFormError(message || 'Error');
     } finally {
       setProviderSaving(false);
     }
@@ -118,6 +184,8 @@ export function AiProvidersPanel({
   };
 
   const handleTestProvider = async (provider: AIProvider) => {
+    if (testingProviderId) return;
+    setTestingProviderId(provider.id);
     try {
       const res = await fetch('/api/ai-providers/test', {
         method: 'POST',
@@ -142,6 +210,8 @@ export function AiProvidersPanel({
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
       alert(lang === 'zh' ? `网络异常: ${message}` : `Network error: ${message}`);
+    } finally {
+      setTestingProviderId(null);
     }
   };
 
@@ -270,10 +340,15 @@ export function AiProvidersPanel({
                             <div className="flex items-center justify-center gap-2">
                               <button
                                 onClick={() => handleTestProvider(provider)}
-                                className="px-2.5 py-1 text-xs font-semibold rounded-lg border transition-all cursor-pointer flex items-center gap-1.5 shadow-3xs bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100"
+                                disabled={testingProviderId === provider.id}
+                                className="px-2.5 py-1 text-xs font-semibold rounded-lg border transition-all cursor-pointer flex items-center gap-1.5 shadow-3xs bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100 disabled:opacity-60"
                                 title={lang === 'zh' ? '测试连通性' : 'Test Connection'}
                               >
-                                <Globe size={11} />
+                                {testingProviderId === provider.id ? (
+                                  <Loader2 size={11} className="animate-spin" />
+                                ) : (
+                                  <Globe size={11} />
+                                )}
                                 <span>{lang === 'zh' ? '测试' : 'Test'}</span>
                               </button>
                               <button
@@ -355,69 +430,133 @@ export function AiProvidersPanel({
               </button>
             </div>
 
-            <form onSubmit={handleSaveProvider} className="p-5 space-y-4 text-left">
+            <form noValidate onSubmit={handleSaveProvider} className="p-5 space-y-4 text-left">
+              {formError && (
+                <div
+                  role="alert"
+                  className="flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700"
+                >
+                  <AlertCircle size={14} className="mt-0.5 shrink-0" />
+                  <span>{formError}</span>
+                </div>
+              )}
               <div>
                 <label
                   htmlFor="ai-provider-name"
-                  className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5 text-left"
+                  className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1 text-left"
                 >
                   {lang === 'zh' ? '服务商名称 *' : 'Provider Name *'}
                 </label>
                 <input
+                  ref={nameInputRef}
                   id="ai-provider-name"
                   name="provider_name"
                   type="text"
                   required
                   placeholder="e.g. Deepseek, Minimax"
                   value={providerName}
-                  onChange={(e) => setProviderName(e.target.value)}
-                  className="w-full text-xs sm:text-sm bg-gray-50 hover:bg-gray-100/50 focus:bg-white border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all font-semibold"
+                  aria-invalid={nameError ? 'true' : 'false'}
+                  aria-describedby={nameError ? 'ai-provider-name-error' : undefined}
+                  onChange={(e) => {
+                    setProviderName(e.target.value);
+                    if (nameError) setNameError(null);
+                  }}
+                  className={`w-full text-xs sm:text-sm bg-gray-50 hover:bg-gray-100/50 focus:bg-white border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:border-transparent transition-all font-semibold ${
+                    nameError
+                      ? 'border-rose-400 focus:ring-rose-500 bg-rose-50/40'
+                      : 'border-gray-200 focus:ring-indigo-500'
+                  }`}
                 />
+                {nameError && (
+                  <p id="ai-provider-name-error" className="mt-1 text-xs text-rose-600 flex items-center gap-1">
+                    <AlertCircle size={12} className="shrink-0" />
+                    <span>{nameError}</span>
+                  </p>
+                )}
               </div>
               <div>
                 <label
                   htmlFor="ai-provider-url"
-                  className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5 text-left"
+                  className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1 text-left"
                 >
                   {lang === 'zh' ? 'API 端点 URL *' : 'API Endpoint URL *'}
                 </label>
+                <span id="ai-provider-url-hint" className="text-xs text-gray-500 mb-1.5 block">
+                  {lang === 'zh'
+                    ? '支持公网域名、内网/本地 IP（如 http://192.168.1.10:11434/v1）、自定义端口与基础路径。'
+                    : 'Supports domains, LAN/local IPs (e.g. http://192.168.1.10:11434/v1), custom ports, and base paths.'}
+                </span>
                 <input
+                  ref={urlInputRef}
                   id="ai-provider-url"
                   name="provider_api_url"
                   type="url"
                   required
                   spellCheck={false}
                   autoCapitalize="none"
+                  autoCorrect="off"
                   placeholder="https://api.deepseek.com/v1"
                   value={providerApiUrl}
-                  onChange={(e) => setProviderApiUrl(e.target.value)}
-                  className="w-full text-xs sm:text-sm bg-gray-50 hover:bg-gray-100/50 focus:bg-white border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all font-mono"
+                  aria-invalid={urlError ? 'true' : 'false'}
+                  aria-describedby={urlError ? 'ai-provider-url-hint ai-provider-url-error' : 'ai-provider-url-hint'}
+                  onChange={(e) => {
+                    setProviderApiUrl(e.target.value);
+                    if (urlError) setUrlError(null);
+                  }}
+                  onBlur={() => {
+                    if (providerApiUrl.trim()) {
+                      setUrlError(validateUrlField(providerApiUrl));
+                    }
+                  }}
+                  className={`w-full text-xs sm:text-sm bg-gray-50 hover:bg-gray-100/50 focus:bg-white border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:border-transparent transition-all font-mono ${
+                    urlError
+                      ? 'border-rose-400 focus:ring-rose-500 bg-rose-50/40'
+                      : 'border-gray-200 focus:ring-indigo-500'
+                  }`}
                 />
-                <span className="text-xs text-gray-400 mt-1 block">
-                  {lang === 'zh'
-                    ? '符合 OpenAI 规范的标准 API 统一基准 URL。'
-                    : 'OpenAI-compatible base URL (e.g. /v1).'}
-                </span>
+                {urlError && (
+                  <p id="ai-provider-url-error" className="mt-1 text-xs text-rose-600 flex items-start gap-1">
+                    <AlertCircle size={12} className="mt-0.5 shrink-0" />
+                    <span>{urlError}</span>
+                  </p>
+                )}
               </div>
               <div>
                 <label
                   htmlFor="ai-provider-model"
-                  className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5 text-left"
+                  className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1 text-left"
                 >
                   {lang === 'zh' ? '模型代号 *' : 'Model Identifier *'}
                 </label>
                 <input
+                  ref={modelInputRef}
                   id="ai-provider-model"
                   name="provider_model_name"
                   type="text"
                   required
                   spellCheck={false}
                   autoCapitalize="none"
+                  autoCorrect="off"
                   placeholder="e.g. deepseek-chat"
                   value={providerModelName}
-                  onChange={(e) => setProviderModelName(e.target.value)}
-                  className="w-full text-xs sm:text-sm bg-gray-50 hover:bg-gray-100/50 focus:bg-white border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all font-mono"
+                  aria-invalid={modelError ? 'true' : 'false'}
+                  aria-describedby={modelError ? 'ai-provider-model-error' : undefined}
+                  onChange={(e) => {
+                    setProviderModelName(e.target.value);
+                    if (modelError) setModelError(null);
+                  }}
+                  className={`w-full text-xs sm:text-sm bg-gray-50 hover:bg-gray-100/50 focus:bg-white border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:border-transparent transition-all font-mono ${
+                    modelError
+                      ? 'border-rose-400 focus:ring-rose-500 bg-rose-50/40'
+                      : 'border-gray-200 focus:ring-indigo-500'
+                  }`}
                 />
+                {modelError && (
+                  <p id="ai-provider-model-error" className="mt-1 text-xs text-rose-600 flex items-center gap-1">
+                    <AlertCircle size={12} className="shrink-0" />
+                    <span>{modelError}</span>
+                  </p>
+                )}
               </div>
               <PasswordInput
                 id="ai-provider-key"

@@ -32,6 +32,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixes
 
+- **AI Provider IP 端点校验一致性与诊断反馈（Issue #508）**：
+  - 将 `packages/core/ai/utils/redirect-guard.ts` 收口为 AI Provider URL 唯一策略源（新增 `validateAiProviderUrl`、`formatAiProviderUrlError`、`buildOpenAIChatUrl`，同步拦截 IPv4 兼容 IPv6 如 `::169.254.169.254`）；在 `packages/core/ai/utils/fetch-with-retry.ts` 提取 `followAiProviderRedirects` 与 `fetchAiProviderResponse`，统一保留用户/管理员显式配置的公网、内网（`10.x` / `172.16-31.x` / `192.168.x`）及本机回环（`127.0.0.1` / `[::1]` / `localhost`）IP 访问能力，同时继续拦截 `link-local`、`0.0.0.0`、内嵌凭据及跨主机重定向跳转至内网/回环；
+  - 将 `POST /api/ai-providers`、`PUT /api/ai-providers/:id`、`POST /api/ai-providers/test`（`server/routes/plugins.ts`）、`GradingService.generateSemesterAiEvaluation`、`ScheduleService.processTimetableOcr` 及 `packages/plugins/ai-submit-injector.ts` 全部切齐到 `validateAiProviderUrl` / `buildOpenAIChatUrl` / `fetchAiProviderResponse`，并在连接测试接口补充按阶段（`url_validation` / `redirect_guard` / `network` / `chat_completion` / `response_format`）定位的模型、鉴权与响应格式诊断信息；
+  - 同步优化前端表单 `src/features/admin/AiProvidersPanel.tsx` 与 `src/hooks/usePluginManagement.ts` 的无障碍失焦/提交校验、错误聚焦引导与行内测试加载反馈，并补充核心、服务端与前端回归测试。
 - **文件存储合入后的 CI 回归**：去掉统一存储新增代码里的显式 `any`，使 ESLint 告警回到预算内；课程包「后一个附件校验失败」用例改为断言 `<data>/files` 物理文件、`file_assets` 与 `file_blobs` 均被补偿清理（`uploads/` 不再预先创建，扫描它会 ENOENT，也看不到新的落盘位置）。
 - **表单语义校验/可见性切换与全站响应式可访问表格底座（Issue #489）**：
   - 新增 `src/components/PasswordInput.tsx`（关联 `<label htmlFor>`、输入框上方持久化规则提示、显示/隐藏密码 `aria-pressed` 切换、仅在报错时通过 `aria-describedby` 绑定内联错误）与 `src/components/AccessibleTableRegion.tsx`（`tabIndex={0}`、`role="region"`、`aria-labelledby` 键盘可聚焦横向滚动容器），并在 `src/index.css` 中接入 `.table-scroll-region`、`.responsive-data-table[data-stack-mobile="true"]` `@container` 窄屏卡片化、`.field-sizing-auto` 与 `:user-invalid` / `[aria-invalid="true"]` 样式；

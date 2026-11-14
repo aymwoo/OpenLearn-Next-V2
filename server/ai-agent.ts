@@ -8,6 +8,7 @@
 import crypto from 'crypto';
 import { kernelContainer } from '../packages/core/kernel/index.js';
 import { fetchWithRetry } from '../packages/core/ai/utils/fetch-with-retry.js';
+import { buildOpenAIChatUrl } from '../packages/core/ai/utils/redirect-guard.js';
 import { resolvePluginCommandType } from '../packages/core/plugin-host/plugin-namespace.js';
 import { lessonActiveSegments } from './shared-state.js';
 import { collectAIContextSlices } from './ai-context-registry.js';
@@ -479,13 +480,7 @@ export const executeAgentToolCall = async (
   return actionResult;
 };
 
-export const buildOpenAIChatUrl = (apiUrl: string) => {
-  let cleanUrl = apiUrl.trim();
-  if (!cleanUrl.endsWith('/chat/completions')) {
-    cleanUrl = cleanUrl.endsWith('/') ? cleanUrl + 'chat/completions' : cleanUrl + '/chat/completions';
-  }
-  return cleanUrl;
-};
+export { buildOpenAIChatUrl };
 
 export const runGeminiAgentChat = async (request: AgentChatRequest) => {
   const { lang = 'zh' } = request;
