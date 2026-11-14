@@ -77,7 +77,7 @@ curl -fsS http://127.0.0.1:9000/health
 | `LOG_LEVEL`                                               | `info`                    | 日志级别                                                                                                                       |
 | `BACKUP_DIR`                                              | `/backups`                | 站点备份目录                                                                                                                   |
 
-> ⚠️ **`ENCRYPTION_KEY` 一旦设定就不能改**。改动后既有 AI Provider API Key 和班级临时口令全部无法解密。API Key 只能在「系统管理 → AI 提供商管理」重新保存；班级口令需要教师重新设置。若环境变量与 `/data/storage/encryption-key` 不一致，进程会拒绝启动并打印处理步骤。`node scripts/site-backup.mjs` 不包含该密钥文件，恢复后要单独放回。
+> ⚠️ **`ENCRYPTION_KEY` 一旦设定就不能改**。改动后既有 AI Provider API Key 和班级临时口令全部无法解密。API Key 只能在「系统管理 → AI 配置」重新保存；班级口令需要教师重新设置。若环境变量与 `/data/storage/encryption-key` 不一致，进程会拒绝启动并打印处理步骤。`node scripts/site-backup.mjs` 不包含该密钥文件，恢复后要单独放回。
 >
 > ⚠️ **不要**把 `ENCRYPTION_KEY` 写进 git 跟踪的 `ecosystem.config.cjs`（PM2 侧已改为 `dotenv.config()` 运行时读取 `.env`，容器侧走 compose 的 `environment` 注入，两者都避免密钥入库）。
 

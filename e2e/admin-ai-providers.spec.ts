@@ -1,9 +1,9 @@
 /**
  * e2e/admin-ai-providers.spec.ts
  *
- * OpenLearn V2 管理后台：AI 模型提供商治理 E2E 自动化测试
+ * OpenLearn V2 管理后台：AI 配置治理 E2E 自动化测试
  * 覆盖链路：
- * 1. 管理员登录并进入「管理后台」-> 切换至「AI 模型提供商」Tab
+ * 1. 管理员登录并进入「管理后台」-> 切换至「AI 配置」Tab
  * 2. 校验提供商列表视图与空状态/现有状态
  * 3. 展开「添加 AI 提供商」Modal 抽屉，录入 OpenAI 兼容端点、模型代号与 API 密钥并保存至数据库
  * 4. 验证提供商表格成功挂载新记录行与密钥掩码状态
@@ -39,7 +39,7 @@ function purgeAdminAIProvidersE2EFromDb() {
   }
 }
 
-test.describe('管理后台：AI 模型提供商治理 E2E 测试', () => {
+test.describe('管理后台：AI 配置治理 E2E 测试', () => {
   test.beforeAll(() => {
     purgeAdminAIProvidersE2EFromDb();
   });
@@ -48,10 +48,7 @@ test.describe('管理后台：AI 模型提供商治理 E2E 测试', () => {
     purgeAdminAIProvidersE2EFromDb();
   });
 
-  test('AI 模型提供商添加、连通性探测、参数修改与注销删除 (Generates Artifact: Screenshot)', async ({
-    page,
-    context,
-  }) => {
+  test('AI 配置添加、连通性探测、参数修改与注销删除 (Generates Artifact: Screenshot)', async ({ page, context }) => {
     const timestamp = Date.now();
     const providerName = `E2E_OpenAI_${timestamp}`;
     const initialModel = 'gpt-4o-mini';

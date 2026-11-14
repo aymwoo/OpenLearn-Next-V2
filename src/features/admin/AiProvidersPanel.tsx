@@ -226,7 +226,7 @@ export function AiProvidersPanel({
               </h2>
               <p className="text-xs text-gray-600 mt-0.5">
                 {lang === 'zh'
-                  ? '统一管理 AI 模型提供商与内核 AI 助教角色配置；个人私有提供商仍仅限所属账号可见与使用。'
+                  ? '统一管理 AI 模型服务与内核 AI 助教角色；个人私有提供商仍仅限所属账号可见与使用。'
                   : 'Unified management for OpenAI-compatible AI model providers and kernel AI assistant personas. Private providers remain strictly user-scoped.'}
               </p>
             </div>

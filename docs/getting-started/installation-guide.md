@@ -151,7 +151,7 @@ pnpm install
 pnpm run dev
 # 或：./dev.sh（等价，内部即 npx tsx --no-cache server.ts）
 
-# 访问（首次登录后请前往「系统管理 -> AI 提供商管理」添加大模型提供商）
+# 访问（首次登录后请前往「系统管理 -> AI 配置」添加大模型提供商）
 open http://localhost:9000
 ```
 
@@ -185,7 +185,7 @@ ALLOWED_ORIGINS=http://localhost:5173
 | `LOG_LEVEL`         |  —   | 日志级别：`debug` / `info` / `warn` / `error`，默认 `info`                                                                                                                                                           |
 | `ALLOWED_ORIGINS`   |  —   | CORS 白名单，逗号分隔                                                                                                                                                                                                |
 
-> **提示**：系统完全采用后台动态 AI 提供商管理（OpenAI 兼容 API），系统启动后在「系统管理 -> AI 提供商管理」中配置即可，无需在环境变量中写入 AI 密钥。
+> **提示**：AI 提供商完全由后台动态管理（OpenAI 兼容 API），系统启动后在「系统管理 -> AI 配置」中配置即可，无需在环境变量中写入 AI 密钥。
 
 ---
 
@@ -478,7 +478,7 @@ docker-compose up -d
 
 ### Q: AI Agent 功能不可用？
 
-- 确认已配置 AI 服务：在管理后台「AI 提供商管理」中已添加并激活至少一个 AI 提供商
+- 确认已配置 AI 服务：在管理后台「AI 配置」中已添加并激活至少一个 AI 提供商
 - 检查网络是否能正常访问该提供商的 API 地址与模型名称
 - 确认填写的 API Key 是否正确有效
 
