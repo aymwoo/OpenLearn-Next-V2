@@ -6,6 +6,10 @@ import { getDataDir } from '../../utils/paths.js';
 import { isPathInsideRoot } from '../../utils/path-guard.js';
 import { assertValidStorageKey } from './layout-policy.js';
 
+function isMissingFile(err: unknown): boolean {
+  return Boolean(err && typeof err === 'object' && 'code' in err && (err as { code?: unknown }).code === 'ENOENT');
+}
+
 export class LocalFileStorage implements FileStorageBackend {
   readonly id = 'local';
   readonly displayName = '本地磁盘存储 (Local Disk)';
@@ -89,8 +93,8 @@ export class LocalFileStorage implements FileStorageBackend {
     const target = this.resolveLocalPath(key);
     try {
       await fs.promises.unlink(target);
-    } catch (err: any) {
-      if (err?.code === 'ENOENT') return;
+    } catch (err: unknown) {
+      if (isMissingFile(err)) return;
       throw err;
     }
   }

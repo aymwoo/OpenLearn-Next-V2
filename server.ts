@@ -285,7 +285,7 @@ async function startServer() {
       // 敏感文件不做长缓存，避免注销后仍可从缓存读取
       maxAge: 0,
     }),
-    async (req: any, res: any) => {
+    async (req: express.Request, res: express.Response) => {
       try {
         const asset = getFileStorageService().getAssetByAlias(`/uploads${req.path || ''}`);
         if (!asset) {

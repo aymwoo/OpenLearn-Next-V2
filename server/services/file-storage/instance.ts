@@ -13,7 +13,7 @@ let cachedDb: unknown = null;
  * EventBus, and DI IFileStorageExtensionRegistry instance.
  */
 export function getFileStorageService(): FileStorageService {
-  const db = kernelContainer.db as any;
+  const db = kernelContainer.db;
   if (cachedService && cachedDb === db) {
     return cachedService;
   }

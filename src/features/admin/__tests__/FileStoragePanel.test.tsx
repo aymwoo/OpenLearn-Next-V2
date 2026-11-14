@@ -12,7 +12,9 @@ describe('FileStoragePanel (管理后台文件存储策略面板)', () => {
     cleanup();
   });
 
-  function installFetchMock(overrides?: { putHandler?: (body: any) => Promise<any> }) {
+  function installFetchMock(overrides?: {
+    putHandler?: (body: Record<string, unknown>) => Promise<{ ok: boolean; json: () => Promise<unknown> }>;
+  }) {
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
       if (url === '/api/admin/file-storage/config' && (!init?.method || init.method === 'GET')) {
         return {
@@ -83,7 +85,7 @@ describe('FileStoragePanel (管理后台文件存储策略面板)', () => {
       return { ok: false, json: async () => ({ error: 'Unexpected fetch' }) } as Response;
     });
 
-    global.fetch = fetchMock as any;
+    global.fetch = fetchMock as unknown as typeof fetch;
     return fetchMock;
   }
 

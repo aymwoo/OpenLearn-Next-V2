@@ -19,6 +19,7 @@ import {
 import { sendSafeError } from '../utils/error-handler.js';
 import { getFileStorageService } from '../services/file-storage/index.js';
 import { resolveAccessibleAiProvider } from '../services/ai-provider-resolver.js';
+import type { Request } from 'express';
 import type { ServerContext, StoredAIProvider, AgentChatAttachment, AgentChatRequest } from '../context.js';
 
 export function registerOsRoutes(ctx: ServerContext) {
@@ -67,7 +68,7 @@ export function registerOsRoutes(ctx: ServerContext) {
         return res.status(400).json({ error: 'File content does not match the declared file type.' });
       }
 
-      const session = (req as any).session as { userId?: string } | undefined;
+      const session = (req as Request & { session?: { userId?: string } }).session;
       const allowedPurposes = new Set(['lesson-asset', 'courseware', 'attachment']);
       const requestedPurpose =
         context &&
