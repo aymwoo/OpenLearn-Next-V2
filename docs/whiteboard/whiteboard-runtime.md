@@ -84,11 +84,29 @@ fullscreenRendererRegistry.register(type, (props) => <JSX />, pluginId);
 
 ## 插件扩展点
 
+### 注册表型扩展点
+
 | 扩展槽位                     | 用途                          | 映射文件                                     |
 | ---------------------------- | ----------------------------- | -------------------------------------------- |
 | `classroom.tool`             | 工具栏按钮 & 备课画板组件卡片 | `WhiteboardToolbar.tsx`, `LessonPalette.tsx` |
 | `fullscreenRendererRegistry` | 全屏渲染覆盖                  | `FullscreenRendererRegistry.tsx`             |
 | `propertyEditorRegistry`     | 属性面板编辑                  | `PropertyEditorRegistry.tsx`                 |
+
+### UI 扩展槽位（`ExtensionSlot`）
+
+| 扩展槽位                        | 挂载位置 / 职责                                                             | 对应文件                                     |
+| ------------------------------- | --------------------------------------------------------------------------- | -------------------------------------------- |
+| `whiteboard.renderer`           | 画布自定义图元一等公民渲染（支持 React / DOM / 沙箱 `view`）                | `InteractiveWhiteboard.tsx`                  |
+| `whiteboard.selection.toolbar`  | 选中图元上方浮动快捷栏（支持 `targetType` 过滤与声明式 `commandType` 按钮） | `InteractiveWhiteboard.tsx`                  |
+| `whiteboard.context_menu`       | 画布与组件右键菜单扩展区（支持 `target` 与 `targetType` 过滤）              | `InteractiveWhiteboard.tsx`                  |
+| `whiteboard.dock.plugin`        | 画板左下角活跃插件悬浮坞                                                    | `InteractiveWhiteboard.tsx`                  |
+| `whiteboard.canvas.widget`      | 画布浮层可拖拽任务卡片                                                      | `InteractiveWhiteboard.tsx`                  |
+| `whiteboard.pagebar.action`     | 底部悬浮分页条右侧动作扩展                                                  | `components/WhiteboardPageBar.tsx`           |
+| `whiteboard.page_drawer.action` | 页面大纲与缩略图抽屉右上角动作扩展                                          | `components/WhiteboardPageBar.tsx`           |
+| `whiteboard.properties.addon`   | 属性编辑侧边栏附加配置区块                                                  | `components/WhiteboardPropertiesSidebar.tsx` |
+| `anchor:whiteboard-toolbar:*`   | 顶部工具栏锚点扩展（`cursor` / `pen` / `quiz` / `presentation` 等）         | `components/WhiteboardToolbar.tsx`           |
+
+> **画布现代 Web 能力契约**：插件卡片容器外层统一挂载 `.wb-widget-container`（`container-type: inline-size`），视口容器暴露 `data-wb-readonly`、`data-wb-layout` 与 `--wb-readonly` / `--wb-layout` / `--wb-density` 令牌，并在页码切换与平铺切换时通过作用域过渡（`runScopedTransition`）与全屏态 `inert` 保证交互隔离；工具栏「互动工具」面板优先使用原生 `popover="auto"` + CSS Anchor Positioning 并自动降级至 portal。详细信息见 [plugin-ui-extension-slots.md](../reference/plugin-ui-extension-slots.md)。
 
 ## 白板事件槽 (`WhiteboardEventSlot`)
 

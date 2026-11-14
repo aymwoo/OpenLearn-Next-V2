@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import type { WhiteboardPageItem } from '../InteractiveWhiteboard';
 import { isPlainEnterSubmit } from '../../../utils/keyboard';
+import { ExtensionPointRenderer } from '../../../plugin-host/extension-point-renderer';
 
 export interface WhiteboardPageBarProps {
   pages: WhiteboardPageItem[];
@@ -241,6 +242,19 @@ export const WhiteboardPageBar: React.FC<WhiteboardPageBarProps> = ({
         >
           <ChevronRight size={16} />
         </button>
+
+        {/* Plugin Pagebar Actions */}
+        <div className="empty:hidden flex items-center gap-1 ml-0.5 pl-1 border-l border-theme">
+          <ExtensionPointRenderer
+            slot="whiteboard.pagebar.action"
+            slotProps={{
+              pages,
+              currentPage,
+              activeSegmentId,
+              onSwitchPage: handleSwitchPage,
+            }}
+          />
+        </div>
       </div>
 
       {/* Page Outline & Thumbnail Drawer Overlay */}
@@ -262,6 +276,17 @@ export const WhiteboardPageBar: React.FC<WhiteboardPageBarProps> = ({
                 </span>
               </div>
               <div className="flex items-center gap-2">
+                <div className="empty:hidden flex items-center gap-1.5">
+                  <ExtensionPointRenderer
+                    slot="whiteboard.page_drawer.action"
+                    slotProps={{
+                      pages,
+                      currentPage,
+                      activeSegmentId,
+                      onCloseDrawer: () => setShowPageDrawer(false),
+                    }}
+                  />
+                </div>
                 <button
                   onClick={() => handleAddPage()}
                   className="px-3 py-1.5 bg-primary-theme hover:bg-primary-theme-hover text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"

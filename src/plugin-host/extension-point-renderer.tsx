@@ -34,6 +34,8 @@ import type { ExtensionSlot } from './types';
 import { matchesDeclaredExtension } from '../../packages/core/assignment/file-preview-policy.js';
 import { NullExtensionComponent } from './plugin-host';
 import { PluginSandboxIframeView } from '../components/PluginSandboxIframeView';
+import { frontendApi } from '../services/frontend-api';
+import { uiStore } from '../store/uiStore';
 
 // 兼容再导出（历史上从本模块导出；状态已迁移至 ./extension-breaker）
 export { isPluginBlown, resetPluginBreaker };
@@ -930,9 +932,10 @@ export function ExtensionPointRenderer({
       );
     }
 
-    const isReact = typeof activeExt.component === 'function';
-    const isDOM = typeof (activeExt as any).render === 'function';
-    if (!isReact && !isDOM) return null;
+    const isReact = typeof activeExt.component === 'function' && activeExt.component !== NullExtensionComponent;
+    const isDOM = typeof activeExt.render === 'function';
+    const hasView = Boolean(activeExt.slotProps?.view || activeExt.view);
+    if (!isReact && !isDOM && !hasView) return null;
 
     return (
       <ExtensionErrorBoundary
@@ -955,7 +958,7 @@ export function ExtensionPointRenderer({
                 ...slotProps,
                 dispatcher: getExtensionDispatcher(host, activeExt.pluginId, slotProps?.dispatcher),
               })
-            ) : (
+            ) : isDOM ? (
               <DOMExtensionWrapper
                 ext={activeExt}
                 route={activeExt.route || route}
@@ -966,10 +969,151 @@ export function ExtensionPointRenderer({
                 }}
                 slot={slot}
               />
+            ) : (
+              <PluginSandboxIframeView
+                pluginId={activeExt.pluginId}
+                view={String(activeExt.slotProps?.view || activeExt.view)}
+                label={activeExt.label}
+                slot={slot}
+                lessonId={slotProps?.lessonId ?? selectedLesson}
+                classId={slotProps?.classId || liveClassSelectedClassId}
+                variant="panel"
+                locked={locked}
+                style={{ width: '100%', height: '100%' }}
+              />
             )}
           </CrashResetProbe>
         </Suspense>
       </ExtensionErrorBoundary>
+    );
+  }
+
+  // whiteboard.selection.toolbar / whiteboard.context_menu — filter by targetType / target, and support commandType buttons
+  if (slot === 'whiteboard.selection.toolbar' || slot === 'whiteboard.context_menu') {
+    const isContextMenu = slot === 'whiteboard.context_menu';
+    return (
+      <>
+        {extensions.map((ext) => {
+          const extTargetType = ext.targetType ?? ext.slotProps?.targetType;
+          if (extTargetType && extTargetType !== '*' && extTargetType !== slotProps?.elementType) {
+            return null;
+          }
+          const extTarget = ext.slotProps?.target;
+          if (isContextMenu && extTarget && extTarget !== '*' && extTarget !== slotProps?.target) {
+            return null;
+          }
+
+          if (pluginErrors.get(ext.pluginId) || isPluginBlown(ext.pluginId)) {
+            return null;
+          }
+
+          const isReact = typeof ext.component === 'function' && ext.component !== NullExtensionComponent;
+          const isDOM = typeof ext.render === 'function';
+          const hasView = Boolean(ext.slotProps?.view || ext.view);
+          const commandType = typeof ext.slotProps?.commandType === 'string' ? ext.slotProps.commandType : '';
+
+          if (!isReact && !isDOM && !hasView && commandType) {
+            const buttonLabel = resolveLabel(ext.label || ext.id, lang);
+            const runCommandAction = async () => {
+              slotProps?.onClose?.();
+              const basePayload =
+                typeof ext.slotProps?.payload === 'object' && ext.slotProps.payload !== null
+                  ? ext.slotProps.payload
+                  : {};
+              const res = await frontendApi.post('/api/plugins/execute-command', {
+                type: commandType,
+                payload: {
+                  ...basePayload,
+                  elementId: slotProps?.elementId,
+                  elementType: slotProps?.elementType,
+                  target: slotProps?.target,
+                  lessonId: slotProps?.lessonId ?? selectedLesson,
+                  pageId: slotProps?.pageId,
+                },
+              });
+              if (!res.success) {
+                uiStore.getState().addToast({
+                  id: `wb-slot-cmd-err-${Date.now()}`,
+                  type: 'error',
+                  title: lang === 'en' ? 'Plugin action failed' : '插件命令执行失败',
+                  message: res.error || commandType,
+                });
+              }
+            };
+
+            return (
+              <button
+                key={`${ext.pluginId}/${ext.id}`}
+                type="button"
+                data-plugin-id={ext.pluginId}
+                data-extension-id={ext.id}
+                onClick={() => {
+                  void runCommandAction();
+                }}
+                className={
+                  isContextMenu
+                    ? 'w-full px-3 py-1.5 text-left text-xs font-medium text-main hover:bg-primary-theme-light hover:text-primary-theme rounded-md transition-colors flex items-center gap-2 cursor-pointer'
+                    : 'px-2 py-1 text-xs font-medium text-main hover:bg-primary-theme-light hover:text-primary-theme rounded-md transition-colors flex items-center gap-1 cursor-pointer whitespace-nowrap'
+                }
+                title={buttonLabel}
+              >
+                {ext.icon ? <PluginIconRenderer icon={ext.icon} size={13} /> : null}
+                <span>{buttonLabel}</span>
+              </button>
+            );
+          }
+
+          if (!isReact && !isDOM && !hasView) return null;
+
+          return (
+            <ExtensionErrorBoundary
+              key={`${ext.pluginId}/${ext.id}`}
+              pluginId={ext.pluginId}
+              onBreakerTrip={(pid) => handleBreakerTrip(pid, host)}
+              fallback={null}
+            >
+              <Suspense fallback={null}>
+                <CrashResetProbe pluginId={ext.pluginId}>
+                  {isReact ? (
+                    React.createElement(resolveExtensionComponent(ext), {
+                      route: ext.route || route,
+                      lessonId: selectedLesson,
+                      classId: liveClassSelectedClassId,
+                      dispatcher: getExtensionDispatcher(host, ext.pluginId, slotProps?.dispatcher),
+                      ...ext.slotProps,
+                      ...slotProps,
+                    })
+                  ) : isDOM ? (
+                    <DOMExtensionWrapper
+                      ext={ext}
+                      route={ext.route || route}
+                      slotProps={{
+                        lessonId: selectedLesson,
+                        classId: liveClassSelectedClassId,
+                        dispatcher: getExtensionDispatcher(host, ext.pluginId, slotProps?.dispatcher),
+                        ...ext.slotProps,
+                        ...slotProps,
+                      }}
+                      slot={slot}
+                    />
+                  ) : (
+                    <PluginSandboxIframeView
+                      pluginId={ext.pluginId}
+                      view={String(ext.slotProps?.view || ext.view)}
+                      label={ext.label}
+                      slot={slot}
+                      lessonId={slotProps?.lessonId ?? selectedLesson}
+                      classId={slotProps?.classId || liveClassSelectedClassId}
+                      variant="panel"
+                      locked={locked}
+                    />
+                  )}
+                </CrashResetProbe>
+              </Suspense>
+            </ExtensionErrorBoundary>
+          );
+        })}
+      </>
     );
   }
 

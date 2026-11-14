@@ -53,6 +53,7 @@ import {
 } from './utils/auto-tiling';
 import { parseElementData } from './utils/element-cache';
 import { computeContentBounds, resolveCanvasLayout, toCanvasPoint } from './utils/canvas-bounds';
+import { clampOverlayPosition, runScopedTransition } from './utils/modern-web-utils';
 import { measurePaddingBox, measureScrollbarThickness } from './utils/scrollbar-thickness';
 import { whiteboardViewStore, useWhiteboardViewStore } from '../../store/whiteboardViewStore';
 import { usePluginHostStore } from '../../plugin-host/plugin-host-store';
@@ -2391,7 +2392,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                       <Blocks size={13} className="text-indigo-600" />,
                       'indigo',
                     )}
-                    contentClassName="flex-grow bg-white overflow-auto relative min-h-0 p-2"
+                    contentClassName="wb-widget-container flex-grow bg-white overflow-auto relative min-h-0 p-2"
                   >
                     <PluginCardRenderer
                       pluginId={data.pluginId}
@@ -3465,7 +3466,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                   )}
                   {!data.isMinimized && (
                     <div
-                      className={`flex-1 overflow-hidden relative min-h-0 ${isFrameless ? '' : 'bg-white'}`}
+                      className={`wb-widget-container flex-1 overflow-hidden relative min-h-0 ${isFrameless ? '' : 'bg-white'}`}
                       style={{ pointerEvents: readOnly ? 'none' : 'auto' }}
                     >
                       <ExtensionPointRenderer
@@ -3481,6 +3482,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                           readOnly,
                           userRole,
                           lessonId,
+                          classId,
                           onElementUpdate: onElementUpdate
                             ? async (id: string, updatedData: any) => {
                                 await onElementUpdate(id, updatedData);
@@ -3561,7 +3563,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                   />
                   {!data.isMinimized && (
                     <div
-                      className="flex-1 bg-white overflow-hidden relative min-h-0"
+                      className="wb-widget-container flex-1 bg-white overflow-hidden relative min-h-0"
                       style={{ pointerEvents: readOnly ? 'none' : 'auto' }}
                     >
                       {PluginComponent ? (
@@ -3774,6 +3776,64 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
       moveElementToSegment: handleMoveElementToSegment,
     }));
 
+    const handleSwitchPageWithTransition = useCallback(
+      (idx: number) => {
+        runScopedTransition(containerRef.current, () => {
+          handleSwitchPage(idx);
+        });
+      },
+      [handleSwitchPage],
+    );
+
+    const handleToggleAutoTileWithTransition = useCallback(() => {
+      runScopedTransition(containerRef.current, () => {
+        void handleToggleAutoTile();
+      });
+    }, [handleToggleAutoTile]);
+
+    const isFullscreenActive = Boolean(effectiveFullscreenElementId || browserFullscreenElementId);
+
+    const selectedToolbarEl =
+      !readOnly && selectedShapeId && !contextMenu && !isFullscreenActive
+        ? safeElements.find((e) => e.id === selectedShapeId)
+        : undefined;
+    const selectedToolbarData = selectedToolbarEl ? parseElementData(selectedToolbarEl) : null;
+    const selectedToolbarPos =
+      selectedToolbarEl && selectedToolbarData
+        ? clampOverlayPosition(
+            Number(selectedToolbarData.x ?? 40),
+            Number(selectedToolbarData.y ?? 40) > 52
+              ? Number(selectedToolbarData.y ?? 40) - 44
+              : Number(selectedToolbarData.y ?? 40) + Number(selectedToolbarData.height ?? 120) + 8,
+            260,
+            40,
+            containerSize.width || 1000,
+            containerSize.height || 800,
+          )
+        : null;
+
+    const clampedContextMenuPos = contextMenu
+      ? clampOverlayPosition(
+          contextMenu.x,
+          contextMenu.y,
+          176,
+          contextMenu.elementId ? 220 : 280,
+          containerSize.width || 1000,
+          containerSize.height || 800,
+        )
+      : null;
+
+    const contextMenuElement = contextMenu?.elementId
+      ? (safeElements.find((e) => e.id === contextMenu.elementId) ?? null)
+      : null;
+    const contextMenuData = contextMenuElement ? parseElementData(contextMenuElement) : null;
+
+    type WhiteboardScopeStyle = React.CSSProperties & {
+      '--wb-readonly'?: string;
+      '--wb-layout'?: string;
+      '--wb-density'?: string;
+    };
+
     return (
       <div className="flex-1 flex flex-row min-h-0 overflow-hidden bg-app">
         <div
@@ -3798,7 +3858,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
               showGrid={showGrid}
               setShowGrid={setShowGrid}
               autoTileEnabled={autoTileEnabled}
-              onToggleAutoTile={handleToggleAutoTile}
+              onToggleAutoTile={handleToggleAutoTileWithTransition}
               readOnly={readOnly}
               userRole={userRole}
               isSyncing={isSyncing}
@@ -3817,15 +3877,22 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
           <div
             ref={containerRef}
             data-testid="whiteboard-canvas-viewport"
+            data-wb-readonly={readOnly ? 'true' : 'false'}
+            data-wb-layout={autoTileEnabled ? 'tiled' : 'free'}
             // overflow-auto：画布逻辑高度大于容器可视高度时由**本容器**出滚动条 ——
             // 修复前这里是 overflow-hidden，溢出被裁掉且整条祖先链无可滚动容器，
             // 画在下部的组件因此永远够不着（见 canvas-bounds.ts 的说明）。
-            className="flex-1 min-h-0 min-w-0 rounded-xl border border-theme/80 relative overflow-auto w-full shadow-inner transition-colors"
-            style={{
-              backgroundImage: showGrid ? `radial-gradient(${themeTokens.gridDot} 1.2px, transparent 1.2px)` : 'none',
-              backgroundSize: '24px 24px',
-              backgroundColor: themeTokens.background,
-            }}
+            className="wb-scoped-transition-root wb-canvas-scope flex-1 min-h-0 min-w-0 rounded-xl border border-theme/80 relative overflow-auto w-full shadow-inner transition-colors"
+            style={
+              {
+                backgroundImage: showGrid ? `radial-gradient(${themeTokens.gridDot} 1.2px, transparent 1.2px)` : 'none',
+                backgroundSize: '24px 24px',
+                backgroundColor: themeTokens.background,
+                '--wb-readonly': readOnly ? 'true' : 'false',
+                '--wb-layout': autoTileEnabled ? 'tiled' : 'free',
+                '--wb-density': readOnly ? 'compact' : 'comfortable',
+              } as WhiteboardScopeStyle
+            }
             onDragOver={handleWhiteboardDragOver}
             onDragEnter={handleWhiteboardDragEnter}
             onDragLeave={handleWhiteboardDragLeave}
@@ -3959,10 +4026,44 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                   标题栏自带的删除按钮功能重复，已移除。删除入口保留在标题栏、右键
                   菜单与工具栏三处。 */}
 
-              {/* Elegant Right-Click Context Menu */}
-              {!readOnly && contextMenu && (
+              {/* 选中图元浮动操作栏扩展槽 (whiteboard.selection.toolbar) */}
+              {selectedToolbarEl && selectedToolbarData && selectedToolbarPos && (
                 <div
-                  style={{ left: `${contextMenu.x}px`, top: `${contextMenu.y}px`, pointerEvents: 'auto' }}
+                  data-testid="whiteboard-selection-toolbar"
+                  style={{
+                    left: `${selectedToolbarPos.left}px`,
+                    top: `${selectedToolbarPos.top}px`,
+                    pointerEvents: 'auto',
+                  }}
+                  className="empty:hidden absolute z-30 flex items-center gap-1 bg-surface/95 backdrop-blur-md border border-theme rounded-xl shadow-lg px-1.5 py-1 text-main"
+                  onClick={(e) => e.stopPropagation()}
+                  onPointerDown={(e) => e.stopPropagation()}
+                >
+                  <ExtensionPointRenderer
+                    slot="whiteboard.selection.toolbar"
+                    slotProps={{
+                      element: selectedToolbarEl,
+                      elementId: selectedToolbarEl.id,
+                      elementType: selectedToolbarEl.type,
+                      data: selectedToolbarData,
+                      lessonId,
+                      classId,
+                      onElementUpdate,
+                      onOpenProperties: () => setActivePropertiesElementId(selectedToolbarEl.id),
+                      onDelete: handleElementDelete,
+                    }}
+                  />
+                </div>
+              )}
+
+              {/* Elegant Right-Click Context Menu */}
+              {!readOnly && contextMenu && clampedContextMenuPos && (
+                <div
+                  style={{
+                    left: `${clampedContextMenuPos.left}px`,
+                    top: `${clampedContextMenuPos.top}px`,
+                    pointerEvents: 'auto',
+                  }}
                   className="absolute bg-surface rounded-lg shadow-2xl border border-theme py-1.5 w-44 z-40 font-sans text-sm animate-in fade-in zoom-in-95 duration-100 text-main"
                   onClick={(e) => e.stopPropagation()}
                   onContextMenu={(e) => e.preventDefault()}
@@ -4070,11 +4171,31 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                       </button>
                     </>
                   )}
+                  <div className="empty:hidden border-t border-theme mt-1 pt-1">
+                    <ExtensionPointRenderer
+                      slot="whiteboard.context_menu"
+                      slotProps={{
+                        target: contextMenu.elementId ? 'element' : 'canvas',
+                        element: contextMenuElement,
+                        elementId: contextMenu.elementId ?? null,
+                        elementType: contextMenuElement?.type ?? null,
+                        data: contextMenuData,
+                        point: { x: contextMenu.x, y: contextMenu.y },
+                        lessonId,
+                        classId,
+                        onElementUpdate,
+                        onClose: () => setContextMenu(null),
+                      }}
+                    />
+                  </div>
                 </div>
               )}
 
               {/* 白板画布动态可拖拽任务卡片扩展 */}
-              <div className="absolute inset-0 pointer-events-none z-20 overflow-hidden">
+              <div
+                className="absolute inset-0 pointer-events-none z-20 overflow-hidden"
+                inert={isFullscreenActive ? true : undefined}
+              >
                 <ExtensionPointRenderer
                   slot="whiteboard.canvas.widget"
                   slotProps={{ lessonId, classId, userRole, readOnly }}
@@ -4082,7 +4203,10 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
               </div>
 
               {/* 白板主画板左下角活跃插件悬浮坞扩展 */}
-              <div className="absolute bottom-4 left-4 z-30 pointer-events-auto flex items-center gap-2">
+              <div
+                className="absolute bottom-4 left-4 z-30 pointer-events-auto flex items-center gap-2"
+                inert={isFullscreenActive ? true : undefined}
+              >
                 <ExtensionPointRenderer
                   slot="whiteboard.dock.plugin"
                   slotProps={{ lessonId, classId, userRole, readOnly }}
@@ -4090,26 +4214,28 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
               </div>
             </div>
             {!readOnly && !hidePageBar && (
-              <WhiteboardPageBar
-                pages={pages}
-                currentPage={currentPage}
-                activeSegmentId={activeSegmentId}
-                showPageDrawer={showPageDrawer}
-                setShowPageDrawer={setShowPageDrawer}
-                editingPageIdx={editingPageIdx}
-                setEditingPageIdx={setEditingPageIdx}
-                editingPageTitle={editingPageTitle}
-                setEditingPageTitle={setEditingPageTitle}
-                activeMenuPageIdx={activeMenuPageIdx}
-                setActiveMenuPageIdx={setActiveMenuPageIdx}
-                safeElements={safeElements}
-                handleSwitchPage={handleSwitchPage}
-                handleRenamePage={handleRenamePage}
-                handleDuplicatePage={handleDuplicatePage}
-                handleMovePage={handleMovePage}
-                handleDeletePage={handleDeletePage}
-                handleAddPage={handleAddPage}
-              />
+              <div inert={isFullscreenActive ? true : undefined}>
+                <WhiteboardPageBar
+                  pages={pages}
+                  currentPage={currentPage}
+                  activeSegmentId={activeSegmentId}
+                  showPageDrawer={showPageDrawer}
+                  setShowPageDrawer={setShowPageDrawer}
+                  editingPageIdx={editingPageIdx}
+                  setEditingPageIdx={setEditingPageIdx}
+                  editingPageTitle={editingPageTitle}
+                  setEditingPageTitle={setEditingPageTitle}
+                  activeMenuPageIdx={activeMenuPageIdx}
+                  setActiveMenuPageIdx={setActiveMenuPageIdx}
+                  safeElements={safeElements}
+                  handleSwitchPage={handleSwitchPageWithTransition}
+                  handleRenamePage={handleRenamePage}
+                  handleDuplicatePage={handleDuplicatePage}
+                  handleMovePage={handleMovePage}
+                  handleDeletePage={handleDeletePage}
+                  handleAddPage={handleAddPage}
+                />
+              </div>
             )}
           </div>
 

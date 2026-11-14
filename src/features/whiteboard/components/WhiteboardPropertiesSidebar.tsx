@@ -5,6 +5,7 @@ import { AssignmentPeerProgressPanel } from './AssignmentPeerProgressPanel';
 import { propertyEditorRegistry } from '../properties/PropertyEditorRegistry';
 import { buildQuizAnswerFields, resolveCorrectIndex } from '../../../../packages/core/whiteboard/quiz-answer.js';
 import { paletteItemRegistry } from '../../teacher/lesson-editor/palette-item-registry';
+import { ExtensionPointRenderer } from '../../../plugin-host/extension-point-renderer';
 
 /**
  * 系统内置的组件类元素类型（与图形/手绘区分）。
@@ -775,6 +776,20 @@ export const WhiteboardPropertiesSidebar: React.FC<WhiteboardPropertiesSidebarPr
             </div>
           </div>
         )}
+
+        <div className="empty:hidden space-y-3">
+          <ExtensionPointRenderer
+            slot="whiteboard.properties.addon"
+            slotProps={{
+              elementId: selectedEl.id,
+              elementType: selectedEl.type,
+              data: editingProperties,
+              updateData: handlePropsUpdate,
+              lessonId,
+              isSyncing,
+            }}
+          />
+        </div>
 
         <div className="text-xs text-muted text-center select-none pt-2 font-medium">
           提示：属性在失焦或修改时自动同步，多端可见。

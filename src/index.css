@@ -564,3 +564,83 @@ html[data-theme] {
     }
   }
 }
+
+/* ── 互动白板现代 Web 能力层 ───────────────────────────────────────────────
+   1. Container Size Queries：白板插件卡片随自身宽高自适配布局；
+   2. Design Token Reactivity：暴露 --wb-readonly / --wb-layout / --wb-density，
+      配合 :where([data-wb-*]) 低权重兜底与 @container style() 渐进增强；
+   3. Popover + CSS Anchor Positioning：仅在 @supports (position-area: block-end)
+      下覆盖 inset/margin，避免无支持浏览器把浮层错位到 (0, 0)；
+   4. Scoped View Transitions：限定在白板局部容器作用域，不阻塞顶层工具栏与浮层。 */
+
+.wb-widget-container {
+  container-type: inline-size;
+  container-name: wb-widget;
+}
+
+.wb-canvas-scope[data-wb-readonly='true'] {
+  --wb-readonly: true;
+  --wb-density: compact;
+}
+
+.wb-canvas-scope[data-wb-readonly='false'] {
+  --wb-readonly: false;
+  --wb-density: comfortable;
+}
+
+.wb-canvas-scope[data-wb-layout='tiled'] {
+  --wb-layout: tiled;
+}
+
+.wb-canvas-scope[data-wb-layout='free'] {
+  --wb-layout: free;
+}
+
+:where([data-wb-readonly='true']) .wb-authoring-only {
+  display: none;
+}
+
+@container style(--wb-readonly: true) {
+  .wb-authoring-only {
+    display: none;
+  }
+}
+
+@container wb-widget (max-width: 280px) {
+  .wb-widget-compact-hide {
+    display: none;
+  }
+}
+
+.wb-anchored-popover[popover]:is(:popover-open, .\:popover-open) {
+  display: block;
+}
+
+@supports (position-area: block-end) {
+  .wb-anchored-popover[popover] {
+    inset: auto;
+    margin: 0;
+    margin-block-start: 6px;
+    position-area: block-end span-inline-end;
+    position-try-fallbacks:
+      flip-block,
+      flip-inline,
+      flip-block flip-inline;
+  }
+}
+
+.wb-scoped-transition-root {
+  view-transition-scope: all;
+}
+
+.wb-transition-card {
+  view-transition-name: match-element;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
+}

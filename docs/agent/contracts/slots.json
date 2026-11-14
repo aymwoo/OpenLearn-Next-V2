@@ -120,8 +120,13 @@
     "whiteboard.autosave.action",
     "whiteboard.autosave.status",
     "whiteboard.canvas.widget",
+    "whiteboard.context_menu",
     "whiteboard.dock.plugin",
-    "whiteboard.renderer"
+    "whiteboard.page_drawer.action",
+    "whiteboard.pagebar.action",
+    "whiteboard.properties.addon",
+    "whiteboard.renderer",
+    "whiteboard.selection.toolbar"
   ],
   "anchor_slots": [
     "anchor:classroom-attribution:awards",
@@ -133,5 +138,5 @@
     "anchor:whiteboard-toolbar:presentation",
     "anchor:whiteboard-toolbar:rollcall"
   ],
-  "total": 120
+  "total": 125
 }
