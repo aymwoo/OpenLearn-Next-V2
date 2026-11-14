@@ -204,7 +204,7 @@ const t = ctx.db.table('configs'); // → plugin_<manifest_id>_configs
 const rows = ctx.db.prepare(`SELECT * FROM ${t}`).all();
 ```
 
-`sql-guard` 会拒：44 张核心表硬禁、`plugin_*` 表仅限本插件命名空间、
+`sql-guard` 会拒：45 张核心表硬禁、`plugin_*` 表仅限本插件命名空间、
 跨库指令硬禁；**解析不出表名的语句也拒**（fail-closed）。
 另外标识符必须匹配 `SQL_IDENTIFIER_PATTERN`，schema ≤ 4000 字符且不含 `;`。
 见 [数据库](../reference/database.md) 与 [隔离与安全](../reference/isolation-and-security.md) §6–§7。

@@ -87,6 +87,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - 管理员手册补「文件存储策略」与站点设置字段；部署 / 安装 / 配置文档的备份清单补 `files/`，并注明 `themes/` 目前不在 `site-backup` 归档内；
   - `ai-reference/api/http-endpoints.md` 按当前代码重算为 28 个路由文件 / 334 个端点，补 `themes.ts`、`files.ts` 与 classroom 拆分后的两个路由文件；
   - 与 #507（迁移 `049` / `ai_personas`）合并后，表数、黑名单与端点口径已按新基线复核。
+- **同步 #510 迁移 `050` / AI 角色治理表落地后的文档口径**：
+  - 迁移 / 表数推进为 `000`–`050`、51 个脚本、**90** 张表（`database-and-migrations.md`、`platform-data-tables.md`、`platform-services.md`），自动表清单与金样随之重新生成并补入 `ai_persona_governance` 列；
+  - `FORBIDDEN_CORE_TABLES` 由 44 张更新为 **45** 张并补 `ai_persona_governance`（plugin-database-api、plugin-architecture-contracts、agent 与 ai-reference 各页），`sql-guard.ts` 数组行号引用同步为 `L13–L59`；
+  - `ai-reference/api/http-endpoints.md` 端点总数 334 → **335**（`os.ts` 17 → 18，新增 `GET /api/agent/personas/:id/references`），端点表 28 行合计与顶部口径一致。
 
 ## [0.7.15] - 2026-11-12
 
