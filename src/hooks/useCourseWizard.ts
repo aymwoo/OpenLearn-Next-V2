@@ -1,5 +1,55 @@
 import { useState } from 'react';
 
+export interface DefaultWizardSegment {
+  id: string;
+  title: string;
+  type: 'intro' | 'lecture' | 'practice' | 'summary';
+  duration: string;
+  color: string;
+  notes: string;
+}
+
+export function getDefaultWizardTimeline(
+  lang: 'zh' | 'en',
+  idPrefix: 'seg-w' | 'seg-preset-' = 'seg-w',
+): DefaultWizardSegment[] {
+  const zh = lang === 'zh';
+  return [
+    {
+      id: `${idPrefix}1`,
+      title: zh ? '课堂导入' : 'Course Orientation',
+      type: 'intro',
+      duration: '5m',
+      color: 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100',
+      notes: zh ? '明确本课学习目标与情境导入' : 'Introduce basic goals',
+    },
+    {
+      id: `${idPrefix}2`,
+      title: zh ? '核心精讲' : 'Subject Core Lecture',
+      type: 'lecture',
+      duration: '15m',
+      color: 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100',
+      notes: zh ? '讲解核心概念与重点内容' : 'Present major content frameworks',
+    },
+    {
+      id: `${idPrefix}3`,
+      title: zh ? '互动演练' : 'Interactive Lab Work',
+      type: 'practice',
+      duration: '15m',
+      color: 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100',
+      notes: zh ? '开展随堂练习与协作实践' : 'Provide collaborative assignments on terminal or board',
+    },
+    {
+      id: `${idPrefix}4`,
+      title: zh ? '课堂总结' : 'Lesson Wrap-up',
+      type: 'summary',
+      duration: '5m',
+      color: 'bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100',
+      notes: zh ? '回顾重点知识并安排课后任务' : 'Reflect and assign task',
+    },
+  ];
+}
+
 export interface UseCourseWizardOptions {
   lang: 'zh' | 'en';
   addToast: (title: string, msg: string, type: 'info' | 'success' | 'warning' | 'error') => void;
@@ -17,40 +67,7 @@ export function useCourseWizard(options: UseCourseWizardOptions) {
   const [wizardCourseCategory, setWizardCourseCategory] = useState('Mathematics');
   const [wizardCourseDescription, setWizardCourseDescription] = useState('');
   const [wizardCourseContent, setWizardCourseContent] = useState('');
-  const [wizardCourseTimeline, setWizardCourseTimeline] = useState<any[]>([
-    {
-      id: 'seg-w1',
-      title: 'Course Orientation / 课堂导入',
-      type: 'intro',
-      duration: '5m',
-      color: 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100',
-      notes: 'Introduce basic goals',
-    },
-    {
-      id: 'seg-w2',
-      title: 'Subject Core Lecture / 核心精讲',
-      type: 'lecture',
-      duration: '15m',
-      color: 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100',
-      notes: 'Present major content frameworks',
-    },
-    {
-      id: 'seg-w3',
-      title: 'Interactive Lab Work / 实践演练',
-      type: 'practice',
-      duration: '15m',
-      color: 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100',
-      notes: 'Provide collaborative assignments on terminal or board',
-    },
-    {
-      id: 'seg-w4',
-      title: 'Wrap up / 随堂总结与答疑',
-      type: 'summary',
-      duration: '5m',
-      color: 'bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100',
-      notes: 'Reflect and assign task',
-    },
-  ]);
+  const [wizardCourseTimeline, setWizardCourseTimeline] = useState<any[]>(() => getDefaultWizardTimeline(lang));
   const [wizardIsSubmitting, setWizardIsSubmitting] = useState(false);
   const [wizardIsGeneratingOutline, setWizardIsGeneratingOutline] = useState(false);
 
@@ -161,6 +178,7 @@ export function useCourseWizard(options: UseCourseWizardOptions) {
         setWizardCourseCategory('Mathematics');
         setWizardCourseDescription('');
         setWizardCourseContent('');
+        setWizardCourseTimeline(getDefaultWizardTimeline(lang));
         setWizardStep(1);
       } else {
         addToast('Error', 'SQLite save failed', 'warning');
