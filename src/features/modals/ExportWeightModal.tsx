@@ -1,6 +1,7 @@
 import { Dispatch, SetStateAction } from 'react';
 import { Settings2, Percent, ListFilter, Terminal, Download } from 'lucide-react';
 import AccessibleDialog from '../../components/AccessibleDialog';
+import { AccessibleTableRegion } from '../../components/AccessibleTableRegion';
 
 type Lang = 'zh' | 'en';
 
@@ -256,8 +257,11 @@ export function ExportWeightModal({
             </h3>
 
             <div className="border border-gray-150 rounded-xl overflow-hidden bg-white shadow-xs max-w-full">
-              <div className="overflow-x-auto max-h-56 overflow-y-auto">
-                <table className="w-full border-collapse text-left">
+              <AccessibleTableRegion labelledBy="export-weight-preview-caption" className="max-h-56 overflow-y-auto">
+                <table className="responsive-data-table w-full border-collapse text-left">
+                  <caption id="export-weight-preview-caption" className="sr-only">
+                    {lang === 'zh' ? 'CSV 实时成绩表预览 (前5行数据)' : 'Live CSV Grade Preview (First 5 Rows)'}
+                  </caption>
                   <thead>
                     <tr className="bg-gray-50 border-b border-gray-150 sticky top-0 z-10">
                       {csvPreviewData.headers.map((hdr, hIdx) => {
@@ -266,6 +270,7 @@ export function ExportWeightModal({
                         const isWeighted = hdr.includes('Weighted');
                         return (
                           <th
+                            scope="col"
                             key={hIdx}
                             className={`p-2.5 text-xs font-bold tracking-wider uppercase border-r border-gray-150 whitespace-nowrap font-sans font-semibold ${
                               isWeighted
@@ -310,7 +315,7 @@ export function ExportWeightModal({
                     ))}
                   </tbody>
                 </table>
-              </div>
+              </AccessibleTableRegion>
             </div>
             <p className="text-xs text-gray-400 font-sans italic">
               {lang === 'zh'

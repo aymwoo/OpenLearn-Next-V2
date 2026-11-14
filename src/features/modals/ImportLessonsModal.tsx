@@ -1,6 +1,7 @@
 import { Dispatch, SetStateAction } from 'react';
 import { Upload, Download, Loader2, CheckCircle2, Check, FileJson, Package } from 'lucide-react';
 import AccessibleDialog from '../../components/AccessibleDialog';
+import { AccessibleTableRegion } from '../../components/AccessibleTableRegion';
 import type { CoursePackagePreview, CoursePackageDuplicate } from '../../services/coursePackageService';
 import { COURSE_PACKAGE_MAX_FILE_BYTES } from '../../services/coursePackageService';
 
@@ -330,24 +331,42 @@ export function ImportLessonsModal(props: ImportLessonsModalProps) {
               </button>
             </div>
 
-            <div className="border border-gray-200 rounded-xl overflow-hidden shadow-3xs max-h-[300px] overflow-y-auto">
-              <table className="w-full text-left text-xs border-collapse">
+            <AccessibleTableRegion
+              labelledBy="import-lessons-preview-caption"
+              className="border border-gray-200 rounded-xl shadow-3xs max-h-[300px] overflow-y-auto"
+            >
+              <table
+                className="responsive-data-table w-full text-left text-xs border-collapse"
+                data-stack-mobile="true"
+              >
+                <caption id="import-lessons-preview-caption" className="sr-only">
+                  {lang === 'zh' ? '课程导入预览' : 'Lesson Import Preview'}
+                </caption>
                 <thead className="bg-gray-50 text-gray-600 border-b border-gray-200 font-bold">
                   <tr>
-                    <th className="p-3 w-1/4">{lang === 'zh' ? '课程名称' : 'Course Title'}</th>
-                    <th className="p-3 w-3/4">{lang === 'zh' ? '大纲简介片段' : 'Syllabus Preview'}</th>
+                    <th scope="col" className="p-3 w-1/4">
+                      {lang === 'zh' ? '课程名称' : 'Course Title'}
+                    </th>
+                    <th scope="col" className="p-3 w-3/4">
+                      {lang === 'zh' ? '大纲简介片段' : 'Syllabus Preview'}
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 bg-white">
                   {previewImportData.map((row, rIdx) => (
                     <tr key={rIdx} className="hover:bg-slate-50/50">
-                      <td
-                        className="p-3 font-semibold text-gray-800 align-top truncate max-w-[150px]"
+                      <th
+                        scope="row"
+                        data-label={lang === 'zh' ? '课程名称' : 'Course Title'}
+                        className="p-3 font-semibold text-gray-800 align-top truncate max-w-[150px] text-left"
                         title={row.title}
                       >
                         {row.title}
-                      </td>
-                      <td className="p-3 text-gray-500 font-mono text-xs leading-relaxed break-words col-span-2">
+                      </th>
+                      <td
+                        data-label={lang === 'zh' ? '大纲简介片段' : 'Syllabus Preview'}
+                        className="p-3 text-gray-500 font-mono text-xs leading-relaxed break-words"
+                      >
                         {row.content.length > 150
                           ? row.content.substring(0, 150) + '...'
                           : row.content || <em className="text-gray-300 italic">None</em>}
@@ -356,7 +375,7 @@ export function ImportLessonsModal(props: ImportLessonsModalProps) {
                   ))}
                 </tbody>
               </table>
-            </div>
+            </AccessibleTableRegion>
 
             <div className="bg-amber-50 border border-amber-100 text-amber-900 text-xs rounded-xl p-3 flex gap-2.5 items-start">
               <span className="text-base leading-none">⚠️</span>

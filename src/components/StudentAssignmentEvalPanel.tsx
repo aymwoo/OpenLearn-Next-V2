@@ -598,7 +598,7 @@ export function StudentAssignmentEvalPanel({ lessonId, studentId, lang, addToast
                           setReviewComments((prev) => ({ ...prev, [peerSub.id]: e.target.value }));
                         }}
                         placeholder={zh ? '简要评语反馈...' : 'Brief feedback comment...'}
-                        className="flex-1 bg-white border border-slate-200 px-2 py-1 text-xs rounded-lg text-slate-700 focus:outline-none focus:border-indigo-400 resize-none transition-colors"
+                        className="flex-1 bg-white border border-slate-200 px-2 py-1 text-xs rounded-lg text-slate-700 focus:outline-none focus:border-indigo-400 field-sizing-auto transition-colors"
                       />
                       <button
                         onClick={() => handlePeerReview(peerSub.id, peerSub.student_id)}

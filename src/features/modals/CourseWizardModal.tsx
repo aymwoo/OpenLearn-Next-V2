@@ -172,10 +172,15 @@ export function CourseWizardModal(props: CourseWizardModalProps) {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 font-sans">
               <div className="md:col-span-2 space-y-4">
                 <div>
-                  <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">
+                  <label
+                    htmlFor="wizard-course-title"
+                    className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2"
+                  >
                     {lang === 'zh' ? '📍 课程/课件名称 *' : '📍 Course Title *'}
                   </label>
                   <input
+                    id="wizard-course-title"
+                    name="course_title"
                     type="text"
                     required
                     value={wizardCourseTitle}
@@ -190,10 +195,15 @@ export function CourseWizardModal(props: CourseWizardModalProps) {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">
+                  <label
+                    htmlFor="wizard-course-description"
+                    className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2"
+                  >
                     {lang === 'zh' ? '🎯 课程设计简介与要点说明 (Objectives)' : '🎯 Description & Lesson Objectives'}
                   </label>
                   <textarea
+                    id="wizard-course-description"
+                    name="course_description"
                     rows={4}
                     value={wizardCourseDescription}
                     onChange={(e) => setWizardCourseDescription(e.target.value)}
@@ -202,17 +212,22 @@ export function CourseWizardModal(props: CourseWizardModalProps) {
                         ? '在此处编写您的授课背景、面向学段及最关键的 2-3 个核心教学总目标。'
                         : 'Write a short description stating learning outcomes and student prerequisite goals.'
                     }
-                    className="w-full p-4 border border-gray-255 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-gray-800 text-sm shadow-xs resize-none"
+                    className="w-full p-4 border border-gray-255 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-gray-800 text-sm shadow-xs field-sizing-auto"
                   />
                 </div>
               </div>
 
               <div className="col-span-1 border-l border-gray-100 md:pl-6 space-y-4 text-left">
                 <div>
-                  <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">
+                  <label
+                    htmlFor="wizard-course-category"
+                    className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2"
+                  >
                     {lang === 'zh' ? '🎨 学部科目分类' : '🎨 Subject Category'}
                   </label>
                   <select
+                    id="wizard-course-category"
+                    name="course_category"
                     value={wizardCourseCategory}
                     onChange={(e) => {
                       setWizardCourseCategory(e.target.value);

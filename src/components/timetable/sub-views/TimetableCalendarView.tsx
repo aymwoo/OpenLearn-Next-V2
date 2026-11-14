@@ -23,6 +23,7 @@ import {
 import type { ClassType, ScheduleType } from '../types';
 import { getWeekDates, getIsAfternoon } from '../utils/timetableUtils';
 import { ExtensionPointRenderer } from '../../../plugin-host/extension-point-renderer';
+import { AccessibleTableRegion } from '../../AccessibleTableRegion';
 
 export interface TimetableCalendarViewProps {
   lang: 'zh' | 'en';
@@ -598,16 +599,37 @@ export const TimetableCalendarView: React.FC<TimetableCalendarViewProps> = ({
           </p>
         </div>
       ) : viewMode === 'list' ? (
-        <div className="border border-slate-200 rounded-xl overflow-hidden shadow-2xs">
-          <table className="w-full text-left border-collapse table-auto text-sm bg-white">
+        <AccessibleTableRegion
+          labelledBy="timetable-list-caption"
+          className="border border-slate-200 rounded-xl shadow-2xs"
+        >
+          <table
+            className="responsive-data-table w-full text-left border-collapse table-auto text-sm bg-white"
+            data-stack-mobile="true"
+          >
+            <caption id="timetable-list-caption" className="sr-only">
+              {lang === 'zh' ? '排课列表' : 'Timetable Schedule List'}
+            </caption>
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200 text-gray-600 font-semibold text-xs">
-                <th className="p-3 w-[15%]">{lang === 'zh' ? '上课日期' : 'Date'}</th>
-                <th className="p-3 w-[15%]">{lang === 'zh' ? '具体时间段' : 'Time Slot'}</th>
-                <th className="p-3 w-[20%]">{lang === 'zh' ? '关联班级' : 'Class'}</th>
-                <th className="p-3 w-[25%]">{lang === 'zh' ? '授课内容主题' : 'Lesson Topic'}</th>
-                <th className="p-3 w-[10%] text-center">{lang === 'zh' ? '日常状态' : 'Status'}</th>
-                <th className="p-3 w-[15%] text-right">{lang === 'zh' ? '教务微调' : 'Actions'}</th>
+                <th scope="col" className="p-3 w-[15%]">
+                  {lang === 'zh' ? '上课日期' : 'Date'}
+                </th>
+                <th scope="col" className="p-3 w-[15%]">
+                  {lang === 'zh' ? '具体时间段' : 'Time Slot'}
+                </th>
+                <th scope="col" className="p-3 w-[20%]">
+                  {lang === 'zh' ? '关联班级' : 'Class'}
+                </th>
+                <th scope="col" className="p-3 w-[25%]">
+                  {lang === 'zh' ? '授课内容主题' : 'Lesson Topic'}
+                </th>
+                <th scope="col" className="p-3 w-[10%] text-center">
+                  {lang === 'zh' ? '日常状态' : 'Status'}
+                </th>
+                <th scope="col" className="p-3 w-[15%] text-right">
+                  {lang === 'zh' ? '教务微调' : 'Actions'}
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-150">
@@ -618,23 +640,30 @@ export const TimetableCalendarView: React.FC<TimetableCalendarViewProps> = ({
                     key={sch.id}
                     className={`hover:bg-slate-50/80 transition-colors ${isCancel ? 'bg-red-50/10 text-gray-400' : 'text-gray-700'}`}
                   >
-                    <td className="p-3 font-semibold text-xs">
+                    <th
+                      scope="row"
+                      data-label={lang === 'zh' ? '上课日期' : 'Date'}
+                      className="p-3 font-semibold text-xs text-left"
+                    >
                       <span className="flex items-center gap-1">
                         <CalendarDays size={13} className="text-slate-400" />
                         {sch.scheduled_date}
                       </span>
-                    </td>
-                    <td className="p-3 font-mono text-xs text-indigo-750">
+                    </th>
+                    <td
+                      data-label={lang === 'zh' ? '具体时间段' : 'Time Slot'}
+                      className="p-3 font-mono text-xs text-indigo-750"
+                    >
                       {sch.time_slot || (
                         <span className="text-xs text-gray-300 italic">{lang === 'zh' ? '全天' : 'All-day'}</span>
                       )}
                     </td>
-                    <td className="p-3 text-xs">
+                    <td data-label={lang === 'zh' ? '关联班级' : 'Class'} className="p-3 text-xs">
                       <span className="bg-slate-100 text-slate-800 px-2 py-1 rounded-md border border-slate-250 font-medium">
                         {sch.class_name}
                       </span>
                     </td>
-                    <td className="p-3">
+                    <td data-label={lang === 'zh' ? '授课内容主题' : 'Lesson Topic'} className="p-3">
                       <div className="flex flex-col leading-snug">
                         <span className={`font-semibold ${isCancel ? 'line-through opacity-70' : ''}`}>
                           {sch.lesson_title}
@@ -648,7 +677,7 @@ export const TimetableCalendarView: React.FC<TimetableCalendarViewProps> = ({
                         )}
                       </div>
                     </td>
-                    <td className="p-3 text-center">
+                    <td data-label={lang === 'zh' ? '日常状态' : 'Status'} className="p-3 text-center">
                       <span
                         className={`inline-block text-xs px-2 py-0.5 rounded-full font-bold uppercase tracking-wide border ${
                           sch.status === 'cancelled'
@@ -677,7 +706,7 @@ export const TimetableCalendarView: React.FC<TimetableCalendarViewProps> = ({
                                 : 'Active'}
                       </span>
                     </td>
-                    <td className="p-3 text-right">
+                    <td data-label={lang === 'zh' ? '教务微调' : 'Actions'} className="p-3 text-right">
                       <div className="flex items-center justify-end gap-1.5">
                         {renderQuickStartButton(sch, 'sm')}
                         <ExtensionPointRenderer
@@ -707,7 +736,7 @@ export const TimetableCalendarView: React.FC<TimetableCalendarViewProps> = ({
               })}
             </tbody>
           </table>
-        </div>
+        </AccessibleTableRegion>
       ) : (
         <div className="flex flex-col gap-4">
           {viewMode === 'week' && (

@@ -631,24 +631,30 @@ export function AssignmentSubmitDialog({ assignmentId, onClose, onToast, lang = 
 
               <div className="space-y-2">
                 <div>
-                  <label className="block text-xs font-semibold text-main mb-1">
+                  <label htmlFor="assignment-submit-text" className="block text-xs font-semibold text-main mb-1">
                     {zh ? '文字作答（可选）' : 'Text answer (optional)'}
                   </label>
                   <textarea
+                    id="assignment-submit-text"
+                    name="text_content"
                     value={textContent}
                     onChange={(e) => setTextContent(e.target.value)}
-                    className="w-full h-20 p-2 border border-theme rounded-lg text-xs bg-surface text-main resize-none focus:outline-none focus:ring-1 focus:ring-orange-400"
+                    className="w-full min-h-20 p-2 border border-theme rounded-lg text-xs bg-surface text-main field-sizing-auto focus:outline-none focus:ring-1 focus:ring-orange-400"
                     placeholder={zh ? '可直接粘贴代码或说明…' : 'Paste code or notes…'}
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-main mb-1">
+                  <label htmlFor="assignment-submit-link" className="block text-xs font-semibold text-main mb-1">
                     <span className="inline-flex items-center gap-1">
                       <Link2 size={11} /> {zh ? '作品链接（可选）' : 'Link (optional)'}
                     </span>
                   </label>
                   <input
+                    id="assignment-submit-link"
+                    name="link_url"
                     type="url"
+                    spellCheck={false}
+                    autoCapitalize="none"
                     value={linkUrl}
                     onChange={(e) => setLinkUrl(e.target.value)}
                     className="w-full px-2 py-1.5 border border-theme rounded-lg text-xs bg-surface text-main focus:outline-none focus:ring-1 focus:ring-orange-400"

@@ -514,7 +514,7 @@ export function AssessmentEditor({
                         onChange={(e) =>
                           setItems((prev) => prev.map((it, i) => (i === index ? { ...it, stem: e.target.value } : it)))
                         }
-                        className={`${INPUT} resize-none`}
+                        className={`${INPUT} field-sizing-auto`}
                       />
                     </div>
                     {Editor ? (

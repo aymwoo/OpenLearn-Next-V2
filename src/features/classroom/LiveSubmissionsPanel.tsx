@@ -1,5 +1,6 @@
 import React from 'react';
 import { Search, RefreshCw, Trophy, Zap, Database, FileText, Eye, Check } from 'lucide-react';
+import { AccessibleTableRegion } from '../../components/AccessibleTableRegion';
 
 export const FINISHED_STATUSES = ['completed', 'submitted', 'finished'];
 export const IN_PROGRESS_STATUSES = ['active', 'inprogress', 'started'];
@@ -257,141 +258,175 @@ export function LiveSubmissionsPanel({
             }
 
             return (
-              <table className="w-full border-collapse text-left text-xs text-main">
-                <thead>
-                  <tr className="bg-surface-secondary border-b border-theme font-bold text-muted">
-                    <th className="p-3">{lang === 'zh' ? '学生姓名' : 'Student Name'}</th>
-                    <th className="p-3">{lang === 'zh' ? '交互课件' : 'Courseware'}</th>
-                    <th className="p-3">{lang === 'zh' ? '状态' : 'Status'}</th>
-                    <th className="p-3 text-center">{lang === 'zh' ? '成绩' : 'Score'}</th>
-                    <th className="p-3 text-center">{lang === 'zh' ? '完成度' : 'Completion'}</th>
-                    <th className="p-3 text-right">{lang === 'zh' ? '操作' : 'Actions'}</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border-theme">
-                  {displayAttempts.map((a) => {
-                    const isFinished = FINISHED_STATUSES.includes(a.status);
-                    const hasScore = a.score !== null && a.score !== undefined;
-                    const canRecord = isFinished && hasScore;
-                    const recordDisabledReason = !isFinished
-                      ? lang === 'zh'
-                        ? '该提交仍在进行中，完成后才能录入学期成绩'
-                        : 'Still in progress'
-                      : !hasScore
+              <AccessibleTableRegion labelledBy="live-submissions-table-caption">
+                <table
+                  className="responsive-data-table w-full border-collapse text-left text-xs text-main"
+                  data-stack-mobile="true"
+                >
+                  <caption id="live-submissions-table-caption" className="sr-only">
+                    {lang === 'zh' ? '课堂实时提交列表' : 'Live Submissions Table'}
+                  </caption>
+                  <thead>
+                    <tr className="bg-surface-secondary border-b border-theme font-bold text-muted">
+                      <th scope="col" className="p-3">
+                        {lang === 'zh' ? '学生姓名' : 'Student Name'}
+                      </th>
+                      <th scope="col" className="p-3">
+                        {lang === 'zh' ? '交互课件' : 'Courseware'}
+                      </th>
+                      <th scope="col" className="p-3">
+                        {lang === 'zh' ? '状态' : 'Status'}
+                      </th>
+                      <th scope="col" className="p-3 text-center">
+                        {lang === 'zh' ? '成绩' : 'Score'}
+                      </th>
+                      <th scope="col" className="p-3 text-center">
+                        {lang === 'zh' ? '完成度' : 'Completion'}
+                      </th>
+                      <th scope="col" className="p-3 text-right">
+                        {lang === 'zh' ? '操作' : 'Actions'}
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border-theme">
+                    {displayAttempts.map((a) => {
+                      const isFinished = FINISHED_STATUSES.includes(a.status);
+                      const hasScore = a.score !== null && a.score !== undefined;
+                      const canRecord = isFinished && hasScore;
+                      const recordDisabledReason = !isFinished
                         ? lang === 'zh'
-                          ? '该提交没有分数，无法录入（不会凭空记分）'
-                          : 'No score available'
-                        : undefined;
-                    const formattedTime = a.started_at
-                      ? new Date(a.started_at).toLocaleTimeString([], {
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })
-                      : 'N/A';
+                          ? '该提交仍在进行中，完成后才能录入学期成绩'
+                          : 'Still in progress'
+                        : !hasScore
+                          ? lang === 'zh'
+                            ? '该提交没有分数，无法录入（不会凭空记分）'
+                            : 'No score available'
+                          : undefined;
+                      const formattedTime = a.started_at
+                        ? new Date(a.started_at).toLocaleTimeString([], {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })
+                        : 'N/A';
 
-                    return (
-                      <tr key={a.attemptId} className="hover:bg-surface-secondary/50 transition-colors group">
-                        <td className="p-3">
-                          <div className="font-semibold text-main">{a.studentName}</div>
-                          <div className="text-xs text-muted mt-0.5">
-                            {lang === 'zh' ? '时间' : 'Time'}: {formattedTime}
-                          </div>
-                        </td>
-                        <td className="p-3 font-medium text-main max-w-[150px] truncate" title={a.coursewareName}>
-                          {a.coursewareName}
-                        </td>
-                        <td className="p-3">
-                          <span
-                            className={`px-2 py-0.5 rounded-full border text-xs font-bold ${
-                              isFinished
-                                ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
-                                : 'bg-blue-50 text-blue-700 border-blue-100 animate-pulse'
-                            }`}
+                      return (
+                        <tr key={a.attemptId} className="hover:bg-surface-secondary/50 transition-colors group">
+                          <th
+                            scope="row"
+                            data-label={lang === 'zh' ? '学生姓名' : 'Student Name'}
+                            className="p-3 text-left font-normal"
                           >
-                            {isFinished
-                              ? lang === 'zh'
-                                ? '已提交'
-                                : 'Finished'
-                              : lang === 'zh'
-                                ? '进行中'
-                                : 'Running'}
-                          </span>
-                        </td>
-                        <td className="p-3 text-center font-bold font-mono">
-                          {a.score !== null ? (
-                            <span className="text-primary-theme bg-primary-theme/10 border border-primary-theme/20 px-1.5 py-0.5 rounded-md">
-                              {a.score}分
-                            </span>
-                          ) : (
-                            <span className="text-muted font-medium">-</span>
-                          )}
-                        </td>
-                        <td className="p-3 text-center font-semibold font-mono">
-                          {a.completion !== null ? `${Math.round(a.completion * 100)}%` : '0%'}
-                        </td>
-                        <td className="p-3 text-right">
-                          <div className="flex justify-end gap-2">
-                            <button
-                              onClick={() => handleViewRaw(a)}
-                              className="p-1 text-muted hover:text-primary-theme hover:bg-surface-secondary border border-transparent hover:border-theme rounded-lg transition-colors cursor-pointer flex items-center gap-1 text-xs"
-                              title={lang === 'zh' ? '查看提交轨迹事件数据' : 'View Raw Data'}
+                            <div className="font-semibold text-main">{a.studentName}</div>
+                            <div className="text-xs text-muted mt-0.5">
+                              {lang === 'zh' ? '时间' : 'Time'}: {formattedTime}
+                            </div>
+                          </th>
+                          <td
+                            data-label={lang === 'zh' ? '交互课件' : 'Courseware'}
+                            className="p-3 font-medium text-main max-w-[150px] truncate"
+                            title={a.coursewareName}
+                          >
+                            {a.coursewareName}
+                          </td>
+                          <td data-label={lang === 'zh' ? '状态' : 'Status'} className="p-3">
+                            <span
+                              className={`px-2 py-0.5 rounded-full border text-xs font-bold ${
+                                isFinished
+                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                                  : 'bg-blue-50 text-blue-700 border-blue-100 animate-pulse'
+                              }`}
                             >
-                              <Eye size={12} />
-                              <span>{lang === 'zh' ? '轨迹' : 'Events'}</span>
-                            </button>
-
-                            {a.isPromoted > 0 ? (
-                              <span className="px-2 py-1 text-emerald-650 font-bold text-xs flex items-center gap-0.5 bg-emerald-50/50 rounded-lg border border-emerald-100">
-                                <Check size={11} />
-                                {lang === 'zh' ? '已归档' : 'Saved'}
+                              {isFinished
+                                ? lang === 'zh'
+                                  ? '已提交'
+                                  : 'Finished'
+                                : lang === 'zh'
+                                  ? '进行中'
+                                  : 'Running'}
+                            </span>
+                          </td>
+                          <td
+                            data-label={lang === 'zh' ? '成绩' : 'Score'}
+                            className="p-3 text-center font-bold font-mono"
+                          >
+                            {a.score !== null ? (
+                              <span className="text-primary-theme bg-primary-theme/10 border border-primary-theme/20 px-1.5 py-0.5 rounded-md">
+                                {a.score}分
                               </span>
                             ) : (
-                              <>
-                                <button
-                                  onClick={() => handlePromoteAttempt(a.attemptId)}
-                                  disabled={!canRecord}
-                                  className={`px-2 py-1 text-xs font-bold rounded-lg flex items-center gap-1 shadow-sm transition-all active:scale-95 cursor-pointer border ${
-                                    canRecord
-                                      ? 'bg-primary-theme hover:bg-primary-theme-hover text-white border-primary-theme'
-                                      : 'bg-surface-secondary text-muted border-theme cursor-not-allowed opacity-60'
-                                  }`}
-                                  title={
-                                    recordDisabledReason ??
-                                    (lang === 'zh'
-                                      ? '将分数和进度作为随堂学习数据存入数据库，记入学期成绩'
-                                      : 'Save to DB & Semester grade')
-                                  }
-                                >
-                                  <Database size={11} />
-                                  <span>{lang === 'zh' ? '录入成绩' : 'Record'}</span>
-                                </button>
-                                <button
-                                  onClick={() => {
-                                    const confirmed = window.confirm(
-                                      lang === 'zh'
-                                        ? `确定把【${a.studentName}】的「${a.coursewareName}」标记为缺考吗？\n缺考按 0 分计入学期成绩；学生补交不会自动覆盖，教师改判请手动录入。`
-                                        : `Mark ${a.studentName} as absent for "${a.coursewareName}"?\nAbsent counts as 0 in semester grades; resubmission won't override it — use manual recording instead.`,
-                                    );
-                                    if (confirmed) void handleMarkAbsent(a.studentId, a.coursewareId);
-                                  }}
-                                  className="px-2 py-1 text-xs font-bold rounded-lg flex items-center gap-1 shadow-sm transition-all active:scale-95 cursor-pointer border bg-surface text-muted hover:text-red-600 hover:border-red-200 border-theme"
-                                  title={
-                                    lang === 'zh'
-                                      ? '该生未参加本次课件学习（如缺席），成绩按 0 分计'
-                                      : 'Student did not participate (e.g. absent); counts as 0'
-                                  }
-                                >
-                                  <span>{lang === 'zh' ? '标缺考' : 'Absent'}</span>
-                                </button>
-                              </>
+                              <span className="text-muted font-medium">-</span>
                             )}
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                          </td>
+                          <td
+                            data-label={lang === 'zh' ? '完成度' : 'Completion'}
+                            className="p-3 text-center font-semibold font-mono"
+                          >
+                            {a.completion !== null ? `${Math.round(a.completion * 100)}%` : '0%'}
+                          </td>
+                          <td data-label={lang === 'zh' ? '操作' : 'Actions'} className="p-3 text-right">
+                            <div className="flex justify-end gap-2">
+                              <button
+                                onClick={() => handleViewRaw(a)}
+                                className="p-1 text-muted hover:text-primary-theme hover:bg-surface-secondary border border-transparent hover:border-theme rounded-lg transition-colors cursor-pointer flex items-center gap-1 text-xs"
+                                title={lang === 'zh' ? '查看提交轨迹事件数据' : 'View Raw Data'}
+                              >
+                                <Eye size={12} />
+                                <span>{lang === 'zh' ? '轨迹' : 'Events'}</span>
+                              </button>
+
+                              {a.isPromoted > 0 ? (
+                                <span className="px-2 py-1 text-emerald-650 font-bold text-xs flex items-center gap-0.5 bg-emerald-50/50 rounded-lg border border-emerald-100">
+                                  <Check size={11} />
+                                  {lang === 'zh' ? '已归档' : 'Saved'}
+                                </span>
+                              ) : (
+                                <>
+                                  <button
+                                    onClick={() => handlePromoteAttempt(a.attemptId)}
+                                    disabled={!canRecord}
+                                    className={`px-2 py-1 text-xs font-bold rounded-lg flex items-center gap-1 shadow-sm transition-all active:scale-95 cursor-pointer border ${
+                                      canRecord
+                                        ? 'bg-primary-theme hover:bg-primary-theme-hover text-white border-primary-theme'
+                                        : 'bg-surface-secondary text-muted border-theme cursor-not-allowed opacity-60'
+                                    }`}
+                                    title={
+                                      recordDisabledReason ??
+                                      (lang === 'zh'
+                                        ? '将分数和进度作为随堂学习数据存入数据库，记入学期成绩'
+                                        : 'Save to DB & Semester grade')
+                                    }
+                                  >
+                                    <Database size={11} />
+                                    <span>{lang === 'zh' ? '录入成绩' : 'Record'}</span>
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      const confirmed = window.confirm(
+                                        lang === 'zh'
+                                          ? `确定把【${a.studentName}】的「${a.coursewareName}」标记为缺考吗？\n缺考按 0 分计入学期成绩；学生补交不会自动覆盖，教师改判请手动录入。`
+                                          : `Mark ${a.studentName} as absent for "${a.coursewareName}"?\nAbsent counts as 0 in semester grades; resubmission won't override it — use manual recording instead.`,
+                                      );
+                                      if (confirmed) void handleMarkAbsent(a.studentId, a.coursewareId);
+                                    }}
+                                    className="px-2 py-1 text-xs font-bold rounded-lg flex items-center gap-1 shadow-sm transition-all active:scale-95 cursor-pointer border bg-surface text-muted hover:text-red-600 hover:border-red-200 border-theme"
+                                    title={
+                                      lang === 'zh'
+                                        ? '该生未参加本次课件学习（如缺席），成绩按 0 分计'
+                                        : 'Student did not participate (e.g. absent); counts as 0'
+                                    }
+                                  >
+                                    <span>{lang === 'zh' ? '标缺考' : 'Absent'}</span>
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </AccessibleTableRegion>
             );
           })()
         )}

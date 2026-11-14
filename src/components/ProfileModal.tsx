@@ -1,6 +1,7 @@
-import { useState, useRef, useEffect, useCallback, type ChangeEvent } from 'react';
+import { useState, useRef, useEffect, useCallback, type ChangeEvent, type FormEvent } from 'react';
 import { X, User as UserIcon, KeyRound, CheckCircle2, Blocks } from 'lucide-react';
 import AccessibleDialog from './AccessibleDialog';
+import { PasswordInput } from './PasswordInput';
 import type { SessionType } from '../types/app';
 import type { Language } from '../i18n';
 import { AiProvidersPanel, type AIProvider } from '../features/admin/AiProvidersPanel';
@@ -65,12 +66,19 @@ export function ProfileModal({ open, session, lang, onClose, onSaved, onAvatar }
   const [avatarError, setAvatarError] = useState<string | null>(null);
 
   // 修改密码区块
+  const nameInputRef = useRef<HTMLInputElement>(null);
+  const oldPwdRef = useRef<HTMLInputElement>(null);
+  const newPwdRef = useRef<HTMLInputElement>(null);
+  const confirmPwdRef = useRef<HTMLInputElement>(null);
   const [showPwd, setShowPwd] = useState(false);
   const [oldPwd, setOldPwd] = useState('');
   const [newPwd, setNewPwd] = useState('');
   const [confirmPwd, setConfirmPwd] = useState('');
   const [pwdSaving, setPwdSaving] = useState(false);
   const [pwdError, setPwdError] = useState<string | null>(null);
+  const [oldPwdError, setOldPwdError] = useState<string | null>(null);
+  const [newPwdError, setNewPwdError] = useState<string | null>(null);
+  const [confirmPwdError, setConfirmPwdError] = useState<string | null>(null);
   const [pwdSuccess, setPwdSuccess] = useState(false);
 
   if (!open) return null;
@@ -86,8 +94,19 @@ export function ProfileModal({ open, session, lang, onClose, onSaved, onAvatar }
   const trimmed = name.trim();
   const changed = trimmed.length > 0 && trimmed !== session.name;
 
-  const handleSave = async () => {
-    if (!changed || saving) return;
+  const handleSave = async (e?: FormEvent) => {
+    e?.preventDefault();
+    if (saving) return;
+    if (!trimmed) {
+      setError(lang === 'zh' ? '显示名称不能为空' : 'Display name is required');
+      nameInputRef.current?.focus();
+      return;
+    }
+    if (!changed) {
+      setError(lang === 'zh' ? '显示名称未发生变化' : 'Display name is unchanged');
+      nameInputRef.current?.focus();
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
@@ -109,13 +128,45 @@ export function ProfileModal({ open, session, lang, onClose, onSaved, onAvatar }
     }
   };
 
-  const pwdValid =
-    oldPwd.length > 0 && newPwd.length >= 8 && /[a-zA-Z]/.test(newPwd) && /[0-9]/.test(newPwd) && newPwd === confirmPwd;
-
-  const handleChangePwd = async () => {
-    if (!pwdValid || pwdSaving) return;
-    setPwdSaving(true);
+  const handleChangePwd = async (e?: FormEvent) => {
+    e?.preventDefault();
+    if (pwdSaving) return;
     setPwdError(null);
+    let nextOldErr: string | null = null;
+    let nextNewErr: string | null = null;
+    let nextConfirmErr: string | null = null;
+
+    if (!oldPwd) {
+      nextOldErr = lang === 'zh' ? '请输入当前密码' : 'Enter your current password';
+    }
+    if (newPwd.length < 8 || !/[a-zA-Z]/.test(newPwd) || !/[0-9]/.test(newPwd)) {
+      nextNewErr =
+        lang === 'zh' ? '新密码至少 8 位且须包含字母和数字' : 'Use at least 8 characters with letters and numbers';
+    }
+    if (!confirmPwd) {
+      nextConfirmErr = lang === 'zh' ? '请再次输入新密码' : 'Confirm your new password';
+    } else if (newPwd !== confirmPwd) {
+      nextConfirmErr = lang === 'zh' ? '两次输入的新密码不一致' : 'New passwords do not match';
+    }
+
+    setOldPwdError(nextOldErr);
+    setNewPwdError(nextNewErr);
+    setConfirmPwdError(nextConfirmErr);
+
+    if (nextOldErr) {
+      oldPwdRef.current?.focus();
+      return;
+    }
+    if (nextNewErr) {
+      newPwdRef.current?.focus();
+      return;
+    }
+    if (nextConfirmErr) {
+      confirmPwdRef.current?.focus();
+      return;
+    }
+
+    setPwdSaving(true);
     try {
       const res = await fetch('/api/auth/change-password', {
         method: 'POST',
@@ -131,6 +182,9 @@ export function ProfileModal({ open, session, lang, onClose, onSaved, onAvatar }
       setOldPwd('');
       setNewPwd('');
       setConfirmPwd('');
+      setOldPwdError(null);
+      setNewPwdError(null);
+      setConfirmPwdError(null);
       setShowPwd(false);
     } catch {
       setPwdError(lang === 'zh' ? '网络错误，请重试' : 'Network error, please retry');
@@ -297,37 +351,58 @@ export function ProfileModal({ open, session, lang, onClose, onSaved, onAvatar }
           {avatarError && <p className="text-xs text-rose-500">{avatarError}</p>}
 
           {/* 显示名称 */}
-          <div>
-            <label className="block text-sm text-gray-500 mb-1">{t('显示名称', 'Display Name')}</label>
+          <form noValidate onSubmit={(e) => void handleSave(e)}>
+            <label htmlFor="profile-display-name" className="block text-sm text-gray-500 mb-1">
+              {t('显示名称', 'Display Name')}
+            </label>
             <div className="flex gap-2">
               <input
+                ref={nameInputRef}
+                id="profile-display-name"
+                name="displayName"
+                type="text"
+                autoComplete="name"
+                required
                 value={name}
-                onChange={(e) => setName(e.target.value)}
+                onChange={(e) => {
+                  setName(e.target.value);
+                  if (error) setError(null);
+                }}
                 maxLength={50}
+                aria-invalid={error ? 'true' : 'false'}
+                aria-describedby={error ? 'profile-display-name-error' : undefined}
                 className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-200"
               />
               <button
-                onClick={handleSave}
-                disabled={!changed || saving}
+                type="submit"
+                disabled={saving}
                 className="px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium disabled:opacity-40 enabled:hover:bg-indigo-700 transition-colors cursor-pointer shrink-0"
               >
                 {saving ? t('保存中…', 'Saving…') : t('保存', 'Save')}
               </button>
             </div>
-            {error && <p className="text-xs text-rose-500 mt-1">{error}</p>}
-          </div>
+            {error && (
+              <p id="profile-display-name-error" role="alert" className="text-xs text-rose-500 mt-1">
+                {error}
+              </p>
+            )}
+          </form>
 
           <div className="border-t border-gray-100 pt-4">
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium text-gray-700 flex items-center gap-2">
-                <KeyRound size={16} className="text-gray-400" />
+                <KeyRound size={16} className="text-gray-400" aria-hidden="true" />
                 {t('修改密码', 'Change Password')}
               </span>
               {!showPwd && !pwdSuccess && (
                 <button
+                  type="button"
                   onClick={() => {
                     setShowPwd(true);
                     setPwdError(null);
+                    setOldPwdError(null);
+                    setNewPwdError(null);
+                    setConfirmPwdError(null);
                   }}
                   className="text-sm text-indigo-600 hover:text-indigo-800 cursor-pointer"
                 >
@@ -338,57 +413,104 @@ export function ProfileModal({ open, session, lang, onClose, onSaved, onAvatar }
 
             {pwdSuccess && (
               <p className="mt-2 flex items-center gap-1.5 text-sm text-emerald-600">
-                <CheckCircle2 size={16} />
+                <CheckCircle2 size={16} aria-hidden="true" />
                 {t('密码已修改，其他设备的登录已失效', 'Password changed. Other devices were logged out.')}
               </p>
             )}
 
             {showPwd && (
-              <div className="mt-3 space-y-3">
-                <input
-                  type="password"
+              <form noValidate onSubmit={(e) => void handleChangePwd(e)} className="mt-3 space-y-3">
+                <PasswordInput
+                  id="profile-old-password"
+                  name="currentPassword"
+                  label={t('当前密码', 'Current password')}
                   value={oldPwd}
-                  onChange={(e) => setOldPwd(e.target.value)}
+                  onChange={(v) => {
+                    setOldPwd(v);
+                    if (oldPwdError) setOldPwdError(null);
+                  }}
+                  autoComplete="current-password"
+                  required
+                  enterKeyHint="next"
+                  error={oldPwdError}
+                  inputRef={oldPwdRef}
+                  lang={lang}
                   placeholder={t('当前密码', 'Current password')}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                  className="w-full border border-gray-300 rounded-lg pl-3 pr-10 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                  labelClassName="block text-xs font-medium text-gray-600 mb-1"
                 />
-                <input
-                  type="password"
+                <PasswordInput
+                  id="profile-new-password"
+                  name="newPassword"
+                  label={t('新密码', 'New password')}
+                  hint={t('至少 8 位，需同时包含字母和数字', 'At least 8 characters with letters and numbers')}
                   value={newPwd}
-                  onChange={(e) => setNewPwd(e.target.value)}
-                  placeholder={t('新密码（≥8 位，含字母和数字）', 'New password (≥8 chars, letters + numbers)')}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                  onChange={(v) => {
+                    setNewPwd(v);
+                    if (newPwdError) setNewPwdError(null);
+                  }}
+                  autoComplete="new-password"
+                  required
+                  minLength={8}
+                  enterKeyHint="next"
+                  error={newPwdError}
+                  inputRef={newPwdRef}
+                  lang={lang}
+                  placeholder={t('输入新密码', 'Enter new password')}
+                  className="w-full border border-gray-300 rounded-lg pl-3 pr-10 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                  labelClassName="block text-xs font-medium text-gray-600 mb-0.5"
                 />
-                <input
-                  type="password"
+                <PasswordInput
+                  id="profile-confirm-password"
+                  name="confirmPassword"
+                  label={t('确认新密码', 'Confirm new password')}
                   value={confirmPwd}
-                  onChange={(e) => setConfirmPwd(e.target.value)}
-                  placeholder={t('确认新密码', 'Confirm new password')}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                  onChange={(v) => {
+                    setConfirmPwd(v);
+                    if (confirmPwdError) setConfirmPwdError(null);
+                  }}
+                  autoComplete="new-password"
+                  required
+                  minLength={8}
+                  enterKeyHint="done"
+                  error={confirmPwdError}
+                  inputRef={confirmPwdRef}
+                  lang={lang}
+                  placeholder={t('再次输入新密码', 'Re-enter new password')}
+                  className="w-full border border-gray-300 rounded-lg pl-3 pr-10 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                  labelClassName="block text-xs font-medium text-gray-600 mb-1"
                 />
-                {pwdError && <p className="text-xs text-rose-500">{pwdError}</p>}
+                {pwdError && (
+                  <p role="alert" className="text-xs text-rose-500">
+                    {pwdError}
+                  </p>
+                )}
                 <div className="flex gap-2 justify-end">
                   <button
+                    type="button"
                     onClick={() => {
                       setShowPwd(false);
                       setOldPwd('');
                       setNewPwd('');
                       setConfirmPwd('');
                       setPwdError(null);
+                      setOldPwdError(null);
+                      setNewPwdError(null);
+                      setConfirmPwdError(null);
                     }}
                     className="px-4 py-2 rounded-lg border border-gray-300 text-sm text-gray-600 hover:bg-gray-50 cursor-pointer"
                   >
                     {t('取消', 'Cancel')}
                   </button>
                   <button
-                    onClick={handleChangePwd}
-                    disabled={!pwdValid || pwdSaving}
+                    type="submit"
+                    disabled={pwdSaving}
                     className="px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium disabled:opacity-40 enabled:hover:bg-indigo-700 transition-colors cursor-pointer"
                   >
                     {pwdSaving ? t('提交中…', 'Submitting…') : t('提交', 'Submit')}
                   </button>
                 </div>
-              </div>
+              </form>
             )}
           </div>
 

@@ -874,7 +874,7 @@ export function PreClassReadyView({
                 placeholder={
                   lang === 'zh' ? '输入广播给全班学生的课前热身指导...' : 'Type a warm-up prompt for students...'
                 }
-                className="w-full bg-surface-secondary border border-theme rounded-xl p-2.5 text-xs text-main placeholder-muted focus:ring-1 focus:ring-primary-theme outline-none resize-none"
+                className="w-full bg-surface-secondary border border-theme rounded-xl p-2.5 text-xs text-main placeholder-muted focus:ring-1 focus:ring-primary-theme outline-none field-sizing-auto"
               />
 
               <div className="flex items-center justify-between gap-2">
