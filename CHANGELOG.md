@@ -12,6 +12,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Features
 
+- **内核 AI 助手 Persona 第三方插件扩展、可替换模板、`ai:persona` 门禁与持久化治理（Gitee Issue `IKVA8R`）**：
+  - 扩展 `AIPersonaDefinition`（[`packages/core/di/interfaces.ts`](packages/core/di/interfaces.ts) 与 [`packages/plugin-sdk/openlearn.d.ts`](packages/plugin-sdk/openlearn.d.ts)）：支持 `mode?: 'overlay' | 'replace'`、`basePolicy?: 'inherit' | 'drop'`、`visibility?`、`defaultForRole?`、`toolPolicy?: { allow?: string[]; deny?: string[] }` 与 `maxTurns?: number`（服务端裁剪 `1..20`、默认 `5`）；
+  - 重构 `buildAgentSystemInstruction`、`resolveToolsForPersona` 与 `runOpenAIAgentChat` 工具循环（`server/ai-agent.ts`）：按 `mode`/`basePolicy` 显式构造系统指令，学生角色跳过插件切片（`pluginSlices`），按 `toolPolicy` 通配模式 + SEC-01 `isActionAllowedForRole` 角色白名单双重裁剪可用工具并在 `functionCall` 执行前做 `allowedToolNames` 运行期二次拦截；
+  - 新增方法与清单级能力 `CAP_AI_PERSONA = 'ai:persona'`（`packages/core/capability/catalog.ts`、`packages/core/plugin-host/method-policy.ts`），在 Inline `wrapAI`（`context-builder.ts`）、Worker `ServiceHost`（`service-host.ts`）与声明式生命周期（`lifecycle.ts`）均以 fail-closed 拦截 `registerAIPersona` / `registerAIContextProvider` 与 `contributes['ai.persona.provider']`，强制绑定 `registeredBy = pluginId` 并在停用/卸载/Worker `dispose()` 时自动注销；
+  - 新增迁移 `049_ai_personas.sql`（同步更新 `schema-golden.json`、`migrations/README.md` 与 `FORBIDDEN_CORE_TABLES` 守卫共 44 张表）持久化 `ai_personas`、启用覆盖与角色映射；在 `server/ai-persona-registry.ts` 与 `packages/core/di/ai-service.ts` 实现启动孤儿 `'plugin'` 行清理与 pre-bind 注册回放；在 `server/routes/os.ts` 新增 `GET /api/agent/personas` 角色可见性过滤/默认返回、`POST /api/agent/chat` 403/404 强制校检及管理员 `POST`/`PATCH`/`DELETE /api/agent/personas` CRUD 端点；
+  - 前端升级 `src/hooks/useAgentChat.ts`（`openlearn_agent_persona_id` `localStorage` 持久化）、`src/features/shared/RightSidebar.tsx`（角色默认/可用性回退）与管理后台面板 [`src/features/admin/AiPersonasSection.tsx`](src/features/admin/AiPersonasSection.tsx)（基于 `<AccessibleDialog>` 与 `<AccessibleTableRegion>`），并同步更新文档与 `docs/agent/contracts/*.json` 事实契约。
 - **统一文件持久化层、三插槽可扩展架构、安全读取网关与存储目录治理（Issue #504）**：
   - 新增迁移 `048_file_storage_extension.sql`（同步更新 `schema-golden.json`、`platform-data-tables.md` 与 `FORBIDDEN_CORE_TABLES` 守卫），建立物理与逻辑分离的三表模型（`file_blobs` 物理去重与 `ref_count` 引用计数、`file_assets` 逻辑资产与访问作用域 `public | authenticated | assignment`、`file_aliases` 旧 `/uploads/*` 路径别名兼容），并在 `site_settings` 与 `plugin_assignment_files` 分别扩展 `file_storage_config` 与 `asset_id`；
   - 在内核 DI（`IFileStorageExtensionRegistryToken` / `FileStorageExtensionRegistry`）与 `@openlearn/plugin-sdk` 开放文件存储三插槽扩展契约：`LayoutPolicy`（支持 `by-date` / `by-course` / `by-author` / `flat` / `custom` 与扩展 Token，内置路径穿越防线与唯一占位符校验）、`StorageBackend`（内建 `LocalFileStorage` 临时文件原子写与根目录逃逸拦截）与 `FileProcessor`（`before-store` fail-closed、`after-store` fail-open 与有界后台并发、内建 PDF 页数识别、`before-serve` 禁覆写安全响应头）；
@@ -26,6 +32,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixes
 
+- **文件存储合入后的 CI 回归**：去掉统一存储新增代码里的显式 `any`，使 ESLint 告警回到预算内；课程包「后一个附件校验失败」用例改为断言 `<data>/files` 物理文件、`file_assets` 与 `file_blobs` 均被补偿清理（`uploads/` 不再预先创建，扫描它会 ENOENT，也看不到新的落盘位置）。
 - **表单语义校验/可见性切换与全站响应式可访问表格底座（Issue #489）**：
   - 新增 `src/components/PasswordInput.tsx`（关联 `<label htmlFor>`、输入框上方持久化规则提示、显示/隐藏密码 `aria-pressed` 切换、仅在报错时通过 `aria-describedby` 绑定内联错误）与 `src/components/AccessibleTableRegion.tsx`（`tabIndex={0}`、`role="region"`、`aria-labelledby` 键盘可聚焦横向滚动容器），并在 `src/index.css` 中接入 `.table-scroll-region`、`.responsive-data-table[data-stack-mobile="true"]` `@container` 窄屏卡片化、`.field-sizing-auto` 与 `:user-invalid` / `[aria-invalid="true"]` 样式；
   - 重构 `ForcedPasswordChangeGate`、`ProfileModal`、`AdminPanel` 教工表单、`AiProvidersPanel` 与 `ClassStudentsPanel` 密码编辑表单使用 `<form noValidate>` 提交校验与首错自动聚焦，并将 `CourseWizardModal`、`AssignmentSubmitDialog`、`QuestionBankPanel`、`AssessmentEditor` 等叙事文本框升级为 `field-sizing-auto`；
@@ -64,12 +71,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - 重新生成 `docs/reference/platform-data-tables.md` 的自动表清单（82 → **85** 张表、46 → **48** 个迁移），补齐 `themes`、`theme_versions`、`user_theme_preferences` 三张新表，以及 `site_settings` 新增的 `default_theme_id` / `logout_clear_site_data` 列；
   - 同步修正 `docs/architecture/database-and-migrations.md` 与 `docs/agent/reference/platform-services.md` 中过期的迁移数 / 表数口径（`000`–`047` 共 48 个脚本、85 张核心表）。
 - **补齐文件存储扩展（#504）落地后的文档口径**：
-  - 迁移 / 表数统一为 `000`–`048`、49 个脚本、**88** 张表（`database-and-migrations.md`、`platform-data-tables.md`、`platform-services.md`）；
-  - `FORBIDDEN_CORE_TABLES` 由 40 张更新为 **43** 张并补 `file_blobs` / `file_assets` / `file_aliases`（plugin-database-api、plugin-architecture-contracts、security-permissions、agent 与 ai-reference 各页）；
+  - 迁移 / 表数统一为 `000`–`049`、50 个脚本、**89** 张表（`database-and-migrations.md`、`platform-data-tables.md`、`platform-services.md`）；
+  - `FORBIDDEN_CORE_TABLES` 由 40 张更新为 **44** 张并补 `file_blobs` / `file_assets` / `file_aliases` / `ai_personas`（plugin-database-api、plugin-architecture-contracts、security-permissions、agent 与 ai-reference 各页）；
   - `di-tokens.md` 补 `IClassRosterServiceToken` 与 `IFileStorageExtensionRegistryToken`（SDK 值导出 32 → **34**），`typescript-interfaces.md` 补文件存储三插槽接口，`api-coverage-report.md` 重算 Token 数；
   - 课程包规范改按统一文件存储的 `/api/files/<assetId>` 描述（旧 `/uploads/*` 仍兼容）；
   - 管理员手册补「文件存储策略」与站点设置字段；部署 / 安装 / 配置文档的备份清单补 `files/`，并注明 `themes/` 目前不在 `site-backup` 归档内；
-  - `ai-reference/api/http-endpoints.md` 按当前代码重算为 28 个路由文件 / 331 个端点，补 `themes.ts`、`files.ts` 与 classroom 拆分后的两个路由文件。
+  - `ai-reference/api/http-endpoints.md` 按当前代码重算为 28 个路由文件 / 334 个端点，补 `themes.ts`、`files.ts` 与 classroom 拆分后的两个路由文件；
+  - 与 #507（迁移 `049` / `ai_personas`）合并后，表数、黑名单与端点口径已按新基线复核。
 
 ## [0.7.15] - 2026-11-12
 

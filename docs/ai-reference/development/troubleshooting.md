@@ -101,7 +101,7 @@
 
 | 现象                                  | 归属     | 原因                                                                    | 修法                                                                         |
 | ------------------------------------- | -------- | ----------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| `SQL 被拒` / 表名错误                 | 插件     | 命中 43 张禁写表，或未用 `ctx.db.table()`                               | 用 `ctx.db.table(name)`；自有表前缀化                                        |
+| `SQL 被拒` / 表名错误                 | 插件     | 命中 44 张禁写表，或未用 `ctx.db.table()`                               | 用 `ctx.db.table(name)`；自有表前缀化                                        |
 | `no such table: xxx`                  | 插件     | `ensureTable` 没 `await`，或迁移未跑                                    | `await ctx.db.ensureTable(...)`；用 `ctx.db.migrate` 而非 `migrations/*.sql` |
 | 声明式迁移不执行                      | 产品边界 | CLI 不打包 `migrations/`                                                | 改用 `ctx.db.migrate()`                                                      |
 | 401（`api.routes` 写了 `auth:false`） | 配置     | `auth:false` 只是申请                                                   | 管理员批准公开路由，或改 `auth:true`                                         |

@@ -52,6 +52,10 @@ export class AIService implements IAIService {
   }
 
   /** P2: ai.agent.persona —— 角色注册表委托（server/ai-persona-registry.ts 为真源） */
+  private _personaBound = false;
+  private _pendingPersonaOps: Array<
+    { op: 'register'; persona: any } | { op: 'unregister'; id: string; registeredBy?: string }
+  > = [];
   private _personaDelegates: {
     register: (persona: any) => void;
     list: () => any[];
@@ -69,10 +73,27 @@ export class AIService implements IAIService {
     unregister: (id: string, registeredBy?: string) => void;
   }): void {
     this._personaDelegates = delegates;
+    this._personaBound = true;
+    const pending = this._pendingPersonaOps.splice(0, this._pendingPersonaOps.length);
+    for (const item of pending) {
+      try {
+        if (item.op === 'register') {
+          delegates.register(item.persona);
+        } else {
+          delegates.unregister(item.id, item.registeredBy);
+        }
+      } catch (err) {
+        console.warn('[AIService] Failed to replay queued persona op:', err);
+      }
+    }
   }
 
   /** 插件注册角色模板（Worker 亦可 —— persona 为静态模板，可序列化） */
   registerAIPersona(persona: any): void {
+    if (!this._personaBound) {
+      this._pendingPersonaOps.push({ op: 'register', persona });
+      return;
+    }
     this._personaDelegates.register(persona);
   }
 
@@ -81,18 +102,28 @@ export class AIService implements IAIService {
   }
 
   unregisterAIPersona(id: string, registeredBy?: string): void {
+    if (!this._personaBound) {
+      this._pendingPersonaOps.push({ op: 'unregister', id, registeredBy });
+      return;
+    }
     this._personaDelegates.unregister(id, registeredBy);
   }
 
-  registerAIContextProvider(id: string, fn: (lessonId: string | null) => string | null): void {
+  registerAIContextProvider(id: string, fn: (lessonId: string | null) => string | null, registeredBy?: string): void {
     if (!this._contextDelegates.register) {
       throw new Error('[AIService] AI context registry not bound (server boot required)');
     }
-    this._contextDelegates.register(id, fn);
+    (
+      this._contextDelegates.register as (
+        id: string,
+        fn: (lessonId: string | null) => string | null,
+        by?: string,
+      ) => void
+    )(id, fn, registeredBy);
   }
 
-  unregisterAIContextProvider(id: string): void {
-    this._contextDelegates.unregister?.(id);
+  unregisterAIContextProvider(id: string, registeredBy?: string): void {
+    (this._contextDelegates.unregister as ((id: string, by?: string) => void) | undefined)?.(id, registeredBy);
   }
 
   async generateText(

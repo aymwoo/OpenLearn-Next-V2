@@ -31,7 +31,7 @@ import { IClassroomLifecycleServiceToken, IInteractionRuntimeServiceToken } from
 import { ClassroomRuntimeService } from './server/services/classroom-runtime-service.js';
 import { ClassroomFeedService, attachClassroomFeedService } from './server/services/classroom-feed-service.js';
 import { bindAIContextRegistry } from './server/ai-context-registry.js';
-import { bindAIPersonaRegistry } from './server/ai-persona-registry.js';
+import { bindAIPersonaRegistry, initAIPersonaPersistence } from './server/ai-persona-registry.js';
 import helmet from 'helmet';
 import {
   createAiLimiter,
@@ -63,16 +63,11 @@ import {
   runGeminiAgentChat,
   runOpenAIAgentChat,
 } from './server/ai-agent.js';
-import { verifyPassword, hashPassword as bcryptHashPassword } from './packages/core/db/index.js';
 import { performBackup, checkpoint } from './packages/core/db/index.js';
 import { startBackupScheduler } from './server/backup-scheduler.js';
-import { encryptApiKey, decryptApiKey, maskApiKey, detectPromptInjection } from './server/utils/crypto.js';
 import {
   getCookieToken,
   getValidSession,
-  checkIsTeacherOrAdmin,
-  getActorId,
-  requireAuth,
   enforcePasswordChanged,
   socketAuthMiddleware,
 } from './server/middleware/auth.js';
@@ -87,27 +82,19 @@ import { assertRouteDataScopes } from './server/security/route-scope.js';
 import { ROUTE_SCOPE_WHITELIST } from './server/security/route-scope-whitelist.js';
 import { buildHostHelmetOptions } from './server/security/host-helmet.js';
 import { getNetworkIps, openBrowser, formatTerminalHyperlink } from './server/utils/host-network.js';
-import { getUploadsDir, getPluginsDir, getStorageDir } from './server/utils/paths.js';
+import { getUploadsDir, getPluginsDir } from './server/utils/paths.js';
 import { mountLargeBodyParsers } from './server/middleware/body-limits.js';
 import { PLUGIN_SANDBOX_FRAME_HTML } from './server/utils/plugin-sandbox-frame.js';
 import { PLUGIN_VIEW_CSP, PLUGIN_VIEW_BRIDGE_JS } from './server/utils/plugin-view-bridge.js';
-import { BRIDGE_SDK_CODE } from './server/utils/bridge-sdk.js';
 import { ServerBootstrapAdapter } from './packages/core/bootstrap/index.js';
 
 // ── Activity Ecosystem (Sprint P7-01) ─────────────────────────────────────
 import {
   ActivityRegistry,
   registerOfficialActivities,
-  createActivityContext,
   IActivityRegistryToken,
 } from './packages/activity-ecosystem/index.js';
-import type {
-  ServerContext,
-  AgentChatAttachment,
-  AgentChatRequest,
-  AgentToolExecution,
-  StoredAIProvider,
-} from './server/context.js';
+import type { ServerContext } from './server/context.js';
 import { registerOsRoutes } from './server/routes/os.js';
 import { registerFilesRoutes, serveFileAsset } from './server/routes/files.js';
 import { getFileStorageService } from './server/services/file-storage/index.js';
@@ -165,6 +152,9 @@ async function startServer() {
     // 金样 = 空库跑完全部迁移后的表→列快照；实际库缺任何金样声明的结构即拒绝服务。
     assertSchemaMatchesGolden(kernelContainer.db, migrationsDir);
     console.log('[SchemaGolden] 启动终检通过：数据库结构覆盖代码期望的全部表与列。');
+    initAIPersonaPersistence(kernelContainer.db as any);
+    bindAIContextRegistry(kernelContainer.aiService as any);
+    bindAIPersonaRegistry(kernelContainer.aiService as any);
   } catch (err) {
     console.error('[Migration] FATAL: 数据库迁移失败，拒绝在未完成迁移的库上提供服务。');
     console.error(err);
@@ -295,7 +285,7 @@ async function startServer() {
       // 敏感文件不做长缓存，避免注销后仍可从缓存读取
       maxAge: 0,
     }),
-    async (req: any, res: any) => {
+    async (req: express.Request, res: express.Response) => {
       try {
         const asset = getFileStorageService().getAssetByAlias(`/uploads${req.path || ''}`);
         if (!asset) {
@@ -451,11 +441,7 @@ async function startServer() {
     db: kernelContainer.db as unknown as import('./server/realtime-bridge.js').BridgeDb,
   });
 
-  // P2: ai.context.provider —— 把插件上下文注册表委托给 kernel AIService
-  // （Inline 插件经 ctx.services.ai.registerAIContextProvider 注册的切片，
-  //   /agent/chat 组装 system instruction 时逐个收集）
-  bindAIContextRegistry(kernelContainer.aiService as any);
-  bindAIPersonaRegistry(kernelContainer.aiService as any);
+  // P2: ai.context.provider & ai.agent.persona 已在迁移完成后绑定（此处保留注释锚点）
 
   setupPresence({
     io,

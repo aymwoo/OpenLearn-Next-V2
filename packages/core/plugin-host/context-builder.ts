@@ -11,6 +11,7 @@
  * D-07: ResourceTracker 按插入顺序管理 cleanup
  */
 
+import crypto from 'node:crypto';
 import type { CommandHandler } from '../command-bus/index.js';
 import type { ActionDescriptor } from '../registry/index.js';
 import type { Manifest } from '../esm-loader/manifest-schema.js';
@@ -24,7 +25,7 @@ import type { ResourceTracker } from './resource-tracker.js';
 import type { ServiceRegistry } from '../di/service-registry.js';
 import { createLogger } from '../observability/logger.js';
 import { recordSecurityAudit } from '../observability/audit-log.js';
-import { CAP_STUDENT_DATA_READ, CAP_STUDENT_DATA_WRITE, hasCapability } from './method-policy.js';
+import { CAP_AI_PERSONA, CAP_STUDENT_DATA_READ, CAP_STUDENT_DATA_WRITE, hasCapability } from './method-policy.js';
 import { PluginCapabilityDeniedError } from './errors.js';
 import { createGuardedPluginDatabase, isSqlGuardAllModesEnabled } from './inline-db-guard.js';
 import { warnDeprecation } from '../extension-points/index.js';
@@ -864,7 +865,30 @@ function wrapStorage(storageService: IStorageService, db: any, manifestId: strin
  * PluginRuntime 的 ai 包装器内联 AI 提供者逻辑，但 Phase 2 的 AIService
  * 已包含该逻辑，因此此处仅做安全代理。
  */
-function wrapAI(aiService: IAIService, pluginId: string, tracker: ResourceTracker): IAIService {
+function wrapAI(
+  aiService: IAIService,
+  pluginId: string,
+  tracker: ResourceTracker,
+  capabilities?: readonly string[],
+): IAIService {
+  const assertPersonaCapability = (method: string, targetId: string, extra?: Record<string, unknown>) => {
+    const hasCap = hasCapability(capabilities ?? [], CAP_AI_PERSONA);
+    recordSecurityAudit('plugin.ai_persona_access', {
+      pluginId,
+      method,
+      targetId,
+      hasCapability: hasCap,
+      ...(extra ?? {}),
+      ...(hasCap ? {} : { denied: true }),
+    });
+    if (!hasCap) {
+      console.error(
+        `[Security] 插件 "${pluginId}" 调用 ai.${method} 被拒：缺少能力 "${CAP_AI_PERSONA}"。请在 manifest.capabilitiesProposed 声明它。`,
+      );
+      throw new PluginCapabilityDeniedError(pluginId, CAP_AI_PERSONA, 'write', method);
+    }
+  };
+
   return {
     generateText: createSafeFunction(
       async (prompt: string, options?: { systemInstruction?: string; temperature?: number }) => {
@@ -884,20 +908,30 @@ function wrapAI(aiService: IAIService, pluginId: string, tracker: ResourceTracke
     //   · context provider → 每次 AI 请求都会被注入已停用插件的上下文。
     // 且 `uninstallPlugin` 也不调注销，故卸载同样不清。
     registerAIContextProvider: createSafeFunction((id: string, fn: (lessonId: string | null) => string | null) => {
-      (aiService as any).registerAIContextProvider?.(id, fn);
+      assertPersonaCapability('registerAIContextProvider', id);
+      (aiService as any).registerAIContextProvider?.(id, fn, pluginId);
       tracker.track(pluginId, {
         dispose: () => {
-          (aiService as any).unregisterAIContextProvider?.(id);
+          (aiService as any).unregisterAIContextProvider?.(id, pluginId);
         },
       });
     }),
     unregisterAIContextProvider: createSafeFunction((id: string) => {
-      return (aiService as any).unregisterAIContextProvider?.(id);
+      return (aiService as any).unregisterAIContextProvider?.(id, pluginId);
     }),
     // P2: ai.agent.persona —— 插件注册角色模板（registeredBy 记为插件 id，便于注销归属）
     registerAIPersona: createSafeFunction((persona: AIPersonaDefinition) => {
+      const personaId = persona?.id ?? '';
+      const digest = crypto
+        .createHash('sha256')
+        .update(`${persona?.instructionZh ?? ''}\n${persona?.instructionEn ?? ''}`)
+        .digest('hex')
+        .slice(0, 16);
+      assertPersonaCapability('registerAIPersona', personaId, {
+        mode: persona?.mode ?? 'overlay',
+        instructionHash: digest,
+      });
       (aiService as any).registerAIPersona?.({ ...persona, registeredBy: pluginId });
-      const personaId = persona?.id;
       if (personaId) {
         tracker.track(pluginId, {
           dispose: () => {
@@ -969,7 +1003,7 @@ export async function buildContext(
   const wrappedActionRegistry = wrapActionRegistry(actionRegistryService, tracker, pluginId, manifest.id);
   const wrappedCapability = wrapCapability(capabilityService);
   const wrappedStorage = wrapStorage(storageService, db, manifest.id);
-  const wrappedAI = wrapAI(aiService, pluginId, tracker);
+  const wrappedAI = wrapAI(aiService, pluginId, tracker, manifest.capabilitiesProposed);
   // Points 包装仅在服务已注册时生效；未注册则取 null（plugin 可检查 === null 降级）。
   const wrappedPointsDimension = pointsDimensionRegistry
     ? wrapPointsDimensionRegistry(pointsDimensionRegistry, tracker, pluginId)

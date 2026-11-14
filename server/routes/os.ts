@@ -7,10 +7,19 @@ import { getCookieToken, getValidSession, getActorId, requireAuth } from '../mid
 import { requireScopedAuth } from '../middleware/data-scope.js';
 import { createActivityContext } from '../../packages/activity-ecosystem/index.js';
 import { validateMagicBytes, BLOCKED_EXTENSIONS } from './shared.js';
-import { listAIPersonas } from '../ai-persona-registry.js';
+import {
+  AdminPersonaError,
+  deleteAdminPersona,
+  getAIPersona,
+  getDefaultPersonaIdForRole,
+  isPersonaVisibleToRole,
+  listAIPersonas,
+  upsertAdminPersona,
+} from '../ai-persona-registry.js';
 import { sendSafeError } from '../utils/error-handler.js';
 import { getFileStorageService } from '../services/file-storage/index.js';
 import { resolveAccessibleAiProvider } from '../services/ai-provider-resolver.js';
+import type { Request } from 'express';
 import type { ServerContext, StoredAIProvider, AgentChatAttachment, AgentChatRequest } from '../context.js';
 
 export function registerOsRoutes(ctx: ServerContext) {
@@ -59,7 +68,7 @@ export function registerOsRoutes(ctx: ServerContext) {
         return res.status(400).json({ error: 'File content does not match the declared file type.' });
       }
 
-      const session = (req as any).session as { userId?: string } | undefined;
+      const session = (req as Request & { session?: { userId?: string } }).session;
       const allowedPurposes = new Set(['lesson-asset', 'courseware', 'attachment']);
       const requestedPurpose =
         context &&
@@ -108,7 +117,7 @@ export function registerOsRoutes(ctx: ServerContext) {
         fileType: ext.substring(1),
         slideCount,
       });
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error('Upload error:', e);
       sendSafeError(res, e);
     }
@@ -138,7 +147,7 @@ export function registerOsRoutes(ctx: ServerContext) {
         if (timeoutHandle !== undefined) clearTimeout(timeoutHandle);
       });
       res.json({ success: true, result });
-    } catch (err: any) {
+    } catch (err: unknown) {
       sendSafeError(res, err);
     }
   });
@@ -147,7 +156,7 @@ export function registerOsRoutes(ctx: ServerContext) {
     try {
       const actions = kernelContainer.actionRegistry.getAllActions();
       res.json(actions);
-    } catch (err: any) {
+    } catch (err: unknown) {
       sendSafeError(res, err);
     }
   });
@@ -161,9 +170,11 @@ export function registerOsRoutes(ctx: ServerContext) {
       const list =
         role === 'all'
           ? activityRegistry.listDescriptors()
-          : activityRegistry.listByRole(role as any).map((p) => p.descriptor);
+          : activityRegistry
+              .listByRole(role as Parameters<typeof activityRegistry.listByRole>[0])
+              .map((p) => p.descriptor);
       res.json({ activities: list });
-    } catch (err: any) {
+    } catch (err: unknown) {
       sendSafeError(res, err);
     }
   });
@@ -183,8 +194,10 @@ export function registerOsRoutes(ctx: ServerContext) {
       });
       const result = await activityRegistry.startActivity(req.params.id, context, payload ?? {}, actorId);
       res.json({ ok: true, ...result });
-    } catch (err: any) {
-      const status = err?.code === 'PERMISSION_DENIED' ? 403 : 500;
+    } catch (err: unknown) {
+      const code =
+        typeof err === 'object' && err !== null && 'code' in err ? (err as { code?: unknown }).code : undefined;
+      const status = code === 'PERMISSION_DENIED' ? 403 : 500;
       sendSafeError(res, err, status);
     }
   });
@@ -208,7 +221,7 @@ export function registerOsRoutes(ctx: ServerContext) {
           startedAt: p.startedAt ?? null,
         }));
       res.json({ activities });
-    } catch (err: any) {
+    } catch (err: unknown) {
       sendSafeError(res, err);
     }
   });
@@ -225,12 +238,14 @@ export function registerOsRoutes(ctx: ServerContext) {
         commandBus: kernelContainer.commandBus,
         eventBus: kernelContainer.eventBus,
         actionRegistry: kernelContainer.actionRegistry,
-        capability: kernelContainer.capabilityGuard as any,
+        capability: kernelContainer.capabilityGuard as unknown as Parameters<
+          typeof createActivityContext
+        >[0]['capability'],
         ai: kernelContainer.aiService,
       });
       await provider.finish(context);
       res.json({ ok: true });
-    } catch (err: any) {
+    } catch (err: unknown) {
       sendSafeError(res, err);
     }
   });
@@ -246,12 +261,14 @@ export function registerOsRoutes(ctx: ServerContext) {
         commandBus: kernelContainer.commandBus,
         eventBus: kernelContainer.eventBus,
         actionRegistry: kernelContainer.actionRegistry,
-        capability: kernelContainer.capabilityGuard as any,
+        capability: kernelContainer.capabilityGuard as unknown as Parameters<
+          typeof createActivityContext
+        >[0]['capability'],
         ai: kernelContainer.aiService,
       });
       await provider.pause(context);
       res.json({ ok: true });
-    } catch (err: any) {
+    } catch (err: unknown) {
       sendSafeError(res, err);
     }
   });
@@ -267,22 +284,74 @@ export function registerOsRoutes(ctx: ServerContext) {
         commandBus: kernelContainer.commandBus,
         eventBus: kernelContainer.eventBus,
         actionRegistry: kernelContainer.actionRegistry,
-        capability: kernelContainer.capabilityGuard as any,
+        capability: kernelContainer.capabilityGuard as unknown as Parameters<
+          typeof createActivityContext
+        >[0]['capability'],
         ai: kernelContainer.aiService,
       });
       await provider.resume(context);
       res.json({ ok: true });
-    } catch (err: any) {
+    } catch (err: unknown) {
       sendSafeError(res, err);
     }
   });
 
   // OS Agent interaction
-  // P2: ai.agent.persona —— 角色模板列表（聊天面板下拉选择器）
-  app.get('/api/agent/personas', requireScopedAuth('authenticated'), (_req, res) => {
+  // P2: ai.agent.persona —— 角色模板列表（按当前用户角色过滤 visibility；管理员传 scope=all 查看全量）
+  app.get('/api/agent/personas', requireScopedAuth('authenticated'), (req, res) => {
     try {
-      res.json({ success: true, personas: listAIPersonas() });
+      const session = (req as any).session || (getCookieToken(req) ? getValidSession(getCookieToken(req)!) : null);
+      const callerRole = session?.role as string | undefined;
+      const includeAll = req.query.scope === 'all' && callerRole === 'administrator';
+      const personas = includeAll ? listAIPersonas() : listAIPersonas(callerRole);
+      res.json({
+        success: true,
+        personas,
+        defaultPersonaId: getDefaultPersonaIdForRole(callerRole),
+      });
     } catch (e: any) {
+      sendSafeError(res, e, 500);
+    }
+  });
+
+  app.post('/api/agent/personas', requireScopedAuth('admin'), (req, res) => {
+    try {
+      const persona = upsertAdminPersona(req.body ?? {}, {
+        isUpdate: false,
+        actorId: getActorId(req),
+      });
+      res.status(201).json({ success: true, persona });
+    } catch (e: any) {
+      if (e instanceof AdminPersonaError) {
+        return res.status(e.status).json({ success: false, error: e.code, message: e.message });
+      }
+      sendSafeError(res, e, 500);
+    }
+  });
+
+  app.patch('/api/agent/personas/:id', requireScopedAuth('admin'), (req, res) => {
+    try {
+      const persona = upsertAdminPersona(
+        { ...(req.body ?? {}), id: req.params.id },
+        { isUpdate: true, actorId: getActorId(req) },
+      );
+      res.json({ success: true, persona });
+    } catch (e: any) {
+      if (e instanceof AdminPersonaError) {
+        return res.status(e.status).json({ success: false, error: e.code, message: e.message });
+      }
+      sendSafeError(res, e, 500);
+    }
+  });
+
+  app.delete('/api/agent/personas/:id', requireScopedAuth('admin'), (req, res) => {
+    try {
+      deleteAdminPersona(req.params.id, getActorId(req));
+      res.json({ success: true });
+    } catch (e: any) {
+      if (e instanceof AdminPersonaError) {
+        return res.status(e.status).json({ success: false, error: e.code, message: e.message });
+      }
       sendSafeError(res, e, 500);
     }
   });
@@ -327,6 +396,31 @@ export function registerOsRoutes(ctx: ServerContext) {
         userId = session.userId || session.username;
       }
 
+      const requestedPersonaId =
+        typeof (req.body as AgentChatRequest)?.personaId === 'string'
+          ? (req.body as AgentChatRequest).personaId!.trim()
+          : '';
+      if (requestedPersonaId) {
+        const persona = getAIPersona(requestedPersonaId);
+        if (!persona) {
+          return res.status(404).json({
+            success: false,
+            error: 'PERSONA_NOT_FOUND',
+            message: lang === 'zh' ? '指定的 AI 角色模板不存在。' : 'Requested AI persona was not found.',
+          });
+        }
+        if (!isPersonaVisibleToRole(persona, callerRole)) {
+          return res.status(403).json({
+            success: false,
+            error: 'PERSONA_FORBIDDEN',
+            message:
+              lang === 'zh'
+                ? '当前角色无权使用该 AI 角色模板。'
+                : 'Current role is not allowed to use this AI persona.',
+          });
+        }
+      }
+
       // Build a per-user / per-lesson memory key and load prior turns
       const convKey = `agent:${userId || 'anonymous'}:${currentLessonId || 'global'}`;
       const MEMORY_TURNS = 20;
@@ -348,11 +442,12 @@ export function registerOsRoutes(ctx: ServerContext) {
           userId,
           lang,
         });
-      } catch (err: any) {
-        return res.status(err.status || 400).json({
+      } catch (err: unknown) {
+        const errObj = err as { status?: number; code?: string; message?: string };
+        return res.status(errObj.status || 400).json({
           success: false,
-          error: err.code || 'NO_AI_PROVIDER',
-          message: err.message,
+          error: errObj.code || 'NO_AI_PROVIDER',
+          message: errObj.message || 'AI provider error',
         });
       }
 
@@ -384,7 +479,7 @@ export function registerOsRoutes(ctx: ServerContext) {
         ...result,
         providerUsed: { id: provider.id, name: provider.name, model_name: provider.model_name },
       });
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
       sendSafeError(res, err);
     }
@@ -395,7 +490,9 @@ export function registerOsRoutes(ctx: ServerContext) {
     try {
       const token = getCookieToken(req);
       let userId: string | undefined;
-      const session = (req as any).session || (token ? getValidSession(token) : null);
+      const session =
+        (req as { session?: { userId?: string; username?: string } }).session ||
+        (token ? getValidSession(token) : null);
       if (session) {
         userId = session.userId || session.username;
       }
@@ -407,7 +504,7 @@ export function registerOsRoutes(ctx: ServerContext) {
       res.json({
         messages: rows.map((r) => ({ role: r.role, content: r.content, createdAt: r.created_at })),
       });
-    } catch (e: any) {
+    } catch (e: unknown) {
       sendSafeError(res, e);
     }
   });
@@ -417,7 +514,9 @@ export function registerOsRoutes(ctx: ServerContext) {
     try {
       const token = getCookieToken(req);
       let userId: string | undefined;
-      const session = (req as any).session || (token ? getValidSession(token) : null);
+      const session =
+        (req as { session?: { userId?: string; username?: string } }).session ||
+        (token ? getValidSession(token) : null);
       if (session) {
         userId = session.userId || session.username;
       }
@@ -425,7 +524,7 @@ export function registerOsRoutes(ctx: ServerContext) {
       const convKey = `agent:${userId || 'anonymous'}:${currentLessonId || 'global'}`;
       kernelContainer.db.prepare('DELETE FROM agent_conversations WHERE conv_key = ?').run(convKey);
       res.json({ success: true });
-    } catch (e: any) {
+    } catch (e: unknown) {
       sendSafeError(res, e);
     }
   });

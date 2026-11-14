@@ -32,7 +32,7 @@
 
 `migrations/*.sql` 共 **45 个**文件，累计 `CREATE TABLE` 出 **86 张表**。按归属分三类：
 
-### 2.1 内核业务表（插件**不可写**，43 张在黑名单）
+### 2.1 内核业务表（插件**不可写**，44 张在黑名单）
 
 ```text
 users  client_sessions  plugins  plugin_storage  ai_providers  processes
@@ -46,7 +46,7 @@ whiteboard_elements  student_point_logs  lianyun_research_activities
 lianyun_research_groups  lianyun_research_submissions  lianyun_research_reviews
 ```
 
-逐字比对源：`packages/core/plugin-host/sql-guard.ts → FORBIDDEN_CORE_TABLES`（L13-54）。
+逐字比对源：`packages/core/plugin-host/sql-guard.ts → FORBIDDEN_CORE_TABLES`（L13-58）。
 
 ### 2.2 平台扩展表（不在黑名单，但同样不建议插件直写）
 

@@ -573,7 +573,7 @@ interface SqliteDatabase {
 
 平台文档对「插件能否访问核心表」曾长期自相矛盾（RBAC 表把 Plugin 的 SQLite 访问标 ❌），
 2026-10-26 已复核统一为：**能拿句柄，边界在语句级守卫**（worker 路径）。
-核心表 88 张的清单与「43 张硬禁」的对照，见仓库
+核心表 89 张的清单与「44 张硬禁」的对照，见仓库
 `docs/reference/platform-data-tables.md`。
 
 ---
@@ -695,7 +695,7 @@ Token 白名单现在只有一处实现：`packages/core/worker-runtime/worker-m
 | 历史缺陷：worker stub 缺 `exec` 转发（`rawDb.exec is not a function`）                                           | 变更日志条目（repomix L414757）                                                                                                                                                                                                                            |
 | inline `IDatabase` 为原句柄、不经 worker 守卫                                                                    | `docs/reference/platform-data-tables.md` 引言 + 安全审计 inline 条目                                                                                                                                                                                       |
 | 「能拿句柄，边界在语句级守卫」统一结论（2026-10-26 复核）                                                        | `docs/reference/platform-data-tables.md` ✅ 段落                                                                                                                                                                                                           |
-| 核心表 88 张 / 43 张硬禁                                                                                         | `docs/reference/platform-data-tables.md`、`plugin-trust-boundary.md` §2.3                                                                                                                                                                                  |
+| 核心表 89 张 / 44 张硬禁                                                                                         | `docs/reference/platform-data-tables.md`、`plugin-trust-boundary.md` §2.3                                                                                                                                                                                  |
 | `SqliteDatabase` 自包含窄接口（避免暴露 better-sqlite3 类型）                                                    | `packages/core/di/interfaces.ts` 注释                                                                                                                                                                                                                      |
 | 白名单规则集中在一处（原前后端两份已收敛）                                                                       | `packages/core/worker-runtime/worker-manager.ts`                                                                                                                                                                                                           |
 | ~~`BASE_FRONTEND_WORKER_SERVICE_TOKENS` 4 项~~                                                                   | 已随 Phase 0 删除（浏览器 Worker 车道从未接线）                                                                                                                                                                                                            |

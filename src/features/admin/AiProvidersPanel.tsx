@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Blocks, Check, Globe, Loader2, Plus, Puzzle, Settings2, X, ShieldCheck, User } from 'lucide-react';
 import { PasswordInput } from '../../components/PasswordInput';
 import { AccessibleTableRegion } from '../../components/AccessibleTableRegion';
+import { AiPersonasSection } from './AiPersonasSection';
 
 export interface AIProvider {
   id: string;
@@ -326,6 +327,7 @@ export function AiProvidersPanel({
             )}
           </div>
         </div>
+        {currentUserRole === 'administrator' && <AiPersonasSection lang={lang} />}
       </div>
 
       {isAIProviderModalOpen && (

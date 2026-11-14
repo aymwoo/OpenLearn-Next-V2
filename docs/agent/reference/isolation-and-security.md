@@ -356,7 +356,7 @@ export function assertPluginSqlAllowed(options: SqlGuardOptions): void {
 `ERROR` 消息统一是 `Dangerous statement is forbidden: "<sql>"`（整条 SQL 原文进消息，注意别把密钥写进 SQL 文本）。
 ```
 
-### 6.2 `FORBIDDEN_CORE_TABLES`（43 张，兜底黑名单）
+### 6.2 `FORBIDDEN_CORE_TABLES`（44 张，兜底黑名单）
 
 前 28 张为初始集：`users`、`client_sessions`、`plugins`、`plugin_storage`、`ai_providers`、
 `processes`、`pending_commands`、`classes`、`students`、`class_students`、`lessons`、
@@ -368,7 +368,8 @@ export function assertPluginSqlAllowed(options: SqlGuardOptions): void {
 `lesson_quiz_submissions`、`courseware_score_config`、`demo_data_registry`、`whiteboard_elements`、
 `student_point_logs`、`lianyun_research_activities`、`lianyun_research_groups`、
 `lianyun_research_submissions`、`lianyun_research_reviews`；
-2026-11-14 文件存储扩展补充 3 张：`file_blobs`、`file_assets`、`file_aliases`。
+2026-11-14 文件存储扩展补充 3 张：`file_blobs`、`file_assets`、`file_aliases`；
+2026-11-14 AI Persona 补充 1 张：`ai_personas`。
 
 ````{danger}
 命中黑名单时消息**分两种**，取决于这条 SQL 是不是 DDL：
@@ -511,7 +512,7 @@ Downgrading plugin database schema is not permitted.`
 | 「开发机不杀、线上杀」                                    | **平台**                            | CPU/RSS 采样仅 Linux `/proc`                    |
 | 疯狂写 stderr 后内存涨、日志丢                            | external 内存不受堆上限约束         | §4                                              |
 | `Dangerous statement is forbidden`                        | 你的 SQL                            | 含 `PRAGMA` / `ATTACH` / 建视图，哪怕在字符串里 |
-| `... core security table is strictly forbidden`           | 你的表名撞了 43 张黑名单            | §6.2                                            |
+| `... core security table is strictly forbidden`           | 你的表名撞了 44 张黑名单            | §6.2                                            |
 | `Direct access to sqlite metadata table ...`              | 你的 `sqlite_master` 查询形状不符   | §6.3                                            |
 | `[SEC] Invalid SQL identifier ...`                        | 表名含 `-` `.` `$` 或超 64 字符     | §7                                              |
 | 卸载后残留空表                                            | 表名不满足 `^plugin_[A-Za-z0-9_]+$` | §7                                              |
@@ -529,7 +530,7 @@ Downgrading plugin database schema is not permitted.`
 5. 表名只用 `[A-Za-z0-9_]`，长度 ≤64，且以 `plugin_` 开头（保证可被 `dropAllTables` 清理）；
 6. `ensureTable` 的 schema 里不写分号，长度 ≤4000；
 7. 不查 `sqlite_master`（除宿主那种逐字形状的 LIKE 前缀查询）；
-8. 不碰 43 张核心表，包括「只读」；
+8. 不碰 44 张核心表，包括「只读」；
 9. 不用 `PRAGMA` / `ATTACH` / `CREATE VIEW`（要 `ctx.db` 的能力就用它暴露的方法）；
 10. 内存占用按 128MB 老生代规划，大缓冲区别在堆里长驻；
 11. 长任务分片让出 CPU，接受 8s/10s 窗口配额；
@@ -570,7 +571,7 @@ Downgrading plugin database schema is not permitted.`
 | 五个调参键纳入 `assertStartupEnv`                               | L26954、L16764                                                                             |
 | 网络三层与 `process.getBuiltinModule` 屏蔽                      | `plugin-permission.ts` L128468（Issue #237）+ `plugin-net-preload.cjs` L128010 段          |
 | `OPENLEARN_PLUGIN_NET_ALLOW` 为内部交接键                       | 同 {doc}`background-and-config` §4 取证                                                    |
-| 43 张 `FORBIDDEN_CORE_TABLES` 逐字                              | ``packages/core/plugin-host/sql-guard.ts`→`FORBIDDEN_CORE_TABLES`（L13–L54）               |
+| 44 张 `FORBIDDEN_CORE_TABLES` 逐字                              | ``packages/core/plugin-host/sql-guard.ts`→`FORBIDDEN_CORE_TABLES`（L13–L58）               |
 | 6 条 `FORBIDDEN_OPERATIONS`                                     | `packages/core/plugin-host/sql-guard.ts`（L58–L65）                                        |
 | `sanitizeSql` 的注释/引号处理                                   | `packages/core/plugin-host/sql-guard.ts`（L68–L143）                                       |
 | `extractReferencedTables` 100 层收缩                            | `packages/core/plugin-host/sql-guard.ts`（L201–L218）                                      |

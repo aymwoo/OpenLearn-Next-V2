@@ -247,6 +247,7 @@ delete(key: string): Promise<void>;
 generateText(prompt: string, options?: { systemInstruction?: string; temperature?: number }): Promise<string>;
 
 // 5 个可选成员（非 `?` 之外的实现方需自行判空；未实现时为 undefined）
+// 其中 registerAIContextProvider / registerAIPersona 均需 manifest 声明并获批 `ai:persona` 能力（fail-closed）
 registerAIContextProvider?(id: string, fn: (lessonId: string | null) => string | null): void;
 unregisterAIContextProvider?(id: string): void;
 registerAIPersona?(persona: AIPersonaDefinition): void;
@@ -254,7 +255,9 @@ listAIPersonas?(): AIPersonaDefinition[];
 unregisterAIPersona?(id: string): void;
 ```
 
-> 统一由数据库 `ai_providers` 中配置的 OpenAI 兼容 Provider 提供。若未配置任何有效提供商，抛出友好错误提示。
+> - 文本生成统一由数据库 `ai_providers` 中配置的 OpenAI 兼容 Provider 提供；若未配置任何有效提供商，抛出友好错误提示。
+> - `AIPersonaDefinition` 支持 `mode?: 'overlay' | 'replace'`、`basePolicy?: 'inherit' | 'drop'`、`visibility?: ('administrator' | 'teacher' | 'student')[]`、`defaultForRole?: ('administrator' | 'teacher' | 'student')[]`、`toolPolicy?: { allow?: string[]; deny?: string[] }` 与 `maxTurns?: number`（服务端裁剪 `1..20`）。
+> - `registerAIPersona` 会由宿主强制绑定 `registeredBy = pluginId` 并持久化到 `ai_personas` 表（未批准 `ai:persona` 会抛出 `PluginCapabilityDeniedError`），且在插件停用/卸载或 Worker `dispose()` 时自动注销。
 
 ### `IDatabaseToken` → 原生 SQLite 句柄（`SqliteDatabase`）
 

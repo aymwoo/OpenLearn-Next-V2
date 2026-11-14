@@ -63,12 +63,12 @@ export function listAIContextProviders(): string[] {
  */
 export function bindAIContextRegistry(kernelAIService: {
   bindContextRegistry(delegates: {
-    register: (id: string, fn: (lessonId: string | null) => string | null) => void;
-    unregister: (id: string) => void;
+    register: (id: string, fn: (lessonId: string | null) => string | null, registeredBy?: string) => void;
+    unregister: (id: string, registeredBy?: string) => void;
   }): void;
 }): void {
   kernelAIService.bindContextRegistry({
-    register: (id, fn) => registerAIContextProvider(id, fn),
-    unregister: (id) => unregisterAIContextProvider(id),
+    register: (id, fn, registeredBy) => registerAIContextProvider(id, fn, registeredBy),
+    unregister: (id, registeredBy) => unregisterAIContextProvider(id, registeredBy),
   });
 }

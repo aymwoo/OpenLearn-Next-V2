@@ -17,7 +17,7 @@ flowchart TB
     PH["PluginHost<br/>生命周期状态机"]
     LG["PluginLifecycleManager<br/>PluginDistributionManager"]
     GW["plugin-api-gateway<br/>/api/plugins/:id/*"]
-    SQL["sql-guard<br/>43 张禁写表"]
+    SQL["sql-guard<br/>44 张禁写表"]
   end
 
   subgraph L2["② 隔离层（独立 V8 / 独立进程 · 不可信）"]

@@ -45,6 +45,9 @@ export const CAP_AGENT_TOOL = 'agent:tool';
 /** 授予「驱动 AI 生成」所需。 */
 export const CAP_AI_INVOKE = 'ai:invoke';
 
+/** 授予「注册 AI Persona 角色模板或 AI 上下文切片提供者」所需。 */
+export const CAP_AI_PERSONA = 'ai:persona';
+
 /** 授予「注册后台常驻任务」所需。 */
 export const CAP_TASK_REGISTER = 'task:register';
 
@@ -89,6 +92,7 @@ export const CAP = {
   GRADES_WRITE: CAP_GRADES_WRITE,
   AGENT_TOOL: CAP_AGENT_TOOL,
   AI_INVOKE: CAP_AI_INVOKE,
+  AI_PERSONA: CAP_AI_PERSONA,
   TASK_REGISTER: CAP_TASK_REGISTER,
   STUDENT_DATA_READ: CAP_STUDENT_DATA_READ,
   STUDENT_DATA_WRITE: CAP_STUDENT_DATA_WRITE,
