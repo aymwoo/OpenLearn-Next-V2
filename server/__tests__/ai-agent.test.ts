@@ -6,6 +6,7 @@ import {
   buildOpenAITools,
 } from '../ai-agent.js';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
+import { getAIPersona } from '../ai-persona-registry.js';
 import type { AgentChatAttachment } from '../context.js';
 
 /**
@@ -58,13 +59,10 @@ describe('AI-agent pure helpers', () => {
     expect(out).not.toContain('[Persona · 苏格拉底追问者]');
   });
 
-  it('buildAgentSystemInstruction skips the default persona overlay', () => {
-    const out = buildAgentSystemInstruction('zh', null, undefined, {
-      nameZh: '普通助教（默认）',
-      nameEn: 'Plain Assistant (Default)',
-      instructionZh: '保持基础 OS Agent 行为，不附加任何角色设定。',
-      instructionEn: 'Base OS Agent behavior, no persona overlay.',
-    });
+  it('buildAgentSystemInstruction skips the default plain_assistant persona overlay', () => {
+    const plain = getAIPersona('plain_assistant')!;
+    const out = buildAgentSystemInstruction('zh', null, undefined, plain);
+    expect(out).toContain('OS Agent');
     expect(out).not.toContain('[Persona ·');
   });
 

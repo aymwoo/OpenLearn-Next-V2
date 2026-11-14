@@ -306,6 +306,13 @@ export interface IAIService {
   unregisterAIPersona?(id: string): void;
 }
 
+export type AIPersonaRole = 'administrator' | 'teacher' | 'student';
+
+export interface AIPersonaToolPolicy {
+  allow?: string[];
+  deny?: string[];
+}
+
 /** P2: ai.agent.persona —— 角色模板定义（可序列化，跨 Worker 边界安全）。 */
 export interface AIPersonaDefinition {
   id: string;
@@ -314,6 +321,18 @@ export interface AIPersonaDefinition {
   instructionZh: string;
   instructionEn: string;
   icon?: string;
+  /** 'overlay' 在宿主基础系统提示上追加；'replace' 替换角色人格（配合 basePolicy 决定是否保留内置基础指令）。 */
+  mode?: 'overlay' | 'replace';
+  /** replace 时是否继承或丢弃内置基础指令（overlay 默认 'inherit'，replace 默认 'drop'）。 */
+  basePolicy?: 'inherit' | 'drop';
+  /** 允许看到并使用此 Persona 的用户角色；未指定时默认对所有已认证角色可见。 */
+  visibility?: AIPersonaRole[];
+  /** 指定哪些角色在未显式选择 Persona 时默认启用此 Persona。 */
+  defaultForRole?: AIPersonaRole[];
+  /** 相对于 ActionRegistry / 技能导出工具集的放行或拒绝清单（只可收窄，不可扩大权限）。 */
+  toolPolicy?: AIPersonaToolPolicy;
+  /** Agent 工具推理最大循环轮次（默认 5）。 */
+  maxTurns?: number;
 }
 
 // ── Token instances (D-13) ────────────────────────────────────────────────

@@ -42,7 +42,7 @@
 实测口径（`python3 audit-tools/agent_facts.py --check` 校验契约 `docs/agent/contracts/capabilities.json`）：
 
 - **19 个**字符串用作 `ActionDescriptor.capabilityRequired`（`packages/plugins/*.ts` 口径）
-- **8 个**方法级字符串用于 `method-policy` 的方法闸门（§1.2.1）
+- **9 个**方法级字符串用于 `method-policy` 的方法闸门（§1.2.1）
 - **3 个**仅可声明项（§1.2）+ **1 个**平台内部字符串 `segment:gate_eval`（§1.2.2）
 - `segment:gate_eval` **不是** `ActionDescriptor.capabilityRequired`（它只出现在 SDK 注释里）；SDK 注释建议片段命令同时声明它，见 §1.1 的口径说明
 
@@ -96,20 +96,21 @@
 
 `packages/plugins/ai-submit-injector.ts` 的 `capabilitiesProposed` 是**空数组** `[]`——该插件不声明任何权限。
 
-#### 1.2.1 方法级能力字符串（8 条 · `method-policy` 闸门）
+#### 1.2.1 方法级能力字符串（9 条 · `method-policy` 闸门）
 
-这 8 条**不是** `ActionDescriptor.capabilityRequired`，而是 `packages/core/plugin-host/method-policy.ts` 的方法级常量（Security Barrier 3）。它们**同样可以写进 `capabilitiesProposed`**，否则调用对应 `ctx` 方法会被拒：
+这 9 条**不是** `ActionDescriptor.capabilityRequired`，而是 `packages/core/plugin-host/method-policy.ts` 的方法级常量（Security Barrier 3）。它们**同样可以写进 `capabilitiesProposed`**，否则调用对应 `ctx` 方法会被拒：
 
-| 权限                 | 常量                     | 含义与典型消费点                                             |
-| -------------------- | ------------------------ | ------------------------------------------------------------ |
-| `api:write`          | `CAP_API_WRITE`          | 授予「写操作」所需（`ctx` 的写方法）                         |
-| `api:admin`          | `CAP_API_ADMIN`          | 授予高危路径 / 不可逆操作所需                                |
-| `grades:write`       | `CAP_GRADES_WRITE`       | 授予学期成绩**写入**所需（`grades:read` 不足以解锁写入）     |
-| `agent:tool`         | `CAP_AGENT_TOOL`         | 授予「注册对外暴露给 AI Agent 的 action」所需                |
-| `ai:invoke`          | `CAP_AI_INVOKE`          | 授予「驱动 AI 生成」所需                                     |
-| `task:register`      | `CAP_TASK_REGISTER`      | 授予「注册后台常驻任务」所需                                 |
-| `student-data:read`  | `CAP_STUDENT_DATA_READ`  | 授予读取学生个人敏感数据（积分流水、维度汇总等）所需（§5.3） |
-| `student-data:write` | `CAP_STUDENT_DATA_WRITE` | 授予写入 / 变更学生个人敏感数据（积分变动等）所需（§5.3）    |
+| 权限                 | 常量                     | 含义与典型消费点                                                      |
+| -------------------- | ------------------------ | --------------------------------------------------------------------- |
+| `api:write`          | `CAP_API_WRITE`          | 授予「写操作」所需（`ctx` 的写方法）                                  |
+| `api:admin`          | `CAP_API_ADMIN`          | 授予高危路径 / 不可逆操作所需                                         |
+| `grades:write`       | `CAP_GRADES_WRITE`       | 授予学期成绩**写入**所需（`grades:read` 不足以解锁写入）              |
+| `agent:tool`         | `CAP_AGENT_TOOL`         | 授予「注册对外暴露给 AI Agent 的 action」所需                         |
+| `ai:invoke`          | `CAP_AI_INVOKE`          | 授予「驱动 AI 生成」所需                                              |
+| `ai:persona`         | `CAP_AI_PERSONA`         | 授予「注册 AI Persona、上下文切片及声明式 `ai.persona.provider`」所需 |
+| `task:register`      | `CAP_TASK_REGISTER`      | 授予「注册后台常驻任务」所需                                          |
+| `student-data:read`  | `CAP_STUDENT_DATA_READ`  | 授予读取学生个人敏感数据（积分流水、维度汇总等）所需（§5.3）          |
+| `student-data:write` | `CAP_STUDENT_DATA_WRITE` | 授予写入 / 变更学生个人敏感数据（积分变动等）所需（§5.3）             |
 
 > ⚠️ `ai:invoke` **同时**也是第 2 套 `RuntimePermission` 的成员（§1.3）。两个登记互不相干、但字符串同名：写进 `capabilitiesProposed` 是声明「插件可驱动 AI 生成」（方法级闸门）；活动生态的 `permissions: ['ai:invoke']` 是运行时开关。**两处都要写才都有权限**。
 

@@ -5,6 +5,7 @@
   "declarable": [
     "agent:tool",
     "ai:invoke",
+    "ai:persona",
     "api:admin",
     "api:write",
     "assignment:manage",
@@ -63,6 +64,7 @@
     "CAP_GRADES_WRITE": "grades:write",
     "CAP_AGENT_TOOL": "agent:tool",
     "CAP_AI_INVOKE": "ai:invoke",
+    "CAP_AI_PERSONA": "ai:persona",
     "CAP_TASK_REGISTER": "task:register",
     "CAP_STUDENT_DATA_READ": "student-data:read",
     "CAP_STUDENT_DATA_WRITE": "student-data:write"

@@ -32,6 +32,7 @@
 import {
   CAP_AGENT_TOOL,
   CAP_AI_INVOKE,
+  CAP_AI_PERSONA,
   CAP_API_ADMIN,
   CAP_API_WRITE,
   CAP_GRADES_WRITE,
@@ -43,6 +44,7 @@ import {
 export {
   CAP_AGENT_TOOL,
   CAP_AI_INVOKE,
+  CAP_AI_PERSONA,
   CAP_API_ADMIN,
   CAP_API_WRITE,
   CAP_GRADES_WRITE,
@@ -265,12 +267,17 @@ export function checkMethodPolicy(input: MethodPolicyInput): string | null {
     return null;
   }
 
-  // ── 后端：IAIService —— 驱动 AI 生成需 capability ─────────────────────
+  // ── 后端：IAIService —— 驱动 AI 生成 / 注册 Persona 与上下文需 capability ──
   if (tokens.aiService && token === tokens.aiService) {
     if (method === 'generateText' || method === 'chat' || method === 'complete') {
       return hasCapability(caps, CAP_AI_INVOKE)
         ? null
         : `调用 AI 生成（${method}）需要 manifest 声明 '${CAP_AI_INVOKE}' 能力`;
+    }
+    if (method === 'registerAIPersona' || method === 'registerAIContextProvider') {
+      return hasCapability(caps, CAP_AI_PERSONA)
+        ? null
+        : `注册 AI Persona / 上下文提供者（${method}）需要 manifest 声明 '${CAP_AI_PERSONA}' 能力`;
     }
     return null;
   }

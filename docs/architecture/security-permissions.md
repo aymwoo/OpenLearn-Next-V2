@@ -112,7 +112,7 @@ recharts, react-markdown, jspdf, jspdf-autotable, exceljs（可选）, lucide-re
 `assertDatabaseAccessAllowed(sql)` 分三层拦截：
 
 1. **禁用指令**: `ATTACH` / `DETACH` / `PRAGMA` / `VACUUM` / `CREATE|DROP TRIGGER|VIEW`（含 TEMP 变体）。
-2. **核心表黑名单**: `users`、`client_sessions`、`plugins`、`plugin_storage`、`ai_providers`、`processes`、`pending_commands`、`classes`、`students`、`class_students`、`lessons`、`assignments`、`assignment_submissions`、`attendance`、`schedules`、`class_grade_weights`、`exams`、`exam_scores`、`student_semester_reports`、`student_rollcalls`、`student_seats`、`student_read_notifications`、`student_lesson_progress`、`courseware`、`courseware_attempt`、`system_resources`、`events`、`_migrations`，以及 2026-10-04 审计补充的 `site_settings`、`agent_conversations`、`classroom_sessions`、`lesson_quiz_submissions`、`courseware_score_config`、`demo_data_registry`、`whiteboard_elements`、`student_point_logs`、`lianyun_research_*`（共 **40 张**）；SQL 中出现任一表名即拒绝。
+2. **核心表黑名单**: `users`、`client_sessions`、`plugins`、`plugin_storage`、`ai_providers`、`ai_personas`、`processes`、`pending_commands`、`classes`、`students`、`class_students`、`lessons`、`assignments`、`assignment_submissions`、`attendance`、`schedules`、`class_grade_weights`、`exams`、`exam_scores`、`student_semester_reports`、`student_rollcalls`、`student_seats`、`student_read_notifications`、`student_lesson_progress`、`courseware`、`courseware_attempt`、`system_resources`、`events`、`_migrations`，以及审计补充的 `site_settings`、`agent_conversations`、`classroom_sessions`、`lesson_quiz_submissions`、`courseware_score_config`、`demo_data_registry`、`whiteboard_elements`、`student_point_logs`、`file_aliases`、`lianyun_research_*` 等（以 `FORBIDDEN_CORE_TABLES` 为准，当前共 **44 张**）；SQL 中出现任一表名即拒绝。
 
    > ⚠️ 这仍是一张**黑名单**：任何将来新增的核心表若未登记，默认对插件开放。彻底解法是改为白名单（只允许 `plugin_*` 自有表 + 少量显式共享表），但那会改变现有插件的可见面，需单独评估。
 
@@ -124,7 +124,7 @@ recharts, react-markdown, jspdf, jspdf-autotable, exceljs（可选）, lucide-re
 「插件 ❌ 访问 SQLite」需要分开看两个层面：
 
 - **REST 层面**: 插件自身不能直接发 HTTP 请求访问平台 API（浏览器侧 `IFrontendAPI` 走 `same-origin` fetch，但受 §3.3 的方法/路径门禁约束）。
-- **DI 层面**: 插件**可以**通过 `ctx.resolve(IDatabaseToken)` 拿到平台共享的 `better-sqlite3` 句柄（`Token<T>` 绑定的是 `kernelContainer.db`，即平台主库）。**真正的边界不是"拿不到句柄"，而是上面 §2.4 的语句级守卫** —— 所有 SQL 都要过 `assertDatabaseAccessAllowed`：跨库指令硬禁、40 张核心表硬禁、`plugin_*` 表仅限本插件命名空间。
+- **DI 层面**: 插件**可以**通过 `ctx.resolve(IDatabaseToken)` 拿到平台共享的 `better-sqlite3` 句柄（`Token<T>` 绑定的是 `kernelContainer.db`，即平台主库）。**真正的边界不是"拿不到句柄"，而是上面 §2.4 的语句级守卫** —— 所有 SQL 都要过 `assertDatabaseAccessAllowed`：跨库指令硬禁、核心黑名单表硬禁、`plugin_*` 表仅限本插件命名空间。
 - **Worker 基础白名单**（**9 个** Token，与 §2.3 的 `BASE_WORKER_SERVICE_TOKENS` 同一份）：`ICommandBusService`、`IEventBusService`、`IActionRegistryService`、`ICapabilityService`、`IProcessService`、`IStorageService`、`IAIService`、`IDatabase`、`INetworkProxyService`。**`IPluginHost` 已移出**（2026-10-04）—— 它暴露 `installPlugin` / `installPluginFromZip` / `activatePlugin` / `uninstallPlugin`，沙箱化插件本不该能安装并激活**其他**插件（等于给自己留一个能在自身被卸载后继续存活的后门）。内置插件确实需要它，但内置默认 **inline 模式**，不经过 worker 白名单，因此移除无功能影响；空出的位置由出网代理 `INetworkProxyService` 占位。
 - **`ctx.db`**: 另有插件命名空间隔离的 `PluginDatabaseAPI`（`ctx.db`），其表前缀统一为 `plugin_<scopeId>_`（`pluginTablePrefix(scopeId)`）——**只取决于安装主键，与 inline / worker / process 模式无关**，详见 `docs/reference/plugin-database-api.md`。
 
@@ -156,6 +156,7 @@ recharts, react-markdown, jspdf, jspdf-autotable, exceljs（可选）, lucide-re
 这两项位于**不同的文件**，不应并列理解为同一模块：
 
 - **Prompt Injection Detection**: `detectPromptInjection` 定义在 `server/utils/crypto.ts`，**唯一调用点**是 `server/routes/os.ts` 的聊天入口（即 `/api/agent/chat` 一类的对话请求）。它**只覆盖 AI Agent 的聊天输入** —— 其他入口（课件、作业提交、插件 manifest 等）不经过该检测。
+- **`ai:persona` Prompt Surface 门禁**: 第三方插件注册 AI 助手角色模板（`ai.registerAIPersona` / `contributes['ai.persona.provider']`）或上下文切片（`ai.registerAIContextProvider`）均需在 `capabilitiesProposed` 中声明并获批 `ai:persona` 能力（fail-closed）；Inline `wrapAI`、Worker `ServiceHost` 与 `PluginHostLifecycle` 均会强制校验并记录审计拒绝事件。当 `callerRole === 'student'` 时，Agent 会强制忽略所有插件上下文切片，且 Persona 的 `toolPolicy` 仍会与 `isActionAllowedForRole` 角色白名单取交集并在运行期核验 `allowedToolNames`，禁止借自定义 Persona 提权或越权调用工具。
 - **API Key Masking & AES-256-GCM Encryption**: 大模型 API Keys 在 SQLite 中加密存储，UI 中掩码展示。实现在 `packages/core/di/api-key-crypto.ts` 的 `encryptApiKey` / `decryptApiKey`（`server/utils/crypto.ts` 亦导出同名函数），该文件**只做加解密**，不涉及注入检测。
 
 ---

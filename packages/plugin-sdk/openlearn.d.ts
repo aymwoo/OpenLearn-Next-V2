@@ -218,6 +218,13 @@ interface IStorageService {
   delete(key: string): Promise<void>;
 }
 
+type AIPersonaRole = 'administrator' | 'teacher' | 'student';
+
+interface AIPersonaToolPolicy {
+  allow?: string[];
+  deny?: string[];
+}
+
 interface AIPersonaDefinition {
   id: string;
   nameZh: string;
@@ -225,6 +232,12 @@ interface AIPersonaDefinition {
   instructionZh: string;
   instructionEn: string;
   icon?: string;
+  mode?: 'overlay' | 'replace';
+  basePolicy?: 'inherit' | 'drop';
+  visibility?: AIPersonaRole[];
+  defaultForRole?: AIPersonaRole[];
+  toolPolicy?: AIPersonaToolPolicy;
+  maxTurns?: number;
 }
 
 interface IAIService {

@@ -288,6 +288,22 @@ export interface AISkillProviderConfig {
   commandType?: string;
 }
 
+/** A contribution to the ai.persona.provider slot (declarative AI persona templates). */
+export interface AIPersonaProviderConfig {
+  id: string;
+  nameZh: string;
+  nameEn: string;
+  instructionZh: string;
+  instructionEn: string;
+  icon?: string;
+  mode?: 'overlay' | 'replace';
+  basePolicy?: 'inherit' | 'drop';
+  visibility?: Array<'administrator' | 'teacher' | 'student'>;
+  defaultForRole?: Array<'administrator' | 'teacher' | 'student'>;
+  toolPolicy?: { allow?: string[]; deny?: string[] };
+  maxTurns?: number;
+}
+
 /** A contribution to the class.tab slot. */
 export interface ClassTabConfig {
   id: string;
@@ -938,6 +954,7 @@ export type ContributionConfig =
   | QuickInsertItemConfig
   | AIPromptTemplateConfig
   | AISkillProviderConfig
+  | AIPersonaProviderConfig
   | ClassTabConfig
   | ClassBatchActionConfig
   | StudentRowPanelConfig

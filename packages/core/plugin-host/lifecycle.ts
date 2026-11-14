@@ -4,6 +4,7 @@
  * `PluginHostLifecycle` 继承 `PluginHostHttp`。链序约束见 `base.ts` 的说明。
  */
 
+import crypto from 'node:crypto';
 import { PluginHostHttp } from './http.js';
 import fs from 'fs';
 import path from 'path';
@@ -29,14 +30,16 @@ import type { PluginContext, MiddlewareContext } from './types.js';
 import { IllegalStateTransitionError, PluginActivateError, PluginDeactivateTimeoutError } from './errors.js';
 import {
   IActionRegistryServiceToken,
+  IAIServiceToken,
   ICapabilityServiceToken,
   ICommandBusServiceToken,
   IEventBusServiceToken,
 } from '../di/interfaces.js';
-import type { ICapabilityService, IEventBusService } from '../di/interfaces.js';
+import type { IAIService, ICapabilityService, IEventBusService } from '../di/interfaces.js';
 import { isTrustedInProcessPlugin } from './execution-policy.js';
 import { isBlockedPluginCapability, isCapabilityApproved } from './plugin-grants.js';
-import { validateManifestCapabilities } from '../capability/catalog.js';
+import { CAP_AI_PERSONA, validateManifestCapabilities } from '../capability/catalog.js';
+import { recordSecurityAudit } from '../observability/audit-log.js';
 import { WorkerManager } from '../worker-runtime/worker-manager.js';
 import { ACTIVATION_TIMEOUT_MS, DEACTIVATION_TIMEOUT_MS } from './base.js';
 import type { PluginHost } from './index.js';
@@ -249,6 +252,7 @@ export abstract class PluginHostLifecycle extends PluginHostHttp {
       });
 
       await this.runActivatePipeline(pluginId, manifest, activate, ctx);
+      await this.registerDeclarativePersonas(pluginId, manifest);
 
       this.pluginInstances.set(pluginId, {
         manifest,
@@ -376,6 +380,7 @@ export abstract class PluginHostLifecycle extends PluginHostHttp {
 
         console.log(`[PluginHost] Plugin "${mergedManifest.id}" activated (${pluginId})`);
       });
+      await this.registerDeclarativePersonas(pluginId, mergedManifest);
     } catch (err) {
       // D-12: 失败回滚 —— ERROR + disposeAll + 撤销能力 + 原样 rethrow
       this.setPluginState(pluginId, PluginState.ERROR, { persistDb: true });
@@ -571,6 +576,67 @@ export abstract class PluginHostLifecycle extends PluginHostHttp {
    * 统一为「记录日志后继续」—— 撤销失败不该掩盖原始激活/停用错误，
    * 但完全静默会让「能力残留」类问题无从排查。
    */
+  /**
+   * 消费 manifest.contributes['ai.persona.provider'] 声明式 AI Persona 贡献点（P2）。
+   * 必须具备已授予的 `ai:persona` 能力；停用或异常回滚时由 ResourceTracker 自动注销。
+   */
+  private async registerDeclarativePersonas(pluginId: string, manifest: Manifest): Promise<void> {
+    const entries = manifest.contributes?.['ai.persona.provider'];
+    if (!Array.isArray(entries) || entries.length === 0) return;
+
+    const actorId = `plugin:${manifest.id}`;
+    const capService = await this.serviceRegistry.tryResolve<ICapabilityService>(ICapabilityServiceToken);
+    const hasCap = capService ? await capService.check(actorId, CAP_AI_PERSONA) : false;
+
+    if (!hasCap) {
+      recordSecurityAudit('plugin.ai_persona_access', {
+        pluginId,
+        manifestId: manifest.id,
+        method: 'contributes:ai.persona.provider',
+        count: entries.length,
+        hasCapability: false,
+        denied: true,
+      });
+      console.warn(
+        `[PluginHost] Plugin "${manifest.id}" declares contributes['ai.persona.provider'] without approved '${CAP_AI_PERSONA}' capability; skipping.`,
+      );
+      return;
+    }
+
+    const aiService = await this.serviceRegistry.tryResolve<IAIService>(IAIServiceToken);
+    if (!aiService || typeof (aiService as any).registerAIPersona !== 'function') return;
+
+    for (const raw of entries) {
+      if (!raw || typeof raw !== 'object' || typeof (raw as any).id !== 'string') continue;
+      const persona = raw as Record<string, unknown>;
+      const personaId = String(persona.id);
+      const digest = crypto
+        .createHash('sha256')
+        .update(`${String(persona.instructionZh ?? '')}\n${String(persona.instructionEn ?? '')}`)
+        .digest('hex')
+        .slice(0, 16);
+      recordSecurityAudit('plugin.ai_persona_access', {
+        pluginId,
+        manifestId: manifest.id,
+        method: 'contributes:ai.persona.provider',
+        targetId: personaId,
+        mode: typeof persona.mode === 'string' ? persona.mode : 'overlay',
+        instructionHash: digest,
+        hasCapability: true,
+      });
+      try {
+        (aiService as any).registerAIPersona({ ...persona, registeredBy: pluginId });
+        this.resourceTracker.track(pluginId, {
+          dispose: () => {
+            (aiService as any).unregisterAIPersona?.(personaId, pluginId);
+          },
+        });
+      } catch (err) {
+        console.warn(`[PluginHost] Failed to register declarative persona "${personaId}" from "${manifest.id}":`, err);
+      }
+    }
+  }
+
   protected async revokeCapabilities(actorId: string): Promise<void> {
     try {
       const capService = await this.serviceRegistry.resolve<ICapabilityService>(ICapabilityServiceToken);
@@ -654,6 +720,7 @@ export abstract class PluginHostLifecycle extends PluginHostHttp {
         deactivate: undefined,
         workerRef: { transport, serviceHost },
       });
+      await this.registerDeclarativePersonas(pluginId, manifest);
       this.setPluginState(pluginId, PluginState.ACTIVE, { persistDb: true });
       console.log(`[PluginHost] Plugin "${manifest.id}" activated in ${isolateKind} mode (${pluginId})`);
     } catch (err) {

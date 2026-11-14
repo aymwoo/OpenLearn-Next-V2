@@ -47,6 +47,15 @@ const VALID_ENTRY: Record<string, unknown> = {
   'quick_insert.item': { id: 't23', title: 'Insert Diagram' },
   'ai.prompt.template': { id: 't24', title: 'Toulmin Model', prompt: 'Analyze claims' },
   'ai.skill.provider': { id: 't25', name: 'calc_tool', description: 'Calculator' },
+  'ai.persona.provider': {
+    id: 't25b',
+    nameZh: '科研导师',
+    nameEn: 'Research Mentor',
+    instructionZh: '聚焦研究方法追问',
+    instructionEn: 'Focus on research methodology.',
+    mode: 'replace',
+    basePolicy: 'drop',
+  },
   'class.tab': { id: 't26', label: 'Class Stats' },
   'class.batch.action': { id: 't27', label: 'Batch Export' },
   'student.row.panel': { id: 't28', title: 'Student Detail' },
@@ -111,6 +120,10 @@ const INVALID_ENTRY: Record<string, { entry: unknown; pattern: RegExp }> = {
   'quick_insert.item': { entry: { id: 'b23' /* 缺 title */ }, pattern: /title/i },
   'ai.prompt.template': { entry: { id: 'b24', title: 'T' /* 缺 prompt */ }, pattern: /prompt/i },
   'ai.skill.provider': { entry: { id: 'b25', name: 'N' /* 缺 description */ }, pattern: /description/i },
+  'ai.persona.provider': {
+    entry: { id: 'b25b', nameZh: '导师', nameEn: 'Mentor', instructionZh: 'hi' /* 缺 instructionEn */ },
+    pattern: /instructionEn/i,
+  },
 };
 
 const SERVER_SLOTS = Object.keys(VALID_ENTRY);
