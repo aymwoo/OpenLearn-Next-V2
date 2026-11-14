@@ -3,7 +3,7 @@
 <!-- doc-version: sdk=3.8.0 -->
 
 > **适用范围**：`@openlearn/plugin-sdk@3.8.0`
-> 插件通过 `ctx.resolve(IDatabaseToken)` 拿到**整个平台共享数据库**的裸 SQLite 句柄（SDK 类型 `SqliteDatabase`，运行时为 better-sqlite3 `Database`），可读写任意表。本页覆盖**平台核心表**（当前 82 张，完整清单见文末自动生成段），作为插件跨表查询/读写时的参考。
+> 插件通过 `ctx.resolve(IDatabaseToken)` 拿到**整个平台共享数据库**的裸 SQLite 句柄（SDK 类型 `SqliteDatabase`，运行时为 better-sqlite3 `Database`），可读写任意表。本页覆盖**平台核心表**（当前 85 张，完整清单见文末自动生成段），作为插件跨表查询/读写时的参考。
 >
 > ✅ **权限边界已澄清（2026-10-26 复核）**：早期版本此处曾标注与 [`security-permissions.md`](../architecture/security-permissions.md) §1 的 RBAC 表冲突（那份表格把 Plugin 的「访问 SQLite 数据库」标为 ❌）。该冲突已在 `security-permissions.md` 侧修正：RBAC 表改指向 §2.5「插件与数据库的权限边界」，并明确插件**可以**通过 `ctx.resolve(IDatabaseToken)` 拿到平台共享库句柄。**真正的边界不是「拿不到句柄」，而是语句级守卫** —— 所有 SQL 都要过 `assertDatabaseAccessAllowed`：跨库指令（`ATTACH`/`DETACH`/`PRAGMA`/`VACUUM`）禁用、**40 张核心表硬禁**、`plugin_*` 表仅限本插件命名空间。仍建议优先用 `ctx.db`（自动加 `plugin_{pluginId}_` 前缀）或 `ctx.services.storage`。
 >
@@ -26,7 +26,7 @@
 
 | 来源                                | 表数       | 说明                                                                                |
 | ----------------------------------- | ---------- | ----------------------------------------------------------------------------------- |
-| `migrations/*.sql`（唯一结构 SSOT） | **82**     | 空库顺序跑完 `000`–`043` 全部迁移后的核心表（`migrations/schema-golden.json` 实测） |
+| `migrations/*.sql`（唯一结构 SSOT） | **85**     | 空库顺序跑完 `000`–`047` 全部迁移后的核心表（`migrations/schema-golden.json` 实测） |
 | 插件私有表（运行时动态创建）        | 随安装而变 | `plugin_{scopeId}_*`，不在金样/本页清单内                                           |
 
 > 早期的「内核内联 schema / bootstrap-db 建表」来源已收敛：`packages/core/db/index.ts` 模块加载即跑全量迁移，`server/bootstrap-db.ts` 只做旧插件升级与过期会话清理，不建表。逐迁移职责见 `migrations/README.md`。
@@ -475,7 +475,7 @@ MFE 远端登记。MFE 执行边界已移除，表保留作历史数据兼容。
 
 <!-- AUTO-GENERATED:table-inventory BEGIN -->
 
-共 **82** 张表（迁移 46 个，金样生成于 2026-11-02T16:07:15.878Z）。列清单为列名（类型与约束见迁移 SQL）：
+共 **85** 张表（迁移 48 个，金样生成于 2026-11-13T15:34:59.721Z）。列清单为列名（类型与约束见迁移 SQL）：
 
 - `_academic_year_backfill`: backfilled_at, id
 - `_class_passcode_encryption`: id, note
@@ -544,7 +544,7 @@ MFE 远端登记。MFE 执行边界已移除，表保留作历史数据兼容。
 - `schedules`: academic_year, class_id, created_at, id, lesson_id, notes, scheduled_date, status, time_slot
 - `segment_gate_overrides`: actor_id, created_at, lesson_id, reason, segment_id, student_id
 - `segment_visits`: entered_at, id, left_at, lesson_id, segment_id, student_id
-- `site_settings`: academic_start_month, current_academic_year, id, logo_url, site_name, slogan, upload_max_file_mb
+- `site_settings`: academic_start_month, current_academic_year, default_theme_id, id, logo_url, logout_clear_site_data, site_name, slogan, upload_max_file_mb
 - `student_lesson_progress`: academic_year, assigned_at, completed, completed_segments, lesson_id, progress_percent, student_id, verified, verified_progress_percent
 - `student_point_logs`: class_id, created_at, delta_points, dimension_id, id, plugin_id, reason, student_id
 - `student_read_notifications`: created_at, notification_id, student_id
@@ -556,6 +556,9 @@ MFE 远端登记。MFE 执行边界已移除，表保留作历史数据兼容。
 - `submission_result`: attempt_id, comment, completion, extra_json, id, score
 - `system_resources`: content, created_at, id, name, type
 - `teaching_modes`: color, created_at, description, description_en, icon, id, is_builtin, name, name_en, sort_order, updated_at
+- `theme_versions`: asset_manifest_json, created_at, manifest_json, styles_css, theme_id, uploader_id, version
+- `themes`: author, created_at, description, id, latest_version, manifest_json, name, platform_max_version, platform_min_version, status, styles_css, supports_modes, updated_at, uploader_id, uploader_name
+- `user_theme_preferences`: appearance_json, installed_version, mode, principal_key, theme_id, updated_at
 - `users`: avatar, created_at, id, must_change_password, name, password_hash, role, status, username
 - `vfs_nodes`: content, created_at, id, name, parent_id, type, updated_at
 - `whiteboard_elements`: created_at, data, id, lesson_id, type
