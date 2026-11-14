@@ -12,6 +12,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixes
 
+- **统一原生 `<dialog>` + `showModal()` 弹窗底座迁移（Issue #488）**：
+  - 新增 `src/components/AccessibleDialog.tsx` 与 `src/index.css` 中 `dialog.openlearn-dialog` 顶层过渡动画样式（原生 `showModal()` 顶层渲染、焦点锁定、背景 `inert`、`Esc` 关闭与焦点自动归还；配置 `closedby` 属性并实现基于 `getBoundingClientRect()` 的 `pointerdown`/`click` 轻量关闭回退及 `prefers-reduced-motion` 减动效动画；同步兼容无 `showModal()` 的 Vitest `jsdom` 测试环境）；
+  - 将 `src/features/modals/` 全部 11 个弹窗组件（`BatchPickerModal`、`CloudDriveModal`、`CourseWizardModal`、`ExportWeightModal`、`ImportLessonsModal`、`ImportModal`、`NotificationDetailModal`、`ProcessLogsModal`、`QuizGeneratorModal`、`SystemErrorCenterModal`、`SystemResourceLibraryModal`）及 `src/components/ProfileModal.tsx` 迁移至 `<AccessibleDialog>`，补全 `aria-labelledby` / `aria-label` 与关闭按钮无障碍标签。
 - **局域网 HTTP 访问被 Chrome 升级为 HTTPS 导致静态资源加载失败（Issue #494）**：
   - 抽出 `server/security/host-helmet.ts`（`buildHostHelmetOptions`）并在未启用 `ENABLE_HSTS` / 生产 `FORCE_HTTPS` 时显式设置 `upgradeInsecureRequests: null`，修复 Helmet v8 默认 `useDefaults: true` 下省略该键仍下发 `upgrade-insecure-requests`、导致 Chrome 在局域网 HTTP IP 下把 `/assets/*` 强升为 `https://...` 并报 `net::ERR_SSL_PROTOCOL_ERROR` 白屏的问题；
   - 新增 `packages/core/security/safe-uuid.ts`（`safeRandomUUID`），替换前端可触达模块（`classroom-runtime` / `lesson-engine`）对 `crypto.randomUUID()` 的裸调用（在非安全上下文的局域网 HTTP 下为 `undefined`），并将 `src/` 中 11 处裸用 `navigator.clipboard.writeText` 统一收敛到带 `execCommand` 回退的 `copyToClipboard`；
