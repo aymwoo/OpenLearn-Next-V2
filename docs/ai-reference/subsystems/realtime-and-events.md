@@ -119,7 +119,7 @@ segment_gate_overrides    segment_visits
 | 课堂节奏信号 | `classroom_pacing_signals`                                                                             |
 | 同伴互评     | `classroom_peer_review_tasks` / `reviews` / `rubric_dimensions` / `nominations` / `badges`             |
 
-**改动提示**：这些表都在 40 张黑名单之外，但**不等于插件可以写**。
+**改动提示**：这些表都在 43 张黑名单之外，但**不等于插件可以写**。
 正确路径是调对应命令或 HTTP 路由，由服务层处理事务与广播。
 
 ---

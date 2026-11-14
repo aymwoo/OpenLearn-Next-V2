@@ -1,7 +1,7 @@
 # 上下文与服务
 
 **结论先行**：`ctx` 有 **16 个字段**（9 服务 + 7 直接能力），9 个服务的类型全部是 `T | null`；
-Token 有 **32 个值导出**但**只有 31 个可解析**，且 `IDatabase` 必须用 Token 对象解析（不能按名字）。
+Token 有 **34 个值导出**（含仅供宿主使用的 `IFileStorageExtensionRegistryToken`），且 `IDatabase` 必须用 Token 对象解析（不能按名字）。
 
 ---
 

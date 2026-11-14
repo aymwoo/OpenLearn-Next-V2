@@ -63,7 +63,7 @@ interface PluginContext {
 
 ---
 
-## 2. 完整 Token 列表（SDK 值导出 32 个，以 `packages/plugin-sdk/index.ts` 导出为准）
+## 2. 完整 Token 列表（SDK 值导出 34 个，以 `packages/plugin-sdk/index.ts` 导出为准）
 
 `Token<T>` 本身是一个运行时常量（`packages/core/di/token.ts`），其 `name` 形如 `@openlearn/core:ICommandBusService`，`T` 仅用于编译期类型携带。
 
@@ -157,6 +157,15 @@ interface PluginContext {
 | `IStageGuardServiceToken`               | `IStageGuardService`               | `@openlearn/core:IStageGuardService`               |
 | `IAssessmentGraderRegistryToken`        | `IAssessmentGraderRegistry`        | 测评批改器注册表（自定义 AI/规则批改器）           |
 | `INetworkProxyServiceToken`             | `INetworkProxyService`             | 插件出站网络宿主代发（R-02 授权闭环）              |
+
+### I. 班级名册 / 文件存储扩展 Token
+
+| 导出 Token                           | 解析类型                        | 标识字符串                                      |
+| ------------------------------------ | ------------------------------- | ----------------------------------------------- |
+| `IClassRosterServiceToken`           | `IClassRosterService`           | `@openlearn/core:IClassRosterService`           |
+| `IFileStorageExtensionRegistryToken` | `IFileStorageExtensionRegistry` | `@openlearn/core:IFileStorageExtensionRegistry` |
+
+> `IFileStorageExtensionRegistryToken` 仅面向内核宿主与同进程受信任扩展（布局策略 / 存储后端 / 文件处理器）；第三方 `process` / `worker` 插件不跨 IPC 传递二进制流插槽，见[文件存储扩展设计](../architecture/file-storage-extension-design.md) §4。
 
 ---
 

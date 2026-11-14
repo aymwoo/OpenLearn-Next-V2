@@ -242,7 +242,7 @@ Mock 迁移助手**不做这件事**。
 | :--------------------------------- | :--------------------------------------------------------------- | :--------------------------------------------------------------------- |
 | `ctx.provide`                      | 不校验 `manifest.provides`，直接注册                             | `token.name` 必须完整出现在 `manifest.provides`，否则抛错              |
 | `ctx.resolve`                      | 8 个预置 + `customTokens`，其余抛 `[MockContext] No provider...` | `PLUGIN_RESOLVABLE_TOKEN_NAMES`（31）白名单，非白名单静默 `undefined`  |
-| `ctx.db.ensureTable/table`         | 无 SEC 校验                                                      | 表名正则、schema ≤ 4000、禁分号、40 张核心表黑名单、跨库指令硬禁       |
+| `ctx.db.ensureTable/table`         | 无 SEC 校验                                                      | 表名正则、schema ≤ 4000、禁分号、43 张核心表黑名单、跨库指令硬禁       |
 | `ctx.db` 物理位置                  | 内存 SQLite，per-test                                            | 平台共享库 + `plugin_<id>_` 命名空间                                   |
 | `ctx.require`                      | 直接抛错                                                         | `PLUGIN_SHARED_MODULES` 白名单（`recharts` / `exceljs` / `jspdf` / …） |
 | `pointsDimension` / `pointsLedger` | 恒 `null`                                                        | inline 注入真服务；worker / process 也是 `null`                        |

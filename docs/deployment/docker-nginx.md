@@ -29,10 +29,10 @@
 
 运行阶段的数据根是 `OPENLEARN_DATA_DIR=/data`，库文件是 `OPENLEARN_DB_PATH=/data/educational_os.db`。课件、插件和上传文件都是这个根下面的子目录，**不要**再单独把库挂到 `/app/packages/core/db`、把课件挂到 `/app/storage`。以前那样挂，设置了 `OPENLEARN_DB_PATH` 却没设置 `OPENLEARN_DATA_DIR` 时，课件实际写到库文件的同级目录，`/app/storage` 卷里只有种子口令文件。
 
-| 容器内路径 | 装什么                                                                                        | 漏挂的后果                         |
-| ---------- | --------------------------------------------------------------------------------------------- | ---------------------------------- |
-| `/data`    | `educational_os.db`、`storage/`（课件与 `bootstrap-credentials.txt`）、`plugins/`、`uploads/` | **业务数据、课件、已装插件一起丢** |
-| `/backups` | `node scripts/site-backup.mjs` 的数据库快照和文件包                                           | 无法按脚本恢复                     |
+| 容器内路径 | 装什么                                                                                                                                                           | 漏挂的后果                                   |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------- |
+| `/data`    | `educational_os.db`、`files/`（统一文件存储）、`storage/`（课件与 `bootstrap-credentials.txt`）、`plugins/`、`uploads/`（旧上传兼容）、`themes/`（第三方主题包） | **业务数据、课件、上传文件、已装插件一起丢** |
+| `/backups` | `node scripts/site-backup.mjs` 的数据库快照和文件包                                                                                                              | 无法按脚本恢复                               |
 
 应用日志走标准输出，用 `docker compose logs app` 查看。镜像不再挂 `/app/logs`：进程本身不往那个目录写文件。
 
@@ -105,7 +105,7 @@ docker run -d --name openlearnv2 \
 
 ### 1.5 数据备份与恢复
 
-镜像里带了不依赖 `tsx` 的脚本。数据库用 `VACUUM INTO`，服务开着也能做一致性快照；文件包是 `storage/`、`plugins/`、`uploads/` 的 tar。
+镜像里带了不依赖 `tsx` 的脚本。数据库用 `VACUUM INTO`，服务开着也能做一致性快照；文件包是 `files/`、`storage/`、`plugins/`、`uploads/` 的 tar（第三方主题包 `themes/` 目前不在归档清单内，需单独备份）。
 
 ```bash
 # 备份（不必停服）
@@ -227,20 +227,20 @@ curl -fsS http://127.0.0.1:9000/health
 
 ## 3. 相关源文件
 
-| 路径                                 | 内容                                                   |
-| ------------------------------------ | ------------------------------------------------------ |
-| `Dockerfile`                         | 两阶段构建定义、运行用户、健康检查                     |
-| `docker-compose.yml`                 | 服务定义、数据卷、可选 Nginx profile                   |
-| `deploy/nginx/openlearn.conf`        | compose 网络内的 Nginx（upstream `app:9000`）          |
-| `deploy/nginx/openlearn.host.conf`   | 裸机 Nginx（upstream `127.0.0.1:9000`）                |
-| `scripts/site-backup.mjs`            | 数据库 VACUUM INTO + storage/plugins/uploads 打包      |
-| `scripts/site-restore.mjs`           | 停服后恢复上述备份                                     |
-| `scripts/backfill-class-owners.mjs`  | 把空 `owner_user_id` 回填给指定教师                    |
-| `scripts/docker-entrypoint.sh`       | 容器入口：目录权限与启动失败日志                       |
-| `server.ts`                          | `startServer` 监听 `PORT`（默认 9000）、`GET /health`  |
-| `server/routes/bridge.ts`            | `/runtime/:uuid` 课件加载路由                          |
-| `server/routes/shared.ts`            | `setCoursewareDocumentCsp` 课件自有宽松 CSP            |
-| `packages/core/db/index.ts`          | 读取 `OPENLEARN_DB_PATH` 决定 SQLite 主库路径          |
-| `packages/core/di/api-key-crypto.ts` | `ENCRYPTION_KEY` 解析与 AES-256-GCM 加解密             |
-| `scripts/restore-db.ts`              | 备份枚举与恢复（读取 `BACKUP_DIR`）                    |
-| `ecosystem.config.cjs`               | PM2 进程定义（裸机部署路径，密钥走 `.env` 运行时读取） |
+| 路径                                 | 内容                                                    |
+| ------------------------------------ | ------------------------------------------------------- |
+| `Dockerfile`                         | 两阶段构建定义、运行用户、健康检查                      |
+| `docker-compose.yml`                 | 服务定义、数据卷、可选 Nginx profile                    |
+| `deploy/nginx/openlearn.conf`        | compose 网络内的 Nginx（upstream `app:9000`）           |
+| `deploy/nginx/openlearn.host.conf`   | 裸机 Nginx（upstream `127.0.0.1:9000`）                 |
+| `scripts/site-backup.mjs`            | 数据库 VACUUM INTO + files/storage/plugins/uploads 打包 |
+| `scripts/site-restore.mjs`           | 停服后恢复上述备份                                      |
+| `scripts/backfill-class-owners.mjs`  | 把空 `owner_user_id` 回填给指定教师                     |
+| `scripts/docker-entrypoint.sh`       | 容器入口：目录权限与启动失败日志                        |
+| `server.ts`                          | `startServer` 监听 `PORT`（默认 9000）、`GET /health`   |
+| `server/routes/bridge.ts`            | `/runtime/:uuid` 课件加载路由                           |
+| `server/routes/shared.ts`            | `setCoursewareDocumentCsp` 课件自有宽松 CSP             |
+| `packages/core/db/index.ts`          | 读取 `OPENLEARN_DB_PATH` 决定 SQLite 主库路径           |
+| `packages/core/di/api-key-crypto.ts` | `ENCRYPTION_KEY` 解析与 AES-256-GCM 加解密              |
+| `scripts/restore-db.ts`              | 备份枚举与恢复（读取 `BACKUP_DIR`）                     |
+| `ecosystem.config.cjs`               | PM2 进程定义（裸机部署路径，密钥走 `.env` 运行时读取）  |

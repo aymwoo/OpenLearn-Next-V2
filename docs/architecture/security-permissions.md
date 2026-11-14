@@ -112,7 +112,7 @@ recharts, react-markdown, jspdf, jspdf-autotable, exceljs（可选）, lucide-re
 `assertDatabaseAccessAllowed(sql)` 分三层拦截：
 
 1. **禁用指令**: `ATTACH` / `DETACH` / `PRAGMA` / `VACUUM` / `CREATE|DROP TRIGGER|VIEW`（含 TEMP 变体）。
-2. **核心表黑名单**: `users`、`client_sessions`、`plugins`、`plugin_storage`、`ai_providers`、`processes`、`pending_commands`、`classes`、`students`、`class_students`、`lessons`、`assignments`、`assignment_submissions`、`attendance`、`schedules`、`class_grade_weights`、`exams`、`exam_scores`、`student_semester_reports`、`student_rollcalls`、`student_seats`、`student_read_notifications`、`student_lesson_progress`、`courseware`、`courseware_attempt`、`system_resources`、`events`、`_migrations`，以及 2026-10-04 审计补充的 `site_settings`、`agent_conversations`、`classroom_sessions`、`lesson_quiz_submissions`、`courseware_score_config`、`demo_data_registry`、`whiteboard_elements`、`student_point_logs`、`lianyun_research_*`（共 **40 张**）；SQL 中出现任一表名即拒绝。
+2. **核心表黑名单**: `users`、`client_sessions`、`plugins`、`plugin_storage`、`ai_providers`、`processes`、`pending_commands`、`classes`、`students`、`class_students`、`lessons`、`assignments`、`assignment_submissions`、`attendance`、`schedules`、`class_grade_weights`、`exams`、`exam_scores`、`student_semester_reports`、`student_rollcalls`、`student_seats`、`student_read_notifications`、`student_lesson_progress`、`courseware`、`courseware_attempt`、`system_resources`、`events`、`_migrations`，以及 2026-10-04 审计补充的 `site_settings`、`agent_conversations`、`classroom_sessions`、`lesson_quiz_submissions`、`courseware_score_config`、`demo_data_registry`、`whiteboard_elements`、`student_point_logs`、`file_blobs`、`file_assets`、`file_aliases`、`lianyun_research_*`（共 **43 张**）；SQL 中出现任一表名即拒绝。
 
    > ⚠️ 这仍是一张**黑名单**：任何将来新增的核心表若未登记，默认对插件开放。彻底解法是改为白名单（只允许 `plugin_*` 自有表 + 少量显式共享表），但那会改变现有插件的可见面，需单独评估。
 
@@ -124,7 +124,7 @@ recharts, react-markdown, jspdf, jspdf-autotable, exceljs（可选）, lucide-re
 「插件 ❌ 访问 SQLite」需要分开看两个层面：
 
 - **REST 层面**: 插件自身不能直接发 HTTP 请求访问平台 API（浏览器侧 `IFrontendAPI` 走 `same-origin` fetch，但受 §3.3 的方法/路径门禁约束）。
-- **DI 层面**: 插件**可以**通过 `ctx.resolve(IDatabaseToken)` 拿到平台共享的 `better-sqlite3` 句柄（`Token<T>` 绑定的是 `kernelContainer.db`，即平台主库）。**真正的边界不是"拿不到句柄"，而是上面 §2.4 的语句级守卫** —— 所有 SQL 都要过 `assertDatabaseAccessAllowed`：跨库指令硬禁、40 张核心表硬禁、`plugin_*` 表仅限本插件命名空间。
+- **DI 层面**: 插件**可以**通过 `ctx.resolve(IDatabaseToken)` 拿到平台共享的 `better-sqlite3` 句柄（`Token<T>` 绑定的是 `kernelContainer.db`，即平台主库）。**真正的边界不是"拿不到句柄"，而是上面 §2.4 的语句级守卫** —— 所有 SQL 都要过 `assertDatabaseAccessAllowed`：跨库指令硬禁、43 张核心表硬禁、`plugin_*` 表仅限本插件命名空间。
 - **Worker 基础白名单**（**9 个** Token，与 §2.3 的 `BASE_WORKER_SERVICE_TOKENS` 同一份）：`ICommandBusService`、`IEventBusService`、`IActionRegistryService`、`ICapabilityService`、`IProcessService`、`IStorageService`、`IAIService`、`IDatabase`、`INetworkProxyService`。**`IPluginHost` 已移出**（2026-10-04）—— 它暴露 `installPlugin` / `installPluginFromZip` / `activatePlugin` / `uninstallPlugin`，沙箱化插件本不该能安装并激活**其他**插件（等于给自己留一个能在自身被卸载后继续存活的后门）。内置插件确实需要它，但内置默认 **inline 模式**，不经过 worker 白名单，因此移除无功能影响；空出的位置由出网代理 `INetworkProxyService` 占位。
 - **`ctx.db`**: 另有插件命名空间隔离的 `PluginDatabaseAPI`（`ctx.db`），其表前缀统一为 `plugin_<scopeId>_`（`pluginTablePrefix(scopeId)`）——**只取决于安装主键，与 inline / worker / process 模式无关**，详见 `docs/reference/plugin-database-api.md`。
 

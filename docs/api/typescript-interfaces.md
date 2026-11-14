@@ -151,4 +151,46 @@ SDK 额外导出了各引擎的**纯类型**（仅供类型断言，无对应 `T
 
 见 [DI Token 字典](di-tokens.md) 第 4 节：`IWhiteboardToken` / `IAuthToken` / `ILoggerToken` / `IPluginRuntimeToken` / `IUnifiedPluginContextToken` 等均**不存在**。
 
-> 最后更新：2026-10-27
+---
+
+## 9. 文件存储三插槽接口（v0.7.15+）
+
+`#504` 统一文件持久化层在 `packages/core/di/interfaces.ts` 定义、并由 `@openlearn/plugin-sdk` 导出以下类型。它们只描述**内核宿主 / 同进程受信任扩展**的插槽契约；第三方 `process` / `worker` 插件不跨 IPC 传递 `Buffer` / `Readable` 流：
+
+| 类型                                                  | 作用                                                                                              |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `FilePurpose`                                         | `courseware` / `avatar` / `assignment` / `lesson-asset` / `theme` / `attachment`                  |
+| `FileAccessScope`                                     | `public` / `authenticated` / `assignment`                                                         |
+| `FileAssetContext`                                    | 写入时携带的 `purpose`、作者 / 课程 / 课节 / 作业 / 班级与 `metadata`                             |
+| `FileStorageBackend`                                  | 物理后端：`put` / `exists` / `stat` / `readStream` / `delete`（可选 `copy` / `getSignedUrl`）     |
+| `FileStorageBackendCapabilities`                      | `supportsRange` / `supportsPresignedUrl` / `externalBacked` / `maxFileSizeBytes`                  |
+| `FileProcessor`                                       | 生命周期处理器：`before-store` / `after-store` / `before-serve`；可按 MIME / purpose / 扩展名匹配 |
+| `FileProcessorContext`                                | 处理器入参：资产上下文、字节、哈希、`localPath` 与累计 `metadata`                                 |
+| `FileProcessorResult`                                 | 可改写 buffer / MIME / 文件名，或返回 `metadataPatch`、响应头                                     |
+| `FileLayoutTokenResolver`                             | 自定义目录模板变量解析器（如 `{school}`）                                                         |
+| `IRegisteredFileBackend` / `IRegisteredFileProcessor` | 注册表内的 `{ owner, backend/processor }` 包装项                                                  |
+| `IFileStorageExtensionRegistry`                       | 注册 / 注销后端与处理器、注册布局变量、按 owner 清理                                              |
+
+```typescript
+interface IFileStorageExtensionRegistry {
+  registerBackend(owner: string, backend: FileStorageBackend): void;
+  unregisterBackend(owner: string, id: string): boolean;
+  getBackend(id: string): FileStorageBackend | undefined;
+  listBackends(): IRegisteredFileBackend[];
+
+  registerProcessor(owner: string, processor: FileProcessor): void;
+  unregisterProcessor(owner: string, id: string): boolean;
+  listProcessors(stage?: FileProcessorStage): IRegisteredFileProcessor[];
+
+  registerLayoutToken(owner: string, tokenName: string, resolver: FileLayoutTokenResolver): void;
+  unregisterLayoutToken(owner: string, tokenName: string): boolean;
+  getLayoutTokenResolvers(): ReadonlyMap<string, { owner: string; resolver: FileLayoutTokenResolver }>;
+
+  clear(owner?: string): void;
+  listOwners(): string[];
+}
+```
+
+Token 与详细插槽语义见 [DI 字典](di-tokens.md) §2.I 与[文件存储扩展设计](../architecture/file-storage-extension-design.md) §4。
+
+> 最后更新：2026-11-14

@@ -32,7 +32,7 @@
 
 `migrations/*.sql` 共 **45 个**文件，累计 `CREATE TABLE` 出 **86 张表**。按归属分三类：
 
-### 2.1 内核业务表（插件**不可写**，40 张在黑名单）
+### 2.1 内核业务表（插件**不可写**，43 张在黑名单）
 
 ```text
 users  client_sessions  plugins  plugin_storage  ai_providers  processes

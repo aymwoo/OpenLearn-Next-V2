@@ -86,7 +86,7 @@
 | 方法级 Barrier 3 | `packages/core/plugin-host/method-policy.ts`                                                             | L110122–L110455                                   | 8 个能力串、`exposeToAgent` 降级                                                                                     |
 | 能力网关         | `packages/core/plugin-host/plugin-capability-gateway.ts`                                                 | L111093–L111189                                   | `hasCapability` 与通配语义                                                                                           |
 | 域名授权         | `packages/core/plugin-host/plugin-grants.ts`                                                             | L111539–L111856                                   | `plugin_network_grants`、`classifyNetHostProposals`、SSRF 名单                                                       |
-| SQL 守卫         | `packages/core/plugin-host/sql-guard.ts`                                                                 | L113087–L113405                                   | `assertPluginSqlAllowed`、40 张核心表、6 条禁操正则、fail-closed                                                     |
+| SQL 守卫         | `packages/core/plugin-host/sql-guard.ts`                                                                 | L113087–L113405                                   | `assertPluginSqlAllowed`、43 张核心表、6 条禁操正则、fail-closed                                                     |
 | 学生数据隐私     | `packages/core/plugin-host/student-data-privacy.ts`                                                      | L113447–L113655                                   | `student-data:*` 硬拒（Issue #225）                                                                                  |
 | 权限旗标         | `packages/core/worker-runtime/plugin-permission.ts`                                                      | L128430–L128591                                   | `rw`/`ro`/`off` 生成的 `--allow-*` 列表                                                                              |
 | 配额             | `packages/core/worker-runtime/plugin-limits.ts`、`plugin-quota.ts`、`../plugin-host/resource-tracker.ts` | L127896–L128020、L128592–L128701、L112940–L113086 | 128MB / 512MB / 8000ms per 10000ms、`/proc` 采样、SIGKILL                                                            |
@@ -143,7 +143,7 @@
 | 插件 REST 路由 | `server/routes/plugins.ts`                                     | L209844–L211870                             | 安装/审批/启停/网络授权端点与状态码             |
 | 插件 API 网关  | `server/routes/plugin-api-gateway.ts`                          | L209275–L209843                             | `/api/plugins/:id(*)/...`、confused-deputy 防护 |
 | 数据库与迁移   | `packages/core/db/index.ts`、`migrator.ts`、`schema-golden.ts` | L71639–L72249、L72250–L72606、L73042–L73162 | `VITEST` 分支、迁移账本、schema 金标准          |
-| 平台数据表     | `docs/reference/platform-data-tables.md`                       | L21845–L22410                               | 40 张核心表的清单来源                           |
+| 平台数据表     | `docs/reference/platform-data-tables.md`                       | L21845–L22410                               | 43 张核心表的清单来源                           |
 | CI 门禁        | `.github/workflows/ci.yml`                                     | L2661–L3340                                 | 哪些 audit 会挡 PR                              |
 
 ---

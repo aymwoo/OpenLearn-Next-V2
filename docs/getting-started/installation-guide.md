@@ -508,7 +508,7 @@ node scripts/site-backup.mjs
 docker compose exec app node scripts/site-backup.mjs
 ```
 
-> ⚠️ **别忘了课件目录**。`storage/courseware/` 存着上传的课件。`site-backup.mjs` 会把 `storage/`、`plugins/`、`uploads/` 打进同一个文件包。容器里它们都在 `/data` 卷。
+> ⚠️ **别忘了文件目录**。统一文件存储落在 `files/`，课件目录包落在 `storage/courseware/`。`site-backup.mjs` 会把 `files/`、`storage/`、`plugins/`、`uploads/` 打进同一个文件包。容器里它们都在 `/data` 卷。第三方主题包 `themes/` 目前不在归档清单内，需单独备份。
 >
 > SQLite 在线复制可能拿到不一致快照。脚本用 `VACUUM INTO`。不要直接 `cp` 正在写入的 db 文件。
 >
