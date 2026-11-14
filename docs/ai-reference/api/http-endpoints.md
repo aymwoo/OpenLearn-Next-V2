@@ -1,6 +1,6 @@
 # HTTP API 总览
 
-> 24 个路由文件，其中 22 个直接注册端点，共 **313 个端点**。
+> 28 个路由文件，其中 26 个直接注册端点，共 **331 个端点**。
 > 本文件给「路径 → 文件 → 鉴权级别」的映射，不逐条列签名（签名以源码为准）。
 
 ---
@@ -20,32 +20,36 @@
 
 ## 2. 端点分布（按文件）
 
-| 文件                       | 端点数      | 主前缀                                                                  | 说明                                      |
-| -------------------------- | ----------- | ----------------------------------------------------------------------- | ----------------------------------------- |
-| `roster.ts`                | **53**      | `/api/classes`、`/api/students`、`/api/auth`、`/api/users`、`/api/labs` | 班级/学生/账号/机房，最大的 CRUD 面       |
-| `classroom.ts`             | **45**      | `/api/classroom/sessions`                                               | 课堂会话、倒计时、视图状态、点名、抢答    |
-| `plugins.ts`               | **37**      | `/api/plugins`、`/api/ai-providers`、`/api/site-settings`               | 插件安装/启停/市场、AI provider、站点设置 |
-| `assessments.ts`           | **35**      | `/api/assessments`、`/api/assessment-attempts`、`/api/question-bank`    | 测评全流程                                |
-| `lessons.ts`               | **30**      | `/api/lessons`                                                          | 课节 CRUD、时间轴、环节                   |
-| `courseware.ts`            | 16          | `/api/courseware`                                                       | 课件上传/确认/作答                        |
-| `grading.ts`               | 16          | `/api/classes/:id/*`、`/api/exams`、`/api/schedules`                    | 考勤汇总、成绩权重、考试                  |
-| `os.ts`                    | 14          | `/api/commands`、`/api/agent`、`/api/activities`、`/api/upload`         | **命令入口**、AI Agent、活动生态          |
-| `assignment-hub.ts`        | 10          | `/api/assignments`                                                      | 作业 CRUD + 附件 + 提交                   |
-| `schedules.ts`             | 9           | `/api/schedules`、`/api/timetable`                                      | 课表与冲突检测                            |
-| `assignments.ts`           | 7           | `/api/classes/:id/assignments`、`/api/assignments/:id/submissions`      | 作业生成/提交/评分                        |
-| `classroom-peer-review.ts` | 7           | `/api/classroom/sessions/:id/peer-review`                               | 同伴互评、展示作品、弹幕                  |
-| `admin.ts`                 | 5           | `/api/system/*`、`/api/admin/*`                                         | 加密状态、升级检查、批量导入              |
-| `processes.ts`             | 5           | `/api/approvals`、`/api/processes`                                      | 高危命令审批、长任务日志                  |
-| `resources.ts`             | 5           | `/api/resources`                                                        | 资源库                                    |
-| `workspace.ts`             | 4           | `/api/events`、`/api/vfs`、`/api/diagnostics`                           | 事件流、虚拟文件系统、诊断                |
-| `bridge.ts`                | 3           | `/bridge.js`、`/runtime/:uuid`                                          | LMS 桥与运行时注入                        |
-| `course-packages.ts`       | 3           | `/api/course-packages`                                                  | 课程包导入导出                            |
-| `demo-data.ts`             | 3           | `/api/demo-data`                                                        | 演示数据 seed/cleanup                     |
-| `health.ts`                | 3           | `/health`、`/health/ready`、`/metrics`                                  | 探针与指标（**无 `/api` 前缀**）          |
-| `classroom-extras.ts`      | 2           | `/api/classroom/:lessonId/*`                                            | 家长通知、掌握度预测                      |
-| `client-errors.ts`         | 1           | `/api/client-errors`                                                    | 前端错误上报                              |
-| `plugin-api-gateway.ts`    | 0（中间件） | `/api/plugins/:id/*`                                                    | 插件 REST 网关，`plugins.ts` L21 挂载     |
-| `shared.ts`                | 0（工具）   | —                                                                       | 路由公共依赖                              |
+| 文件                          | 端点数      | 主前缀                                                                  | 说明                                      |
+| ----------------------------- | ----------- | ----------------------------------------------------------------------- | ----------------------------------------- |
+| `roster.ts`                   | **54**      | `/api/classes`、`/api/students`、`/api/auth`、`/api/users`、`/api/labs` | 班级/学生/账号/机房，最大的 CRUD 面       |
+| `classroom.ts`                | **37**      | `/api/classroom/sessions`                                               | 课堂会话、倒计时、视图状态、点名、抢答    |
+| `plugins.ts`                  | **37**      | `/api/plugins`、`/api/ai-providers`、`/api/site-settings`               | 插件安装/启停/市场、AI provider、站点设置 |
+| `assessments.ts`              | **35**      | `/api/assessments`、`/api/assessment-attempts`、`/api/question-bank`    | 测评全流程                                |
+| `lessons.ts`                  | **30**      | `/api/lessons`                                                          | 课节 CRUD、时间轴、环节                   |
+| `courseware.ts`               | 16          | `/api/courseware`                                                       | 课件上传/确认/作答                        |
+| `grading.ts`                  | 16          | `/api/classes/:id/*`、`/api/exams`、`/api/schedules`                    | 考勤汇总、成绩权重、考试                  |
+| `os.ts`                       | 14          | `/api/commands`、`/api/agent`、`/api/activities`、`/api/upload`         | **命令入口**、AI Agent、活动生态          |
+| `themes.ts`                   | 12          | `/api/themes`                                                           | 第三方主题包安装/启停/偏好隔离            |
+| `assignment-hub.ts`           | 10          | `/api/assignments`                                                      | 作业 CRUD + 附件 + 提交                   |
+| `schedules.ts`                | 9           | `/api/schedules`、`/api/timetable`                                      | 课表与冲突检测                            |
+| `assignments.ts`              | 7           | `/api/classes/:id/assignments`、`/api/assignments/:id/submissions`      | 作业生成/提交/评分                        |
+| `classroom-peer-review.ts`    | 7           | `/api/classroom/sessions/:id/peer-review`                               | 同伴互评、展示作品、弹幕                  |
+| `admin.ts`                    | 5           | `/api/system/*`、`/api/admin/*`                                         | 加密状态、升级检查、批量导入              |
+| `files.ts`                    | 5           | `/api/files/:assetId`、`/api/admin/file-storage/*`                      | 统一文件读取网关与存储策略                |
+| `processes.ts`                | 5           | `/api/approvals`、`/api/processes`                                      | 高危命令审批、长任务日志                  |
+| `resources.ts`                | 5           | `/api/resources`                                                        | 资源库                                    |
+| `classroom-preset-polls.ts`   | 4           | `/api/lessons/:lessonId/preset-polls`                                   | 预设投票题 CRUD                           |
+| `classroom-teaching-modes.ts` | 4           | `/api/classroom/teaching-modes`                                         | 教学模式配置 CRUD                         |
+| `workspace.ts`                | 4           | `/api/events`、`/api/vfs`、`/api/diagnostics`                           | 事件流、虚拟文件系统、诊断                |
+| `bridge.ts`                   | 3           | `/bridge.js`、`/runtime/:uuid`                                          | LMS 桥与运行时注入                        |
+| `course-packages.ts`          | 3           | `/api/course-packages`                                                  | 课程包导入导出                            |
+| `demo-data.ts`                | 3           | `/api/demo-data`                                                        | 演示数据 seed/cleanup                     |
+| `health.ts`                   | 3           | `/health`、`/health/ready`、`/metrics`                                  | 探针与指标（**无 `/api` 前缀**）          |
+| `classroom-extras.ts`         | 2           | `/api/classroom/:lessonId/*`                                            | 家长通知、掌握度预测                      |
+| `client-errors.ts`            | 1           | `/api/client-errors`                                                    | 前端错误上报                              |
+| `plugin-api-gateway.ts`       | 0（中间件） | `/api/plugins/:id/*`                                                    | 插件 REST 网关，`plugins.ts` L21 挂载     |
+| `shared.ts`                   | 0（工具）   | —                                                                       | 路由公共依赖                              |
 
 ---
 
