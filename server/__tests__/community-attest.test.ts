@@ -6,9 +6,13 @@ import os from 'node:os';
 import {
   communityInstallEnabled,
   communityPublicKeyPem,
+  getStoredCommunityInstallEnabled,
   hashMatches,
+  resolveCommunityInstallConfig,
+  setStoredCommunityInstallEnabled,
   signatureMatches,
   verifyCommunityPackage,
+  type CommunityInstallDbLike,
 } from '../services/community-attest.js';
 
 describe('community-attest 密码学完整性与签名校验', () => {
@@ -170,5 +174,113 @@ describe('community-attest 密码学完整性与签名校验', () => {
     );
     expect(resRawHash.ok).toBe(false);
     expect((resRawHash as any).code).toBe('COMMUNITY_SIGNATURE_INVALID');
+  });
+});
+
+describe('resolveCommunityInstallConfig 优先级与持久化', () => {
+  function memoryDb(initial: number | boolean | null | 'missing' = null): CommunityInstallDbLike {
+    let stored: number | boolean | null | 'missing' = initial;
+    return {
+      prepare(sql: string) {
+        return {
+          get() {
+            if (stored === 'missing') {
+              throw new Error('no such column: community_install_enabled');
+            }
+            return { community_install_enabled: stored };
+          },
+          run(...params: unknown[]) {
+            if (!sql.includes('?')) {
+              stored = null;
+              return;
+            }
+            stored = params[0] as number;
+          },
+        };
+      },
+    };
+  }
+
+  it('未配置且无环境变量时默认关闭', () => {
+    const env = {} as NodeJS.ProcessEnv;
+    expect(communityInstallEnabled(env)).toBe(false);
+    const resolved = resolveCommunityInstallConfig(memoryDb(null), env);
+    expect(resolved).toMatchObject({
+      enabled: false,
+      storedValue: null,
+      envEnabled: false,
+      configSource: 'default',
+      hasEnvFallback: false,
+    });
+  });
+
+  it('数据库尚未显式设置时回退 OPENLEARN_COMMUNITY_INSTALL=1', () => {
+    const env = { OPENLEARN_COMMUNITY_INSTALL: '1' } as NodeJS.ProcessEnv;
+    const resolved = resolveCommunityInstallConfig(memoryDb(null), env);
+    expect(resolved).toMatchObject({
+      enabled: true,
+      storedValue: null,
+      envEnabled: true,
+      configSource: 'env',
+      hasEnvFallback: true,
+    });
+  });
+
+  it('缺少列时按未配置处理并回退环境变量', () => {
+    const env = { OPENLEARN_COMMUNITY_INSTALL: '1' } as NodeJS.ProcessEnv;
+    expect(getStoredCommunityInstallEnabled(memoryDb('missing'))).toBeNull();
+    expect(resolveCommunityInstallConfig(memoryDb('missing'), env).enabled).toBe(true);
+  });
+
+  it('环境变量不是 1 时不能开启回退', () => {
+    for (const value of ['', '0', 'true', 'yes']) {
+      const env = { OPENLEARN_COMMUNITY_INSTALL: value } as NodeJS.ProcessEnv;
+      expect(communityInstallEnabled(env)).toBe(false);
+      expect(resolveCommunityInstallConfig(memoryDb(null), env).enabled).toBe(false);
+    }
+  });
+
+  it('界面显式关闭覆盖环境变量 1，清除后恢复环境回退', () => {
+    const env = { OPENLEARN_COMMUNITY_INSTALL: '1' } as NodeJS.ProcessEnv;
+    const db = memoryDb(null);
+    const closed = setStoredCommunityInstallEnabled(db, false, env);
+    expect(closed).toMatchObject({
+      enabled: false,
+      storedValue: false,
+      configSource: 'database',
+      hasEnvFallback: true,
+    });
+    // 再次读取模拟进程重载后仍读持久化值
+    expect(resolveCommunityInstallConfig(db, env).enabled).toBe(false);
+    const cleared = setStoredCommunityInstallEnabled(db, null, env);
+    expect(cleared).toMatchObject({
+      enabled: true,
+      storedValue: null,
+      configSource: 'env',
+    });
+  });
+
+  it('界面显式开启无需环境变量，保存后再次读取仍开启', () => {
+    const env = {} as NodeJS.ProcessEnv;
+    const db = memoryDb(null);
+    const opened = setStoredCommunityInstallEnabled(db, true, env);
+    expect(opened).toMatchObject({
+      enabled: true,
+      storedValue: true,
+      configSource: 'database',
+      hasEnvFallback: false,
+    });
+    expect(resolveCommunityInstallConfig(db, env).enabled).toBe(true);
+  });
+
+  it('publicKeysConfigured 只反映是否已配置公钥，不暴露密钥', () => {
+    const withoutKeys = resolveCommunityInstallConfig(memoryDb(null), {} as NodeJS.ProcessEnv);
+    expect(withoutKeys.publicKeysConfigured).toBe(false);
+    expect(JSON.stringify(withoutKeys)).not.toMatch(/BEGIN PUBLIC KEY/);
+    const withKeys = resolveCommunityInstallConfig(memoryDb(null), {
+      OPENLEARN_COMMUNITY_PUBKEY: '-----BEGIN PUBLIC KEY-----\nMIIB\n-----END PUBLIC KEY-----',
+    } as NodeJS.ProcessEnv);
+    expect(withKeys.publicKeysConfigured).toBe(true);
+    expect(JSON.stringify(withKeys)).not.toMatch(/BEGIN PUBLIC KEY/);
   });
 });

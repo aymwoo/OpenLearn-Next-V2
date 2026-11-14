@@ -373,7 +373,7 @@ AI 助手对话记忆。`id` / `conv_key` / `role` / `content` / `created_at`。
 
 ### `site_settings`
 
-站点设置。`id` / `site_name` / `slogan` / `logo_url`。
+站点设置。`id` / `site_name` / `slogan` / `logo_url` / `community_registry_url`（迁移 051，未配置时回落 `PLUGIN_COMMUNITY_REGISTRY_URL`） / `community_install_enabled`（迁移 052：`NULL` 表示未配置并回落 `OPENLEARN_COMMUNITY_INSTALL`，`0` 为显式关闭，`1` 为显式开启）。
 
 ### `system_resources`
 
@@ -549,7 +549,7 @@ MFE 远端登记。MFE 执行边界已移除，表保留作历史数据兼容。
 - `schedules`: academic_year, class_id, created_at, id, lesson_id, notes, scheduled_date, status, time_slot
 - `segment_gate_overrides`: actor_id, created_at, lesson_id, reason, segment_id, student_id
 - `segment_visits`: entered_at, id, left_at, lesson_id, segment_id, student_id
-- `site_settings`: academic_start_month, current_academic_year, default_theme_id, file_storage_config, id, logo_url, logout_clear_site_data, site_name, slogan, upload_max_file_mb
+- `site_settings`: academic_start_month, community_install_enabled, community_registry_url, current_academic_year, default_theme_id, file_storage_config, id, logo_url, logout_clear_site_data, site_name, slogan, upload_max_file_mb
 - `student_lesson_progress`: academic_year, assigned_at, completed, completed_segments, lesson_id, progress_percent, student_id, verified, verified_progress_percent
 - `student_point_logs`: class_id, created_at, delta_points, dimension_id, id, plugin_id, reason, student_id
 - `student_read_notifications`: created_at, notification_id, student_id

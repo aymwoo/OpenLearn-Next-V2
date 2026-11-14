@@ -54,6 +54,11 @@ interface RegistryBody {
   configSource?: 'database' | 'env' | 'none';
   databaseUrl?: string | null;
   hasEnvFallback?: boolean;
+  installEnabled?: boolean;
+  installConfigSource?: 'database' | 'env' | 'default' | null;
+  storedInstallEnabled?: boolean | null;
+  hasInstallEnvFallback?: boolean | null;
+  publicKeysConfigured?: boolean | null;
 }
 
 function registryBody(overrides: Partial<RegistryBody> = {}): RegistryBody {
@@ -735,6 +740,109 @@ describe('PluginCommunityPanel', () => {
 
       fireEvent.click(screen.getByRole('button', { name: '修改插件源' }));
       expect(screen.getByTestId('community-registry-config-panel')).toBeTruthy();
+    });
+  });
+
+  describe('community install toggle', () => {
+    it('lets an administrator turn the switch on and persist installEnabled', async () => {
+      const { fetcher, calls } = makeFetcher([
+        (url, init) => {
+          if (url === '/api/plugins/community/config' && init?.method === 'PUT') {
+            return json({
+              success: true,
+              installEnabled: true,
+              storedInstallEnabled: true,
+              installConfigSource: 'database',
+            });
+          }
+          if (url.startsWith('/api/plugins/community')) {
+            const alreadySaved = calls.some((c) => c.url === '/api/plugins/community/config');
+            return json(
+              registryBody({
+                canConfigure: true,
+                installEnabled: alreadySaved,
+                installConfigSource: alreadySaved ? 'database' : 'default',
+                storedInstallEnabled: alreadySaved ? true : null,
+                hasInstallEnvFallback: false,
+                publicKeysConfigured: true,
+              }),
+            );
+          }
+          return undefined;
+        },
+      ]);
+
+      renderPanel({ fetcher });
+      await screen.findByText('作业中心');
+
+      const toggle = screen.getByTestId('community-install-toggle');
+      expect(toggle.textContent || '').toMatch(/允许从社区注册表安装/);
+      expect(toggle.textContent || '').toMatch(/有效状态：已关闭/);
+      const switchBtn = screen.getByRole('switch', { name: '允许从社区注册表安装' }) as HTMLButtonElement;
+      expect(switchBtn.disabled).toBe(false);
+      expect(switchBtn.getAttribute('aria-checked')).toBe('false');
+
+      fireEvent.click(switchBtn);
+      await waitFor(() => {
+        const body = calls.find((c) => c.url === '/api/plugins/community/config');
+        expect(body).toBeTruthy();
+        expect(JSON.parse(String(body?.init?.body))).toEqual({ installEnabled: true });
+      });
+      await waitFor(() => {
+        expect(screen.getByTestId('community-install-toggle').textContent || '').toMatch(/有效状态：已开启/);
+      });
+    });
+
+    it('warns in Chinese when the switch is on but no public key is configured', async () => {
+      const { fetcher } = makeFetcher([
+        (url) =>
+          url.startsWith('/api/plugins/community')
+            ? json(
+                registryBody({
+                  canConfigure: true,
+                  installEnabled: true,
+                  installConfigSource: 'database',
+                  storedInstallEnabled: true,
+                  publicKeysConfigured: false,
+                }),
+              )
+            : undefined,
+      ]);
+
+      renderPanel({ fetcher });
+      await screen.findByText('作业中心');
+      const toggle = screen.getByTestId('community-install-toggle');
+      expect(toggle.textContent || '').toMatch(/尚未配置社区验签公钥/);
+      expect(toggle.textContent || '').toMatch(/即便已开启此开关，也无法从社区注册表安装/);
+    });
+
+    it('disables the switch for non-administrators and does not submit', async () => {
+      const { fetcher, calls } = makeFetcher([
+        (url) =>
+          url.startsWith('/api/plugins/community')
+            ? json(
+                registryBody({
+                  canConfigure: false,
+                  installEnabled: false,
+                  installConfigSource: null,
+                  storedInstallEnabled: null,
+                  hasInstallEnvFallback: null,
+                  publicKeysConfigured: null,
+                }),
+              )
+            : undefined,
+      ]);
+
+      renderPanel({ fetcher });
+      await screen.findByText('作业中心');
+
+      const switchBtn = screen.getByRole('switch', { name: '允许从社区注册表安装' }) as HTMLButtonElement;
+      expect(switchBtn.disabled).toBe(true);
+      fireEvent.click(switchBtn);
+      expect(calls.some((c) => c.url === '/api/plugins/community/config')).toBe(false);
+      expect(screen.getByTestId('community-install-toggle').textContent || '').not.toMatch(
+        /OPENLEARN_COMMUNITY_INSTALL/,
+      );
     });
   });
 });
