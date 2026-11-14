@@ -3,9 +3,9 @@
 <!-- doc-version: sdk=3.8.0 -->
 
 > **适用范围**：`@openlearn/plugin-sdk@3.8.0`
-> 插件通过 `ctx.resolve(IDatabaseToken)` 拿到**整个平台共享数据库**的裸 SQLite 句柄（SDK 类型 `SqliteDatabase`，运行时为 better-sqlite3 `Database`），可读写任意表。本页覆盖**平台核心表**（当前 89 张，完整清单见文末自动生成段），作为插件跨表查询/读写时的参考。
+> 插件通过 `ctx.resolve(IDatabaseToken)` 拿到**整个平台共享数据库**的裸 SQLite 句柄（SDK 类型 `SqliteDatabase`，运行时为 better-sqlite3 `Database`），可读写任意表。本页覆盖**平台核心表**（当前 90 张，完整清单见文末自动生成段），作为插件跨表查询/读写时的参考。
 >
-> ✅ **权限边界已澄清（2026-10-26 复核）**：早期版本此处曾标注与 [`security-permissions.md`](../architecture/security-permissions.md) §1 的 RBAC 表冲突（那份表格把 Plugin 的「访问 SQLite 数据库」标为 ❌）。该冲突已在 `security-permissions.md` 侧修正：RBAC 表改指向 §2.5「插件与数据库的权限边界」，并明确插件**可以**通过 `ctx.resolve(IDatabaseToken)` 拿到平台共享库句柄。**真正的边界不是「拿不到句柄」，而是语句级守卫** —— 所有 SQL 都要过 `assertDatabaseAccessAllowed`：跨库指令（`ATTACH`/`DETACH`/`PRAGMA`/`VACUUM`）禁用、**44 张核心表硬禁**、`plugin_*` 表仅限本插件命名空间。仍建议优先用 `ctx.db`（自动加 `plugin_{pluginId}_` 前缀）或 `ctx.services.storage`。
+> ✅ **权限边界已澄清（2026-10-26 复核）**：早期版本此处曾标注与 [`security-permissions.md`](../architecture/security-permissions.md) §1 的 RBAC 表冲突（那份表格把 Plugin 的「访问 SQLite 数据库」标为 ❌）。该冲突已在 `security-permissions.md` 侧修正：RBAC 表改指向 §2.5「插件与数据库的权限边界」，并明确插件**可以**通过 `ctx.resolve(IDatabaseToken)` 拿到平台共享库句柄。**真正的边界不是「拿不到句柄」，而是语句级守卫** —— 所有 SQL 都要过 `assertDatabaseAccessAllowed`：跨库指令（`ATTACH`/`DETACH`/`PRAGMA`/`VACUUM`）禁用、**45 张核心表硬禁**、`plugin_*` 表仅限本插件命名空间。仍建议优先用 `ctx.db`（自动加 `plugin_{pluginId}_` 前缀）或 `ctx.services.storage`。
 >
 > ⚠️ **本页不是完整字典**：插件安装后会按需动态创建 `plugin_{pluginId}_*` 私有表（数量随安装的插件而变），且各类表仍可能随迁移加列。**结构权威清单是 `migrations/schema-golden.json`（金样）与 `sqlite_master`**——改迁移后跑 `pnpm db:gen-golden && pnpm db:gen-tables` 同步金样与本页文末清单：
 >
@@ -26,7 +26,7 @@
 
 | 来源                                | 表数       | 说明                                                                                |
 | ----------------------------------- | ---------- | ----------------------------------------------------------------------------------- |
-| `migrations/*.sql`（唯一结构 SSOT） | **89**     | 空库顺序跑完 `000`–`049` 全部迁移后的核心表（`migrations/schema-golden.json` 实测） |
+| `migrations/*.sql`（唯一结构 SSOT） | **90**     | 空库顺序跑完 `000`–`050` 全部迁移后的核心表（`migrations/schema-golden.json` 实测） |
 | 插件私有表（运行时动态创建）        | 随安装而变 | `plugin_{scopeId}_*`，不在金样/本页清单内                                           |
 
 > 早期的「内核内联 schema / bootstrap-db 建表」来源已收敛：`packages/core/db/index.ts` 模块加载即跑全量迁移，`server/bootstrap-db.ts` 只做旧插件升级与过期会话清理，不建表。逐迁移职责见 `migrations/README.md`。

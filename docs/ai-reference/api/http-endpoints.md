@@ -1,6 +1,6 @@
 # HTTP API 总览
 
-> 28 个路由文件，其中 26 个直接注册端点，共 **334 个端点**。
+> 28 个路由文件，其中 26 个直接注册端点，共 **335 个端点**。
 > 本文件给「路径 → 文件 → 鉴权级别」的映射，不逐条列签名（签名以源码为准）。
 
 ---
@@ -29,7 +29,7 @@
 | `lessons.ts`                  | **30**      | `/api/lessons`                                                          | 课节 CRUD、时间轴、环节                   |
 | `courseware.ts`               | 16          | `/api/courseware`                                                       | 课件上传/确认/作答                        |
 | `grading.ts`                  | 16          | `/api/classes/:id/*`、`/api/exams`、`/api/schedules`                    | 考勤汇总、成绩权重、考试                  |
-| `os.ts`                       | 17          | `/api/commands`、`/api/agent`、`/api/activities`、`/api/upload`         | **命令入口**、AI Agent、活动生态          |
+| `os.ts`                       | 18          | `/api/commands`、`/api/agent`、`/api/activities`、`/api/upload`         | **命令入口**、AI Agent、活动生态          |
 | `themes.ts`                   | 12          | `/api/themes`                                                           | 第三方主题包安装/启停/偏好隔离            |
 | `assignment-hub.ts`           | 10          | `/api/assignments`                                                      | 作业 CRUD + 附件 + 提交                   |
 | `schedules.ts`                | 9           | `/api/schedules`、`/api/timetable`                                      | 课表与冲突检测                            |

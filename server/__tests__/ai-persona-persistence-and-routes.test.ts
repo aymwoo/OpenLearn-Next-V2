@@ -502,4 +502,70 @@ describe('Issue #510 · AI 配置角色治理（用途说明、启停、共享�
     expect(disablePlainRes.status).toBe(400);
     expect((await disablePlainRes.json()).error).toBe('BUILTIN_FALLBACK_PROTECTED');
   });
+
+  it('GET /api/agent/personas/:id/references 仅管理员可用，并如实返回默认角色引用与兜底标记', async () => {
+    const adminToken = createSessionToken('administrator', 'admin_510');
+    const teacherToken = createSessionToken('teacher', 'teacher_510');
+
+    const createRes = await fetch(`${baseUrl}/api/agent/personas`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Cookie: `edu_os_token=${adminToken}`,
+      },
+      body: JSON.stringify({
+        id: 'references_probe',
+        nameZh: '引用探测角色',
+        nameEn: 'References Probe',
+        instructionZh: '用于验证引用查询端点。',
+        instructionEn: 'Verifies the references endpoint.',
+        defaultForRole: ['teacher'],
+        preferredProviderId: 'prov_510_shared',
+      }),
+    });
+    expect(createRes.status).toBe(201);
+
+    // 非管理员不得查询引用（避免泄露全站默认角色绑定信息）
+    const forbiddenRes = await fetch(`${baseUrl}/api/agent/personas/references_probe/references`, {
+      headers: { Cookie: `edu_os_token=${teacherToken}` },
+    });
+    expect(forbiddenRes.status).toBe(403);
+
+    // 管理员查询：返回默认角色、共享提供商绑定与非兜底标记
+    const okRes = await fetch(`${baseUrl}/api/agent/personas/references_probe/references`, {
+      headers: { Cookie: `edu_os_token=${adminToken}` },
+    });
+    expect(okRes.status).toBe(200);
+    const body = (await okRes.json()) as {
+      success: boolean;
+      personaId: string;
+      references: {
+        defaultForRoles: string[];
+        preferredProviderId?: string;
+        isFallback: boolean;
+      };
+    };
+    expect(body.success).toBe(true);
+    expect(body.personaId).toBe('references_probe');
+    expect(body.references.defaultForRoles).toEqual(['teacher']);
+    expect(body.references.preferredProviderId).toBe('prov_510_shared');
+    expect(body.references.isFallback).toBe(false);
+
+    // 系统兜底角色的 isFallback 标记
+    const fallbackRes = await fetch(`${baseUrl}/api/agent/personas/plain_assistant/references`, {
+      headers: { Cookie: `edu_os_token=${adminToken}` },
+    });
+    expect(fallbackRes.status).toBe(200);
+    const fallbackBody = (await fallbackRes.json()) as {
+      references: { isFallback: boolean };
+    };
+    expect(fallbackBody.references.isFallback).toBe(true);
+
+    // 不存在的角色返回 404 而非 500
+    const missingRes = await fetch(`${baseUrl}/api/agent/personas/no_such_persona/references`, {
+      headers: { Cookie: `edu_os_token=${adminToken}` },
+    });
+    expect(missingRes.status).toBe(404);
+    expect((await missingRes.json()).error).toBe('PERSONA_NOT_FOUND');
+  });
 });

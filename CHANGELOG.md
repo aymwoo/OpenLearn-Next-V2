@@ -13,7 +13,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 ### Features
 
 - **后台「AI 配置」入口升级与内核 AI 助教角色全生命周期治理（Issue #510）**：
-  - 将管理后台原「AI 模型提供商」页签、页内标题及全端引导提示统一更名为「**AI 配置**」（`AdminPanel.tsx`、`AiProvidersPanel.tsx` 等），原有个人私有与平台共享 AI Provider 隔离权限与数据完全保持不变；
+  - 将管理后台原「AI 模型提供商」页签、页内标题及全端引导提示统一更名为「**AI 配置**」（`AdminPanel.tsx`、`AiProvidersPanel.tsx` 等），并同步安装 / 快速上手 / 部署文档中的入口指引与 E2E 用例描述，避免同一入口名称不一致；原有个人私有与平台共享 AI Provider 隔离权限与数据完全保持不变；
   - 新增数据库迁移 `050_ai_persona_governance.sql`（同步更新 `schema-golden.json`、`platform-data-tables.md` 与 `migrations/README.md`），为 `ai_personas` 增加用途说明（`description_zh` / `description_en`）、启停状态（`enabled`）与绑定平台共享 AI 提供商（`preferred_provider_id`）；
   - 强化 `server/ai-persona-registry.ts` 与 `server/routes/os.ts` / `server/routes/plugins.ts`：强制角色仅可绑定平台共享（`is_shared = 1`）提供商（禁止泄露个人私有配置）、提供商删除或取消共享时自动清理悬空绑定、`plain_assistant` 兜底角色受停用保护、停用/删除仍设作默认的角色需二次确认（`409 PERSONA_IN_USE` + `force=true` 自动清除默认绑定并回退）；`POST /api/agent/chat` 对已停用或已删除角色不再报错中断，而是自动回退至可用默认角色并返回 `personaFallback` 供侧栏无缝自愈；
   - 升级前端 `AiPersonasSection.tsx`、`RightSidebar.tsx`、`useAgentChat.ts` 与 `docs/administrator-guide/admin-manual.md`，补充角色用途展示、启停操作、引用二次确认弹窗、字段/作用域/生效时机说明及单元与集成回归测试。
@@ -87,6 +87,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - 管理员手册补「文件存储策略」与站点设置字段；部署 / 安装 / 配置文档的备份清单补 `files/`，并注明 `themes/` 目前不在 `site-backup` 归档内；
   - `ai-reference/api/http-endpoints.md` 按当前代码重算为 28 个路由文件 / 334 个端点，补 `themes.ts`、`files.ts` 与 classroom 拆分后的两个路由文件；
   - 与 #507（迁移 `049` / `ai_personas`）合并后，表数、黑名单与端点口径已按新基线复核。
+- **同步 #510 迁移 `050` / AI 角色治理表落地后的文档口径**：
+  - 迁移 / 表数推进为 `000`–`050`、51 个脚本、**90** 张表（`database-and-migrations.md`、`platform-data-tables.md`、`platform-services.md`），自动表清单与金样随之重新生成并补入 `ai_persona_governance` 列；
+  - `FORBIDDEN_CORE_TABLES` 由 44 张更新为 **45** 张并补 `ai_persona_governance`（plugin-database-api、plugin-architecture-contracts、agent 与 ai-reference 各页），`sql-guard.ts` 数组行号引用同步为 `L13–L59`；
+  - `ai-reference/api/http-endpoints.md` 端点总数 334 → **335**（`os.ts` 17 → 18，新增 `GET /api/agent/personas/:id/references`），端点表 28 行合计与顶部口径一致。
 
 ## [0.7.15] - 2026-11-12
 

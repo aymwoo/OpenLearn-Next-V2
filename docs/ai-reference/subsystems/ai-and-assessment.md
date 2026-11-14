@@ -172,7 +172,7 @@ lesson_quiz_submissions  courseware_attempt  courseware_score_config
 | Token 名 | `@openlearn/activity-ecosystem:IActivityRegistry`                                             |
 | 解析方式 | **只能按名字** resolve（对象不在白名单）                                                      |
 | 路由     | `GET /api/activities?role=`（`os.ts` L146）                                                   |
-| 相关表   | `lianyun_research_activities` / `_groups` / `_submissions` / `_reviews`（均在 44 张黑名单内） |
+| 相关表   | `lianyun_research_activities` / `_groups` / `_submissions` / `_reviews`（均在 45 张黑名单内） |
 
 插件若想读取活动的分组信息，正确路径是 `ctx.resolve(IActivityRegistryToken as any)`
 再降级到只读 SQL（示例见 [../examples/lab-seat-walkthrough.md](../examples/lab-seat-walkthrough.md) §6.3）。
