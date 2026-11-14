@@ -15,7 +15,7 @@
 | 文件形态    | `.csv`，两列 `title` + `content`    | `.json`，单个自包含文档                                              |
 | 教学环节    | ❌ 不导入，课程没有 timeline        | ✅ 完整导入 `lesson.timeline`（讲授 / 练习 / 测验 / 总结…）          |
 | 白板元素    | ❌ 空白板                           | ✅ 导入 `elements[]`（演示文稿、测验、代码沙箱、数学函数等预设组件） |
-| 附件 / 图片 | ❌ 只能依赖公网图床链接             | ✅ 附件 base64 内联，导入时落盘到本实例 `/uploads`                   |
+| 附件 / 图片 | ❌ 只能依赖公网图床链接             | ✅ 附件 base64 内联，导入时落盘并返回本实例 `/api/files/<assetId>`   |
 | 事务性      | 逐条写入，中途失败会留下半截数据    | ✅ 单事务写入，失败整体回滚并清理已落盘文件                          |
 | 幂等去重    | 无                                  | ✅ `meta.id` 或内容哈希去重，重复导入返回 409 并询问                 |
 | 适用场景    | 批量建「空壳课」、快速占位          | 完整教案交换、备课备份、模板分发、带讲义/课件的课堂                  |
@@ -148,22 +148,22 @@
 
 ## 3. 附件占位符 `${asset:<id>}`
 
-课程包里**不直接写** `/uploads/xxx.pdf` 这类本机路径 —— 换个实例必然 404。
+课程包里**不直接写** `/uploads/xxx.pdf` 或 `/api/files/<assetId>` 这类本机路径 —— 换个实例必然 404。
 所有附件引用统一写成占位符：
 
 - 白板元素：`data.fileUrl = "${asset:asset-sample-handout}"`
 - 课程正文（Markdown）：图片写 `![示意图](${asset:img-1})`；下载链接则是普通超链接，把圆括号里的地址写成 `${asset:doc-1}`。
 
-导入时，占位符会被替换成**导入方实例上真实落盘后的** `/uploads/<随机名>.<ext>`：
+导入时，占位符会被替换成**导入方实例统一文件存储返回的** `/api/files/<assetId>`（旧数据里的 `/uploads/<随机名>.<ext>` 仍由 `file_aliases` 兼容读取）：
 
 ```text
 课程包内的 ${asset:img-1}
         ↓ 导入时落盘 + 替换
-lessons.content / whiteboard_elements.data 中的 /uploads/1750000000-ab12cd34.png
+lessons.content / whiteboard_elements.data 中的 /api/files/fa_01J...
 ```
 
 - 引用了不存在的资产 id → **整个导入失败并回滚**（不会写出一节半坏的课）。
-- 导出时平台会做逆向操作：扫描正文与元素里的 `/uploads/*` 引用，读盘、base64 内联、把 URL 换回占位符。
+- 导出时平台会做逆向操作：扫描正文与元素里的 `/api/files/*` 与旧 `/uploads/*` 引用，读取对应资产、base64 内联、把 URL 换回占位符。
 
 ### 3.1 哪些类型能内联放映
 
@@ -296,7 +296,7 @@ GET /api/lessons/:id/export-package
 
 - 权限：课程创建教师或管理员。
 - 行为：读取 `lessons`（标题 / 正文 / timeline / progressMode）、`whiteboard_elements`，
-  扫描正文与元素里引用的 `/uploads/*` 文件，读盘并 base64 内联进 `assets[]`，URL 逆向替换为占位符。
+  扫描正文与元素里引用的 `/api/files/*` 与旧 `/uploads/*` 文件，读取资产并 base64 内联进 `assets[]`，URL 逆向替换为占位符。
 - 响应头：
   - `Content-Disposition`：`filename*=UTF-8''<课程标题>.openlearn-package.json`
   - `X-Course-Package-Filename`：URL 编码后的文件名（前端据此保存）
@@ -323,7 +323,7 @@ A：你用的可能是 CSV 通道。CSV 只写标题与正文；白板元素只�
 
 **Q：正文里的图片为什么不显示？**
 A：请确认引用写的是 `${asset:<id>}`（0.7.8+ 支持正文占位符），且 `id` 在 `assets[]` 中存在；
-导入时占位符会被替换成 `/uploads/...`，直接写死的本机路径在其他实例上会 404。
+导入时占位符会被替换成 `/api/files/<assetId>`（旧数据为 `/uploads/...`），直接写死的本机路径在其他实例上会 404。
 
 **Q：为什么 docx / xlsx / zip 没有内联预览？**
 A：平台只对 PDF / PPTX 提供内联渲染器；其余类型按设计降级为下载卡片（`fileType: "file"`），

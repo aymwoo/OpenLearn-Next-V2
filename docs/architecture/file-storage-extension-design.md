@@ -82,7 +82,7 @@
 - `id TEXT PRIMARY KEY`（对外 `/api/files/:assetId` 标识）
 - `blob_id TEXT NOT NULL REFERENCES file_blobs(id)`
 - `original_name TEXT NOT NULL`、`mime TEXT NOT NULL`
-- 上下文字段：`author_id`、`course_id`、`lesson_id`、`purpose`（`avatar` / `courseware-asset` / `assignment` / `attachment` / `export`）
+- 上下文字段：`author_id`、`course_id`、`lesson_id`、`purpose`（`courseware` / `avatar` / `assignment` / `lesson-asset` / `theme` / `attachment`）
 - `access_scope TEXT NOT NULL DEFAULT 'authenticated'`（`public` | `authenticated` | `assignment`）
 - `metadata_json TEXT`、`deleted_at TEXT`、`created_at TEXT NOT NULL`
 

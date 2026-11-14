@@ -85,7 +85,7 @@ const db = await ctx.resolve(IDatabaseToken); // 类型: SqliteDatabase (Inline)
 
 为防止第三方插件通过手写 SQL 或注入绕过权限模型窃取系统凭证、破坏课堂数据或越权操控核心状态，宿主在 `packages/core/plugin-host/sql-guard.ts` 中部署了严格的 Fail-Closed SQL 审计器：
 
-#### 1. 40 张核心安全表黑名单（`FORBIDDEN_CORE_TABLES`）
+#### 1. 44 张核心安全表黑名单（`FORBIDDEN_CORE_TABLES`）
 
 第三方与隔离模式插件**绝对禁止**在 SQL（含 `SELECT` / `INSERT` / `UPDATE` / `DELETE` / `DROP` / `CREATE` / `ALTER` 以及任意嵌套子查询、JOIN）中引用以下核心表：
 
@@ -93,11 +93,12 @@ const db = await ctx.resolve(IDatabaseToken); // 类型: SqliteDatabase (Inline)
 | :------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **用户与凭据**       | `users`, `client_sessions`, `agent_conversations`                                                                                                        |
 | **插件与系统元数据** | `plugins`, `plugin_storage`, `processes`, `pending_commands`, `system_resources`, `site_settings`, `_migrations`, `events`, `demo_data_registry`         |
-| **AI 模型接入**      | `ai_providers`                                                                                                                                           |
+| **AI 模型接入**      | `ai_providers`, `ai_personas`                                                                                                                            |
 | **班级与学生档案**   | `classes`, `students`, `class_students`, `schedules`, `class_grade_weights`, `student_point_logs`                                                        |
 | **课堂教学与协作**   | `lessons`, `classroom_sessions`, `whiteboard_elements`, `student_seats`, `student_rollcalls`, `attendance`, `student_read_notifications`                 |
 | **课件与作答评估**   | `courseware`, `courseware_attempt`, `student_lesson_progress`, `lesson_quiz_submissions`, `courseware_score_config`                                      |
 | **作业与考试测评**   | `assignments`, `assignment_submissions`, `exams`, `exam_scores`, `student_semester_reports`                                                              |
+| **文件存储**         | `file_blobs`, `file_assets`, `file_aliases`                                                                                                              |
 | **科研教学活动**     | `lianyun_research_activities`, `lianyun_research_groups`, `lianyun_research_submissions`, `lianyun_research_reviews`（仅授权 manifest 白名单插件可访问） |
 
 #### 2. 底层高危操作与多语句绝对禁止

@@ -70,6 +70,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - `migrations/README.md` 增加 `047_third_party_theme_system.sql` 台账行 —— 该文件是迁移职责的权威清单，约定「随每个迁移同步更新」，此前遗漏；
   - 重新生成 `docs/reference/platform-data-tables.md` 的自动表清单（82 → **85** 张表、46 → **48** 个迁移），补齐 `themes`、`theme_versions`、`user_theme_preferences` 三张新表，以及 `site_settings` 新增的 `default_theme_id` / `logout_clear_site_data` 列；
   - 同步修正 `docs/architecture/database-and-migrations.md` 与 `docs/agent/reference/platform-services.md` 中过期的迁移数 / 表数口径（`000`–`047` 共 48 个脚本、85 张核心表）。
+- **补齐文件存储扩展（#504）落地后的文档口径**：
+  - 迁移 / 表数统一为 `000`–`049`、50 个脚本、**89** 张表（`database-and-migrations.md`、`platform-data-tables.md`、`platform-services.md`）；
+  - `FORBIDDEN_CORE_TABLES` 由 40 张更新为 **44** 张并补 `file_blobs` / `file_assets` / `file_aliases` / `ai_personas`（plugin-database-api、plugin-architecture-contracts、security-permissions、agent 与 ai-reference 各页）；
+  - `di-tokens.md` 补 `IClassRosterServiceToken` 与 `IFileStorageExtensionRegistryToken`（SDK 值导出 32 → **34**），`typescript-interfaces.md` 补文件存储三插槽接口，`api-coverage-report.md` 重算 Token 数；
+  - 课程包规范改按统一文件存储的 `/api/files/<assetId>` 描述（旧 `/uploads/*` 仍兼容）；
+  - 管理员手册补「文件存储策略」与站点设置字段；部署 / 安装 / 配置文档的备份清单补 `files/`，并注明 `themes/` 目前不在 `site-backup` 归档内；
+  - `ai-reference/api/http-endpoints.md` 按当前代码重算为 28 个路由文件 / 334 个端点，补 `themes.ts`、`files.ts` 与 classroom 拆分后的两个路由文件；
+  - 与 #507（迁移 `049` / `ai_personas`）合并后，表数、黑名单与端点口径已按新基线复核。
 
 ## [0.7.15] - 2026-11-12
 

@@ -31,7 +31,7 @@
 | `ENCRYPTION_KEY`                              | 见下文                                       | 64 位 hex。加密 AI Provider API Key 与班级临时口令。设置了就用环境变量；未设置时首次启动生成并写入 `storage/encryption-key`（0600）。与已有文件不一致则拒绝启动                                                                                                                                                                              |
 | `OPENLEARN_DB_PATH`                           | 见 §2                                        | SQLite 数据库文件路径                                                                                                                                                                                                                                                                                                                        |
 | `OPENLEARN_READ_POOL_SIZE`                    | 自适应（按 CPU 核心数 4~16）                 | 只读连接池（`ReadConnectionPool`）容量上限（支持 1–32）。在高并发读与 NVMe 场景下可手动超调                                                                                                                                                                                                                                                  |
-| `OPENLEARN_DATA_DIR`                          | 见说明                                       | 课件 `storage/`、`plugins/`、`uploads/` 的根。容器默认 `/data`。**不决定数据库路径**——DB 只由 `OPENLEARN_DB_PATH` 决定                                                                                                                                                                                                                       |
+| `OPENLEARN_DATA_DIR`                          | 见说明                                       | 统一文件 `files/`、课件 `storage/`、插件 `plugins/`、旧上传 `uploads/`、主题包 `themes/` 的根。容器默认 `/data`。**不决定数据库路径**——DB 只由 `OPENLEARN_DB_PATH` 决定                                                                                                                                                                      |
 | `BACKUP_DIR`                                  | `<库文件目录>/backups`                       | `scripts/site-backup.mjs` 与迁移前快照的输出目录。容器默认 `/backups`                                                                                                                                                                                                                                                                        |
 | `BACKUP_SCHEDULE`                             | 开启                                         | `off` 完全关闭自动备份调度：WAL 检查点巡检与每日全量快照都不再触发                                                                                                                                                                                                                                                                           |
 | `BACKUP_KEEP`                                 | `10`                                         | 每日全量备份保留份数（仅修剪 `backup_` 前缀，人工快照不受影响）                                                                                                                                                                                                                                                                              |
@@ -105,13 +105,13 @@
 
 ## 2. SQLite 数据库路径
 
-| 场景                              | 路径                                                                         |
-| --------------------------------- | ---------------------------------------------------------------------------- |
-| 本地开发（`pnpm dev`）            | `packages/core/db/educational_os.db`（相对项目根）                           |
-| npx 安装                          | `~/openlearn-next/data.db`                                                   |
-| `--db-path` / `OPENLEARN_DB_PATH` | 任意指定路径                                                                 |
-| Docker Compose                    | `/data/educational_os.db`，文件在同一卷的 `storage/`、`plugins/`、`uploads/` |
-| Vitest                            | `/tmp/openlearn_test_dbs/` per-worker 临时库（按 `VITEST_POOL_ID` 隔离）     |
+| 场景                              | 路径                                                                                              |
+| --------------------------------- | ------------------------------------------------------------------------------------------------- |
+| 本地开发（`pnpm dev`）            | `packages/core/db/educational_os.db`（相对项目根）                                                |
+| npx 安装                          | `~/openlearn-next/data.db`                                                                        |
+| `--db-path` / `OPENLEARN_DB_PATH` | 任意指定路径                                                                                      |
+| Docker Compose                    | `/data/educational_os.db`，文件在同一卷的 `files/`、`storage/`、`plugins/`、`uploads/`、`themes/` |
+| Vitest                            | `/tmp/openlearn_test_dbs/` per-worker 临时库（按 `VITEST_POOL_ID` 隔离）                          |
 
 ## 3. 会话与密钥
 

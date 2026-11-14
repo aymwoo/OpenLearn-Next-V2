@@ -30,7 +30,7 @@ graph TD
         C3["classId || 'default' 容错<br/>onContextUpdate 生命周期响应"]
     end
     subgraph DB ["契约 4: SQL-Guard 数据库隔离"]
-        C4["40 张平台核心表黑名单<br/>强制 plugin_<scopeId>_* 私有前缀"]
+        C4["44 张平台核心表黑名单<br/>强制 plugin_<scopeId>_* 私有前缀"]
     end
     subgraph RPC ["契约 5: ServiceHost 门禁"]
         C5["Barrier 1: Token 白名单<br/>Barrier 2: 空能力只读锁定 (非 get* 抛错)<br/>Barrier 3: 方法/路径细粒度策略"]
@@ -135,18 +135,19 @@ graph TD
 
 对于隔离模式插件（`process` / `worker_threads`），平台数据库访问遵循**零信任与白名单命名空间原则**：
 
-#### 4.1 40 张核心安全表静态黑名单（`FORBIDDEN_CORE_TABLES`）
+#### 4.1 44 张核心安全表静态黑名单（`FORBIDDEN_CORE_TABLES`）
 
-无论任何 SQL 语法结构（包括简单查询、多层子查询、JOIN、视图展开），只要触及以下 40 张核心表中的任何一张，SQL-Guard 立即阻断并记录安全审计事件：
+无论任何 SQL 语法结构（包括简单查询、多层子查询、JOIN、视图展开），只要触及以下 44 张核心表中的任何一张，SQL-Guard 立即阻断并记录安全审计事件：
 
 ```text
 users, client_sessions, agent_conversations,
 plugins, plugin_storage, processes, pending_commands, system_resources, site_settings, _migrations, events, demo_data_registry,
-ai_providers,
+ai_providers, ai_personas,
 classes, students, class_students, schedules, class_grade_weights, student_point_logs,
 lessons, classroom_sessions, whiteboard_elements, student_seats, student_rollcalls, attendance, student_read_notifications,
 courseware, courseware_attempt, student_lesson_progress, lesson_quiz_submissions, courseware_score_config,
 assignments, assignment_submissions, exams, exam_scores, student_semester_reports,
+file_blobs, file_assets, file_aliases,
 lianyun_research_activities, lianyun_research_groups, lianyun_research_submissions, lianyun_research_reviews
 ```
 

@@ -246,10 +246,28 @@
 
 ### 5.4 站点设置
 
-| 方法 | 路径                 | 鉴权                           | 说明                   |
-| ---- | -------------------- | ------------------------------ | ---------------------- |
-| GET  | `/api/site-settings` | 公开                           | 读站点名 / 口号 / Logo |
-| PUT  | `/api/site-settings` | `requireAuth('administrator')` | 写站点名 / 口号 / Logo |
+| 方法 | 路径                 | 鉴权                           | 说明                        |
+| ---- | -------------------- | ------------------------------ | --------------------------- |
+| GET  | `/api/site-settings` | 公开                           | 读站点信息与外观 / 学年配置 |
+| PUT  | `/api/site-settings` | `requireAuth('administrator')` | 写站点信息与外观 / 学年配置 |
+
+接口字段：`siteName`、`slogan`、`logoUrl`、`uploadMaxFileMb`（1–90，整数）、`currentAcademicYear`、`academicStartMonth`、`logoutClearSiteData`（登出时下发 `Clear-Site-Data`）、`defaultThemeId`（全站默认主题）。文件存储配置不在此接口内，见 §5.5。
+
+### 5.5 文件存储策略
+
+管理员可在「站点设置 → 文件存储」调整统一文件持久化层（迁移 `048`）：
+
+| 方法 | 路径                              | 鉴权  | 说明                                                    |
+| ---- | --------------------------------- | ----- | ------------------------------------------------------- |
+| GET  | `/api/admin/file-storage/config`  | admin | 当前配置、已注册后端及其 `capabilities`、内置布局模板   |
+| PUT  | `/api/admin/file-storage/config`  | admin | 修改布局方案 / 自定义模板 / 默认后端 / SHA-256 去重开关 |
+| POST | `/api/admin/file-storage/preview` | admin | 按给定方案预览将生成的相对物理 Key                      |
+| GET  | `/api/admin/file-storage/stats`   | admin | 资产数、去重后占用空间、节省空间、旧路径别名数          |
+
+- 单文件统一存放在 `<dataDir>/files/`，对外地址是 `/api/files/<assetId>`；旧 `/uploads/*` 通过 `file_aliases` 兼容读取。
+- 内置布局方案：`by-date` / `by-course` / `by-author` / `flat` / `custom`；自定义模板必须包含 `{safeName}`、`{hash8}`、`{uuid}` 或 `{id}` 之一，否则拒绝。
+- 切换默认后端前先确认目标后端可用；启用远程对象存储时，`site-backup.mjs` 只包含元数据，远程对象需由对象存储的快照 / 版本策略单独保障。
+- 存量物理布局重整用 `pnpm file:reorg --dry-run` 预览，再按需加 `--scheme` / `--template` / `--backend` / `--limit` 执行；详见[文件存储扩展设计](../architecture/file-storage-extension-design.md) §6。
 
 ---
 
@@ -294,16 +312,19 @@
 
 ### 6.4 备份与恢复
 
-平台**没有**备份相关的 HTTP 端点。数据库和课件一起备份用 `node scripts/site-backup.mjs`（容器：`docker compose exec app node scripts/site-backup.mjs`）。它用 `VACUUM INTO` 做一致性快照，并把 `storage/`、`plugins/`、`uploads/` 打进 tar。只备份 SQLite 时仍可用 `pnpm run db:backup` / `scripts/restore-db.ts`。
+平台**没有**备份相关的 HTTP 端点。数据库和课件一起备份用 `node scripts/site-backup.mjs`（容器：`docker compose exec app node scripts/site-backup.mjs`）。它用 `VACUUM INTO` 做一致性快照，并把 `files/`、`storage/`、`plugins/`、`uploads/` 打进 tar。只备份 SQLite 时仍可用 `pnpm run db:backup` / `scripts/restore-db.ts`。
 
 **必须一起备份的目录**（容器里都在 `/data`，备份在 `/backups`）：
 
-| 路径       | 内容                | 漏备份的后果     |
-| ---------- | ------------------- | ---------------- |
-| 数据库文件 | `educational_os.db` | 全部业务数据丢失 |
-| `storage/` | 课件、种子口令文件  | 课件 404         |
-| `plugins/` | 已安装插件源码      | 插件启动失败     |
-| `uploads/` | 头像等上传          | 附件 404         |
+| 路径       | 内容                                                   | 漏备份的后果     |
+| ---------- | ------------------------------------------------------ | ---------------- |
+| 数据库文件 | `educational_os.db`                                    | 全部业务数据丢失 |
+| `files/`   | 统一文件存储的物理资产（头像、作业附件、课程包资产等） | 附件 / 头像 404  |
+| `storage/` | 课件目录包、种子口令文件                               | 课件 404         |
+| `plugins/` | 已安装插件源码                                         | 插件启动失败     |
+| `uploads/` | 旧版上传目录（兼容读取）                               | 旧附件 404       |
+
+> 第三方主题包存放在 `<dataDir>/themes/`。当前 `site-backup.mjs` 的归档清单（`files/`、`storage/`、`plugins/`、`uploads/`）**不包含** `themes/`；使用第三方主题时需单独打包该目录。
 
 **恢复**（先停服）：
 
@@ -354,6 +375,8 @@ node scripts/backfill-class-owners.mjs --assign teacher
 | `server/routes/roster.ts`            | 登录 / 会话 / 用户 CRUD / 班级 / 学生 / 导入导出 / DB 状态   |
 | `server/routes/admin.ts`             | 演示数据播种、审计报告下载                                   |
 | `server/routes/plugins.ts`           | 插件生命周期、AI 提供商、站点设置、管理日志                  |
+| `server/routes/files.ts`             | `/api/files/:assetId` 读取网关与 `/api/admin/file-storage/*` |
+| `server/services/file-storage/`      | 统一文件存储（去重、布局策略、后端、处理器流水线）           |
 | `server/middleware/auth.ts`          | `requireAuth` / `getValidSession` / `enforcePasswordChanged` |
 | `server/middleware/csrf.ts`          | 写请求跨站来源门控                                           |
 | `server.ts`                          | 限流器装配、CORS 白名单、`/health`、端口                     |

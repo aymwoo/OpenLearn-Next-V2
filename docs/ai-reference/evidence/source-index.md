@@ -33,7 +33,7 @@
 
 ```bash
 grep -c "capabilityRequired:" packages/core/plugin-host/context-builder.ts   # 命令闸门条目基数
-grep -c "^\s*'" packages/core/plugin-host/sql-guard.ts                       # 禁写表数量（区间 L13-54）
+grep -c "^\s*'" packages/core/plugin-host/sql-guard.ts                       # 禁写表数量（区间 L13-58）
 ```
 
 ---
@@ -162,7 +162,7 @@ grep -c 'actionRegistry\.register(' packages/plugins/*.ts server/routes/*.ts
 
 | 结论                                          | 坐标                                                                                                                   |
 | --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| 禁写表 40 张                                  | `packages/core/plugin-host/sql-guard.ts → FORBIDDEN_CORE_TABLES（L13-54）`                                             |
+| 禁写表 44 张                                  | `packages/core/plugin-host/sql-guard.ts → FORBIDDEN_CORE_TABLES（L13-58）`                                             |
 | 禁写语句（ATTACH/PRAGMA/VACUUM/TRIGGER/VIEW） | `packages/core/plugin-host/sql-guard.ts → FORBIDDEN_OPERATIONS（L58-66）`                                              |
 | 表名前缀归属校验                              | `packages/core/plugin-host/sql-guard.ts`（L276-290，ownPrefix / `plugin_migrations` / `plugin_research_*`）            |
 | **守卫只作用于 process/worker**               | `packages/core/worker-runtime/service-host.ts`（L81 导入、L1216 调用 —— 全仓唯一调用方）                               |

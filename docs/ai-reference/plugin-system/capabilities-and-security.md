@@ -144,15 +144,15 @@ action "<type>" 的 exposeToAgent=true 需要 'agent:tool' 能力；
 
 | 规则     | 内容                                                                                                                                                                           |
 | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 禁写表   | **40 张**核心表，命中即拒（`FORBIDDEN_CORE_TABLES`，`sql-guard.ts` L13-54）                                                                                                    |
+| 禁写表   | **44 张**核心表，命中即拒（`FORBIDDEN_CORE_TABLES`，`sql-guard.ts` L13-58）                                                                                                    |
 | 禁写语句 | `ATTACH` / `DETACH` / `PRAGMA` / `VACUUM` / `CREATE TRIGGER` / `DROP TRIGGER` / `CREATE VIEW` / `DROP VIEW`（`FORBIDDEN_OPERATIONS`，L58-64；`TEMP`/`TEMPORARY` 变体同样命中） |
 | 表名解析 | 先 `sanitizeSql` 剥注释与字符串字面量，再 `extractReferencedTables` 覆盖 `FROM`/`JOIN`/`INTO`/`UPDATE`/`TABLE`                                                                 |
 | 元数据表 | `sqlite_master` / `sqlite_schema` 仅放行**精确前缀**查询                                                                                                                       |
 
-40 张禁写表（全列，务必逐字比对）：
+44 张禁写表（全列，务必逐字比对）：
 
 ```text
-users  client_sessions  plugins  plugin_storage  ai_providers  processes
+users  client_sessions  plugins  plugin_storage  ai_providers  ai_personas  processes
 pending_commands  classes  students  class_students  lessons  assignments
 assignment_submissions  attendance  schedules  class_grade_weights  exams
 exam_scores  student_semester_reports  student_rollcalls  student_seats
@@ -161,9 +161,10 @@ system_resources  events  _migrations  site_settings  agent_conversations
 classroom_sessions  lesson_quiz_submissions  courseware_score_config  demo_data_registry
 whiteboard_elements  student_point_logs  lianyun_research_activities
 lianyun_research_groups  lianyun_research_submissions  lianyun_research_reviews
+file_blobs  file_assets  file_aliases
 ```
 
-> ⚠️ **这是黑名单，不是白名单**。不在 40 张之内的表理论上可写。
+> ⚠️ **这是黑名单，不是白名单**。不在 44 张之内的表理论上可写。
 > 反例：示例插件 `lab-seat` 直接 `rawDb.exec('CREATE TABLE IF NOT EXISTS computer_labs …')`（`[P] src/index.ts` L175-186）。
 > **不要据此认为「写平台表是安全的」** —— 一旦该表将来被加入黑名单，插件会在升级后突然失败。
 
@@ -245,7 +246,7 @@ lianyun_research_groups  lianyun_research_submissions  lianyun_research_reviews
 - [ ] 每个 `commandType` 的 `capabilityRequired` 都在 19 条真值内；
 - [ ] 需要进 AI 工具箱的 action 才设 `exposeToAgent: true`，并已声明 `agent:tool`；
 - [ ] 需要人工审批的高风险操作设 `isHighRisk: true`；
-- [ ] SQL 只碰 `ctx.db.table()` 派生的表，或确定不在 40 张黑名单内的自有表；
+- [ ] SQL 只碰 `ctx.db.table()` 派生的表，或确定不在 44 张黑名单内的自有表；
 - [ ] 没有 `import ... from 'crypto' | 'fs' | 'path'`（用 `crypto.randomUUID()` / VFS）；
 - [ ] 没有 `child_process` / `worker_threads` / `eval`；
 - [ ] 前端没有 `fetch` / `document` / `window`（`view` 页面除外，且只能走 bridge）；
