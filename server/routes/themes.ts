@@ -8,6 +8,19 @@ import { requireScopedAuth } from '../middleware/data-scope.js';
 import type { ServerContext } from '../context.js';
 import { sendSafeError } from '../utils/error-handler.js';
 import { ThemeService, getThemeActorFromSession } from '../services/theme-service.js';
+import type { Session } from '../middleware/auth.js';
+
+interface ThemeAuthenticatedRequest extends express.Request {
+  session?: Session | null;
+}
+
+function actorFromRequest(req: express.Request) {
+  const session = (req as ThemeAuthenticatedRequest).session;
+  if (!session) {
+    throw new ThemeValidationError('Authentication session required', 'UNAUTHORIZED');
+  }
+  return getThemeActorFromSession(session);
+}
 
 function mapThemeErrorStatus(err: ThemeValidationError): number {
   switch (err.code) {
@@ -59,7 +72,7 @@ export function registerThemeRoutes(ctx: ServerContext): void {
   // Shared authenticated theme catalog
   app.get('/api/themes', requireScopedAuth('authenticated'), (req, res) => {
     try {
-      const actor = getThemeActorFromSession((req as any).session);
+      const actor = actorFromRequest(req);
       res.json({
         builtinThemes: BUILTIN_THEME_IDS,
         themes: getService().listCatalog(actor),
@@ -72,7 +85,7 @@ export function registerThemeRoutes(ctx: ServerContext): void {
   // Account-isolated current user theme preferences & resolved active bundle
   app.get('/api/themes/me', requireScopedAuth('self'), (req, res) => {
     try {
-      const actor = getThemeActorFromSession((req as any).session);
+      const actor = actorFromRequest(req);
       res.json(getService().getUserThemeState(actor.principalKey));
     } catch (e) {
       sendSafeError(res, e);
@@ -82,7 +95,7 @@ export function registerThemeRoutes(ctx: ServerContext): void {
   // Update current user's isolated theme / version / mode / basic appearance overrides
   app.put('/api/themes/me', requireScopedAuth('self'), (req, res) => {
     try {
-      const actor = getThemeActorFromSession((req as any).session);
+      const actor = actorFromRequest(req);
       const { themeId, installedVersion, mode, appearanceOverrides } = req.body || {};
       const next = getService().updateUserThemePreference(actor.principalKey, {
         themeId,
@@ -102,7 +115,7 @@ export function registerThemeRoutes(ctx: ServerContext): void {
   // One-click failsafe recovery endpoint for current account
   app.post('/api/themes/me/reset', requireScopedAuth('self'), (req, res) => {
     try {
-      const actor = getThemeActorFromSession((req as any).session);
+      const actor = actorFromRequest(req);
       res.json(getService().resetUserThemePreference(actor.principalKey));
     } catch (e) {
       sendSafeError(res, e);
@@ -119,7 +132,7 @@ export function registerThemeRoutes(ctx: ServerContext): void {
     }),
     async (req, res) => {
       try {
-        const actor = getThemeActorFromSession((req as any).session);
+        const actor = actorFromRequest(req);
         let zipBuffer: Buffer | null = null;
 
         if (Buffer.isBuffer(req.body) && req.body.length > 0) {

@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import type Database from 'better-sqlite3';
 import semver from 'semver';
 import {
   BUILTIN_THEME_IDS,
@@ -131,10 +132,46 @@ export function sanitizeAppearanceOverrides(raw: unknown): ThemeAppearanceOverri
   return out;
 }
 
-export class ThemeService {
-  private db: any;
+type ThemeDatabase = Pick<Database.Database, 'prepare' | 'transaction'>;
 
-  constructor(db: any) {
+interface ThemeRow {
+  id: string;
+  name: string;
+  description?: string | null;
+  author?: string | null;
+  latest_version: string;
+  uploader_id: string;
+  uploader_name?: string | null;
+  status: string;
+  supports_modes?: string | null;
+  platform_min_version?: string | null;
+  platform_max_version?: string | null;
+  manifest_json?: string | null;
+  created_at?: number | null;
+  updated_at?: number | null;
+}
+
+interface ThemeVersionRow {
+  theme_id: string;
+  version: string;
+  manifest_json?: string | null;
+  styles_css?: string | null;
+  asset_manifest_json?: string | null;
+}
+
+interface UserThemePrefRow {
+  principal_key: string;
+  theme_id?: string | null;
+  installed_version?: string | null;
+  mode?: string | null;
+  appearance_json?: string | null;
+  updated_at?: number | null;
+}
+
+export class ThemeService {
+  private db: ThemeDatabase;
+
+  constructor(db: ThemeDatabase) {
     this.db = db;
   }
 
@@ -163,7 +200,10 @@ export class ThemeService {
       .join('/')}`;
   }
 
-  private buildBundleFromRow(themeRow: any, versionRow: any): ValidatedThemeBundle | null {
+  private buildBundleFromRow(
+    themeRow: ThemeRow | undefined,
+    versionRow: ThemeVersionRow | undefined,
+  ): ValidatedThemeBundle | null {
     if (!themeRow || !versionRow) return null;
     try {
       const manifest = JSON.parse(versionRow.manifest_json || '{}') as ThemePackageManifest;
@@ -202,7 +242,8 @@ export class ThemeService {
       if (isBuiltinThemeId(candidate)) return candidate;
       const activeTheme = this.db
         .prepare('SELECT id, status, platform_min_version, platform_max_version FROM themes WHERE id = ?')
-        .get(candidate) as any;
+        .get(candidate) as
+        Pick<ThemeRow, 'id' | 'status' | 'platform_min_version' | 'platform_max_version'> | undefined;
       if (!activeTheme || activeTheme.status !== 'active') {
         return 'light';
       }
@@ -241,7 +282,7 @@ export class ThemeService {
       };
     }
 
-    const themeRow = this.db.prepare('SELECT * FROM themes WHERE id = ?').get(themeId) as any;
+    const themeRow = this.db.prepare('SELECT * FROM themes WHERE id = ?').get(themeId) as ThemeRow | undefined;
     if (!themeRow) {
       return {
         bundle: null,
@@ -261,12 +302,12 @@ export class ThemeService {
 
     let versionRow = this.db
       .prepare('SELECT * FROM theme_versions WHERE theme_id = ? AND version = ?')
-      .get(themeId, targetVersion) as any;
+      .get(themeId, targetVersion) as ThemeVersionRow | undefined;
 
     if (!versionRow && targetVersion !== themeRow.latest_version) {
       versionRow = this.db
         .prepare('SELECT * FROM theme_versions WHERE theme_id = ? AND version = ?')
-        .get(themeId, themeRow.latest_version) as any;
+        .get(themeId, themeRow.latest_version) as ThemeVersionRow | undefined;
     }
 
     const bundle = this.buildBundleFromRow(themeRow, versionRow);
@@ -310,7 +351,7 @@ export class ThemeService {
       throw new ThemeValidationError('BUILTIN_CONFLICT', `不能覆盖系统内置主题 "${manifest.id}"`);
     }
 
-    const existing = this.db.prepare('SELECT * FROM themes WHERE id = ?').get(manifest.id) as any;
+    const existing = this.db.prepare('SELECT * FROM themes WHERE id = ?').get(manifest.id) as ThemeRow | undefined;
     const isUpdate = Boolean(existing);
 
     if (existing) {
@@ -417,7 +458,7 @@ export class ThemeService {
 
     // Note: intentionally DO NOT mutate other users' user_theme_preferences rows!
     // Users opt into upgrading to latest_version from their own theme center UI.
-    const row = this.db.prepare('SELECT * FROM themes WHERE id = ?').get(manifest.id) as any;
+    const row = this.db.prepare('SELECT * FROM themes WHERE id = ?').get(manifest.id) as ThemeRow;
     return {
       item: this.mapRowToCatalogItem(row, actor),
       bundle,
@@ -425,8 +466,8 @@ export class ThemeService {
     };
   }
 
-  private mapRowToCatalogItem(row: any, actor?: ThemeActor): ThemeCatalogItem {
-    let manifest: ThemePackageManifest | null = null;
+  private mapRowToCatalogItem(row: ThemeRow, actor?: ThemeActor): ThemeCatalogItem {
+    let manifest: ThemePackageManifest | null;
     try {
       manifest = JSON.parse(row.manifest_json || '{}') as ThemePackageManifest;
     } catch {
@@ -480,15 +521,14 @@ export class ThemeService {
     const sql = isAdmin
       ? 'SELECT * FROM themes ORDER BY updated_at DESC'
       : "SELECT * FROM themes WHERE status = 'active' ORDER BY updated_at DESC";
-    const rows = this.db.prepare(sql).all() as any[];
+    const rows = this.db.prepare(sql).all() as ThemeRow[];
     return rows.map((row) => this.mapRowToCatalogItem(row, actor));
   }
 
   getUserThemeState(principalKey: string): UserThemePreferenceState {
     const defaultSiteThemeId = this.getDefaultSiteThemeId();
-    const pref = this.db
-      .prepare('SELECT * FROM user_theme_preferences WHERE principal_key = ?')
-      .get(principalKey) as any;
+    const pref = this.db.prepare('SELECT * FROM user_theme_preferences WHERE principal_key = ?').get(principalKey) as
+      UserThemePrefRow | undefined;
 
     if (!pref) {
       const resolvedDefault = this.resolveActiveOrFallback(defaultSiteThemeId, null);
@@ -508,7 +548,7 @@ export class ThemeService {
       };
     }
 
-    let appearanceOverrides: ThemeAppearanceOverrides = {};
+    let appearanceOverrides: ThemeAppearanceOverrides;
     try {
       appearanceOverrides = sanitizeAppearanceOverrides(JSON.parse(pref.appearance_json || '{}'));
     } catch {
@@ -548,7 +588,7 @@ export class ThemeService {
         if (upgradeAvailable) {
           const latestRow = this.db
             .prepare('SELECT manifest_json FROM theme_versions WHERE theme_id = ? AND version = ?')
-            .get(requestedThemeId, latestVer) as any;
+            .get(requestedThemeId, latestVer) as Pick<ThemeVersionRow, 'manifest_json'> | undefined;
           try {
             const latestManifest = JSON.parse(latestRow?.manifest_json || '{}') as ThemePackageManifest;
             upgradeChangelog = latestManifest.changelog;
@@ -650,7 +690,7 @@ export class ThemeService {
     const nextThemeId =
       typeof input.themeId === 'string' && input.themeId.trim() ? input.themeId.trim() : existing.themeId;
 
-    let pinnedVersion: string | null = null;
+    let pinnedVersion: string | null;
     if (isBuiltinThemeId(nextThemeId)) {
       pinnedVersion = null;
     } else {
@@ -720,7 +760,7 @@ export class ThemeService {
     if (isBuiltinThemeId(themeId)) {
       throw new ThemeValidationError('BUILTIN_READONLY', '系统内置主题不可停用');
     }
-    const existing = this.db.prepare('SELECT * FROM themes WHERE id = ?').get(themeId) as any;
+    const existing = this.db.prepare('SELECT * FROM themes WHERE id = ?').get(themeId) as ThemeRow | undefined;
     if (!existing) {
       throw new ThemeValidationError('THEME_NOT_FOUND', '主题不存在');
     }
@@ -735,7 +775,7 @@ export class ThemeService {
         // ignore if site_settings has no matching row
       }
     }
-    const updated = this.db.prepare('SELECT * FROM themes WHERE id = ?').get(themeId) as any;
+    const updated = this.db.prepare('SELECT * FROM themes WHERE id = ?').get(themeId) as ThemeRow;
     return this.mapRowToCatalogItem(updated);
   }
 
@@ -743,7 +783,8 @@ export class ThemeService {
     if (isBuiltinThemeId(themeId)) {
       throw new ThemeValidationError('BUILTIN_READONLY', '系统内置主题不可删除');
     }
-    const existing = this.db.prepare('SELECT id FROM themes WHERE id = ?').get(themeId) as any;
+    const existing = this.db.prepare('SELECT id FROM themes WHERE id = ?').get(themeId) as
+      Pick<ThemeRow, 'id'> | undefined;
     if (!existing) {
       throw new ThemeValidationError('THEME_NOT_FOUND', '主题不存在');
     }
@@ -819,10 +860,12 @@ export class ThemeService {
       .prepare(
         "SELECT id, name, description, author, latest_version, supports_modes, manifest_json FROM themes WHERE status = 'active' ORDER BY updated_at DESC",
       )
-      .all() as any[];
+      .all() as Array<
+      Pick<ThemeRow, 'id' | 'name' | 'description' | 'author' | 'latest_version' | 'supports_modes' | 'manifest_json'>
+    >;
 
     const availablePublicThemes: PublicThemeSummary[] = activeRows.map((row) => {
-      let supportsModes: Array<'light' | 'dark'> = ['light'];
+      let supportsModes: Array<'light' | 'dark'>;
       let previewImageUrl: string | null = null;
       try {
         supportsModes = JSON.parse(row.supports_modes || '["light"]');

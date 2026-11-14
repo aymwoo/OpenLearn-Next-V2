@@ -9,7 +9,7 @@ import { kernelContainer } from '../../packages/core/kernel/index.js';
 import { registerThemeRoutes } from '../routes/themes.js';
 import { registerPluginsRoutes } from '../routes/plugins.js';
 import { buildThemeZipBuffer, parseAndValidateThemeZip } from '../../packages/core/themes/theme-package.js';
-import { ThemeValidationError } from '../../packages/core/themes/theme-spec.js';
+import { ThemeValidationError, type ThemePackageManifest } from '../../packages/core/themes/theme-spec.js';
 import type { ServerContext } from '../context.js';
 
 describe('第三方主题包校验、目录共享、账号隔离与治理 (Issue #484)', () => {
@@ -30,11 +30,11 @@ describe('第三方主题包校验、目录共享、账号隔离与治理 (Issue
   const cookie = (tok: string) => ({ Cookie: `edu_os_token=${tok}` });
 
   async function buildSampleZip(
-    overrides: Record<string, any> = {},
+    overrides: Partial<ThemePackageManifest> = {},
     extraCss = '',
     extraFiles: Record<string, string> = {},
   ) {
-    const manifest = {
+    const manifest: ThemePackageManifest = {
       schemaVersion: 1,
       id: 'aurora-edu',
       name: 'Aurora Classroom',
@@ -68,7 +68,7 @@ describe('第三方主题包校验、目录共享、账号隔离与治理 (Issue
       assets[k] = Buffer.from(v, 'utf8');
     }
     return buildThemeZipBuffer({
-      manifest: manifest as any,
+      manifest,
       stylesCss: `[data-theme="${manifest.id}"] .hero { border-color: var(--color-primary); }\n${extraCss}`,
       assets,
     });
@@ -234,7 +234,7 @@ describe('第三方主题包校验、目录共享、账号隔离与治理 (Issue
 
     // Teacher B sees aurora-edu in shared catalog, and applies v1.0.0 + overrides
     const catB = await (await fetch(`${baseUrl}/api/themes`, { headers: cookie(tokTeacherB) })).json();
-    expect(catB.themes.some((t: any) => t.id === 'aurora-edu')).toBe(true);
+    expect(catB.themes.some((t: { id: string }) => t.id === 'aurora-edu')).toBe(true);
 
     const applyB = await fetch(`${baseUrl}/api/themes/me`, {
       method: 'PUT',

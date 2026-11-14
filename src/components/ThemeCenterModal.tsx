@@ -101,10 +101,15 @@ export function ThemeCenterModal({ isOpen, onClose, lang = 'zh', isAdmin = false
             ? `已安装第三方主题「${item.name}」(v${item.latestVersion})`
             : `Installed theme "${item.name}" (v${item.latestVersion})`,
       });
-    } catch (err: any) {
+    } catch (err: unknown) {
       setFeedback({
         type: 'err',
-        text: err?.message || (lang === 'zh' ? '主题包校验或安装失败' : 'Failed to install theme package'),
+        text:
+          err instanceof Error
+            ? err.message
+            : lang === 'zh'
+              ? '主题包校验或安装失败'
+              : 'Failed to install theme package',
       });
     } finally {
       setUploading(false);
@@ -140,8 +145,8 @@ export function ThemeCenterModal({ isOpen, onClose, lang = 'zh', isAdmin = false
         type: 'ok',
         text: lang === 'zh' ? `已切换至主题「${entry.name}」` : `Switched to "${entry.name}"`,
       });
-    } catch (err: any) {
-      setFeedback({ type: 'err', text: err?.message || '应用主题失败' });
+    } catch (err: unknown) {
+      setFeedback({ type: 'err', text: err instanceof Error ? err.message : '应用主题失败' });
     } finally {
       setBusyId(null);
     }
@@ -160,8 +165,8 @@ export function ThemeCenterModal({ isOpen, onClose, lang = 'zh', isAdmin = false
       if (theme === entry.id && entry.status !== 'disabled') {
         await resetToSafeDefault();
       }
-    } catch (err: any) {
-      setFeedback({ type: 'err', text: err?.message || '操作失败' });
+    } catch (err: unknown) {
+      setFeedback({ type: 'err', text: err instanceof Error ? err.message : '操作失败' });
     } finally {
       setBusyId(null);
     }
@@ -176,8 +181,8 @@ export function ThemeCenterModal({ isOpen, onClose, lang = 'zh', isAdmin = false
       if (theme === entry.id) {
         await resetToSafeDefault();
       }
-    } catch (err: any) {
-      setFeedback({ type: 'err', text: err?.message || '删除主题失败' });
+    } catch (err: unknown) {
+      setFeedback({ type: 'err', text: err instanceof Error ? err.message : '删除主题失败' });
     } finally {
       setBusyId(null);
     }

@@ -74,57 +74,55 @@ describe('useThemeStore third-party lifecycle, isolation & failsafe recovery (Is
   });
 
   it('persists only anonymous visual appearance pre-login and isolates accounts A and B across syncWithSession', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockImplementation(async (url: string) => {
-        if (url === '/api/themes/me') {
-          const callCount = (fetch as any).mock.calls.filter((c: any[]) => c[0] === '/api/themes/me').length;
-          if (callCount === 1) {
-            // Account A
-            return {
-              ok: true,
-              json: async () => ({
-                principalKey: 'teacher:usr-a',
-                themeId: 'campus-atelier',
-                installedVersion: '1.0.0',
-                latestVersion: '1.1.0',
-                upgradeAvailable: true,
-                mode: 'dark',
-                appearanceOverrides: { primaryColor: '#14b8a6', borderRadius: 'pill' },
-                activeBundle: sampleBundle,
-                defaultSiteThemeId: 'light',
-                fallbackApplied: false,
-                updatedAt: Date.now(),
-              }),
-            };
-          }
-          // Account B
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url === '/api/themes/me') {
+        const callCount = fetchMock.mock.calls.filter((c) => c[0] === '/api/themes/me').length;
+        if (callCount === 1) {
+          // Account A
           return {
             ok: true,
             json: async () => ({
-              principalKey: 'student:stu-b',
-              themeId: 'eyecare',
-              installedVersion: null,
-              latestVersion: null,
-              upgradeAvailable: false,
-              mode: 'light',
-              appearanceOverrides: {},
-              activeBundle: null,
+              principalKey: 'teacher:usr-a',
+              themeId: 'campus-atelier',
+              installedVersion: '1.0.0',
+              latestVersion: '1.1.0',
+              upgradeAvailable: true,
+              mode: 'dark',
+              appearanceOverrides: { primaryColor: '#14b8a6', borderRadius: 'pill' },
+              activeBundle: sampleBundle,
               defaultSiteThemeId: 'light',
               fallbackApplied: false,
               updatedAt: Date.now(),
             }),
           };
         }
-        if (url === '/api/themes') {
-          return { ok: true, json: async () => ({ themes: [] }) };
-        }
+        // Account B
         return {
           ok: true,
-          json: async () => ({ defaultThemeId: 'light', defaultThemeBundle: null, availablePublicThemes: [] }),
+          json: async () => ({
+            principalKey: 'student:stu-b',
+            themeId: 'eyecare',
+            installedVersion: null,
+            latestVersion: null,
+            upgradeAvailable: false,
+            mode: 'light',
+            appearanceOverrides: {},
+            activeBundle: null,
+            defaultSiteThemeId: 'light',
+            fallbackApplied: false,
+            updatedAt: Date.now(),
+          }),
         };
-      }),
-    );
+      }
+      if (url === '/api/themes') {
+        return { ok: true, json: async () => ({ themes: [] }) };
+      }
+      return {
+        ok: true,
+        json: async () => ({ defaultThemeId: 'light', defaultThemeBundle: null, availablePublicThemes: [] }),
+      };
+    });
+    vi.stubGlobal('fetch', fetchMock);
 
     // Account A signs in
     await useThemeStore.getState().syncWithSession({ userId: 'usr-a', role: 'teacher' });

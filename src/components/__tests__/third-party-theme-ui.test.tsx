@@ -103,7 +103,7 @@ describe('Third-Party Theme UI Layouts, Theme Center, Bridge Payload & Recovery 
       lang: 'zh',
       session: { role: 'teacher', userId: 't-1', name: 'Teacher', username: 't1' },
       todaySchedules: [],
-    } as any;
+    } as unknown as React.ComponentProps<typeof AppDataProvider>['value'];
 
     const { container: teacherContainer } = render(
       <AppDataProvider value={mockTeacherAppData}>
@@ -119,7 +119,7 @@ describe('Third-Party Theme UI Layouts, Theme Center, Bridge Payload & Recovery 
       lang: 'zh',
       studentViewStatus: 'dashboard',
       studentDashboardData: null,
-    } as any;
+    } as unknown as React.ComponentProps<typeof AppDataProvider>['value'];
 
     const { container: studentContainer } = render(
       <AppDataProvider value={mockStudentAppData}>

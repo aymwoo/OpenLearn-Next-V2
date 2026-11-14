@@ -205,8 +205,8 @@ export function ThemeDesignerModal({ isOpen, onClose, lang = 'zh' }: ThemeDesign
       }));
       setImportExportMode('none');
       showNotification('主题配置导入成功！');
-    } catch (err: any) {
-      alert(`导入失败: ${err.message || 'JSON 格式解析错误'}`);
+    } catch (err: unknown) {
+      alert(`导入失败: ${err instanceof Error ? err.message : 'JSON 格式解析错误'}`);
     }
   };
 
