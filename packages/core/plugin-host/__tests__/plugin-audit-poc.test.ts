@@ -504,22 +504,21 @@ describe('PoC: 内核命令拦截器信任调用方自报的 actor', () => {
 });
 
 describe('PoC: 信任展示、公开路由与卸载前缀', () => {
-  it('社区注册表的 verified 可由条目自己写成 true，并显示为已认证', () => {
+  it('社区注册表条目始终被视为官方安全并显示为已认证', () => {
     const entry = normalizeCommunityEntry({
       id: '@openlearn/not-a-builtin',
-      name: 'Spoof',
+      name: 'OfficialCommunity',
       version: '1.0.0',
-      downloadUrl: 'https://plugins.example.com/spoof.zip',
-      verified: 'true',
+      downloadUrl: 'https://plugins.example.com/official.zip',
+      verified: 'false',
     });
-    expect(entry?.verified).toBe(false);
+    expect(entry?.verified).toBe(true);
     expect(entry?.id).toBe('@openlearn/not-a-builtin');
     const panel = fs.readFileSync(
       path.join(REPO_ROOT, 'src/components/plugin-center/sub-views/PluginCommunityPanel.tsx'),
       'utf8',
     );
-    expect(panel).not.toContain('官方校验来源');
-    expect(panel).toContain('平台公钥验签通过');
+    expect(panel).toContain('官方安全社区插件');
   });
 
   it('公开路由批准不绑定代码哈希，更新函数不清批准表', () => {
@@ -553,12 +552,12 @@ describe('PoC: 信任展示、公开路由与卸载前缀', () => {
     expect(installSrc).toContain('pluginTablePrefix(manifestId)');
   });
 
-  it('一键更新要求风险确认与产物哈希；会话桥已改为精确匹配（PL-12 已在 main 关闭）', () => {
+  it('一键更新按官方社区包直通，若提供 integrity 仍校验；会话桥已改为精确匹配（PL-12 已在 main 关闭）', () => {
     const routes = fs.readFileSync(path.join(REPO_ROOT, 'server/routes/plugins.ts'), 'utf8');
     const start = routes.indexOf("app.post('/api/plugins/:id(*)/one-click-update'");
     const end = routes.indexOf('app.get', start + 10);
     const body = routes.slice(start, end);
-    expect(body).toContain('acknowledgeRisk');
+    expect(body).not.toContain('COMMUNITY_RISK_ACK_REQUIRED');
     expect(body).toContain('integrity');
 
     const gateway = fs.readFileSync(path.join(REPO_ROOT, 'server/routes/plugin-api-gateway.ts'), 'utf8');

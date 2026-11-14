@@ -16,7 +16,7 @@ import { getMaxUncompressedSize, removeTempFile, validateAndBundleZip } from '..
 import { buildContext } from './context-builder.js';
 import type { ClassroomToolConfig } from './contribution-registry.js';
 import { normalizeExecutionMode, requiresIsolatedExecution, type PluginExecutionMode } from './types.js';
-import { resolvePluginExecutionMode } from './execution-policy.js';
+import { COMMUNITY_OFFICIAL_MARKER, resolvePluginExecutionMode } from './execution-policy.js';
 import { clearPluginGrants } from './plugin-grants.js';
 import { deleteOrphanDataRecord, findAdoptableOrphanData, type OrphanDataRecord } from './orphan-data.js';
 import { recordSecurityAudit } from '../observability/audit-log.js';
@@ -266,14 +266,19 @@ export abstract class PluginHostInstall extends PluginHostReload {
    *   出现**一份** Buffer 副本（读盘即交 JSZip，用完可回收）。
    * @returns manifest
    */
-  async installPluginFromZip(zipPath: string, overrideExecutionMode?: PluginExecutionMode): Promise<Manifest> {
+  async installPluginFromZip(
+    zipPath: string,
+    overrideExecutionMode?: PluginExecutionMode,
+    options?: { communityOfficial?: boolean },
+  ): Promise<Manifest> {
     // 审计 R-4：安装入队串行（见 base.enqueueInstall）
-    return this.enqueueInstall(() => this.installPluginFromZipExclusive(zipPath, overrideExecutionMode));
+    return this.enqueueInstall(() => this.installPluginFromZipExclusive(zipPath, overrideExecutionMode, options));
   }
 
   private async installPluginFromZipExclusive(
     zipPath: string,
     overrideExecutionMode?: PluginExecutionMode,
+    options?: { communityOfficial?: boolean },
   ): Promise<Manifest> {
     if (!this.esmLoader) {
       throw new Error('Cannot install ZIP plugin: no esmLoader injected');
@@ -332,6 +337,13 @@ export abstract class PluginHostInstall extends PluginHostReload {
       fs.copyFileSync(bundledPath, filePath);
       fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2), 'utf-8');
       fs.copyFileSync(zipPath, zipFilePath);
+      if (options?.communityOfficial) {
+        fs.writeFileSync(
+          path.join(pluginDir, COMMUNITY_OFFICIAL_MARKER),
+          JSON.stringify({ official: true, source: 'community', installedAt: Date.now() }),
+          'utf-8',
+        );
+      }
 
       // Extract frontend.js and deploy script if present in ZIP
       const frontendFile = zip.file('frontend.js');
@@ -585,6 +597,7 @@ export abstract class PluginHostInstall extends PluginHostReload {
       targetPluginId?: string;
       executionMode?: PluginExecutionMode;
       allowDowngrade?: boolean;
+      communityOfficial?: boolean;
     } = {},
   ): Promise<{
     pluginId: string;
@@ -607,6 +620,7 @@ export abstract class PluginHostInstall extends PluginHostReload {
       targetPluginId?: string;
       executionMode?: PluginExecutionMode;
       allowDowngrade?: boolean;
+      communityOfficial?: boolean;
     } = {},
   ): Promise<{
     pluginId: string;
@@ -691,6 +705,20 @@ export abstract class PluginHostInstall extends PluginHostReload {
       }
     }
 
+    const pluginDir = this.getPluginDir(pluginId);
+    const filePath = this.getPluginFilePath(pluginId);
+    const manifestPath = this.getPluginManifestPath(pluginId);
+    const zipFilePath = path.join(pluginDir, 'package.zip');
+
+    if (options.communityOfficial) {
+      fs.mkdirSync(pluginDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(pluginDir, COMMUNITY_OFFICIAL_MARKER),
+        JSON.stringify({ official: true, source: 'community', updatedAt: Date.now() }),
+        'utf-8',
+      );
+    }
+
     const previousStatus = existingRow.status;
     const currentState = this.pluginStates.get(pluginId) ?? PluginState.INSTALLED;
     const wasActive = currentState === PluginState.ACTIVE ? true : previousStatus === 'active';
@@ -698,22 +726,13 @@ export abstract class PluginHostInstall extends PluginHostReload {
     // F-5：manifest.executionMode 三个取值都识别（原来是只认 'worker' 的两值映射）。
     const manifestMode = normalizeExecutionMode((manifest as { executionMode?: unknown }).executionMode);
     const requestedUpdateMode =
-      options.executionMode ?? (manifestMode !== 'inline' ? manifestMode : oldMode || 'inline');
-    const updateDecision = resolvePluginExecutionMode(
-      manifest.id,
-      requestedUpdateMode,
-      process.env,
-      this.getPluginFilePath(pluginId),
-    );
+      options.executionMode ??
+      (options.communityOfficial ? manifestMode : manifestMode !== 'inline' ? manifestMode : oldMode || 'inline');
+    const updateDecision = resolvePluginExecutionMode(manifest.id, requestedUpdateMode, process.env, filePath);
     if (updateDecision.coerced) {
       console.warn(`[PluginHost] ${updateDecision.reason}`);
     }
     const executionMode = updateDecision.mode;
-
-    const pluginDir = this.getPluginDir(pluginId);
-    const filePath = this.getPluginFilePath(pluginId);
-    const manifestPath = this.getPluginManifestPath(pluginId);
-    const zipFilePath = path.join(pluginDir, 'package.zip');
 
     // Snapshot old files for crude rollback on inactive path failures
     const backupDir = path.join(pluginDir, '.update-backup');

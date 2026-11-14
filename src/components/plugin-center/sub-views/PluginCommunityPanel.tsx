@@ -200,8 +200,6 @@ export function PluginCommunityPanel({
   const [sort, setSort] = useState<SortKey>('recommended');
   const [hideInstalled, setHideInstalled] = useState(false);
   const [installStates, setInstallStates] = useState<Record<string, InstallState>>({});
-  const [pendingInstall, setPendingInstall] = useState<CommunityPlugin | null>(null);
-  const [approvePublicRoutes, setApprovePublicRoutes] = useState(false);
   /** 本次会话内已成功安装的 id，用于无需等待刷新即可更新卡片状态。 */
   const [justInstalled, setJustInstalled] = useState<Record<string, true>>({});
   const [configOpen, setConfigOpen] = useState(false);
@@ -330,7 +328,6 @@ export function PluginCommunityPanel({
           'Content-Type': 'application/octet-stream',
           'x-filename': encodeURIComponent(filename),
           'x-community-install': 'true',
-          'x-acknowledge-risk': 'true',
           ...(plugin.integrity ? { 'x-integrity': plugin.integrity } : {}),
           ...(plugin.signature ? { 'x-signature': plugin.signature } : {}),
           ...(approvePublic ? { 'x-approve-public-routes': 'true' } : {}),
@@ -366,7 +363,6 @@ export function PluginCommunityPanel({
           body: JSON.stringify({
             downloadUrl: plugin.downloadUrl,
             expectedId: plugin.id,
-            acknowledgeRisk: true,
             approvePublicRoutes: approvePublic,
             ...(plugin.integrity ? { integrity: plugin.integrity } : {}),
             ...(plugin.signature ? { signature: plugin.signature } : {}),
@@ -526,8 +522,8 @@ export function PluginCommunityPanel({
         setInstallNotice(
           installEnabled === null
             ? zh
-              ? '已清除界面覆盖，将按环境变量或默认关闭生效'
-              : 'Cleared UI override; env or default-off now applies'
+              ? '已清除界面覆盖，将按环境变量或默认开启生效'
+              : 'Cleared UI override; env or default-on now applies'
             : installEnabled
               ? zh
                 ? '已允许从社区注册表安装，立即生效'
@@ -547,11 +543,10 @@ export function PluginCommunityPanel({
   );
 
   const renderInstallToggle = (options: { compact?: boolean } = {}) => {
-    const enabled = Boolean(data?.installEnabled);
+    const enabled = Boolean(data?.installEnabled ?? true);
     const source = canConfigure ? data?.installConfigSource : null;
     const stored = canConfigure ? data?.storedInstallEnabled : null;
     const hasEnvFallback = canConfigure ? Boolean(data?.hasInstallEnvFallback) : false;
-    const keysConfigured = canConfigure ? data?.publicKeysConfigured : null;
     const sourceLabel =
       source === 'database'
         ? zh
@@ -559,12 +554,12 @@ export function PluginCommunityPanel({
           : 'Source: admin UI setting (overrides env)'
         : source === 'env'
           ? zh
-            ? '当前来源：环境变量 OPENLEARN_COMMUNITY_INSTALL=1（未在界面显式配置）'
-            : 'Source: OPENLEARN_COMMUNITY_INSTALL=1 (no explicit UI setting)'
+            ? `当前来源：环境变量 OPENLEARN_COMMUNITY_INSTALL=${enabled ? '1' : '0'}（未在界面显式配置）`
+            : `Source: OPENLEARN_COMMUNITY_INSTALL=${enabled ? '1' : '0'} (no explicit UI setting)`
           : source === 'default'
             ? zh
-              ? '当前来源：默认关闭（未在界面或环境变量中开启）'
-              : 'Source: default off (not enabled in UI or env)'
+              ? '当前来源：默认开启（未在界面或环境变量中关闭）'
+              : 'Source: default on (not disabled in UI or env)'
             : null;
 
     return (
@@ -584,11 +579,11 @@ export function PluginCommunityPanel({
             <p className="text-xs text-gray-500 leading-relaxed mt-1">
               {canConfigure
                 ? zh
-                  ? '默认关闭。管理员可在此开启或关闭，保存后立即对安装、URL 更新和社区直传生效。未在界面显式配置时，才回退到环境变量 OPENLEARN_COMMUNITY_INSTALL=1；显式关闭会覆盖该环境变量。此开关不能绕过签名公钥、权限或网络校验。'
-                  : 'Off by default. Admins can turn this on or off here; the change applies immediately to install, URL update, and community direct upload. Env OPENLEARN_COMMUNITY_INSTALL=1 is only a fallback when no explicit UI value is stored; an explicit off overrides that env. This switch cannot bypass signature public keys, permission, or network checks.'
+                  ? '默认开启。管理员可在此开启或关闭，保存后立即对安装、URL 更新和社区直传生效。未在界面显式配置时，可使用环境变量 OPENLEARN_COMMUNITY_INSTALL=0 关闭；显式设置会覆盖该环境变量。'
+                  : 'On by default. Admins can turn this on or off here; the change applies immediately to install, URL update, and community direct upload. When no explicit UI value is stored, env OPENLEARN_COMMUNITY_INSTALL=0 can disable it; an explicit UI value overrides that env.'
                 : zh
-                  ? '社区安装由管理员在插件中心配置，默认关闭。此状态不能绕过签名、权限或网络校验。'
-                  : 'Community install is configured by an administrator and is off by default. This status cannot bypass signature, permission, or network checks.'}
+                  ? '社区安装由管理员在插件中心配置，默认开启。'
+                  : 'Community install is configured by an administrator and is on by default.'}
             </p>
             <p className="text-xs text-gray-600 mt-1.5">
               {zh ? `有效状态：${enabled ? '已开启' : '已关闭'}` : `Effective: ${enabled ? 'on' : 'off'}`}
@@ -625,16 +620,9 @@ export function PluginCommunityPanel({
                 ? '清除界面覆盖，回退到环境变量'
                 : 'Clear UI override and fall back to env'
               : zh
-                ? '清除界面覆盖，回退到默认关闭'
-                : 'Clear UI override and fall back to default off'}
+                ? '清除界面覆盖，恢复默认开启'
+                : 'Clear UI override and fall back to default on'}
           </button>
-        )}
-        {canConfigure && enabled && keysConfigured === false && (
-          <p role="alert" className="text-xs text-amber-700 leading-relaxed">
-            {zh
-              ? '尚未配置社区验签公钥。即便已开启此开关，也无法从社区注册表安装。请由部署者设置 OPENLEARN_COMMUNITY_PUBKEY 或 OPENLEARN_TRUSTED_PUBKEYS 后重启服务。'
-              : 'No community signing public key is configured. Even with this switch on, community registry installs will be rejected. Set OPENLEARN_COMMUNITY_PUBKEY or OPENLEARN_TRUSTED_PUBKEYS and restart the server.'}
-          </p>
         )}
         {installError && (
           <p role="alert" className="text-xs text-rose-600">
@@ -1115,7 +1103,7 @@ export function PluginCommunityPanel({
                   )}
                   {plugin.verified && (
                     <span
-                      title={zh ? '平台公钥验签通过' : 'Signed with the platform public key'}
+                      title={zh ? '官方安全社区插件' : 'Official safe community plugin'}
                       className="text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 px-1.5 py-0.5 rounded-full flex items-center gap-0.5"
                     >
                       <BadgeCheck size={11} />
@@ -1228,8 +1216,7 @@ export function PluginCommunityPanel({
                     <button
                       type="button"
                       onClick={() => {
-                        setApprovePublicRoutes(false);
-                        setPendingInstall(plugin);
+                        void handleInstall(plugin, true);
                       }}
                       disabled={state?.phase === 'installing' || (installed && !plugin.hasUpdate)}
                       className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all flex items-center gap-1.5 shrink-0 disabled:cursor-default ${
@@ -1267,72 +1254,6 @@ export function PluginCommunityPanel({
               </article>
             );
           })}
-        </div>
-      )}
-      {pendingInstall && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="community-risk-title"
-            data-testid="community-install-risk-dialog"
-            className="w-full max-w-lg rounded-2xl bg-white shadow-xl border border-amber-200 p-6"
-          >
-            <div className="flex items-start gap-3">
-              <AlertTriangle className="text-amber-600 shrink-0 mt-0.5" size={20} />
-              <div>
-                <h3 id="community-risk-title" className="text-base font-bold text-slate-900">
-                  {zh
-                    ? `安装「${pendingInstall.name}」前请确认风险`
-                    : `Confirm the risk before installing “${pendingInstall.name}”`}
-                </h3>
-                <p className="mt-2 text-sm text-slate-600 leading-relaxed">
-                  {zh
-                    ? '社区插件是第三方代码，安装后会在本机执行。未受信任的插件默认进入独立子进程，不继承宿主的密钥类环境变量，但仍具备该系统用户被权限模型允许的能力（含出站网络）。只有清单 id 以 @openlearn/ 开头，或写在 OPENLEARN_TRUSTED_INLINE_PLUGINS 里的插件，才会在宿主进程内运行。'
-                    : 'A community plugin is third-party code that runs on this machine. Untrusted plugins start in a child process and do not inherit host secret environment variables, but they still have the OS user permissions the process model allows, including outbound network. Only plugins whose manifest id starts with @openlearn/, or ids listed in OPENLEARN_TRUSTED_INLINE_PLUGINS, run inside the host process.'}
-                </p>
-                <p className="mt-2 text-sm text-slate-600 leading-relaxed">
-                  {zh
-                    ? '插件自己写 auth: false 不会让接口变成公开。下面的选项默认关闭；勾选后才会批准清单里声明为公开的路由。'
-                    : 'auth: false in the manifest does not publish a route. The option below stays off unless you approve those routes.'}
-                </p>
-              </div>
-            </div>
-            <label className="mt-4 flex items-start gap-2 text-sm text-slate-700 cursor-pointer">
-              <input
-                type="checkbox"
-                className="mt-1"
-                checked={approvePublicRoutes}
-                onChange={(e) => setApprovePublicRoutes(e.target.checked)}
-              />
-              <span>
-                {zh
-                  ? '同时批准清单中声明为公开的路由（auth: false）'
-                  : 'Also approve routes the manifest marks public (auth: false)'}
-              </span>
-            </label>
-            <div className="mt-5 flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setPendingInstall(null)}
-                className="px-3 py-1.5 text-sm font-medium rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50"
-              >
-                {zh ? '取消' : 'Cancel'}
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  const plugin = pendingInstall;
-                  const approve = approvePublicRoutes;
-                  setPendingInstall(null);
-                  void handleInstall(plugin, approve);
-                }}
-                className="px-3 py-1.5 text-sm font-semibold rounded-lg bg-amber-600 text-white hover:bg-amber-700"
-              >
-                {zh ? '确认风险并安装' : 'I understand the risk — install'}
-              </button>
-            </div>
-          </div>
         </div>
       )}
     </div>

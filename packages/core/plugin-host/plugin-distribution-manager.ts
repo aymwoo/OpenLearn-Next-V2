@@ -75,6 +75,11 @@ export interface PluginUpdateOptions {
   targetPluginId?: string;
   executionMode?: PluginExecutionMode;
   allowDowngrade?: boolean;
+  communityOfficial?: boolean;
+}
+
+export interface PluginInstallOptions {
+  communityOfficial?: boolean;
 }
 
 export interface PluginUpdateResult {
@@ -99,6 +104,7 @@ export interface IPluginDistributionManager {
   installFromZip(
     zipPath: string,
     executionMode?: PluginExecutionMode,
+    options?: PluginInstallOptions,
   ): Promise<{ pluginId: string; manifest: Manifest }>;
   installFromRepository(repoId: string, pluginId: string): Promise<{ pluginId: string; manifest: Manifest }>;
   updatePlugin(pluginId: string, zipPath?: string): Promise<void>;
@@ -144,8 +150,9 @@ export class PluginDistributionManager implements IPluginDistributionManager {
   public async installFromZip(
     zipPath: string,
     executionMode?: PluginExecutionMode,
+    options?: PluginInstallOptions,
   ): Promise<{ pluginId: string; manifest: Manifest }> {
-    const manifest = await this.pluginHost.installPluginFromZip(zipPath, executionMode);
+    const manifest = await this.pluginHost.installPluginFromZip(zipPath, executionMode, options);
     // installPluginFromZip returns Manifest & { pluginId: <DB UUID> }.
     // Prefer the UUID so callers can toggle/activate without alias resolution.
     const pluginId = (manifest as Manifest & { pluginId?: string }).pluginId ?? manifest.id;
@@ -199,7 +206,7 @@ export class PluginDistributionManager implements IPluginDistributionManager {
       // R-4：仓库适配器暴露的仍是 Buffer（内存态仓库，无下载环节），
       // 在此转换成路径contract 并负责清理。
       zipPath = writeBufferToTempZip(zipBuffer, 'plugin-repo-');
-      return await this.installFromZip(zipPath);
+      return await this.installFromZip(zipPath, undefined, { communityOfficial: isCommunity });
     } finally {
       removeTempZip(zipPath);
     }

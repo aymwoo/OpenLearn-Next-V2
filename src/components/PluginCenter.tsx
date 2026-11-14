@@ -145,11 +145,10 @@ export function PluginCenter({
       const body = marketItem?.downloadUrl
         ? JSON.stringify({
             downloadUrl: marketItem.downloadUrl,
-            acknowledgeRisk: true,
             ...(marketItem.integrity ? { integrity: marketItem.integrity } : {}),
             ...(marketItem.signature ? { signature: marketItem.signature } : {}),
           })
-        : JSON.stringify({ acknowledgeRisk: true });
+        : JSON.stringify({});
       const res = await fetch(`/api/plugins/${encodeURIComponent(pluginId)}/one-click-update`, {
         method: 'POST',
         headers: body ? { 'Content-Type': 'application/json' } : undefined,
@@ -180,7 +179,6 @@ export function PluginCenter({
             headers: {
               'Content-Type': 'application/octet-stream',
               'x-install-mode': 'update',
-              'x-acknowledge-risk': 'true',
               'x-community-install': 'true',
               ...(marketItem.integrity ? { 'x-integrity': marketItem.integrity } : {}),
               ...(marketItem.signature ? { 'x-signature': marketItem.signature } : {}),

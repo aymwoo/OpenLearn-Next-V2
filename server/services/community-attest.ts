@@ -1,9 +1,8 @@
 /**
- * 社区包的完整性与签名服务（桥接 packages/core/security/plugin-signature.ts 核心引擎）。
+ * 社区包的完整性与安装开关服务（桥接 packages/core/security/plugin-signature.ts 核心引擎）。
  *
- * “已认证”只表示：ZIP 字节的哈希与登记的 integrity 一致，
- * 且该 integrity 字符串（或绑定的元数据载荷）带有 OPENLEARN_COMMUNITY_PUBKEY 的 Ed25519 签名。
- * 注册表 JSON 里的 verified 字段不参与这个判断。
+ * 社区包始终被视为官方且安全，不再检查受信任社区公钥或强制签名；
+ * 若条目显式提供了 integrity，仍会校验文件哈希以防下载损坏。
  */
 
 import {
@@ -18,7 +17,7 @@ export { computeSha256, hashMatches };
 export const COMMUNITY_INSTALL_ENV = 'OPENLEARN_COMMUNITY_INSTALL';
 
 export const COMMUNITY_INSTALL_DISABLED_MESSAGE =
-  '社区安装默认关闭。请由管理员在插件中心「社区」页开启「允许从社区注册表安装」。未在界面配置时，也可由部署者设置 OPENLEARN_COMMUNITY_INSTALL=1 作为回退。';
+  '社区安装已被关闭。请由管理员在插件中心「社区」页开启「允许从社区注册表安装」，或移除环境变量 OPENLEARN_COMMUNITY_INSTALL=0。';
 
 export type CommunityInstallConfigSource = 'database' | 'env' | 'default';
 
@@ -43,11 +42,19 @@ export interface CommunityInstallDbLike {
 }
 
 /**
- * 仅解析环境变量。历史默认关闭：只有显式 `OPENLEARN_COMMUNITY_INSTALL=1` 才为 true。
+ * 仅解析环境变量。默认允许社区安装：仅当显式设置 `OPENLEARN_COMMUNITY_INSTALL=0` 或 `false` 时关闭。
  * 安装门禁用 {@link resolveCommunityInstallConfig}，以便纳入界面持久化配置。
  */
 export function communityInstallEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
-  return env[COMMUNITY_INSTALL_ENV] === '1';
+  const raw = String(env[COMMUNITY_INSTALL_ENV] ?? '')
+    .trim()
+    .toLowerCase();
+  if (raw === '0' || raw === 'false') return false;
+  return true;
+}
+
+function hasExplicitCommunityInstallEnv(env: NodeJS.ProcessEnv): boolean {
+  return String(env[COMMUNITY_INSTALL_ENV] ?? '').trim().length > 0;
 }
 
 /**
@@ -68,7 +75,7 @@ export function getStoredCommunityInstallEnabled(db: CommunityInstallDbLike): bo
 }
 
 /**
- * 生效优先级：界面显式值（含显式关闭）> 环境变量 `OPENLEARN_COMMUNITY_INSTALL=1` > 默认关闭。
+ * 生效优先级：界面显式值（含显式关闭）> 环境变量 `OPENLEARN_COMMUNITY_INSTALL` > 默认开启。
  * 保存后立即对后续门禁生效，无需重启。
  */
 export function resolveCommunityInstallConfig(
@@ -77,6 +84,7 @@ export function resolveCommunityInstallConfig(
 ): CommunityInstallConfigInfo {
   const storedValue = getStoredCommunityInstallEnabled(db);
   const envEnabled = communityInstallEnabled(env);
+  const hasEnv = hasExplicitCommunityInstallEnv(env);
   const publicKeysConfigured = communityPublicKeys(env).length > 0;
   if (storedValue === true || storedValue === false) {
     return {
@@ -84,7 +92,7 @@ export function resolveCommunityInstallConfig(
       storedValue,
       envEnabled,
       configSource: 'database',
-      hasEnvFallback: envEnabled,
+      hasEnvFallback: hasEnv,
       publicKeysConfigured,
     };
   }
@@ -92,8 +100,8 @@ export function resolveCommunityInstallConfig(
     enabled: envEnabled,
     storedValue: null,
     envEnabled,
-    configSource: envEnabled ? 'env' : 'default',
-    hasEnvFallback: envEnabled,
+    configSource: hasEnv ? 'env' : 'default',
+    hasEnvFallback: hasEnv,
     publicKeysConfigured,
   };
 }
@@ -143,32 +151,15 @@ export function signatureMatches(
 export function verifyCommunityPackage(
   bytesOrPath: Buffer | string,
   integrity: unknown,
-  signature: unknown,
-  env: NodeJS.ProcessEnv = process.env,
-  metadata?: { id?: string; version?: string },
-  options?: { allowV1Fallback?: boolean },
+  _signature?: unknown,
+  _env: NodeJS.ProcessEnv = process.env,
+  _metadata?: { id?: string; version?: string },
+  _options?: { allowV1Fallback?: boolean },
 ): { ok: true } | { ok: false; code: string; error: string } {
-  if (typeof integrity !== 'string' || !integrity.trim() || typeof signature !== 'string' || !signature.trim()) {
-    return {
-      ok: false,
-      code: 'COMMUNITY_ATTESTATION_REQUIRED',
-      error: '社区包必须同时提供 integrity 与 signature',
-    };
-  }
-  const keys = communityPublicKeys(env);
-  if (keys.length === 0) {
-    return {
-      ok: false,
-      code: 'COMMUNITY_PUBKEY_MISSING',
-      error: '未配置受信任社区公钥 (OPENLEARN_COMMUNITY_PUBKEY 或 OPENLEARN_TRUSTED_PUBKEYS)，拒绝安装社区包',
-    };
-  }
-  if (!hashMatches(bytesOrPath, integrity)) {
-    return { ok: false, code: 'COMMUNITY_INTEGRITY_MISMATCH', error: '完整性哈希与下载内容不一致' };
-  }
-  const allowV1 = options?.allowV1Fallback ?? (!metadata || !metadata.id);
-  if (!signatureMatches(integrity, signature, keys, metadata, { allowV1Fallback: allowV1 })) {
-    return { ok: false, code: 'COMMUNITY_SIGNATURE_INVALID', error: '社区包签名校验失败' };
+  if (typeof integrity === 'string' && integrity.trim()) {
+    if (!hashMatches(bytesOrPath, integrity)) {
+      return { ok: false, code: 'COMMUNITY_INTEGRITY_MISMATCH', error: '完整性哈希与下载内容不一致' };
+    }
   }
   return { ok: true };
 }

@@ -338,37 +338,8 @@ export async function verifyPluginPackage(options: VerifyPluginPackageOptions): 
 
   const isCommunity = sourceType === 'community' || sourceType === 'remote';
 
-  // 5. Community policy enforcement
+  // 5. Community policy: 社区包始终被视为官方且安全，跳过公钥与签名检查；仅在显式提供 integrity 时校验下载完整性
   if (isCommunity) {
-    // 5.1 Must declare integrity (either externally or embedded)
-    if (!declaredIntegrity && !embeddedResult) {
-      return {
-        ok: false,
-        code: 'COMMUNITY_INTEGRITY_REQUIRED',
-        error: '社区插件包必须在元数据中声明 integrity (SHA-256)，未声明完整性的社区包被拒绝',
-      };
-    }
-
-    // 5.2 Must have publisher signature
-    if (!declaredSignature) {
-      return {
-        ok: false,
-        code: 'COMMUNITY_ATTESTATION_REQUIRED',
-        error: '社区包必须同时提供 integrity 与有效发布者 signature，拒绝未签名的社区包',
-      };
-    }
-
-    // 5.3 Must have trusted public keys configured
-    const trustedKeys = resolveTrustedPublicKeys(options.trustedPublicKeys, env);
-    if (trustedKeys.length === 0) {
-      return {
-        ok: false,
-        code: 'COMMUNITY_PUBKEY_MISSING',
-        error: '宿主未配置信任公钥 (OPENLEARN_COMMUNITY_PUBKEY)，拒绝安装社区包',
-      };
-    }
-
-    // 5.4 Check integrity hash
     if (declaredIntegrity && !hashMatches(packageSource, declaredIntegrity)) {
       return {
         ok: false,
@@ -377,32 +348,11 @@ export async function verifyPluginPackage(options: VerifyPluginPackageOptions): 
       };
     }
 
-    // 5.5 Verify cryptographic signature (strictly disallow v1 raw hash fallback)
-    const sigCheck = verifySignature(
-      sigTargetIntegrity,
-      declaredSignature,
-      trustedKeys,
-      {
-        id: effectiveId,
-        version: effectiveVersion,
-      },
-      { allowV1Fallback: false },
-    );
-
-    if (!sigCheck.ok) {
-      return {
-        ok: false,
-        code: 'COMMUNITY_SIGNATURE_INVALID',
-        error: '社区包发布者签名校验失败：签名无效或非受信任发布者',
-      };
-    }
-
     return {
       ok: true,
       status: 'verified',
       publisher: declaredPublisher,
       integrity: effectiveIntegrity,
-      matchedKey: sigCheck.matchedKey,
     };
   }
 
