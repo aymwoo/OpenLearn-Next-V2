@@ -55,7 +55,7 @@ function authorizeAssignmentAsset(
   session: NonNullable<ReturnType<typeof getValidSession>>,
 ): boolean {
   if (session.role === 'administrator') return true;
-  const db = kernelContainer.db as any;
+  const db = kernelContainer.db;
   const linked = db
     .prepare('SELECT id, assignment_id, student_id FROM plugin_assignment_files WHERE asset_id = ? LIMIT 1')
     .get(asset.id) as { id: string; assignment_id: string; student_id: string } | undefined;
@@ -164,7 +164,7 @@ export async function serveFileAsset(req: Request, res: Response, asset: FileAss
   opened.stream.pipe(res);
 }
 
-export function registerFilesRoutes(ctx: ServerContext): void {
+export function registerFilesRoutes(ctx: Pick<ServerContext, 'app'>): void {
   const { app } = ctx;
 
   // Read gateway for unified file assets; enforces scope-based authorization & strict security headers.
@@ -229,7 +229,7 @@ export function registerFilesRoutes(ctx: ServerContext): void {
 
   app.get('/api/admin/file-storage/stats', requireScopedAuth('admin'), (_req: Request, res: Response) => {
     try {
-      const db = kernelContainer.db as any;
+      const db = kernelContainer.db;
       const assets = db
         .prepare(
           'SELECT COUNT(*) as total, SUM(CASE WHEN deleted_at IS NULL THEN 1 ELSE 0 END) as active FROM file_assets',

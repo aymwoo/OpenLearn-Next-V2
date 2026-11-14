@@ -1,13 +1,14 @@
 /**
  * @vitest-environment node
  */
-import express from 'express';
+import express, { type RequestHandler } from 'express';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import fs from 'node:fs';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
-import { runStartupMigrations } from '../bootstrap-db.js';
+import { runStartupMigrations, type MigrationDb } from '../bootstrap-db.js';
+import type { ServerContext } from '../context.js';
 import { registerFilesRoutes, serveFileAsset } from '../routes/files.js';
 import { registerOsRoutes } from '../routes/os.js';
 import { registerPluginsRoutes } from '../routes/plugins.js';
@@ -17,7 +18,7 @@ import {
   resetFileStorageServiceForTesting,
 } from '../services/file-storage/index.js';
 
-const db = () => kernelContainer.db as any;
+const db = () => kernelContainer.db;
 
 const adminId = 'usr-froute-admin';
 const teacherId = 'usr-froute-teacher';
@@ -39,7 +40,7 @@ const createdAssetIds: string[] = [];
 describe('文件安全读取网关、旧路径别名与管理配置路由', () => {
   beforeAll(async () => {
     resetFileStorageServiceForTesting();
-    await runStartupMigrations(db());
+    await runStartupMigrations(db() as unknown as MigrationDb);
 
     const now = Date.now();
     for (const u of [
@@ -80,10 +81,13 @@ describe('文件安全读取网关、旧路径别名与管理配置路由', () =
 
     app = express();
     app.use(express.json({ limit: '16mb' }));
-    const noopMiddleware = (_req: any, _res: any, next: any) => next();
-    registerFilesRoutes({ app } as any);
-    registerOsRoutes({ app, aiLimiter: noopMiddleware } as any);
-    registerPluginsRoutes({ app, aiLimiter: noopMiddleware } as any);
+    const noopMiddleware: RequestHandler = (_req, _res, next) => {
+      next();
+    };
+    const routeCtx = { app, aiLimiter: noopMiddleware } as unknown as ServerContext;
+    registerFilesRoutes({ app });
+    registerOsRoutes(routeCtx);
+    registerPluginsRoutes(routeCtx);
 
     // 挂载与 server.ts 一致的 /uploads 别名兜底中间件（不含真实磁盘旧文件）
     app.use('/uploads', async (req, res) => {

@@ -41,6 +41,28 @@ export class FileStorageConfigError extends Error {
 const VALID_SCHEMES = new Set<FileLayoutScheme>(['flat', 'by-date', 'by-course', 'by-author', 'custom']);
 const VALID_SCOPES = new Set<FileAccessScope>(['public', 'authenticated', 'assignment']);
 
+/** Row shape of `file_assets` joined to `file_blobs` (optional window `rn` from reorg). */
+interface FileAssetJoinRow {
+  id: string;
+  blob_id: string;
+  original_name: string;
+  mime: string;
+  author_id: string | null;
+  course_id: string | null;
+  lesson_id: string | null;
+  purpose: string;
+  access_scope: string;
+  metadata_json: string | null;
+  deleted_at: string | null;
+  created_at: string;
+  backend_id: string;
+  storage_key: string;
+  sha256: string;
+  size_bytes: number;
+  ref_count: number;
+  rn?: number;
+}
+
 export function normalizeLegacyAlias(alias: string): string {
   const clean = String(alias || '')
     .trim()
@@ -419,7 +441,7 @@ export class FileStorageService {
     return tx();
   }
 
-  private mapAssetRow(row: Record<string, any> | undefined): FileAssetWithBlob | null {
+  private mapAssetRow(row: FileAssetJoinRow | undefined): FileAssetWithBlob | null {
     if (!row) return null;
     return {
       id: row.id,
@@ -450,7 +472,7 @@ export class FileStorageService {
          JOIN file_blobs b ON a.blob_id = b.id
          WHERE a.id = ? AND a.deleted_at IS NULL`,
       )
-      .get(assetId) as Record<string, any> | undefined;
+      .get(assetId) as FileAssetJoinRow | undefined;
     return this.mapAssetRow(row);
   }
 
@@ -465,7 +487,7 @@ export class FileStorageService {
          JOIN file_blobs b ON a.blob_id = b.id
          WHERE al.alias = ? AND a.deleted_at IS NULL`,
       )
-      .get(normalized) as Record<string, any> | undefined;
+      .get(normalized) as FileAssetJoinRow | undefined;
     return this.mapAssetRow(row);
   }
 
@@ -620,7 +642,7 @@ export class FileStorageService {
          ORDER BY created_at ASC
          ${sqlLimit}`,
       )
-      .all() as Array<Record<string, any>>;
+      .all() as FileAssetJoinRow[];
 
     const plan: ReorgPlanItem[] = [];
 

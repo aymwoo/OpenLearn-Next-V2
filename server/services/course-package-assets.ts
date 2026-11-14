@@ -478,12 +478,12 @@ export function countPdfPages(buffer: Buffer): number {
  *
  * ## 失败补偿（Issue #246）
  *
- * 资产是**逐个**落盘的：第 N 个附件校验失败时，前 N-1 个文件已经躺在
- * uploads 目录里。调用方（importCoursePackage）拿不到已经写盘的那部分，
- * 也就没法清理 —— 于是留下孤儿文件（uploads 目录无界增长）。
+ * 资产是**逐个**写入统一文件存储的：第 N 个附件校验失败时，前 N-1 个
+ * 已经在 `<data>/files` 落下 blob 与 `file_assets` 行。调用方
+ * （importCoursePackage）拿不到已经写盘的那部分，也就没法清理。
  *
- * 因此本函数自己负责补偿：任何一步抛错都把本次已写盘的文件删掉再抛，
- * 保证「要么全部落盘，要么一个都不留」。
+ * 因此本函数自己负责补偿：任何一步抛错都 `purgeAsset` 本次已写入的资产再抛，
+ * 保证「要么全部落盘，要么一个都不留」（物理文件与引用计数一起清掉）。
  */
 export async function materializePackageAssets(
   assets: Array<{ id: string; filename: string; contentType: PackageAssetType; base64: string }>,

@@ -26,6 +26,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixes
 
+- **文件存储合入后的 CI 回归**：去掉统一存储新增代码里的显式 `any`，使 ESLint 告警回到预算内；课程包「后一个附件校验失败」用例改为断言 `<data>/files` 物理文件、`file_assets` 与 `file_blobs` 均被补偿清理（`uploads/` 不再预先创建，扫描它会 ENOENT，也看不到新的落盘位置）。
 - **表单语义校验/可见性切换与全站响应式可访问表格底座（Issue #489）**：
   - 新增 `src/components/PasswordInput.tsx`（关联 `<label htmlFor>`、输入框上方持久化规则提示、显示/隐藏密码 `aria-pressed` 切换、仅在报错时通过 `aria-describedby` 绑定内联错误）与 `src/components/AccessibleTableRegion.tsx`（`tabIndex={0}`、`role="region"`、`aria-labelledby` 键盘可聚焦横向滚动容器），并在 `src/index.css` 中接入 `.table-scroll-region`、`.responsive-data-table[data-stack-mobile="true"]` `@container` 窄屏卡片化、`.field-sizing-auto` 与 `:user-invalid` / `[aria-invalid="true"]` 样式；
   - 重构 `ForcedPasswordChangeGate`、`ProfileModal`、`AdminPanel` 教工表单、`AiProvidersPanel` 与 `ClassStudentsPanel` 密码编辑表单使用 `<form noValidate>` 提交校验与首错自动聚焦，并将 `CourseWizardModal`、`AssignmentSubmitDialog`、`QuestionBankPanel`、`AssessmentEditor` 等叙事文本框升级为 `field-sizing-auto`；
