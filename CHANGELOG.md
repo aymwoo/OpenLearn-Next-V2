@@ -12,6 +12,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixes
 
+- **修复插件 SQL 守卫将 `ON CONFLICT ... DO UPDATE SET` 误判为访问表 `"set"`（Issue #492）**：在 `packages/core/plugin-host/sql-guard.ts` 的 `extractFlatTables` 中识别 SQLite UPSERT 的 `DO UPDATE SET` 关键字上下文，不再将关键字 `SET` 提取为表名；同时保留对 `UPDATE "set" SET ...` 及 UPSERT 内跨表子查询的严格拦截，并在 `sql-guard.test.ts` 补充回归测试。
 - **无障碍语义地标、焦点可见性、跨文档消息安全与可选登出站点清理（Issue #487）**：
   - 为 `App.tsx` 主应用壳、登录页及强制改密页补齐 Skip Link、`lang`/`title` 动态同步与 `<main>`/`<nav>`/`<aside>` 地标；为 `QuickActionsMenu.tsx` 菜单选项与 `RightSidebar.tsx` 折叠触发器、通知列表项等可点击 `<div>` 改用原生 `<button type="button">`；为 `RevealPresentationWrapper.tsx` 演示文稿 PDF `<iframe>` 补充 `title`；补全 `focus-visible:ring-2` 键盘焦点指示并清理表格与表单中的反效 `select-none`；
   - 加固 `lms-bridge.ts`、`PluginSandboxIframeView.tsx` 与 `plugin-host.ts` 的 `postMessage` 校验，显式拒绝 `event.source` 为 `null`/伪造来源的消息；
