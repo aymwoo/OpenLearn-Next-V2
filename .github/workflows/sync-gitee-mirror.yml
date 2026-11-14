@@ -18,7 +18,9 @@ name: Sync Gitee Mirror
 #   · 具体逻辑抽到 .github/scripts/sync-gitee-mirror.sh，避免 Actions 把
 #     多行 run: 源码逐行回显（回显里的 SKIP_SYNC=1 / ::error 字面量曾造成误判）；
 #   · 手动触发可选 strict=true，让失败直接反映到 run 结论，便于维护者验证配置。
-#     push / schedule 仍永远宽松，不阻塞主干。
+#     push / schedule 仍永远宽松，不阻塞主干；
+#   · 只同步 main：拒绝 --ref <非默认分支> 触发时把 PR 提交写进镜像
+#     （此时 github.sha 是分支 HEAD，且 main 恰为其祖先，祖先校验拦不住）。
 #
 # 一次性配置（仓库维护者做一次即可，缺 secret 时本 workflow 自动跳过）：
 #   1. 在 Gitee 生成「私人访问令牌」：设置 → 私人令牌 → 勾选 `projects` 权限；

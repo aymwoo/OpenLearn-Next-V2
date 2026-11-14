@@ -80,7 +80,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Refactor / Performance
 
-- **Gitee 镜像同步失败不再被绿勾掩盖**：`.github/workflows/sync-gitee-mirror.yml` 的 job 级 `continue-on-error` 会把同步失败吞成 run 结论 success，且多行 `run:` 脚本被 Actions 逐行回显（`SKIP_SYNC=1` / `::error` 字面量看起来像真报错），导致失败难以辨认。现把逻辑抽到 `.github/scripts/sync-gitee-mirror.sh`（prepare / push / verify / summary 四个子命令），新增 `if: always()` 的「同步结果」步骤把「已跳过 / 成功 / 失败」三态写进 Step Summary 并在失败时打 `::error` annotation；`workflow_dispatch` 增加 `strict` 选项，让维护者手动验证时失败可真实反映到 run 结论。push / schedule 触发仍保持宽松、不阻塞主干 CI，三条铁律（单向、只快进、不影响主干）不变。
+- **Gitee 镜像同步失败不再被绿勾掩盖**：`.github/workflows/sync-gitee-mirror.yml` 的 job 级 `continue-on-error` 会把同步失败吞成 run 结论 success，且多行 `run:` 脚本被 Actions 逐行回显（`SKIP_SYNC=1` / `::error` 字面量看起来像真报错），导致失败难以辨认。现把逻辑抽到 `.github/scripts/sync-gitee-mirror.sh`（prepare / push / verify / summary 四个子命令），新增 `if: always()` 的「同步结果」步骤把「已跳过 / 成功 / 失败」三态写进 Step Summary 并在失败时打 `::error` annotation；`workflow_dispatch` 增加 `strict` 选项，让维护者手动验证时失败可真实反映到 run 结论；`cmd_push` 增加 `GITHUB_REF` 校验，拒绝 `--ref <非默认分支>` 触发时把 PR 提交写入镜像（此时 `github.sha` 是分支 HEAD，且 main 恰为其祖先，祖先校验拦不住）。push / schedule 触发仍保持宽松、不阻塞主干 CI，三条铁律（单向、只快进、不影响主干）不变。
 - **Node 基线从 22 迁移到 24**：`.nvmrc` / `.node-version` / `PINNED_NODE_MAJOR` / `Dockerfile`（`node:24-alpine`）/ CI 主作业 / `AGENTS.md` 与安装、部署、开发指南统一钉住 Node 24；`20.x || 22.x || 24.x` 的受支持范围与 CI 的 node-runtime-compat 矩阵保持不变。起因是本机运行时已是 Node 24（`better-sqlite3` 需 ABI 137），而仓库仍钉 22，跨环境复用 `node_modules` 会反复触发 `ERR_DLOPEN_FAILED`。
 
 ### Docs

@@ -34,6 +34,14 @@ cmd_prepare() {
 }
 
 cmd_push() {
+  # 防御误触发：workflow_dispatch 可用 --ref <非默认分支> 触发，此时 github.sha
+  # 是该分支 HEAD；若放行会把未合并的 PR 提交快进到镜像（main 恰好是其祖先，
+  # 祖先校验拦不住）。本 workflow 只负责把 GitHub main 推往 Gitee。
+  if [ "${GITHUB_REF:-}" != 'refs/heads/main' ]; then
+    echo "::error title=拒绝同步非 main 引用::当前 GITHUB_REF=${GITHUB_REF:-<空>} 不是 refs/heads/main。本 workflow 只把 GitHub main 快进到 Gitee 镜像，拒绝把分支 / PR 提交写入镜像；请在 main 上触发。"
+    exit 1
+  fi
+
   local auth
   auth="$(auth_header)"
   git -c http.extraheader="$auth" fetch gitee --tags --prune --force
