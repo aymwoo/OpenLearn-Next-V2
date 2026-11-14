@@ -50,6 +50,10 @@ interface RegistryBody {
   skipped: number;
   error?: string;
   envVar?: string;
+  canConfigure?: boolean;
+  configSource?: 'database' | 'env' | 'none';
+  databaseUrl?: string | null;
+  hasEnvFallback?: boolean;
 }
 
 function registryBody(overrides: Partial<RegistryBody> = {}): RegistryBody {
@@ -345,10 +349,73 @@ describe('PluginCommunityPanel', () => {
       expect(uploadCall?.init?.body).toBeInstanceOf(Blob);
     });
 
-    it('explains that installation is administrator-only on a 403', async () => {
+    it('explains that installation is administrator-only on a 403 without error code', async () => {
       const { fetcher } = makeFetcher([
         (url) => (url.startsWith('/api/plugins/community') ? json(registryBody()) : undefined),
         (url) => (url === '/api/plugins/install-from-url' ? json({ success: false }, 403) : undefined),
+      ]);
+
+      renderPanel({ fetcher });
+      await screen.findByTestId(HOMEWORK_CARD);
+
+      fireEvent.click(screen.getByRole('button', { name: '安装' }));
+      fireEvent.click(screen.getByRole('button', { name: '确认风险并安装' }));
+
+      expect(await screen.findByText('仅管理员可安装社区插件，请联系管理员。')).toBeTruthy();
+    });
+
+    it('surfaces the server error when 403 carries a specific error code such as COMMUNITY_INSTALL_DISABLED', async () => {
+      const disabledMsg = '社区安装默认关闭。设置 OPENLEARN_COMMUNITY_INSTALL=1 后才允许从注册表安装。';
+      const { fetcher } = makeFetcher([
+        (url) => (url.startsWith('/api/plugins/community') ? json(registryBody()) : undefined),
+        (url) =>
+          url === '/api/plugins/install-from-url'
+            ? json({ success: false, code: 'COMMUNITY_INSTALL_DISABLED', error: disabledMsg }, 403)
+            : undefined,
+      ]);
+
+      renderPanel({ fetcher });
+      await screen.findByTestId(HOMEWORK_CARD);
+
+      fireEvent.click(screen.getByRole('button', { name: '安装' }));
+      fireEvent.click(screen.getByRole('button', { name: '确认风险并安装' }));
+
+      expect(await screen.findByText(disabledMsg)).toBeTruthy();
+      expect(screen.queryByText('仅管理员可安装社区插件，请联系管理员。')).toBeNull();
+    });
+
+    it('handles 403 code distinction properly during browser upload fallback', async () => {
+      const disabledMsg = '社区安装默认关闭。设置 OPENLEARN_COMMUNITY_INSTALL=1 后才允许从注册表安装。';
+      const { fetcher } = makeFetcher([
+        (url) => (url.startsWith('/api/plugins/community') ? json(registryBody()) : undefined),
+        (url) =>
+          url === '/api/plugins/install-from-url' ? json({ success: false, fallbackToClient: true }, 502) : undefined,
+        (url) =>
+          url.endsWith('.zip') ? new Response(new Blob([new Uint8Array([1, 2, 3])]), { status: 200 }) : undefined,
+        (url) =>
+          url === '/api/plugins/upload-zip-raw'
+            ? json({ success: false, code: 'COMMUNITY_INSTALL_DISABLED', error: disabledMsg }, 403)
+            : undefined,
+      ]);
+
+      renderPanel({ fetcher });
+      await screen.findByTestId(HOMEWORK_CARD);
+
+      fireEvent.click(screen.getByRole('button', { name: '安装' }));
+      fireEvent.click(screen.getByRole('button', { name: '确认风险并安装' }));
+
+      expect(await screen.findByText(disabledMsg)).toBeTruthy();
+      expect(screen.queryByText('仅管理员可安装社区插件，请联系管理员。')).toBeNull();
+    });
+
+    it('falls back to administrator-only message during browser upload fallback on role-only 403', async () => {
+      const { fetcher } = makeFetcher([
+        (url) => (url.startsWith('/api/plugins/community') ? json(registryBody()) : undefined),
+        (url) =>
+          url === '/api/plugins/install-from-url' ? json({ success: false, fallbackToClient: true }, 502) : undefined,
+        (url) =>
+          url.endsWith('.zip') ? new Response(new Blob([new Uint8Array([1, 2, 3])]), { status: 200 }) : undefined,
+        (url) => (url === '/api/plugins/upload-zip-raw' ? json({ success: false }, 403) : undefined),
       ]);
 
       renderPanel({ fetcher });
@@ -474,5 +541,200 @@ describe('PluginCommunityPanel', () => {
     expect(await screen.findByRole('button', { name: 'Install' })).toBeTruthy();
     expect(screen.getByRole('button', { name: /Refresh/ })).toBeTruthy();
     expect(screen.getByLabelText('Hide installed')).toBeTruthy();
+  });
+
+  describe('registry URL configuration in Community tab', () => {
+    it('lets an administrator configure the registry URL directly from the unconfigured view', async () => {
+      let configuredUrl: string | null = null;
+      const { fetcher, calls } = makeFetcher([
+        (url, init) => {
+          if (url === '/api/plugins/community/config' && init?.method === 'PUT') {
+            const parsed = JSON.parse(String(init.body)) as { registryUrl: string | null };
+            configuredUrl = parsed.registryUrl;
+            return json({
+              success: true,
+              configSource: 'database',
+              databaseUrl: configuredUrl,
+              activeUrl: configuredUrl,
+              hasEnvFallback: false,
+            });
+          }
+          if (url.startsWith('/api/plugins/community')) {
+            return configuredUrl
+              ? json(
+                  registryBody({
+                    configured: true,
+                    source: configuredUrl,
+                    configSource: 'database',
+                    databaseUrl: configuredUrl,
+                    canConfigure: true,
+                  }),
+                )
+              : json(
+                  registryBody({
+                    configured: false,
+                    source: null,
+                    plugins: [],
+                    envVar: 'PLUGIN_COMMUNITY_REGISTRY_URL',
+                    canConfigure: true,
+                    configSource: 'none',
+                  }),
+                );
+          }
+          return undefined;
+        },
+      ]);
+
+      renderPanel({ fetcher });
+
+      const input = await screen.findByLabelText('社区插件注册表 JSON 地址');
+      fireEvent.change(input, { target: { value: 'https://community.example.com/plugins.json' } });
+      fireEvent.click(screen.getByRole('button', { name: '保存并加载' }));
+
+      expect(await screen.findByText('作业中心')).toBeTruthy();
+      const putCall = calls.find((c) => c.url === '/api/plugins/community/config');
+      expect(putCall?.init?.method).toBe('PUT');
+      expect(JSON.parse(String(putCall?.init?.body))).toEqual({
+        registryUrl: 'https://community.example.com/plugins.json',
+      });
+      expect(calls.some((c) => c.url === '/api/plugins/community?refresh=1')).toBe(true);
+    });
+
+    it('validates invalid URLs client-side and surfaces server SSRF rejection errors', async () => {
+      const { fetcher, calls } = makeFetcher([
+        (url, init) => {
+          if (url === '/api/plugins/community/config' && init?.method === 'PUT') {
+            return json({ success: false, error: '安全拦截: 非法注册表地址 (IPv4 loopback)' }, 400);
+          }
+          if (url.startsWith('/api/plugins/community')) {
+            return json(
+              registryBody({
+                configured: false,
+                source: null,
+                plugins: [],
+                canConfigure: true,
+                configSource: 'none',
+              }),
+            );
+          }
+          return undefined;
+        },
+      ]);
+
+      renderPanel({ fetcher });
+
+      const input = await screen.findByLabelText('社区插件注册表 JSON 地址');
+      fireEvent.change(input, { target: { value: 'ftp://bad.example.com/plugins.json' } });
+      fireEvent.click(screen.getByRole('button', { name: '保存并加载' }));
+
+      expect(await screen.findByRole('alert')).toBeTruthy();
+      expect(screen.getByText(/仅支持 http:\/\/ 或 https:\/\//)).toBeTruthy();
+      expect(input.getAttribute('aria-invalid')).toBe('true');
+      expect(calls.find((c) => c.url === '/api/plugins/community/config')).toBeUndefined();
+
+      fireEvent.change(input, { target: { value: 'http://127.0.0.1/plugins.json' } });
+      expect(screen.queryByRole('alert')).toBeNull();
+      fireEvent.click(screen.getByRole('button', { name: '保存并加载' }));
+
+      expect(await screen.findByText(/安全拦截: 非法注册表地址/)).toBeTruthy();
+    });
+
+    it('allows editing and clearing the registry URL from the toolbar settings panel', async () => {
+      let dbUrl: string | null = 'https://custom.example.com/plugins.json';
+      const envUrl = 'https://env.example.com/plugins.json';
+
+      const { fetcher, calls } = makeFetcher([
+        (url, init) => {
+          if (url === '/api/plugins/community/config' && init?.method === 'PUT') {
+            const parsed = JSON.parse(String(init.body)) as { registryUrl: string | null };
+            dbUrl = parsed.registryUrl;
+            return json({
+              success: true,
+              configSource: dbUrl ? 'database' : 'env',
+              databaseUrl: dbUrl,
+              activeUrl: dbUrl ?? envUrl,
+              hasEnvFallback: true,
+            });
+          }
+          if (url.startsWith('/api/plugins/community')) {
+            return json(
+              registryBody({
+                configured: true,
+                source: dbUrl ?? envUrl,
+                configSource: dbUrl ? 'database' : 'env',
+                databaseUrl: dbUrl,
+                hasEnvFallback: true,
+                canConfigure: true,
+              }),
+            );
+          }
+          return undefined;
+        },
+      ]);
+
+      renderPanel({ fetcher });
+      await screen.findByText('作业中心');
+
+      fireEvent.click(screen.getByRole('button', { name: '插件源设置' }));
+      const panel = screen.getByTestId('community-registry-config-panel');
+      expect(within(panel).getByText('当前来源：界面配置（覆盖环境变量）')).toBeTruthy();
+      const input = within(panel).getByLabelText('社区插件注册表 JSON 地址') as HTMLInputElement;
+      expect(input.value).toBe('https://custom.example.com/plugins.json');
+
+      fireEvent.change(input, { target: { value: 'https://mirror.example.com/plugins.json' } });
+      fireEvent.click(within(panel).getByRole('button', { name: '保存并刷新' }));
+
+      await waitFor(() => expect(screen.queryByTestId('community-registry-config-panel')).toBeNull());
+      expect(screen.getByText('mirror.example.com')).toBeTruthy();
+
+      fireEvent.click(screen.getByRole('button', { name: '插件源设置' }));
+      fireEvent.click(screen.getByRole('button', { name: '恢复环境变量默认' }));
+
+      await waitFor(() => expect(screen.getByText('env.example.com')).toBeTruthy());
+      const clearCall = calls.filter((c) => c.url === '/api/plugins/community/config').pop();
+      expect(JSON.parse(String(clearCall?.init?.body))).toEqual({ registryUrl: null });
+    });
+
+    it('hides registry configuration controls when user is not an administrator', async () => {
+      const { fetcher } = makeFetcher([
+        (url) =>
+          url.startsWith('/api/plugins/community')
+            ? json(registryBody({ canConfigure: false, configSource: 'env' }))
+            : undefined,
+      ]);
+
+      renderPanel({ fetcher });
+      await screen.findByText('作业中心');
+
+      expect(screen.queryByRole('button', { name: '插件源设置' })).toBeNull();
+    });
+
+    it('hides the setup form on the unconfigured view for non-administrators', async () => {
+      const { fetcher } = makeFetcher([
+        (url) =>
+          url.startsWith('/api/plugins/community')
+            ? json(registryBody({ configured: false, source: null, plugins: [], canConfigure: false }))
+            : undefined,
+      ]);
+
+      renderPanel({ fetcher });
+      expect(await screen.findByText('尚未配置社区插件源')).toBeTruthy();
+      expect(screen.queryByLabelText('社区插件注册表 JSON 地址')).toBeNull();
+    });
+
+    it('offers an edit-source shortcut in the error state for administrators', async () => {
+      const { fetcher } = makeFetcher([
+        (url) =>
+          url.startsWith('/api/plugins/community')
+            ? json(registryBody({ error: '拉取社区注册表超时', plugins: [], canConfigure: true }))
+            : undefined,
+      ]);
+
+      renderPanel({ fetcher });
+      expect(await screen.findByRole('alert')).toBeTruthy();
+
+      fireEvent.click(screen.getByRole('button', { name: '修改插件源' }));
+      expect(screen.getByTestId('community-registry-config-panel')).toBeTruthy();
+    });
   });
 });

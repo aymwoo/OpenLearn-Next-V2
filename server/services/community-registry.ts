@@ -15,7 +15,8 @@ import { isSafeExternalUrl, fetchWithSafeRedirects, UrlSafetyError } from '../ut
  *     PluginDistributionManager 安装/更新；服务端下载失败时返回
  *     `fallbackToClient`，由浏览器直传至既有的 `/api/plugins/upload-zip-raw`。
  *
- * 注册表地址通过环境变量 `PLUGIN_COMMUNITY_REGISTRY_URL` 配置。默认留空——
+ * 注册表地址支持界面持久化配置（`site_settings.community_registry_url`）与环境变量
+ * `PLUGIN_COMMUNITY_REGISTRY_URL`（界面配置优先）。默认留空——
  * 平台不应内置指向第三方域名的硬编码地址，未配置时前端展示明确的配置提示。
  */
 
@@ -244,6 +245,105 @@ export function annotateInstallState(
 }
 
 // ── 注册表地址 ───────────────────────────────────────────────────────────────
+
+export type CommunityRegistryConfigSource = 'database' | 'env' | 'none';
+
+export interface CommunityRegistryConfigInfo {
+  activeUrl: string | null;
+  databaseUrl: string | null;
+  envUrl: string | null;
+  configSource: CommunityRegistryConfigSource;
+  hasEnvFallback: boolean;
+}
+
+export interface CommunityRegistryDbLike {
+  prepare(sql: string): {
+    get(...params: unknown[]): unknown;
+    run(...params: unknown[]): unknown;
+  };
+}
+
+export class CommunityRegistryConfigError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'CommunityRegistryConfigError';
+  }
+}
+
+/**
+ * 解析环境变量配置的注册表地址（经 SSRF 校验）。
+ */
+export function resolveEnvCommunityRegistryUrl(): string | null {
+  const raw = (process.env[COMMUNITY_REGISTRY_ENV] ?? '').trim();
+  if (!raw) return null;
+  return isSafeExternalUrl(raw).safe ? raw : null;
+}
+
+/**
+ * 读取数据库 `site_settings.community_registry_url`（未配置或表/列不存在时返回 null）。
+ */
+export function getStoredCommunityRegistryUrl(db: CommunityRegistryDbLike): string | null {
+  try {
+    const row = db.prepare('SELECT community_registry_url FROM site_settings WHERE id = ?').get('global') as
+      { community_registry_url?: string | null } | undefined;
+    const trimmed = typeof row?.community_registry_url === 'string' ? row.community_registry_url.trim() : '';
+    return trimmed || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 解析当前生效的社区注册表配置（数据库持久化配置 > 环境变量）。
+ */
+export function resolveCommunityRegistryConfig(db: CommunityRegistryDbLike): CommunityRegistryConfigInfo {
+  const stored = getStoredCommunityRegistryUrl(db);
+  const databaseUrl = stored && isSafeExternalUrl(stored).safe ? stored : null;
+  const envUrl = resolveEnvCommunityRegistryUrl();
+  const activeUrl = databaseUrl ?? envUrl;
+  const configSource: CommunityRegistryConfigSource = databaseUrl ? 'database' : envUrl ? 'env' : 'none';
+  return {
+    activeUrl,
+    databaseUrl,
+    envUrl,
+    configSource,
+    hasEnvFallback: Boolean(envUrl),
+  };
+}
+
+/**
+ * 校验并持久化社区注册表地址到 `site_settings.community_registry_url`。
+ * 传入 null 或空白字符串会清除界面覆盖（回落到环境变量或未配置态）。
+ */
+export function setStoredCommunityRegistryUrl(
+  db: CommunityRegistryDbLike,
+  rawUrl: string | null,
+): CommunityRegistryConfigInfo {
+  const trimmed = typeof rawUrl === 'string' ? rawUrl.trim() : '';
+  if (!trimmed) {
+    db.prepare(
+      `INSERT INTO site_settings (id, community_registry_url) VALUES ('global', NULL)
+       ON CONFLICT(id) DO UPDATE SET community_registry_url = NULL`,
+    ).run();
+    cache.clear();
+    return resolveCommunityRegistryConfig(db);
+  }
+
+  if (trimmed.length > 2048) {
+    throw new CommunityRegistryConfigError('注册表地址长度不能超过 2048 个字符');
+  }
+  const safety = isSafeExternalUrl(trimmed);
+  if (!safety.safe) {
+    throw new CommunityRegistryConfigError(`安全拦截: 非法注册表地址 (${safety.reason})`);
+  }
+
+  db.prepare(
+    `INSERT INTO site_settings (id, community_registry_url) VALUES ('global', ?)
+     ON CONFLICT(id) DO UPDATE SET community_registry_url = excluded.community_registry_url`,
+  ).run(trimmed);
+  cache.clear();
+  return resolveCommunityRegistryConfig(db);
+}
 
 /**
  * 解析注册表地址：显式入参 > 环境变量。返回值已被 SSRF 校验，

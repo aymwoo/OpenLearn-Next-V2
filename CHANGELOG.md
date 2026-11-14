@@ -12,6 +12,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Features
 
+- **插件中心「社区」页签支持界面配置注册表 JSON 地址（Issue #514）**：
+  - 新增数据库迁移 `051_community_registry_url.sql`（同步更新 `migrations/README.md` 与 `schema-golden.json`），在 `site_settings` 表新增 `community_registry_url` 列，生效优先级为 **UI/数据库配置 > 环境变量 `PLUGIN_COMMUNITY_REGISTRY_URL`**；
+  - 扩展 `server/services/community-registry.ts`（`resolveCommunityRegistryConfig`、`setStoredCommunityRegistryUrl` 等），保存时自动校验公网 HTTP(S) URL 与 SSRF 规则并清空注册表缓存；
+  - 在 `server/routes/plugins.ts` 扩展 `GET /api/plugins/community` 返回 `canConfigure` / `configSource` / `databaseUrl` / `hasEnvFallback`，并新增 `PUT /api/plugins/community/config`（`requireScopedAuth('admin')`）及 `plugin.community_registry.updated` 审计记录；
+  - 升级前端 `PluginView.tsx`、`PluginCenter.tsx` 与 `PluginCommunityPanel.tsx`，为管理员提供未配置态内联 URL 表单、工具栏「插件源设置」折叠面板（支持保存、清空并回退环境变量）与加载失败快捷修改入口，并同步更新社区注册表文档与单测/路由测试。
+
 - **后台「AI 配置」入口升级与内核 AI 助教角色全生命周期治理（Issue #510）**：
   - 将管理后台原「AI 模型提供商」页签、页内标题及全端引导提示统一更名为「**AI 配置**」（`AdminPanel.tsx`、`AiProvidersPanel.tsx` 等），原有个人私有与平台共享 AI Provider 隔离权限与数据完全保持不变；
   - 新增数据库迁移 `050_ai_persona_governance.sql`（同步更新 `schema-golden.json`、`platform-data-tables.md` 与 `migrations/README.md`），为 `ai_personas` 增加用途说明（`description_zh` / `description_en`）、启停状态（`enabled`）与绑定平台共享 AI 提供商（`preferred_provider_id`）；
@@ -36,6 +42,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - 扩展 `packages/bridge-sdk/src/bridge.js`、`PluginSandboxIframeView.tsx` 与 `lms-bridge.ts`，向插件与沙箱课件统一同步主题、深浅配色、Token、字体栈与外观参数，并附带完整示例包 `examples/themes/campus-atelier/` 及更新 `docs/architecture/theming-system.md`。
 
 ### Fixes
+
+- **社区插件安装误报「仅管理员可安装」（Issue #514）**：
+  - 修复 `src/components/plugin-center/sub-views/PluginCommunityPanel.tsx` 在 `handleInstall` 与 `uploadViaBrowser` 中将所有 `HTTP 403` 无差别映射为「仅管理员可安装社区插件，请联系管理员。」的问题；改为仅在 `403` 无业务错误码（角色鉴权失败）时展示权限提示，当服务端返回具体 `code`（如未开启 `OPENLEARN_COMMUNITY_INSTALL=1` 时的 `COMMUNITY_INSTALL_DISABLED` 或 `FORBIDDEN_DEFAULT_PASSWORD`）时直接透传 `body.error`，并将卡片错误提示由单行截断改为允许换行展示。
 
 - **AI Provider IP 端点校验一致性与诊断反馈（Issue #508）**：
   - 将 `packages/core/ai/utils/redirect-guard.ts` 收口为 AI Provider URL 唯一策略源（新增 `validateAiProviderUrl`、`formatAiProviderUrlError`、`buildOpenAIChatUrl`，同步拦截 IPv4 兼容 IPv6 如 `::169.254.169.254`）；在 `packages/core/ai/utils/fetch-with-retry.ts` 提取 `followAiProviderRedirects` 与 `fetchAiProviderResponse`，统一保留用户/管理员显式配置的公网、内网（`10.x` / `172.16-31.x` / `192.168.x`）及本机回环（`127.0.0.1` / `[::1]` / `localhost`）IP 访问能力，同时继续拦截 `link-local`、`0.0.0.0`、内嵌凭据及跨主机重定向跳转至内网/回环；

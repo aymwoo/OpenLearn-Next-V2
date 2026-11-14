@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { sanitizeHref } from '../../../../packages/core/security/url-safety.js';
 import {
   AlertTriangle,
@@ -11,6 +11,7 @@ import {
   Package,
   RefreshCw,
   Search,
+  Settings,
   Shield,
   Sparkles,
   Star,
@@ -65,12 +66,18 @@ interface CommunityRegistryResponse {
   skipped: number;
   error?: string;
   envVar?: string;
+  canConfigure?: boolean;
+  configSource?: 'database' | 'env' | 'none';
+  databaseUrl?: string | null;
+  hasEnvFallback?: boolean;
 }
 
 export interface PluginCommunityPanelProps {
   /** 本地已安装插件；仅使用 id 与 manifest 字段，便于与 PluginType 结构兼容。 */
   installedPlugins: ReadonlyArray<{ id: string; manifest: string }>;
   lang: string;
+  /** 是否有权修改社区插件源（管理员专属；未传时取服务端返回值，单元测试回落为 true）。 */
+  canConfigure?: boolean;
   /** 安装成功后回调，父组件可据此刷新已安装列表。 */
   onInstalled?: () => void;
   /** 测试注入点；默认使用全局 fetch。 */
@@ -87,6 +94,7 @@ interface InstallState {
 type SortKey = 'recommended' | 'downloads' | 'name';
 
 const REGISTRY_ENDPOINT = '/api/plugins/community';
+const CONFIG_ENDPOINT = '/api/plugins/community/config';
 const INSTALL_ENDPOINT = '/api/plugins/install-from-url';
 const ZIP_UPLOAD_ENDPOINT = '/api/plugins/upload-zip-raw';
 
@@ -163,9 +171,21 @@ function SkeletonCard() {
   );
 }
 
-export function PluginCommunityPanel({ installedPlugins, lang, onInstalled, fetcher }: PluginCommunityPanelProps) {
+export function PluginCommunityPanel({
+  installedPlugins,
+  lang,
+  canConfigure: canConfigureProp,
+  onInstalled,
+  fetcher,
+}: PluginCommunityPanelProps) {
   const zh = lang === 'zh';
   const doFetch = useMemo(() => fetcher ?? ((input: string, init?: RequestInit) => fetch(input, init)), [fetcher]);
+  const registryInputId = useId();
+  const registryHintId = useId();
+  const registryErrorId = useId();
+  const configPanelId = useId();
+  const configHeadingId = useId();
+  const registryInputRef = useRef<HTMLInputElement>(null);
 
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const [data, setData] = useState<CommunityRegistryResponse | null>(null);
@@ -179,6 +199,14 @@ export function PluginCommunityPanel({ installedPlugins, lang, onInstalled, fetc
   const [approvePublicRoutes, setApprovePublicRoutes] = useState(false);
   /** 本次会话内已成功安装的 id，用于无需等待刷新即可更新卡片状态。 */
   const [justInstalled, setJustInstalled] = useState<Record<string, true>>({});
+  const [configOpen, setConfigOpen] = useState(false);
+  const [registryUrlInput, setRegistryUrlInput] = useState('');
+  const [configSaving, setConfigSaving] = useState(false);
+  const [configError, setConfigError] = useState<string | null>(null);
+  const [configNotice, setConfigNotice] = useState<string | null>(null);
+  const [registryInputDirty, setRegistryInputDirty] = useState(false);
+
+  const canConfigure = canConfigureProp ?? data?.canConfigure ?? true;
 
   const loadRegistry = useCallback(
     async (forceRefresh: boolean) => {
@@ -192,12 +220,14 @@ export function PluginCommunityPanel({ installedPlugins, lang, onInstalled, fetc
         }
         setData(body);
         if (body.error) {
+          setConfigNotice(null);
           setError(body.error);
           setStatus('error');
         } else {
           setStatus('ready');
         }
       } catch (e) {
+        setConfigNotice(null);
         setError(e instanceof Error ? e.message : String(e));
         setStatus('error');
       }
@@ -302,8 +332,12 @@ export function PluginCommunityPanel({ installedPlugins, lang, onInstalled, fetc
       const uploadBody = (await uploadResponse.json().catch(() => null)) as {
         success?: boolean;
         error?: string;
+        code?: string;
       } | null;
       if (!uploadResponse.ok || !uploadBody?.success) {
+        if (uploadResponse.status === 403 && !uploadBody?.code) {
+          throw new Error(zh ? '仅管理员可安装社区插件，请联系管理员。' : 'Only administrators can install plugins.');
+        }
         throw new Error(uploadBody?.error || (zh ? '浏览器直传失败' : 'Browser upload failed'));
       }
     },
@@ -333,6 +367,7 @@ export function PluginCommunityPanel({ installedPlugins, lang, onInstalled, fetc
         const body = (await response.json().catch(() => null)) as {
           success?: boolean;
           error?: string;
+          code?: string;
           fallbackToClient?: boolean;
           updated?: boolean;
           newVersion?: string;
@@ -341,7 +376,7 @@ export function PluginCommunityPanel({ installedPlugins, lang, onInstalled, fetc
         if (!response.ok || !body?.success) {
           if (body?.fallbackToClient) {
             await uploadViaBrowser(plugin, approvePublic);
-          } else if (response.status === 403) {
+          } else if (response.status === 403 && !body?.code) {
             throw new Error(zh ? '仅管理员可安装社区插件，请联系管理员。' : 'Only administrators can install plugins.');
           } else {
             throw new Error(body?.error || (zh ? '安装失败' : 'Installation failed'));
@@ -364,6 +399,218 @@ export function PluginCommunityPanel({ installedPlugins, lang, onInstalled, fetc
     [doFetch, onInstalled, setInstallState, uploadViaBrowser, zh],
   );
 
+  const validateRegistryUrl = useCallback(
+    (raw: string, allowEmpty: boolean): string | null => {
+      const trimmed = raw.trim();
+      if (!trimmed) {
+        return allowEmpty
+          ? null
+          : zh
+            ? '请输入社区插件注册表 JSON 地址'
+            : 'Please enter the community registry JSON URL';
+      }
+      try {
+        const parsed = new URL(trimmed);
+        if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+          return zh ? '仅支持 http:// 或 https:// 开头的公网地址' : 'Only http:// or https:// URLs are supported';
+        }
+      } catch {
+        return zh
+          ? '请输入有效的 URL 地址（例如 https://example.com/community-plugins.json）'
+          : 'Please enter a valid URL (e.g. https://example.com/community-plugins.json)';
+      }
+      return null;
+    },
+    [zh],
+  );
+
+  const openConfigPanel = useCallback(() => {
+    setRegistryUrlInput(data?.databaseUrl ?? data?.source ?? '');
+    setConfigError(null);
+    setRegistryInputDirty(false);
+    setConfigOpen(true);
+  }, [data]);
+
+  const submitRegistryConfig = useCallback(
+    async (rawUrl: string | null, allowEmpty: boolean) => {
+      const normalized = rawUrl === null ? '' : rawUrl.trim();
+      const validationError = validateRegistryUrl(normalized, allowEmpty);
+      if (validationError) {
+        setConfigError(validationError);
+        registryInputRef.current?.focus();
+        return;
+      }
+
+      setConfigSaving(true);
+      setConfigError(null);
+      setConfigNotice(null);
+      try {
+        const res = await doFetch(CONFIG_ENDPOINT, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ registryUrl: normalized || null }),
+        });
+        const body = (await res.json().catch(() => null)) as {
+          success?: boolean;
+          error?: string;
+        } | null;
+
+        if (!res.ok || !body?.success) {
+          const msg =
+            res.status === 403
+              ? zh
+                ? '仅管理员可修改社区插件源设置'
+                : 'Only administrators can configure the community registry'
+              : body?.error || (zh ? '保存社区插件源失败' : 'Failed to save community registry URL');
+          setConfigError(msg);
+          registryInputRef.current?.focus();
+          return;
+        }
+
+        setConfigOpen(false);
+        setRegistryInputDirty(false);
+        setRegistryUrlInput(normalized);
+        setConfigNotice(
+          normalized
+            ? zh
+              ? '社区插件源已保存，正在加载注册表…'
+              : 'Community registry URL saved, loading…'
+            : zh
+              ? '已清除界面自定义插件源'
+              : 'Cleared custom community registry URL',
+        );
+        await loadRegistry(true);
+      } catch (e) {
+        setConfigError(e instanceof Error ? e.message : String(e));
+      } finally {
+        setConfigSaving(false);
+      }
+    },
+    [doFetch, loadRegistry, validateRegistryUrl, zh],
+  );
+
+  const renderRegistryConfigForm = (options: { isUnconfiguredCard?: boolean } = {}) => {
+    const isUnconfiguredCard = Boolean(options.isUnconfiguredCard);
+    const hasDatabaseOverride = Boolean(data?.databaseUrl) || data?.configSource === 'database';
+    const allowEmpty = !isUnconfiguredCard && hasDatabaseOverride;
+    const describedBy = configError ? `${registryHintId} ${registryErrorId}` : registryHintId;
+
+    return (
+      <form
+        aria-labelledby={isUnconfiguredCard ? undefined : configHeadingId}
+        noValidate
+        onSubmit={(e) => {
+          e.preventDefault();
+          void submitRegistryConfig(registryUrlInput, allowEmpty);
+        }}
+        className={isUnconfiguredCard ? 'mt-6 text-left' : 'space-y-3'}
+      >
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor={registryInputId} className="text-xs font-semibold text-gray-700">
+            {zh ? '社区插件注册表 JSON 地址' : 'Community Registry JSON URL'}
+          </label>
+          <p id={registryHintId} className="text-xs text-gray-500 leading-relaxed">
+            {zh
+              ? `支持远端 JSON 注册表地址（仅允许公网 HTTP(S)，回环与内网地址会被安全拦截）。${
+                  !isUnconfiguredCard && hasDatabaseOverride
+                    ? data?.hasEnvFallback
+                      ? `留空保存或点击清除可恢复环境变量 ${data?.envVar || 'PLUGIN_COMMUNITY_REGISTRY_URL'} 默认配置。`
+                      : '留空保存或点击清除可移除当前配置。'
+                    : ''
+                }`
+              : `Enter a remote JSON registry URL (public HTTP(S) only; loopback and private networks are blocked).${
+                  !isUnconfiguredCard && hasDatabaseOverride
+                    ? data?.hasEnvFallback
+                      ? ` Clear to fall back to ${data?.envVar || 'PLUGIN_COMMUNITY_REGISTRY_URL'}.`
+                      : ' Clear to remove the current URL.'
+                    : ''
+                }`}
+          </p>
+          <input
+            ref={registryInputRef}
+            id={registryInputId}
+            name="registryUrl"
+            type="url"
+            value={registryUrlInput}
+            onChange={(e) => {
+              setRegistryUrlInput(e.target.value);
+              setRegistryInputDirty(true);
+              if (configError) setConfigError(null);
+            }}
+            onBlur={() => {
+              if (registryInputDirty) {
+                setConfigError(validateRegistryUrl(registryUrlInput, allowEmpty));
+              }
+            }}
+            placeholder="https://example.com/community-plugins.json"
+            autoComplete="url"
+            autoCorrect="off"
+            autoCapitalize="none"
+            spellCheck={false}
+            enterKeyHint="done"
+            aria-invalid={Boolean(configError)}
+            aria-describedby={describedBy}
+            className={`w-full px-3 py-2 text-sm bg-white border rounded-lg focus:outline-none focus:ring-2 ${
+              configError
+                ? 'border-rose-400 focus:ring-rose-500/30 focus:border-rose-500'
+                : 'border-gray-200 focus:ring-indigo-500/30 focus:border-indigo-400'
+            }`}
+          />
+          {configError && (
+            <p id={registryErrorId} role="alert" className="text-xs text-rose-600 flex items-center gap-1.5 mt-0.5">
+              <AlertTriangle size={12} className="shrink-0" />
+              <span>{configError}</span>
+            </p>
+          )}
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2 pt-1">
+          <button
+            type="submit"
+            disabled={configSaving}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-60 transition-colors cursor-pointer"
+          >
+            {configSaving && <Loader2 size={13} className="animate-spin" />}
+            <span>
+              {isUnconfiguredCard ? (zh ? '保存并加载' : 'Save & Load') : zh ? '保存并刷新' : 'Save & Refresh'}
+            </span>
+          </button>
+
+          {!isUnconfiguredCard && hasDatabaseOverride && (
+            <button
+              type="button"
+              disabled={configSaving}
+              onClick={() => void submitRegistryConfig(null, true)}
+              className="px-3 py-2 text-xs font-semibold rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 hover:text-gray-900 disabled:opacity-60 transition-colors cursor-pointer"
+            >
+              {data?.hasEnvFallback
+                ? zh
+                  ? '恢复环境变量默认'
+                  : 'Reset to env default'
+                : zh
+                  ? '清除配置'
+                  : 'Clear configuration'}
+            </button>
+          )}
+
+          {!isUnconfiguredCard && (
+            <button
+              type="button"
+              disabled={configSaving}
+              onClick={() => {
+                setConfigOpen(false);
+                setConfigError(null);
+              }}
+              className="px-3 py-2 text-xs font-medium rounded-lg text-gray-500 hover:text-gray-800 hover:bg-gray-100 transition-colors cursor-pointer"
+            >
+              {zh ? '收起' : 'Close'}
+            </button>
+          )}
+        </div>
+      </form>
+    );
+  };
+
   // ── 未配置 ────────────────────────────────────────────────────────────
   if (status === 'ready' && data && !data.configured) {
     return (
@@ -374,18 +621,30 @@ export function PluginCommunityPanel({ installedPlugins, lang, onInstalled, fetc
             {zh ? '尚未配置社区插件源' : 'No community registry configured'}
           </h3>
           <p className="text-sm text-gray-500 mt-2 leading-relaxed">
-            {zh
-              ? '社区市场会从一个远端 JSON 注册表读取可安装插件。请在服务端环境变量中配置地址后重启服务：'
-              : 'The community market reads an installable-plugin list from a remote JSON registry. Set the environment variable on the server and restart:'}
+            {canConfigure
+              ? zh
+                ? '社区市场会从一个远端 JSON 注册表读取可安装插件。您可以直接在下方配置注册表地址，或在服务端环境变量中设置：'
+                : 'The community market reads an installable-plugin list from a remote JSON registry. Configure the registry URL below or set the server environment variable:'
+              : zh
+                ? '社区市场会从一个远端 JSON 注册表读取可安装插件。请联系管理员在页面中配置地址，或在服务端环境变量中配置后重启服务：'
+                : 'The community market reads an installable-plugin list from a remote JSON registry. Ask an administrator to configure it or set the environment variable on the server:'}
           </p>
-          <code className="inline-block mt-4 px-3 py-1.5 rounded-lg bg-gray-900 text-gray-50 text-xs font-mono">
-            {data.envVar || 'PLUGIN_COMMUNITY_REGISTRY_URL'}={'<https://example.com/community-plugins.json>'}
-          </code>
-          <p className="text-xs text-gray-400 mt-4">
-            {zh
-              ? '地址仅允许公网 HTTP(S)，回环与内网地址会被安全拦截。'
-              : 'Only public HTTP(S) endpoints are allowed; loopback and private addresses are blocked.'}
-          </p>
+          {canConfigure && renderRegistryConfigForm({ isUnconfiguredCard: true })}
+          <div className="mt-5 pt-4 border-t border-gray-100">
+            <p className="text-xs text-gray-400 mb-2">
+              {zh ? '也可以通过服务端环境变量配置：' : 'Or configure via server environment variable:'}
+            </p>
+            <code className="inline-block px-3 py-1.5 rounded-lg bg-gray-900 text-gray-50 text-xs font-mono">
+              {data.envVar || 'PLUGIN_COMMUNITY_REGISTRY_URL'}={'<https://example.com/community-plugins.json>'}
+            </code>
+          </div>
+          {!canConfigure && (
+            <p className="text-xs text-gray-400 mt-4">
+              {zh
+                ? '地址仅允许公网 HTTP(S)，回环与内网地址会被安全拦截。'
+                : 'Only public HTTP(S) endpoints are allowed; loopback and private addresses are blocked.'}
+            </p>
+          )}
         </div>
       </div>
     );
@@ -447,7 +706,81 @@ export function PluginCommunityPanel({ installedPlugins, lang, onInstalled, fetc
           {status === 'loading' ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
           <span>{zh ? '刷新' : 'Refresh'}</span>
         </button>
+
+        {canConfigure && (
+          <button
+            type="button"
+            onClick={() => {
+              if (configOpen) {
+                setConfigOpen(false);
+                setConfigError(null);
+              } else {
+                openConfigPanel();
+              }
+            }}
+            aria-expanded={configOpen}
+            aria-controls={configPanelId}
+            className={`flex items-center gap-1.5 text-xs font-semibold border rounded-lg px-3 py-2 shadow-sm transition-colors cursor-pointer ${
+              configOpen
+                ? 'border-indigo-300 bg-indigo-50 text-indigo-700'
+                : 'border-gray-200 bg-white text-gray-600 hover:text-gray-900 hover:border-gray-300'
+            }`}
+          >
+            <Settings size={14} />
+            <span>{zh ? '插件源设置' : 'Registry Source'}</span>
+          </button>
+        )}
       </div>
+
+      {configNotice && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="mb-4 px-4 py-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-700 flex items-center justify-between gap-2"
+        >
+          <span className="inline-flex items-center gap-1.5">
+            <CheckCircle2 size={14} className="shrink-0" />
+            <span>{configNotice}</span>
+          </span>
+          <button
+            type="button"
+            onClick={() => setConfigNotice(null)}
+            aria-label={zh ? '关闭提示' : 'Dismiss notice'}
+            className="text-emerald-600 hover:text-emerald-900 cursor-pointer"
+          >
+            <X size={13} />
+          </button>
+        </div>
+      )}
+
+      {canConfigure && configOpen && (
+        <section
+          id={configPanelId}
+          data-testid="community-registry-config-panel"
+          className="mb-4 bg-white border border-indigo-200 rounded-xl p-4 shadow-sm"
+        >
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+            <h3 id={configHeadingId} className="text-sm font-bold text-gray-900 flex items-center gap-1.5">
+              <Settings size={14} className="text-indigo-600" />
+              <span>{zh ? '社区插件源设置' : 'Community Registry Settings'}</span>
+            </h3>
+            <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 font-medium">
+              {data?.configSource === 'database'
+                ? zh
+                  ? '当前来源：界面配置（覆盖环境变量）'
+                  : 'Source: UI setting (overrides env)'
+                : data?.configSource === 'env'
+                  ? zh
+                    ? `当前来源：环境变量 ${data.envVar || 'PLUGIN_COMMUNITY_REGISTRY_URL'}`
+                    : `Source: env ${data.envVar || 'PLUGIN_COMMUNITY_REGISTRY_URL'}`
+                  : zh
+                    ? '当前状态：未配置'
+                    : 'Status: Not configured'}
+            </span>
+          </div>
+          {renderRegistryConfigForm()}
+        </section>
+      )}
 
       {/* 来源与统计 */}
       {data?.source && status === 'ready' && (
@@ -522,13 +855,24 @@ export function PluginCommunityPanel({ installedPlugins, lang, onInstalled, fetc
               {zh ? '社区插件市场加载失败' : 'Failed to load the community market'}
             </p>
             <p className="text-xs text-amber-700 mt-1 break-all">{error}</p>
-            <button
-              type="button"
-              onClick={() => void loadRegistry(true)}
-              className="mt-3 px-3 py-1.5 text-xs font-semibold rounded-lg bg-amber-600 text-white hover:bg-amber-700 transition-colors cursor-pointer"
-            >
-              {zh ? '重试' : 'Retry'}
-            </button>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => void loadRegistry(true)}
+                className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-amber-600 text-white hover:bg-amber-700 transition-colors cursor-pointer"
+              >
+                {zh ? '重试' : 'Retry'}
+              </button>
+              {canConfigure && !configOpen && (
+                <button
+                  type="button"
+                  onClick={openConfigPanel}
+                  className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-amber-300 bg-white text-amber-800 hover:bg-amber-100 transition-colors cursor-pointer"
+                >
+                  {zh ? '修改插件源' : 'Edit registry source'}
+                </button>
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -714,7 +1058,7 @@ export function PluginCommunityPanel({ installedPlugins, lang, onInstalled, fetc
                   </div>
 
                   {/* 操作区 */}
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <button
                       type="button"
                       onClick={() => {
@@ -722,7 +1066,7 @@ export function PluginCommunityPanel({ installedPlugins, lang, onInstalled, fetc
                         setPendingInstall(plugin);
                       }}
                       disabled={state?.phase === 'installing' || (installed && !plugin.hasUpdate)}
-                      className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all flex items-center gap-1.5 disabled:cursor-default ${
+                      className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all flex items-center gap-1.5 shrink-0 disabled:cursor-default ${
                         installed && !plugin.hasUpdate
                           ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                           : 'bg-gradient-to-r from-indigo-600 to-violet-600 text-white hover:from-indigo-700 hover:to-violet-700 shadow-sm disabled:opacity-60 cursor-pointer'
@@ -739,12 +1083,12 @@ export function PluginCommunityPanel({ installedPlugins, lang, onInstalled, fetc
                     </button>
                     {state && (
                       <span
-                        className={`text-xs truncate ${
+                        className={`text-xs ${
                           state.phase === 'error'
-                            ? 'text-rose-600'
+                            ? 'text-rose-600 break-words flex-1 min-w-[12rem]'
                             : state.phase === 'success'
-                              ? 'text-emerald-600'
-                              : 'text-gray-400'
+                              ? 'text-emerald-600 truncate'
+                              : 'text-gray-400 truncate'
                         }`}
                         title={state.message}
                         role={state.phase === 'error' ? 'alert' : undefined}

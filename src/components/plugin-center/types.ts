@@ -54,6 +54,7 @@ export type PluginStoreTab = 'store' | 'widgets' | 'dev' | 'logs' | 'community' 
 export interface PluginCenterProps {
   plugins: PluginType[];
   lang: Language;
+  isAdmin?: boolean;
   storeTab: PluginStoreTab;
   setStoreTab: (tab: PluginStoreTab) => void;
   pluginCode: string;
