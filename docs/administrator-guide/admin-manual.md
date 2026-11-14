@@ -117,7 +117,7 @@
 
 ---
 
-## 3. AI 提供商配置
+## 3. AI 配置（模型提供商与助教角色）
 
 ### 3.1 端点（`server/routes/plugins.ts`）
 
@@ -147,6 +147,26 @@
 ### 3.3 AI 功能可用性
 
 平台**不依赖任何静态 API Key 环境变量**。未配置任何 provider 时，AI 相关功能（`/api/agent/chat`、成绩自然语言分析等）不可用，其余功能不受影响。
+
+### 3.4 内核 AI 助教角色配置与管理
+
+后台「**AI 配置**」页签下半部分为内核 AI 助教角色（Persona）管理入口，配置同时持久化于 SQLite `ai_personas` 表并即时同步至内核 `ai-persona-registry`（`server/ai-persona-registry.ts`）：
+
+| 字段                              | 说明                                                       | 作用域与限制                                                                        |
+| --------------------------------- | ---------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `id`                              | 角色唯一标识（`2-64` 位 `[a-zA-Z0-9._:-]`）                | 创建后不可变更；插件注册与 `builtin` / `admin` 各自隔离                             |
+| `nameZh` / `nameEn`               | 中英文展示名称                                             | 必填；展示于管理列表与侧栏角色选择器                                                |
+| `descriptionZh` / `descriptionEn` | 角色用途说明                                               | 可选（未填时列表自动展示系统指令摘要）                                              |
+| `mode` / `basePolicy`             | `overlay`（叠加）或 `replace`（替换） + `inherit` / `drop` | 控制是否继承宿主内置安全与教学基础指令                                              |
+| `visibility`                      | 可见用户角色集合（空表示全角色可见）                       | 在 `GET /api/agent/personas` 与 `POST /api/agent/chat` 双端强制校验                 |
+| `defaultForRole`                  | 设为哪些用户角色的默认初始助教                             | 当用户未主动切换侧栏角色时自动选用                                                  |
+| `preferredProviderId`             | 可选绑定的模型提供商                                       | **仅允许绑定 `is_shared = 1` 的平台共享提供商**；禁止将个人私有配置设为角色公共绑定 |
+| `toolPolicy` / `maxTurns`         | 工具白名单/黑名单及最大推理轮次（`1..20`）                 | 只可收窄动作范围，不可突破学生权限白名单                                            |
+| `enabled`                         | 启停状态（默认启用）                                       | 系统兜底角色 `plain_assistant` 不可停用                                             |
+
+- **生效时机**：管理员新建、编辑、启停或删除角色保存后**立即生效**——新发起的 `/api/agent/chat` 请求与新打开/刷新的 AI 侧栏立即按最新配置运行。
+- **引用保护与安全回退**：若角色当前被设为某个身份的 `defaultForRole`，停用或删除前接口返回 `409 PERSONA_IN_USE` 并由界面弹出确认框列明受影响身份；确认后（`force=true`）会自动清除默认绑定并回退至 `plain_assistant`；若前端侧栏缓存的旧角色恰好被停用或删除，`POST /api/agent/chat` 会自动回退到当前角色可用默认角色并在响应返回 `personaFallback`，保证内核助手始终可用。
+- **关联端点**（`server/routes/os.ts`）：`GET /api/agent/personas`（登录可用，管理员加 `?scope=all` 查看含已停用全量）、`GET /api/agent/personas/:id/references`（管理员）、`POST /api/agent/personas`（管理员）、`PATCH /api/agent/personas/:id`（管理员）、`DELETE /api/agent/personas/:id`（管理员）。
 
 ---
 
@@ -357,7 +377,7 @@ node scripts/backfill-class-owners.mjs --assign teacher
 | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | 教师账号调管理端点返回 403      | 端点是 `requireAuth('administrator')`，不含 teacher。改用管理员账号。                                                                                                          |
 | 登录后立刻被弹回改密页          | 种子账号带 `mustChangePassword`。走 `POST /api/auth/change-password`。                                                                                                         |
-| AI 功能报「API Key 解密失败」   | `ENCRYPTION_KEY` 与加密时不一致，或被 PM2 env 块置空。恢复原值，或在 AI 提供商管理逐个重存 Key。                                                                               |
+| AI 功能报「API Key 解密失败」   | `ENCRYPTION_KEY` 与加密时不一致，或被 PM2 env 块置空。恢复原值，或在「AI 配置」逐个重存 Key。                                                                                  |
 | 登录被限流 429                  | `loginLimiter` 5 次/分钟/IP。等待或从 nginx 层确认不是反向代理把大量用户汇聚成同一 IP。                                                                                        |
 | 写操作 403 `CORS not allowed`   | `ALLOWED_ORIGINS` 未包含实际访问来源。注意未配置时对无 `Origin` 头与同源请求是放行的。                                                                                         |
 | 写操作 403 且响应来自 csrfGuard | `Sec-Fetch-Site: cross-site` 且路径不在豁免清单。检查是否有第三方页面在跨站调用本站写接口。                                                                                    |

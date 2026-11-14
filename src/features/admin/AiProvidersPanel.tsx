@@ -218,6 +218,20 @@ export function AiProvidersPanel({
   return (
     <>
       <div className="flex-1 overflow-y-auto p-6 space-y-6 animate-fade-in text-gray-800">
+        {currentUserRole === 'administrator' && (
+          <div className="bg-indigo-50/70 border border-indigo-200/70 rounded-xl px-5 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div>
+              <h2 className="font-extrabold text-gray-900 text-base sm:text-lg tracking-tight">
+                {lang === 'zh' ? 'AI 配置' : 'AI Configuration'}
+              </h2>
+              <p className="text-xs text-gray-600 mt-0.5">
+                {lang === 'zh'
+                  ? '统一管理 AI 模型提供商与内核 AI 助教角色配置；个人私有提供商仍仅限所属账号可见与使用。'
+                  : 'Unified management for OpenAI-compatible AI model providers and kernel AI assistant personas. Private providers remain strictly user-scoped.'}
+              </p>
+            </div>
+          </div>
+        )}
         {/* AI Provider List Card */}
         <div className="bg-white border border-gray-200 rounded-xl shadow-3xs overflow-hidden">
           <div className="p-4 sm:p-5 border-b border-gray-100 flex items-center justify-between bg-gray-50/60">
@@ -402,7 +416,7 @@ export function AiProvidersPanel({
             )}
           </div>
         </div>
-        {currentUserRole === 'administrator' && <AiPersonasSection lang={lang} />}
+        {currentUserRole === 'administrator' && <AiPersonasSection lang={lang} aiProviders={aiProviders} />}
       </div>
 
       {isAIProviderModalOpen && (

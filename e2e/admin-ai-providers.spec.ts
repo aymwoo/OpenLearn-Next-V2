@@ -79,9 +79,9 @@ test.describe('管理后台：AI 模型提供商治理 E2E 测试', () => {
       await expect(adminNavBtn).toBeVisible({ timeout: 15_000 });
       await adminNavBtn.click();
 
-      // 3. 验证管理后台加载并切换至「AI 模型提供商」Tab
+      // 3. 验证管理后台加载并切换至「AI 配置」Tab
       await expect(page.getByText('系统管理与教职后台')).toBeVisible({ timeout: 15_000 });
-      const aiProvidersTabBtn = page.getByRole('button', { name: /AI 模型提供商|AI Providers/ }).first();
+      const aiProvidersTabBtn = page.getByRole('button', { name: /AI 配置|AI Config/ }).first();
       await expect(aiProvidersTabBtn).toBeVisible({ timeout: 10_000 });
       await aiProvidersTabBtn.click();
 

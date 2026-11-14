@@ -102,8 +102,8 @@ export const TimetableOcrView: React.FC<TimetableOcrViewProps> = ({
               <AlertTriangle size={15} className="shrink-0 text-amber-600 mt-0.5" />
               <div className="flex-1 leading-relaxed">
                 {lang === 'zh'
-                  ? '未检测到可用的 AI 提供商。课表识别需借助支持视觉（Vision）的大模型（如 GPT-4o 等），请先前往「系统管理 -> AI 提供商管理」添加模型服务。'
-                  : 'No AI providers configured. Timetable recognition requires a vision-capable AI model. Please configure one in System Management.'}
+                  ? '未检测到可用的 AI 提供商。课表识别需借助支持视觉（Vision）的大模型（如 GPT-4o 等），请先前往「系统管理 -> AI 配置」添加模型服务。'
+                  : 'No AI providers configured. Timetable recognition requires a vision-capable AI model. Please configure one in System Management -> AI Config.'}
               </div>
             </div>
           )}

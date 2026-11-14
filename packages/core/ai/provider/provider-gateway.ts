@@ -18,7 +18,7 @@ export class AIProviderGateway {
 
   public async generateText(prompt: string, options?: AIGenerateOptions, config?: AIProviderConfig): Promise<string> {
     if (!config || !config.apiKey || !config.apiKey.trim()) {
-      throw new Error('未检测到可用的 AI 提供商。请前往「系统管理 -> AI 提供商管理」添加并配置大模型服务。');
+      throw new Error('未检测到可用的 AI 提供商。请前往「系统管理 -> AI 配置」添加并配置大模型服务。');
     }
 
     const startTime = Date.now();

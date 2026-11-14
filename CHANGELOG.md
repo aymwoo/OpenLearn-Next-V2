@@ -12,6 +12,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Features
 
+- **后台「AI 配置」入口升级与内核 AI 助教角色全生命周期治理（Issue #510）**：
+  - 将管理后台原「AI 模型提供商」页签、页内标题及全端引导提示统一更名为「**AI 配置**」（`AdminPanel.tsx`、`AiProvidersPanel.tsx` 等），原有个人私有与平台共享 AI Provider 隔离权限与数据完全保持不变；
+  - 新增数据库迁移 `050_ai_persona_governance.sql`（同步更新 `schema-golden.json`、`platform-data-tables.md` 与 `migrations/README.md`），为 `ai_personas` 增加用途说明（`description_zh` / `description_en`）、启停状态（`enabled`）与绑定平台共享 AI 提供商（`preferred_provider_id`）；
+  - 强化 `server/ai-persona-registry.ts` 与 `server/routes/os.ts` / `server/routes/plugins.ts`：强制角色仅可绑定平台共享（`is_shared = 1`）提供商（禁止泄露个人私有配置）、提供商删除或取消共享时自动清理悬空绑定、`plain_assistant` 兜底角色受停用保护、停用/删除仍设作默认的角色需二次确认（`409 PERSONA_IN_USE` + `force=true` 自动清除默认绑定并回退）；`POST /api/agent/chat` 对已停用或已删除角色不再报错中断，而是自动回退至可用默认角色并返回 `personaFallback` 供侧栏无缝自愈；
+  - 升级前端 `AiPersonasSection.tsx`、`RightSidebar.tsx`、`useAgentChat.ts` 与 `docs/administrator-guide/admin-manual.md`，补充角色用途展示、启停操作、引用二次确认弹窗、字段/作用域/生效时机说明及单元与集成回归测试。
 - **内核 AI 助手 Persona 第三方插件扩展、可替换模板、`ai:persona` 门禁与持久化治理（Gitee Issue `IKVA8R`）**：
   - 扩展 `AIPersonaDefinition`（[`packages/core/di/interfaces.ts`](packages/core/di/interfaces.ts) 与 [`packages/plugin-sdk/openlearn.d.ts`](packages/plugin-sdk/openlearn.d.ts)）：支持 `mode?: 'overlay' | 'replace'`、`basePolicy?: 'inherit' | 'drop'`、`visibility?`、`defaultForRole?`、`toolPolicy?: { allow?: string[]; deny?: string[] }` 与 `maxTurns?: number`（服务端裁剪 `1..20`、默认 `5`）；
   - 重构 `buildAgentSystemInstruction`、`resolveToolsForPersona` 与 `runOpenAIAgentChat` 工具循环（`server/ai-agent.ts`）：按 `mode`/`basePolicy` 显式构造系统指令，学生角色跳过插件切片（`pluginSlices`），按 `toolPolicy` 通配模式 + SEC-01 `isActionAllowedForRole` 角色白名单双重裁剪可用工具并在 `functionCall` 执行前做 `allowedToolNames` 运行期二次拦截；

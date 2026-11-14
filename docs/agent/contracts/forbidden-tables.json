@@ -45,7 +45,8 @@
     "file_blobs",
     "file_assets",
     "file_aliases",
-    "ai_personas"
+    "ai_personas",
+    "ai_persona_governance"
   ],
-  "total": 44
+  "total": 45
 }

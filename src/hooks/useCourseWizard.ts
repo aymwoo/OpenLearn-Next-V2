@@ -124,8 +124,8 @@ export function useCourseWizard(options: UseCourseWizardOptions) {
         lang === 'zh' ? 'AI 大纲生成失败' : 'AI Outline Generation Failed',
         err?.message ||
           (lang === 'zh'
-            ? '请确认「系统管理 -> AI 提供商管理」中已配置可用的模型服务。'
-            : 'Please configure a working AI Provider in System Management.'),
+            ? '请确认「系统管理 -> AI 配置」中已配置可用的模型服务。'
+            : 'Please configure a working AI Provider in System Management -> AI Config.'),
         'error',
       );
     } finally {

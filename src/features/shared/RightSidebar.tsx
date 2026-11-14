@@ -82,6 +82,11 @@ export function RightSidebar(props: RightSidebarProps = {}) {
       id: string;
       nameZh: string;
       nameEn: string;
+      descriptionZh?: string;
+      descriptionEn?: string;
+      preferredProviderId?: string;
+      preferredProviderName?: string;
+      preferredProviderModel?: string;
       icon?: string;
       source: string;
       defaultForRole?: string[];
@@ -106,6 +111,11 @@ export function RightSidebar(props: RightSidebarProps = {}) {
           id: string;
           nameZh: string;
           nameEn: string;
+          descriptionZh?: string;
+          descriptionEn?: string;
+          preferredProviderId?: string;
+          preferredProviderName?: string;
+          preferredProviderModel?: string;
           icon?: string;
           source: string;
           defaultForRole?: string[];
@@ -258,32 +268,64 @@ export function RightSidebar(props: RightSidebarProps = {}) {
                 </div>
               </div>
 
-              {/* P2: ai.agent.persona —— 角色下拉选择器（personaList 由 /api/agent/personas 按当前角色过滤返回） */}
-              {setPersonaId && personaList.length > 0 && (
-                <div className="mx-4 mb-3">
-                  <label htmlFor="right-sidebar-persona-select" className="sr-only">
-                    {lang === 'zh' ? '选择 AI 助教角色' : 'Select AI Assistant Persona'}
-                  </label>
-                  <select
-                    id="right-sidebar-persona-select"
-                    name="personaId"
-                    value={personaId || ''}
-                    onChange={(e) => setPersonaId(e.target.value)}
-                    className="w-full appearance-none rounded-xl border border-gray-200 bg-gradient-to-b from-white to-gray-50 px-3 py-2 text-xs font-medium text-gray-700 shadow-xs outline-none transition-colors focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
-                  >
-                    {personaList.some((p) => p.id === 'plain_assistant') && (
-                      <option value="">{lang === 'zh' ? '🤖 助教角色：默认' : '🤖 Persona: Default'}</option>
-                    )}
-                    {personaList
-                      .filter((p) => p.id !== 'plain_assistant')
-                      .map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.icon || '🎯'} {lang === 'zh' ? p.nameZh : p.nameEn}
-                        </option>
-                      ))}
-                  </select>
-                </div>
-              )}
+              {/* P2: ai.agent.persona —— 角色下拉选择器（personaList 由 /api/agent/personas 按当前角色与启用态过滤返回） */}
+              {setPersonaId &&
+                personaList.length > 0 &&
+                (() => {
+                  const activePersona =
+                    personaList.find((p) => p.id === (personaId || 'plain_assistant')) ??
+                    personaList.find((p) => p.id === personaId);
+                  const activeDesc = activePersona
+                    ? (lang === 'zh' ? activePersona.descriptionZh : activePersona.descriptionEn) || ''
+                    : '';
+                  return (
+                    <div className="mx-4 mb-3">
+                      <label htmlFor="right-sidebar-persona-select" className="sr-only">
+                        {lang === 'zh' ? '选择 AI 助教角色' : 'Select AI Assistant Persona'}
+                      </label>
+                      <select
+                        id="right-sidebar-persona-select"
+                        name="personaId"
+                        value={personaId || ''}
+                        onChange={(e) => {
+                          const nextPersonaId = e.target.value;
+                          setPersonaId(nextPersonaId);
+                          const chosen = personaList.find((p) => p.id === (nextPersonaId || 'plain_assistant'));
+                          if (
+                            chosen?.preferredProviderId &&
+                            aiProviders.some((prov: { id?: string }) => prov.id === chosen.preferredProviderId)
+                          ) {
+                            setAgentProviderId(chosen.preferredProviderId);
+                          }
+                        }}
+                        className="w-full appearance-none rounded-xl border border-gray-200 bg-gradient-to-b from-white to-gray-50 px-3 py-2 text-xs font-medium text-gray-700 shadow-xs outline-none transition-colors focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
+                      >
+                        {personaList.some((p) => p.id === 'plain_assistant') && (
+                          <option value="">{lang === 'zh' ? '🤖 助教角色：默认' : '🤖 Persona: Default'}</option>
+                        )}
+                        {personaList
+                          .filter((p) => p.id !== 'plain_assistant')
+                          .map((p) => (
+                            <option key={p.id} value={p.id}>
+                              {p.icon || '🎯'} {lang === 'zh' ? p.nameZh : p.nameEn}
+                            </option>
+                          ))}
+                      </select>
+                      {(activeDesc || activePersona?.preferredProviderName) && (
+                        <p className="mt-1 px-1 text-[11px] leading-snug text-gray-500">
+                          {activeDesc}
+                          {activePersona?.preferredProviderName && (
+                            <span className="ml-1 inline-block text-indigo-600 font-medium">
+                              {lang === 'zh'
+                                ? `（推荐模型：${activePersona.preferredProviderName}）`
+                                : `(Recommended model: ${activePersona.preferredProviderName})`}
+                            </span>
+                          )}
+                        </p>
+                      )}
+                    </div>
+                  );
+                })()}
 
               {aiProviders.length === 0 && (
                 <div className="mx-4 mt-3 p-3 bg-amber-50 border border-amber-200/80 rounded-xl text-xs text-amber-900 flex items-start gap-2 shadow-xs shrink-0">
@@ -294,8 +336,8 @@ export function RightSidebar(props: RightSidebarProps = {}) {
                     </span>
                     <p className="mt-0.5 text-amber-700">
                       {lang === 'zh'
-                        ? '请前往「系统管理 -> AI 提供商管理」添加大模型服务（如 DeepSeek、Qwen、OpenAI 等）。'
-                        : 'Please configure an AI provider in "System Management -> AI Provider Management" to use the AI assistant.'}
+                        ? '请前往「系统管理 -> AI 配置」添加大模型服务（如 DeepSeek、Qwen、OpenAI 等）。'
+                        : 'Please configure an AI provider in "System Management -> AI Config" to use the AI assistant.'}
                     </p>
                   </div>
                 </div>

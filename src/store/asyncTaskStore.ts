@@ -218,7 +218,7 @@ export const asyncTaskStore = createStore<AsyncTaskState>((set, get) => ({
         message:
           err?.message ||
           (lang === 'zh'
-            ? '请检查图片是否清晰可见，或前往「系统管理 -> AI 提供商管理」检查模型连通性。'
+            ? '请检查图片是否清晰可见，或前往「系统管理 -> AI 配置」检查模型连通性。'
             : 'Please check the image quality or AI provider settings.'),
         type: 'error',
       });

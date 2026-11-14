@@ -102,8 +102,8 @@ describe('AdminPanel (管理后台页面样式规范化与标签切换)', () => 
     expect(screen.getByText('学校教职及系统配置')).toBeTruthy();
     expect(screen.getByPlaceholderText('检索姓名、教工用户名...')).toBeTruthy();
 
-    // Switch to AI Providers tab
-    const aiProvidersTab = screen.getByText('AI 模型提供商');
+    // Switch to AI Config tab
+    const aiProvidersTab = screen.getByText('AI 配置');
     fireEvent.click(aiProvidersTab);
     expect(screen.getByText('OpenAI 兼容 / 自定义模型 AI 提供商列表')).toBeTruthy();
     expect(screen.getByText('Demo DeepSeek')).toBeTruthy();
@@ -145,9 +145,9 @@ describe('AdminPanel (管理后台页面样式规范化与标签切换)', () => 
     expect(alert.textContent).not.toMatch(/[0-9a-fA-F]{64}/);
   });
 
-  it('switches to the AI providers tab and keeps the primary button label', () => {
+  it('switches to the AI config tab and keeps the primary button label', () => {
     render(<AdminPanel {...defaultProps} />);
-    fireEvent.click(screen.getByText('AI 模型提供商'));
+    fireEvent.click(screen.getByText('AI 配置'));
     expect(screen.getByRole('button', { name: '添加 AI 提供商' })).toBeTruthy();
   });
 

@@ -475,13 +475,14 @@ MFE 远端登记。MFE 执行边界已移除，表保留作历史数据兼容。
 
 <!-- AUTO-GENERATED:table-inventory BEGIN -->
 
-共 **89** 张表（迁移 50 个，金样生成于 2026-11-14T06:49:10.297Z）。列清单为列名（类型与约束见迁移 SQL）：
+共 **90** 张表（迁移 51 个，金样生成于 2026-11-14T08:35:47.121Z）。列清单为列名（类型与约束见迁移 SQL）：
 
 - `_academic_year_backfill`: backfilled_at, id
 - `_class_passcode_encryption`: id, note
 - `_lesson_think_cleanup`: id, note
 - `_migrations`: applied_at, checksum, name
 - `agent_conversations`: content, conv_key, created_at, id, role
+- `ai_persona_governance`: description_en, description_zh, enabled, persona_id, preferred_provider_id
 - `ai_personas`: base_policy, created_at, default_for_role_json, icon, id, instruction_en, instruction_zh, max_turns, mode, name_en, name_zh, plugin_id, source, tool_policy_json, updated_at, visibility_json
 - `ai_providers`: api_key, api_url, created_at, id, is_shared, model_name, name, owner_id, updated_at
 - `assessment_answers`: ai_suggestion_json, answer_json, attempt_id, feedback, graded_at, graded_by, grader, is_correct, item_id, manual_override, max_score, score, updated_at
