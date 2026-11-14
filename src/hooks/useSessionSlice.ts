@@ -182,6 +182,20 @@ export function useSessionSlice({ lang, addToast, fetchStudents }: SessionSliceP
     checkSession();
   }, []);
 
+  // Issue #484：账号会话切换 / 登出时同步服务端隔离的主题偏好与站点默认公开主题
+  useEffect(() => {
+    if (sessionLoading) return;
+    void useThemeStore.getState().syncWithSession(
+      session
+        ? {
+            userId: session.userId,
+            studentId: session.studentId,
+            role: session.role,
+          }
+        : null,
+    );
+  }, [sessionLoading, session?.userId, session?.studentId, session?.role]);
+
   const teacherTab = useAppStore((state) => state.teacherTab);
   const setTeacherTab = useAppStore((state) => state.setTeacherTab);
 

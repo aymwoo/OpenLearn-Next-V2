@@ -20,6 +20,8 @@ import { sendSafeError } from '../utils/error-handler.js';
 import { resolvePluginGuidePath } from '../utils/docs-paths.js';
 import { resolveLogFilePath } from '../../packages/core/observability/log-paths.js';
 import { isValidAcademicYear, getCurrentAcademicYear } from '../utils/academic-year.js';
+import { isBuiltinThemeId } from '../../packages/core/themes/theme-spec.js';
+import { ThemeService } from '../services/theme-service.js';
 import { pluginApiGatewayMiddleware } from './plugin-api-gateway.js';
 import { isSafeExternalUrl, fetchWithSafeRedirects, type SafeFetchOptions } from '../utils/url-safety.js';
 import { AIFetchTimeoutError } from '../../packages/core/ai/utils/fetch-with-retry.js';
@@ -1888,11 +1890,12 @@ export function registerPluginsRoutes(ctx: ServerContext) {
     try {
       const row = kernelContainer.db
         .prepare(
-          'SELECT site_name, slogan, logo_url, upload_max_file_mb, current_academic_year, academic_start_month, logout_clear_site_data FROM site_settings WHERE id = ?',
+          'SELECT site_name, slogan, logo_url, upload_max_file_mb, current_academic_year, academic_start_month, logout_clear_site_data, default_theme_id FROM site_settings WHERE id = ?',
         )
         .get('global') as any;
       const academicStartMonth = row?.academic_start_month ?? 9;
       const currentAcademicYear = row?.current_academic_year || getCurrentAcademicYear(academicStartMonth);
+      const defaultThemeId = new ThemeService(kernelContainer.db).getDefaultSiteThemeId();
       res.json({
         siteName: row?.site_name || '',
         slogan: row?.slogan || '',
@@ -1902,6 +1905,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
         currentAcademicYear,
         academicStartMonth,
         logoutClearSiteData: Boolean(row?.logout_clear_site_data),
+        defaultThemeId,
       });
     } catch (e: any) {
       sendSafeError(res, e);
@@ -1918,6 +1922,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
         currentAcademicYear,
         academicStartMonth,
         logoutClearSiteData,
+        defaultThemeId,
       } = req.body || {};
       // v0.6.1：上传大小上限校验（整数 1–90；90 受 express.json 110MB 全局
       // 上限约束，base64 膨胀 ~33% 后约 90MB 文件）。undefined = 不修改。
@@ -1935,6 +1940,18 @@ export function registerPluginsRoutes(ctx: ServerContext) {
           return res.status(400).json({ error: 'logoutClearSiteData 必须是布尔值' });
         }
         normalizedLogoutClearSiteData = logoutClearSiteData ? 1 : 0;
+      }
+
+      let normalizedDefaultThemeId: string | null = null;
+      if (defaultThemeId !== undefined && defaultThemeId !== null && String(defaultThemeId).trim() !== '') {
+        const candidate = String(defaultThemeId).trim();
+        if (!isBuiltinThemeId(candidate)) {
+          const lookup = new ThemeService(kernelContainer.db).getThemeBundle(candidate);
+          if (lookup.status !== 'active' || !lookup.bundle || !lookup.compatible) {
+            return res.status(400).json({ error: '站点默认主题必须是系统内置主题或处于启用状态的兼容第三方主题' });
+          }
+        }
+        normalizedDefaultThemeId = candidate;
       }
 
       // 学年设置校验
@@ -1959,12 +1976,13 @@ export function registerPluginsRoutes(ctx: ServerContext) {
 
       kernelContainer.db
         .prepare(
-          `INSERT INTO site_settings (id, site_name, slogan, logo_url, upload_max_file_mb, current_academic_year, academic_start_month, logout_clear_site_data) VALUES ('global', ?, ?, ?, ?, ?, ?, ?)
+          `INSERT INTO site_settings (id, site_name, slogan, logo_url, upload_max_file_mb, current_academic_year, academic_start_month, logout_clear_site_data, default_theme_id) VALUES ('global', ?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT(id) DO UPDATE SET site_name = excluded.site_name, slogan = excluded.slogan, logo_url = excluded.logo_url,
              upload_max_file_mb = COALESCE(excluded.upload_max_file_mb, site_settings.upload_max_file_mb),
              current_academic_year = COALESCE(excluded.current_academic_year, site_settings.current_academic_year),
              academic_start_month = COALESCE(excluded.academic_start_month, site_settings.academic_start_month),
-             logout_clear_site_data = COALESCE(?, site_settings.logout_clear_site_data, 0)`,
+             logout_clear_site_data = COALESCE(?, site_settings.logout_clear_site_data, 0),
+             default_theme_id = COALESCE(?, site_settings.default_theme_id, 'light')`,
         )
         .run(
           siteName || '',
@@ -1974,14 +1992,17 @@ export function registerPluginsRoutes(ctx: ServerContext) {
           normalizedAcademicYear ?? null,
           normalizedStartMonth ?? null,
           normalizedLogoutClearSiteData ?? 0,
+          normalizedDefaultThemeId ?? 'light',
           normalizedLogoutClearSiteData,
+          normalizedDefaultThemeId,
         );
       const row = kernelContainer.db
         .prepare(
-          'SELECT upload_max_file_mb, current_academic_year, academic_start_month, logout_clear_site_data FROM site_settings WHERE id = ?',
+          'SELECT upload_max_file_mb, current_academic_year, academic_start_month, logout_clear_site_data, default_theme_id FROM site_settings WHERE id = ?',
         )
         .get('global') as any;
       const resolvedLogoutClear = Boolean(row?.logout_clear_site_data);
+      const resolvedDefaultThemeId = new ThemeService(kernelContainer.db).getDefaultSiteThemeId();
       res.json({
         success: true,
         siteInfo: {
@@ -1989,11 +2010,13 @@ export function registerPluginsRoutes(ctx: ServerContext) {
           slogan: slogan || '',
           logoUrl: logoUrl || null,
           logoutClearSiteData: resolvedLogoutClear,
+          defaultThemeId: resolvedDefaultThemeId,
         },
         uploadMaxFileMb: row?.upload_max_file_mb ?? null,
         currentAcademicYear: row?.current_academic_year ?? null,
         academicStartMonth: row?.academic_start_month ?? 9,
         logoutClearSiteData: resolvedLogoutClear,
+        defaultThemeId: resolvedDefaultThemeId,
       });
     } catch (e: any) {
       sendSafeError(res, e);

@@ -92,7 +92,11 @@ export function PluginSandboxIframeView({
   const lang = useAppStore((s) => s.lang);
   const storeLessonId = useAppStore((s) => s.selectedLesson);
   const storeClassId = useAppStore((s) => s.liveClassSelectedClassId);
-  const theme = useThemeStore((s) => s.theme);
+  const theme = useThemeStore((s) => s.previewState?.themeId || s.theme);
+  const resolvedColorScheme = useThemeStore((s) => s.resolvedColorScheme);
+  const appearanceOverrides = useThemeStore((s) => s.appearanceOverrides);
+  const activeBundle = useThemeStore((s) => s.activeBundle);
+  const getUnifiedPluginThemePayload = useThemeStore((s) => s.getUnifiedPluginThemePayload);
 
   const lessonId = propLessonId !== undefined ? propLessonId : storeLessonId;
   const classId = propClassId !== undefined ? propClassId : storeClassId;
@@ -102,6 +106,7 @@ export function PluginSandboxIframeView({
   const postInit = useCallback(() => {
     const iframe = iframeRef.current;
     if (!iframe || !iframe.contentWindow) return;
+    const themeMeta = getUnifiedPluginThemePayload();
     iframe.contentWindow.postMessage(
       {
         channel: PLUGIN_VIEW_CHANNEL,
@@ -115,11 +120,25 @@ export function PluginSandboxIframeView({
           studentName: studentName ?? null,
           lang,
           theme,
+          themeMeta,
         },
       },
       '*',
     );
-  }, [pluginId, slot, lessonId, classId, studentId, studentName, lang, theme]);
+  }, [
+    pluginId,
+    slot,
+    lessonId,
+    classId,
+    studentId,
+    studentName,
+    lang,
+    theme,
+    resolvedColorScheme,
+    appearanceOverrides,
+    activeBundle,
+    getUnifiedPluginThemePayload,
+  ]);
 
   // 处理 iframe 内部发送来的消息与 RPC 调度
   useEffect(() => {
@@ -247,6 +266,7 @@ export function PluginSandboxIframeView({
   // 当宿主上下文属性（课堂/班级/语言/主题）变动时同步至 iframe
   useEffect(() => {
     if (!isLoaded || !iframeRef.current?.contentWindow) return;
+    const themeMeta = getUnifiedPluginThemePayload();
     iframeRef.current.contentWindow.postMessage(
       {
         channel: PLUGIN_VIEW_CHANNEL,
@@ -258,11 +278,24 @@ export function PluginSandboxIframeView({
           studentName: studentName ?? null,
           lang,
           theme,
+          themeMeta,
         },
       },
       '*',
     );
-  }, [lessonId, classId, studentId, studentName, lang, theme, isLoaded]);
+  }, [
+    lessonId,
+    classId,
+    studentId,
+    studentName,
+    lang,
+    theme,
+    resolvedColorScheme,
+    appearanceOverrides,
+    activeBundle,
+    getUnifiedPluginThemePayload,
+    isLoaded,
+  ]);
 
   if (!cleanView) {
     return (

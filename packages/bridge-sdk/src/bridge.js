@@ -216,6 +216,10 @@
         if (themeData.theme) {
           docEl.setAttribute('data-theme', themeData.theme);
         }
+        if (themeData.colorScheme === 'light' || themeData.colorScheme === 'dark') {
+          docEl.setAttribute('data-color-scheme', themeData.colorScheme);
+          docEl.style.colorScheme = themeData.colorScheme;
+        }
         if (themeData.tokens && typeof themeData.tokens === 'object') {
           for (var k in themeData.tokens) {
             if (Object.prototype.hasOwnProperty.call(themeData.tokens, k)) {
@@ -223,6 +227,19 @@
             }
           }
         }
+        if (themeData.fonts && typeof themeData.fonts === 'object') {
+          if (themeData.fonts.sans) docEl.style.setProperty('--ol-font-sans', themeData.fonts.sans);
+          if (themeData.fonts.display) docEl.style.setProperty('--ol-font-display', themeData.fonts.display);
+          if (themeData.fonts.mono) docEl.style.setProperty('--ol-font-mono', themeData.fonts.mono);
+        }
+        if (themeData.appearance && typeof themeData.appearance === 'object') {
+          if (themeData.appearance.fontScale) {
+            docEl.style.setProperty('--ol-font-scale', String(themeData.appearance.fontScale));
+          }
+        }
+      }
+      if (typeof window.CustomEvent === 'function') {
+        window.dispatchEvent(new CustomEvent('openlearn:themechange', { detail: themeData }));
       }
     } catch (e) {}
   }

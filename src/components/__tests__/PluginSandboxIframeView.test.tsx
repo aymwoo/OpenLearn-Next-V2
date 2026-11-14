@@ -170,7 +170,7 @@ describe('PluginSandboxIframeView component', () => {
       {
         channel: PLUGIN_VIEW_CHANNEL,
         type: 'init',
-        payload: {
+        payload: expect.objectContaining({
           pluginId: PLUGIN_ID,
           slot: 'teacher.tab',
           lessonId: 'lesson-123',
@@ -179,7 +179,15 @@ describe('PluginSandboxIframeView component', () => {
           studentName: null,
           lang: 'zh',
           theme: 'light',
-        },
+          themeMeta: expect.objectContaining({
+            theme: 'light',
+            colorScheme: 'light',
+            tokens: expect.objectContaining({
+              '--bg-app': expect.any(String),
+              '--bg-surface': expect.any(String),
+            }),
+          }),
+        }),
       },
       '*',
     );

@@ -124,6 +124,7 @@ import { registerAssignmentHubRoutes } from './server/routes/assignment-hub.js';
 import { registerSchedulesRoutes } from './server/routes/schedules.js';
 import { registerGradingRoutes } from './server/routes/grading.js';
 import { registerPluginsRoutes } from './server/routes/plugins.js';
+import { registerThemeRoutes } from './server/routes/themes.js';
 import { registerClassroomRoutes } from './server/routes/classroom.js';
 import { registerClassroomExtrasRoutes } from './server/routes/classroom-extras.js';
 import { registerClassroomPeerReviewRoutes } from './server/routes/classroom-peer-review.js';
@@ -406,6 +407,7 @@ async function startServer() {
   registerSchedulesRoutes(ctx);
   registerGradingRoutes(ctx);
   registerPluginsRoutes(ctx);
+  registerThemeRoutes(ctx);
 
   // 测评子系统（Issue #100 / #120）。题型注册表由内核 bootstrap 时注册进 DI，这里只挂路由。
   registerAssessmentRoutes(ctx);

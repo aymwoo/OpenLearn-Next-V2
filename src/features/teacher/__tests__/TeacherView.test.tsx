@@ -257,25 +257,25 @@ const renderView = (props: Record<string, unknown> = {}) => {
 describe('TeacherView', () => {
   it('renders the wrapper and the NavigationSidebar for teacherTab="dashboard"', () => {
     const { container } = renderView({ teacherTab: 'dashboard' });
-    // The root branch div carries the bg-gray-50 class.
-    expect(container.querySelector('.bg-gray-50')).toBeTruthy();
+    // The root branch div carries the semantic bg-app theme canvas class.
+    expect(container.querySelector('.bg-app')).toBeTruthy();
     // NavigationSidebar always renders its nav items regardless of tab.
     expect(screen.getByText('Live Class')).toBeTruthy();
     // The branch root has the <nav> sidebar plus an inner content div (>= 2 children).
-    expect(container.querySelector('.bg-gray-50')?.children.length).toBeGreaterThanOrEqual(2);
+    expect(container.querySelector('.bg-app')?.children.length).toBeGreaterThanOrEqual(2);
   });
 
   it('renders the Dashboard child when teacherTab="dashboard"', () => {
     const { container } = renderView({ teacherTab: 'dashboard' });
     // Dashboard renders inside the inner content div after <nav>; the content area must be populated.
-    const content = container.querySelector('.bg-gray-50 > nav + div');
+    const content = container.querySelector('.bg-app > nav + div');
     expect(content).toBeTruthy();
     expect(content?.children.length).toBeGreaterThan(0);
   });
 
   it('renders the HelpView child (with "Openlearn Next Reference Hub" marker) for teacherTab="help"', async () => {
     const { container } = renderView({ teacherTab: 'help' });
-    expect(container.querySelector('.bg-gray-50')).toBeTruthy();
+    expect(container.querySelector('.bg-app')).toBeTruthy();
     expect(await screen.findByText(/Openlearn Next Reference Hub/i, {}, { timeout: 5000 })).toBeTruthy();
     // The dashboard child must NOT be present on the help tab (tab switch works).
     expect(screen.queryByText('Live Class')).toBeTruthy(); // nav still present

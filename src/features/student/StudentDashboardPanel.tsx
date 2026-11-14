@@ -28,6 +28,7 @@ import { ExtensionPointRenderer } from '../../plugin-host/extension-point-render
 import { useStudentActiveSession } from './useStudentActiveSession';
 import { StudentActiveClassBanner } from './StudentActiveClassBanner';
 import { StudentAssessmentsWidget } from '../assessment/student/StudentAssessmentsWidget';
+import { useThemeStore } from '../../store/themeStore';
 import type { StudentType } from '../../types/app';
 import type { DashboardWidgetId, WidgetSize, WidgetLayoutConfig } from './types/dashboardLayout';
 import { DEFAULT_WIDGET_LAYOUT, LAYOUT_PRESETS } from './types/dashboardLayout';
@@ -73,6 +74,8 @@ export function StudentDashboardPanel(props: StudentDashboardPanelProps) {
     setSelectedLesson(activeSession.lessonId);
     setStudentViewStatus('lesson');
   };
+
+  const studentCardColumns = useThemeStore((s) => s.resolvedLayouts.student.cardColumns);
 
   const storageKey = `student_dashboard_layout_v2_${activeStudentId || 'default'}`;
 
@@ -564,7 +567,14 @@ export function StudentDashboardPanel(props: StudentDashboardPanelProps) {
       {/* 4. Modular CSS Grid Workspace */}
       <div
         id="student-dashboard-modular-grid"
-        className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-6 items-start"
+        data-card-columns={studentCardColumns}
+        className={`grid gap-6 items-start ${
+          studentCardColumns === 1
+            ? 'grid-cols-1'
+            : studentCardColumns === 3
+              ? 'grid-cols-1 md:grid-cols-2 xl:grid-cols-3'
+              : 'grid-cols-1 md:grid-cols-2 lg:grid-cols-12'
+        }`}
       >
         {layout.filter((w) => w.visible).map((widget, index) => renderWidgetContent(widget, index))}
       </div>

@@ -10,6 +10,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Features
+
+- **第三方声明式主题系统、安全沙盒校验、多账号隔离与插件主题适配（Issue #484）**：
+  - 新增统一主题清单与 `.zip` 主题包校验器（`packages/core/themes/theme-spec.ts`、`packages/core/themes/theme-package.ts`），支持 CSS Tokens（浅/深双模式）、字体/圆角/密度外观、白名单化作用域 CSS、静态资源（SVG/图片/字体）安全扫描（禁止脚本、外部 `@import`/URL、路径穿越、越界大小与 SVG 脚本），以及声明式全端布局配置（登录页/教师端/学生端/管理后台）自动保留必需功能控件；
+  - 新增迁移 `047_third_party_theme_system.sql`（同步更新 `schema-golden.json`）、`server/services/theme-service.ts` 与 `server/routes/themes.ts`：所有登录角色均可上传安装/导出主题包至共享目录，个人主题/版本/深浅模式与外观覆盖按账号严格隔离保存；同一主题仅原上传者可发布更高 SemVer 更新且不静默篡改他人使用版本（支持主题中心点击确认升级）；管理员支持停用/启用/删除主题与设置全站默认主题，`/api/themes/public` 严格零用户数据泄漏；
+  - 升级前端 `src/store/themeStore.ts`、`ThemeCenterModal.tsx`、`ThemeSelector.tsx`、`ThemeDesignerModal.tsx`（支持直接导出 `.zip` 包）与 `LoginPage.tsx` / `TeacherView.tsx` / `StudentView.tsx` / `AdminPanel.tsx` 布局联动，并新增纯内联样式、全端常驻的故障自救组件 `ThemeFailsafeRecoveryButton.tsx` 与异常自动回退逻辑；
+  - 扩展 `packages/bridge-sdk/src/bridge.js`、`PluginSandboxIframeView.tsx` 与 `lms-bridge.ts`，向插件与沙箱课件统一同步主题、深浅配色、Token、字体栈与外观参数，并附带完整示例包 `examples/themes/campus-atelier/` 及更新 `docs/architecture/theming-system.md`。
+
 ### Fixes
 
 - **表单语义校验/可见性切换与全站响应式可访问表格底座（Issue #489）**：
@@ -26,9 +34,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - **新建课程向导默认阶段名称中文本地化（Issue #493）**：
   - 将 `src/hooks/useCourseWizard.ts` 初始及重置时间轴抽出为 `getDefaultWizardTimeline(lang, idPrefix)`，中文模式下默认 4 阶段统一显示纯中文名称（`课堂导入`、`核心精讲`、`互动演练`、`课堂总结`）及中文备注，不再出现 `'Course Orientation / 课堂导入'` 等中英混杂文案；
   - 同步本地化 `src/features/modals/CourseWizardModal.tsx` 中的 3 套预设时间轴模板（经典 5-15-15-5 讲授模式、主题讨论工作坊模式、翻转课堂高强度训练），根据 `lang` 分别输出纯中文或纯英文阶段标题与备注。
-
-> > > > > > > origin/main
-
 - **无障碍语义地标、焦点可见性、跨文档消息安全与可选登出站点清理（Issue #487）**：
   - 为 `App.tsx` 主应用壳、登录页及强制改密页补齐 Skip Link、`lang`/`title` 动态同步与 `<main>`/`<nav>`/`<aside>` 地标；为 `QuickActionsMenu.tsx` 菜单选项与 `RightSidebar.tsx` 折叠触发器、通知列表项等可点击 `<div>` 改用原生 `<button type="button">`；为 `RevealPresentationWrapper.tsx` 演示文稿 PDF `<iframe>` 补充 `title`；补全 `focus-visible:ring-2` 键盘焦点指示并清理表格与表单中的反效 `select-none`；
   - 加固 `lms-bridge.ts`、`PluginSandboxIframeView.tsx` 与 `plugin-host.ts` 的 `postMessage` 校验，显式拒绝 `event.source` 为 `null`/伪造来源的消息；

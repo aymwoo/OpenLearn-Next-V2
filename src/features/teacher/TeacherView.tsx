@@ -34,6 +34,7 @@ const AssessmentCenter = lazy(() =>
 );
 
 import { useOptionalAppData } from '../../context/AppDataContext';
+import { useThemeStore } from '../../store/themeStore';
 
 /**
  * TeacherView is the single routing wrapper for the entire `teacher` branch of App.tsx.
@@ -47,6 +48,7 @@ export interface TeacherViewProps {
 export function TeacherView(_props: TeacherViewProps = {}) {
   const appData = useOptionalAppData();
   const teacherTab = _props.teacherTab ?? appData?.teacherTab ?? 'dashboard';
+  const teacherLayout = useThemeStore((s) => s.resolvedLayouts.teacher);
 
   // Keep-Alive 互动课堂保活状态：只要挂载过或正在上课，即便切到其他功能 Tab 也不卸载白板 DOM 与课件 iframe
   const [hasMountedLiveClass, setHasMountedLiveClass] = useState(
@@ -62,11 +64,30 @@ export function TeacherView(_props: TeacherViewProps = {}) {
     }
   }, [shouldRenderLiveClass, hasMountedLiveClass]);
 
-  return (
-    <div className="flex-1 overflow-hidden flex bg-gray-50 relative">
-      <NavigationSidebar />
+  const containerFlexClass =
+    teacherLayout.navPosition === 'top'
+      ? 'flex-col'
+      : teacherLayout.navPosition === 'right'
+        ? 'flex-row-reverse'
+        : 'flex-row';
 
-      <div className="flex-1 p-6 overflow-hidden flex gap-6 relative">
+  const workspaceMaxWidthClass =
+    teacherLayout.contentMaxWidth === 'focused'
+      ? 'max-w-5xl mx-auto w-full'
+      : teacherLayout.contentMaxWidth === 'wide'
+        ? 'max-w-7xl mx-auto w-full'
+        : 'w-full';
+
+  return (
+    <div
+      data-teacher-nav-position={teacherLayout.navPosition}
+      data-teacher-content-width={teacherLayout.contentMaxWidth}
+      data-theme-bg-canvas="teacher"
+      className={`flex-1 overflow-hidden flex ${containerFlexClass} bg-app text-main relative transition-colors duration-150`}
+    >
+      <NavigationSidebar navPosition={teacherLayout.navPosition} />
+
+      <div className={`flex-1 p-6 overflow-hidden flex gap-6 relative ${workspaceMaxWidthClass}`}>
         {/* 全局授课中悬浮监控胶囊：老师切到其他页面时常驻显示倒计时与学情 */}
         <ActiveClassFloatingPill />
 

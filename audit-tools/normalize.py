@@ -76,6 +76,7 @@ CANONICAL_OVERRIDES = {
     "whiteboard": "whiteboard",
     "theming-system": "_crosscutting_",  # 跨多个文件的 cross-cutting concern,不是单一 subsystem
     "theming": "_crosscutting_",
+    "themes": "_crosscutting_",  # packages/core/themes/ 由 docs/architecture/theming-system.md 统一归档
 
     # Lesson / Education runtime
     "lesson-runtime": "lesson-engine",

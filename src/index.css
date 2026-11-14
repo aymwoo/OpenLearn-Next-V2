@@ -58,7 +58,7 @@
    主题是运行时写在 <html data-theme> 上的（themeStore）。两者互不相关，导致：
    用户切到深色主题时全项目 156 处 dark:* 不生效；系统为深色时浅色主题反被
    深色样式污染。此处改为跟随 data-theme（含 chalkboard 这套深色主题）。 */
-@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *, [data-theme='chalkboard'], [data-theme='chalkboard'] *));
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *, [data-theme='chalkboard'], [data-theme='chalkboard'] *, [data-color-scheme='dark'], [data-color-scheme='dark'] *));
 
 /* ── 远端兼容兜底：14 个语义色 @utility 显式声明 ─────────────
    @theme 派生会生成 bg-color、text-color、border-color 等工具类，但 portal
@@ -258,6 +258,14 @@
     --primary-ink-hover: #4338ca;
     --color-primary-light: #eef2ff;
     --color-primary-text: #ffffff;
+    --ol-radius-card: 1rem;
+    --ol-radius-control: 0.75rem;
+    --ol-shadow-card: 0 1px 2px 0 rgb(15 23 42 / 0.05);
+    --ol-density-gap: 1.5rem;
+    --ol-font-scale: 1;
+    --ol-font-sans: var(--font-sans);
+    --ol-font-display: var(--font-sans);
+    --ol-font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   }
 
   [data-theme='dark'] {

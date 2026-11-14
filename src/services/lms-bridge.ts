@@ -572,20 +572,37 @@ function postToManagedIframe(iframe: HTMLIFrameElement, message: unknown): void 
 /**
  * 向页面中所有已加载的课件 / 微前端 iframe 广播当前主题状态
  */
-export function broadcastThemeToIframes(theme: string, tokens: Record<string, string> = {}): void {
+export function broadcastThemeToIframes(
+  theme: string,
+  tokens: Record<string, string> = {},
+  extra?: {
+    colorScheme?: 'light' | 'dark';
+    appearance?: {
+      borderRadius?: string;
+      cardStyle?: string;
+      density?: string;
+      fontScale?: number;
+    };
+    fonts?: {
+      sans?: string;
+      display?: string;
+      mono?: string;
+    };
+  },
+): void {
   if (typeof document === 'undefined') return;
   try {
+    const payload = extra ? { theme, tokens, ...extra } : { theme, tokens };
     const iframes = getManagedTargetIframes();
     iframes.forEach((iframe) => {
       postToManagedIframe(iframe, {
         type: 'LMS_HOST_COMMAND',
         event: 'theme:changed',
-        payload: { theme, tokens },
+        payload,
       });
       postToManagedIframe(iframe, {
         type: 'LMS_THEME_CHANGED',
-        theme,
-        tokens,
+        ...payload,
       });
     });
   } catch {
