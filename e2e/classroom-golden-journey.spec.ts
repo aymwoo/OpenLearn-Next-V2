@@ -327,7 +327,7 @@ test.describe('师生双端一镜到底课堂全生命周期黄金旅程 E2E 测
       // Stage 2: 课中授课与中控互动 (IN_CLASS_TEACHING)
       // =========================================================================
       logEvidence('Stage 2: 推进至课中授课白板');
-      await expect(teacherPage.getByText('教学步骤与页面大纲')).toBeVisible({ timeout: 20_000 });
+      await expect(teacherPage.getByTestId('classroom-stage-stepper')).toBeVisible({ timeout: 20_000 });
       await expect(teacherPage.getByText('Live Broadcaster Connected')).toBeVisible({ timeout: 15_000 });
 
       // 1. 发起限时倒计时测试
@@ -491,7 +491,7 @@ test.describe('师生双端一镜到底课堂全生命周期黄金旅程 E2E 测
       const backToTeachingBtn = teacherPage.locator('button:has-text("返回课中白板")');
       await expect(backToTeachingBtn).toBeVisible();
       await backToTeachingBtn.click();
-      await expect(teacherPage.getByText('教学步骤与页面大纲')).toBeVisible({ timeout: 15_000 });
+      await expect(teacherPage.getByTestId('classroom-stage-stepper')).toBeVisible({ timeout: 15_000 });
 
       // 再次推进至简报完成闭环
       const advanceAgainBtn = teacherPage.locator('button:has-text("完成授课，进入课后")');

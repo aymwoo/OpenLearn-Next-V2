@@ -41,6 +41,7 @@ export function ClassRowHeader({
 
   return (
     <div
+      data-testid="class-row"
       className={`p-2 flex items-center justify-between ${batchMode ? 'cursor-pointer hover:bg-amber-50/60' : 'cursor-pointer hover:bg-gray-50'}`}
       onClick={() => {
         if (batchMode) {

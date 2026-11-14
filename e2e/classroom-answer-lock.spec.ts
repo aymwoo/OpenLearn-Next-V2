@@ -5,6 +5,7 @@
  * 本注释用于标明该用例覆盖的能力域 —— 新增用例时按同一口径挂靠。
  */
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
+import { dismissIcebreakerIfPresent } from './fixtures/classroom-entry';
 
 async function loginAdmin(request: APIRequestContext) {
   let res = await request.post('/api/auth/login', {
@@ -132,6 +133,8 @@ test.describe('课堂双锁定模式解耦 E2E 测试（Issue #110）', () => {
       expect(studentLogin.ok()).toBeTruthy();
 
       await openStudent(page, lessonId, studentId, classId);
+      // Issue #131：先关掉课前破冰打卡遮罩，否则后续点击会被 aria-modal 遮罩拦截
+      await dismissIcebreakerIfPresent(page);
 
       // 4. 验证学生端「答题锁定」UI 状态
       // 顶部呈现琥珀金胶囊提示「答题锁定中 · 请完成作答后提交，暂时无法离开本页」
@@ -173,6 +176,8 @@ test.describe('课堂双锁定模式解耦 E2E 测试（Issue #110）', () => {
 
       // 重新载入学生端确认同步
       await openStudent(page, lessonId, studentId, classId);
+      // Issue #131：先关掉课前破冰打卡遮罩，否则后续点击会被 aria-modal 遮罩拦截
+      await dismissIcebreakerIfPresent(page);
 
       // 顶部呈现靛蓝色胶囊「全班专注锁定 · 跟随教师授课」
       const focusPill = page.locator('div[role="status"]', { hasText: '全班专注锁定' });
@@ -185,6 +190,8 @@ test.describe('课堂双锁定模式解耦 E2E 测试（Issue #110）', () => {
 
       // 学生端刷新后锁定解除，恢复 Back to Dashboard 按钮
       await openStudent(page, lessonId, studentId, classId);
+      // Issue #131：先关掉课前破冰打卡遮罩，否则后续点击会被 aria-modal 遮罩拦截
+      await dismissIcebreakerIfPresent(page);
       await expect(statusPill).toBeHidden();
       await expect(focusPill).toBeHidden();
       await expect(page.getByRole('button', { name: /Back to Dashboard/i })).toBeVisible({ timeout: 20_000 });

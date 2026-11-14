@@ -505,7 +505,10 @@ export function ClassroomInteractiveCockpit({
         className="bg-surface border-b border-border/80 px-4 py-2.5 flex flex-wrap items-center justify-between gap-3 select-none text-xs transition-colors"
       >
         {/* 阶段控制导航 (Stepper) */}
-        <div className="flex items-center gap-1.5 bg-surface-secondary/70 p-1 rounded-xl border border-border/60 shadow-3xs">
+        <div
+          data-testid="classroom-stage-stepper"
+          className="flex items-center gap-1.5 bg-surface-secondary/70 p-1 rounded-xl border border-border/60 shadow-3xs"
+        >
           {stages.map((st, idx) => {
             const isActive = currentStage === st.id;
             const canTransition = isActive || isStageTransitionAllowed(currentStage, st.id);

@@ -20,6 +20,25 @@ export async function clickIfVisible(locator: Locator, timeout = 5_000): Promise
 }
 
 /**
+ * Issue #131：学生首次进入课中视图会自动弹出「课前破冰心情打卡」全屏遮罩
+ * （`data-testid="student-icebreaker-modal"`，`aria-modal` 会拦截其后所有点击）。
+ *
+ * 幂等：未弹窗直接返回 false。需要在学生端做点击操作的用例应先调用本 helper，
+ * 否则后续 click 会被遮罩吞掉（表现为 90s 测试超时 + `intercepts pointer events`）。
+ */
+export async function dismissIcebreakerIfPresent(page: Page, timeout = 5_000): Promise<boolean> {
+  const modal = page.getByTestId('student-icebreaker-modal');
+  const shown = await modal
+    .waitFor({ state: 'visible', timeout })
+    .then(() => true)
+    .catch(() => false);
+  if (!shown) return false;
+  await page.getByTestId('icebreaker-skip-btn').click();
+  await modal.waitFor({ state: 'hidden', timeout: 10_000 });
+  return true;
+}
+
+/**
  * Issue #91：进入互动课堂后落到「授课视图」。
  *
  * 新首屏是进行中会话列表：有进行中会话 → 点「继续上课」；有活跃课堂锁定 → 点「回到课堂」；
