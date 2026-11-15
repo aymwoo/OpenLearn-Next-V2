@@ -3,14 +3,25 @@ import { X, Play, Square, Sparkles, Layers, Clock, CheckCircle2, Terminal, Activ
 import { classroomMacroEngine } from './classroom-macro-engine';
 import { CLASSROOM_MACRO_PRESETS } from './macro-presets';
 import type { MacroPreset, MacroExecutionState, MacroId } from '../types';
+import { ExtensionPointRenderer } from '../../../../plugin-host/extension-point-renderer';
 
 export interface ClassroomMacroRunnerModalProps {
   isOpen: boolean;
   onClose: () => void;
   addToast: (title: string, message: string, type?: 'info' | 'success' | 'warning' | 'error') => void;
+  lessonId?: string | null;
+  classId?: string | null;
+  lessonTitle?: string;
 }
 
-export function ClassroomMacroRunnerModal({ isOpen, onClose, addToast }: ClassroomMacroRunnerModalProps) {
+export function ClassroomMacroRunnerModal({
+  isOpen,
+  onClose,
+  addToast,
+  lessonId,
+  classId,
+  lessonTitle,
+}: ClassroomMacroRunnerModalProps) {
   const [selectedMacroId, setSelectedMacroId] = useState<MacroId>('MACRO_BURST_QUIZ');
   const [state, setState] = useState<MacroExecutionState>(classroomMacroEngine.getState());
 
@@ -20,6 +31,15 @@ export function ClassroomMacroRunnerModal({ isOpen, onClose, addToast }: Classro
     });
     return () => unsub();
   }, []);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [isOpen, onClose]);
 
   if (!isOpen) return null;
 
@@ -40,7 +60,12 @@ export function ClassroomMacroRunnerModal({ isOpen, onClose, addToast }: Classro
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="macro-runner-modal-title"
+    >
       <div className="bg-surface border border-theme rounded-2xl max-w-2xl w-full p-6 shadow-2xl flex flex-col gap-4 max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-theme pb-3">
@@ -49,13 +74,17 @@ export function ClassroomMacroRunnerModal({ isOpen, onClose, addToast }: Classro
               <Sparkles size={18} />
             </div>
             <div>
-              <h3 className="text-sm font-black text-main flex items-center gap-2">
+              <h3 id="macro-runner-modal-title" className="text-sm font-black text-main flex items-center gap-2">
                 <span>课堂宏动作编排中枢 (Classroom Action Macros)</span>
                 <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-primary-theme/10 text-primary-theme">
                   一键教学流
                 </span>
               </h3>
-              <p className="text-xs text-muted">自定义与预设一键动作流：倒计时、锁屏推题、切榜单无缝联动</p>
+              <p className="text-xs text-muted">
+                {lessonTitle
+                  ? `当前联动课堂：${lessonTitle}`
+                  : '自定义与预设一键动作流：倒计时、锁屏推题、切榜单无缝联动'}
+              </p>
             </div>
           </div>
           <button
@@ -165,14 +194,25 @@ export function ClassroomMacroRunnerModal({ isOpen, onClose, addToast }: Classro
         )}
 
         {/* 底部动作控制 */}
-        <div className="flex items-center justify-between pt-2 border-t border-theme">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-3 py-1.5 bg-surface hover:bg-surface-secondary border border-theme text-main rounded-xl text-xs font-bold transition-colors cursor-pointer"
-          >
-            关闭窗口
-          </button>
+        <div className="flex items-center justify-between pt-2 border-t border-theme gap-2">
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-3 py-1.5 bg-surface hover:bg-surface-secondary border border-theme text-main rounded-xl text-xs font-bold transition-colors cursor-pointer"
+            >
+              关闭窗口
+            </button>
+            <ExtensionPointRenderer
+              slot="classroom.macro_runner.action"
+              slotProps={{
+                selectedMacroId,
+                status: state.status,
+                lessonId,
+                classId,
+              }}
+            />
+          </div>
 
           <div className="flex items-center gap-2">
             {isRunning ? (

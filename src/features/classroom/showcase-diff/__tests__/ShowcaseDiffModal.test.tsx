@@ -2,6 +2,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import React from 'react';
 import { render, screen, fireEvent, cleanup, within } from '@testing-library/react';
 import { ShowcaseDiffModal } from '../ShowcaseDiffModal';
+import { buildShowcaseDiffCandidateWorks } from '../build-diff-works';
 
 afterEach(cleanup);
 
@@ -176,5 +177,56 @@ describe('ShowcaseDiffModal (Showcase & Dual-Screen Diff)', () => {
     expect(screen.getByTestId('showcase-diff-empty')).toBeTruthy();
     expect(screen.getByText('暂无可对比展示的学生作答')).toBeTruthy();
     expect(screen.queryByText('张子豪')).toBeNull();
+  });
+
+  it('当宿主显式传入空 candidateWorks 时，即使有学生名单也不伪造物理解题样例', () => {
+    renderModal({ availableStudents: mockStudents, candidateWorks: [] });
+    expect(screen.getByTestId('showcase-diff-empty')).toBeTruthy();
+    expect(screen.queryByText('微元累加与动能定理联立')).toBeNull();
+  });
+
+  it('未挂载 onSyncToClass 时不会虚假提示广播已下发', () => {
+    const warnToast = vi.fn();
+    renderModal({ onSyncToClass: undefined, addToast: warnToast });
+    fireEvent.click(screen.getByText('同步广播至全班'));
+    expect(warnToast).toHaveBeenCalledWith(expect.stringContaining('未连接'), expect.any(String), 'warning');
+  });
+
+  it('buildShowcaseDiffCandidateWorks 能真实合并 showcaseWorks 与 attempts，无数据时返回空数组', () => {
+    expect(buildShowcaseDiffCandidateWorks([], [], mockStudents)).toEqual([]);
+
+    const works = buildShowcaseDiffCandidateWorks(
+      [
+        {
+          workId: 'w1',
+          studentId: 'stu-1',
+          studentName: '张子豪',
+          source: 'assignment',
+          sourceLabel: '课后编程作业',
+          title: '快速排序实现',
+          codeSnippet: 'function quickSort(arr) { return arr; }',
+          score: 96,
+        },
+      ],
+      [
+        {
+          student_id: 'stu-2',
+          student_name: '李晓彤',
+          courseware_title: '随堂练习 A',
+          status: 'submitted',
+          score: 58,
+          submission_raw: JSON.stringify({ answer: '双指针遍历尚未处理边界条件' }),
+        },
+      ],
+      mockStudents,
+    );
+    expect(works).toHaveLength(2);
+    expect(works[0]).toMatchObject({ studentId: 'stu-1', source: 'code', category: 'exemplary', accuracyScore: 96 });
+    expect(works[1]).toMatchObject({
+      studentId: 'stu-2',
+      source: 'quiz_answer',
+      category: 'typical_error',
+      content: '双指针遍历尚未处理边界条件',
+    });
   });
 });

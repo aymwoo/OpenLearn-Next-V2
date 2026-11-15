@@ -254,7 +254,16 @@ export type ExtensionSlot =
   | 'editor.timeline.node_badge' // 备课端时间线环节导轨节点微徽章扩展（器材标识、AI评估就绪等）
   | 'student.segment.badge' // 学生端环节导航/卡片微徽章扩展（素养徽标、探究难度标识等）
   // ── 全局后台长任务指示项扩展槽位 ──
-  | 'header.async_task.item'; // 全局顶栏后台异步任务状态/操作项扩展
+  | 'header.async_task.item' // 全局顶栏后台异步任务状态/操作项扩展
+  // ── 互动白板上课页补充扩展槽位（增量扩展，兼容保留既有槽位） ──
+  | 'classroom.toolbar.quick_action' // 课堂顶部右侧快捷工具栏扩展（与告警/学情/协作按钮并排）
+  | 'classroom.monitor.header_action' // 右侧「学生专注力监控」栏头部操作扩展
+  | 'classroom.submissions.toolbar' // 课中「实时提交数据」工具栏扩展
+  | 'classroom.top_performers.action' // 「随堂测验榜 (Top Performers)」顶部动作区扩展
+  | 'classroom.showcase_diff.action' // 「多屏对比投屏批注」模态窗顶栏动作扩展
+  | 'classroom.macro_runner.action' // 「课堂宏动作编排中枢」动作区扩展
+  | 'classroom.hardware_bridge.addon' // 「硬件教具生态网关」设置与监控面板扩展
+  | 'classroom.sessions.action'; // 「课堂会话与档案管理」顶栏动作扩展
 
 /**
  * Anchor slot — 锚点扩展槽（v0.2.6）。

@@ -26,8 +26,10 @@ import { MasteryPredictionModal } from '../../features/classroom/pacing/MasteryP
 import { DiagnosticCenterModal } from '../../features/classroom/diagnostics/DiagnosticCenterModal';
 import { GroupCollabWhiteboardModal } from '../../features/classroom/collab-whiteboard/GroupCollabWhiteboardModal';
 import { ShowcaseDiffModal } from '../../features/classroom/showcase-diff/ShowcaseDiffModal';
+import type { DiffScreenLayout, DiffStudentWork } from '../../features/classroom/showcase-diff/types';
 import { ClassroomMacroRunnerModal, HardwareBridgeSettingsModal } from '../../features/classroom/ecosystem';
 import type { ClassroomLiveData } from '../../features/classroom/hooks/useClassroomLiveData';
+import type { ClassroomSyncChannel } from '../../services/classroom-sync-channel';
 
 type ToastFn = (title: string, message: string, type?: 'info' | 'success' | 'warning' | 'error') => void;
 type Lang = 'zh' | 'en';
@@ -86,10 +88,19 @@ export interface ClassroomModalsHostProps {
   // ── 小组协作白板 ──
   isGroupCollabOpen: boolean;
   onCloseGroupCollab: () => void;
+  syncChannel?: ClassroomSyncChannel | null;
+  collabInitialGalleryMode?: boolean;
 
   // ── 多屏对比投屏批注 ──
   isShowcaseDiffOpen?: boolean;
   onCloseShowcaseDiff?: () => void;
+  showcaseCandidateWorks?: DiffStudentWork[];
+  onSyncShowcaseDiffToClass?: (data: {
+    selectedIds: string[];
+    layout: DiffScreenLayout;
+    works?: DiffStudentWork[];
+    anonymous?: boolean;
+  }) => void;
 
   // ── 课堂宏动作与硬件教具 ──
   isMacroRunnerOpen?: boolean;
@@ -128,8 +139,12 @@ export const ClassroomModalsHost: React.FC<ClassroomModalsHostProps> = ({
   onCloseDiagnosticCenter,
   isGroupCollabOpen,
   onCloseGroupCollab,
+  syncChannel,
+  collabInitialGalleryMode,
   isShowcaseDiffOpen,
   onCloseShowcaseDiff,
+  showcaseCandidateWorks,
+  onSyncShowcaseDiffToClass,
   isMacroRunnerOpen,
   onCloseMacroRunner,
   isHardwareSettingsOpen,
@@ -265,6 +280,8 @@ export const ClassroomModalsHost: React.FC<ClassroomModalsHostProps> = ({
         }))}
         addToast={addToast}
         lang={lang}
+        syncChannel={syncChannel}
+        initialGalleryMode={collabInitialGalleryMode}
       />
 
       {/* ── 优秀作业 / 屏幕一键多屏对比投屏批注（Showcase & Dual-Screen Diff） ── */}
@@ -277,6 +294,8 @@ export const ClassroomModalsHost: React.FC<ClassroomModalsHostProps> = ({
           name: s.name ?? s.student_number ?? s.id,
           seatNumber: s.seat_number ?? (s as any).seatNumber,
         }))}
+        candidateWorks={showcaseCandidateWorks}
+        onSyncToClass={onSyncShowcaseDiffToClass}
         addToast={addToast}
         lang={lang}
       />
@@ -286,6 +305,9 @@ export const ClassroomModalsHost: React.FC<ClassroomModalsHostProps> = ({
         isOpen={Boolean(isMacroRunnerOpen)}
         onClose={onCloseMacroRunner ?? (() => {})}
         addToast={addToast}
+        lessonId={selectedLesson}
+        classId={liveClassSelectedClassId}
+        lessonTitle={lessonTitle}
       />
 
       {/* ── 硬件教具生态标准化网关设置 (Hardware Bridge) ── */}

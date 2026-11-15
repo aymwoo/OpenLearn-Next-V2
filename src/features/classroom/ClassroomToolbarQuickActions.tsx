@@ -1,6 +1,7 @@
 import React from 'react';
 import { EdgeLanStatusIndicator } from './ecosystem';
 import { ClassroomCountdownWidget } from './ClassroomCountdownWidget';
+import { ExtensionPointRenderer } from '../../plugin-host/extension-point-renderer';
 import type { ClassroomSyncChannel } from '../../services/classroom-sync-channel';
 
 export interface ClassroomToolbarQuickActionsProps {
@@ -130,6 +131,7 @@ export function ClassroomToolbarQuickActions({
           ⚙️
         </button>
       )}
+      <ExtensionPointRenderer slot="classroom.toolbar.quick_action" slotProps={{ lessonId: selectedLesson, lang }} />
       <EdgeLanStatusIndicator className="ml-1 shrink-0" />
       <ClassroomCountdownWidget
         variant="header"

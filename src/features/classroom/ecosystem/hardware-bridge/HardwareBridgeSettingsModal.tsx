@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Cpu, Radio, Cast, CheckCircle, Terminal, Play } from 'lucide-react';
 import { hardwareBridgeService } from './hardware-bridge-service';
 import type { HardwareEvent } from '../types';
+import { ExtensionPointRenderer } from '../../../../plugin-host/extension-point-renderer';
 
 export interface HardwareBridgeSettingsModalProps {
   isOpen: boolean;
@@ -20,6 +21,15 @@ export function HardwareBridgeSettingsModal({ isOpen, onClose, addToast }: Hardw
     });
     return () => unsub();
   }, [simEnabled]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [isOpen, onClose]);
 
   if (!isOpen) return null;
 
@@ -42,7 +52,12 @@ export function HardwareBridgeSettingsModal({ isOpen, onClose, addToast }: Hardw
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="hardware-bridge-modal-title"
+    >
       <div className="bg-surface border border-theme rounded-2xl max-w-2xl w-full p-6 shadow-2xl flex flex-col gap-4 max-h-[85vh] overflow-y-auto">
         <div className="flex items-center justify-between border-b border-theme pb-3">
           <div className="flex items-center gap-2.5">
@@ -50,7 +65,9 @@ export function HardwareBridgeSettingsModal({ isOpen, onClose, addToast }: Hardw
               <Cpu size={18} />
             </div>
             <div>
-              <h3 className="text-sm font-black text-main">硬件教具生态标准化网关 (Hardware Bridge)</h3>
+              <h3 id="hardware-bridge-modal-title" className="text-sm font-black text-main">
+                硬件教具生态标准化网关 (Hardware Bridge)
+              </h3>
               <p className="text-xs text-muted">RF433/2.4G 物理答题器、数位板与翻页笔统一映射</p>
             </div>
           </div>
@@ -162,6 +179,11 @@ export function HardwareBridgeSettingsModal({ isOpen, onClose, addToast }: Hardw
             )}
           </div>
         </div>
+
+        <ExtensionPointRenderer
+          slot="classroom.hardware_bridge.addon"
+          slotProps={{ simEnabled, eventCount: eventLogs.length }}
+        />
 
         <div className="flex justify-end pt-2 border-t border-theme">
           <button

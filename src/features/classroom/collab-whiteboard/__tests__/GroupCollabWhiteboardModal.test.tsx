@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import React from 'react';
-import { render, screen, fireEvent, cleanup } from '@testing-library/react';
+import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react';
 import { GroupCollabWhiteboardModal } from '../GroupCollabWhiteboardModal';
 
 afterEach(cleanup);
@@ -134,5 +134,97 @@ describe('GroupCollabWhiteboardModal', () => {
     const spotlightBtn = screen.getAllByTitle('设为全班高光')[0];
     fireEvent.click(spotlightBtn);
     expect(screen.getByText('🌟 置顶高光')).toBeTruthy();
+  });
+
+  it('关闭并重新打开模态窗时保留已有分组与任务状态，不再清零', () => {
+    const { rerender } = renderModal();
+    fireEvent.click(screen.getByTitle('新建小组'));
+    expect(screen.getByText('第 5 小组')).toBeTruthy();
+
+    rerender(
+      <GroupCollabWhiteboardModal
+        isOpen={false}
+        onClose={noopToast}
+        lessonId="les-1"
+        classId="cls-1"
+        availableStudents={students}
+        addToast={noopToast}
+      />,
+    );
+    expect(screen.queryByText('第 5 小组')).toBeNull();
+
+    rerender(
+      <GroupCollabWhiteboardModal
+        isOpen={true}
+        onClose={noopToast}
+        lessonId="les-1"
+        classId="cls-1"
+        availableStudents={students}
+        addToast={noopToast}
+      />,
+    );
+    expect(screen.getByText('第 5 小组')).toBeTruthy();
+  });
+
+  it('从后端恢复持久化的协作白板状态并在修改后写回 PUT', async () => {
+    const fetchMock = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+      if (!init || init.method === undefined || init.method === 'GET') {
+        return {
+          ok: true,
+          json: async () => ({
+            success: true,
+            board: {
+              lessonId: 'les-persist',
+              classId: 'cls-persist',
+              missionPrompt: '持久化验证探究题',
+              groupingStrategy: 'homogeneous',
+              groups: [
+                {
+                  id: 'g-saved-1',
+                  name: '后端恢复小组',
+                  memberIds: ['stu-1'],
+                  color: 'bg-indigo-500',
+                  focusTier: 'balanced',
+                  likesCount: 0,
+                  inquiryTags: [],
+                  isSpotlight: false,
+                },
+              ],
+              strokes: [],
+              likes: {},
+              inquiries: {},
+              spotlightGroupId: null,
+            },
+          }),
+        } as unknown as Response;
+      }
+      return {
+        ok: true,
+        json: async () => ({ success: true, updatedAt: Date.now() }),
+      } as unknown as Response;
+    });
+    const origFetch = globalThis.fetch;
+    globalThis.fetch = fetchMock;
+    const syncChannel = {
+      onMessage: vi.fn(() => () => {}),
+      broadcastGroupCollabUpdated: vi.fn(),
+    } as unknown as NonNullable<React.ComponentProps<typeof GroupCollabWhiteboardModal>['syncChannel']>;
+
+    try {
+      renderModal({ lessonId: 'les-persist', classId: 'cls-persist', syncChannel });
+      await waitFor(() => {
+        expect(screen.getByText('后端恢复小组')).toBeTruthy();
+      });
+      expect(screen.getByDisplayValue('持久化验证探究题')).toBeTruthy();
+
+      fireEvent.click(screen.getByTitle('新建小组'));
+      await waitFor(() => {
+        const putCall = fetchMock.mock.calls.find((c) => c[1]?.method === 'PUT');
+        expect(putCall).toBeTruthy();
+      });
+      expect(syncChannel.broadcastGroupCollabUpdated).toHaveBeenCalled();
+    } finally {
+      globalThis.fetch = origFetch;
+    }
   });
 });

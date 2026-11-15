@@ -21,6 +21,16 @@ export interface ClassroomCountdownState {
   updatedAt: number;
 }
 
+export interface ShowcaseDiffBroadcastWork {
+  studentId: string;
+  studentName: string;
+  title: string;
+  content: string;
+  source?: string;
+  tags?: string[];
+  accuracyScore?: number;
+}
+
 export type ClassroomSyncMessage =
   | { type: 'TEACHER_CHANGE_LESSON'; payload: { lessonId: string | null; classId?: string | null } }
   | { type: 'TEACHER_CHANGE_SEGMENT'; payload: { segmentId: string | null; lessonId?: string | null } }
@@ -34,6 +44,25 @@ export type ClassroomSyncMessage =
   | { type: 'TEACHER_BROADCAST_COUNTDOWN'; payload: ClassroomCountdownState }
   | { type: 'TEACHER_PING_STUDENT'; payload: { studentId: string; message?: string } }
   | { type: 'TEACHER_BROADCAST_FULLSCREEN'; payload: { elementId: string | null; lessonId?: string } }
+  | {
+      type: 'TEACHER_SHOWCASE_DIFF_SYNC';
+      payload: {
+        lessonId?: string | null;
+        selectedIds: string[];
+        layout: 'dual' | 'triple' | 'quad';
+        works?: ShowcaseDiffBroadcastWork[];
+        anonymous?: boolean;
+        timestamp: number;
+      };
+    }
+  | {
+      type: 'TEACHER_MACRO_NOTIFICATION';
+      payload: { lessonId?: string | null; title?: string; message: string; timestamp: number };
+    }
+  | {
+      type: 'GROUP_COLLAB_UPDATED';
+      payload: { lessonId: string | null; classId?: string | null; updatedAt: number; galleryMode?: boolean };
+    }
   | { type: 'STUDENT_ACKNOWLEDGE_PICK'; payload: { studentId: string } }
   | { type: 'STUDENT_HEARTBEAT'; payload: { studentId: string; timestamp: number } };
 
@@ -234,6 +263,49 @@ export class ClassroomSyncChannel {
     if (socket && targetLesson) {
       socket.emit('teacher-broadcast-fullscreen', { elementId, lessonId: targetLesson, classId: this.classId });
     }
+  }
+
+  public broadcastShowcaseDiff(data: {
+    selectedIds: string[];
+    layout: 'dual' | 'triple' | 'quad';
+    works?: ShowcaseDiffBroadcastWork[];
+    anonymous?: boolean;
+  }): void {
+    this.postMessage({
+      type: 'TEACHER_SHOWCASE_DIFF_SYNC',
+      payload: {
+        lessonId: this.lessonId,
+        selectedIds: data.selectedIds,
+        layout: data.layout,
+        works: data.works,
+        anonymous: data.anonymous,
+        timestamp: Date.now(),
+      },
+    });
+  }
+
+  public broadcastMacroNotification(message: string, title?: string): void {
+    this.postMessage({
+      type: 'TEACHER_MACRO_NOTIFICATION',
+      payload: {
+        lessonId: this.lessonId,
+        title,
+        message,
+        timestamp: Date.now(),
+      },
+    });
+  }
+
+  public broadcastGroupCollabUpdated(galleryMode?: boolean): void {
+    this.postMessage({
+      type: 'GROUP_COLLAB_UPDATED',
+      payload: {
+        lessonId: this.lessonId,
+        classId: this.classId,
+        updatedAt: Date.now(),
+        galleryMode,
+      },
+    });
   }
 
   // ── 学生端快捷回传方法 ───────────────────────────────────────────────

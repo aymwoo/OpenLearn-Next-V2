@@ -129,6 +129,7 @@ describe('上课流程扩展端点（classroom-extras）', () => {
   });
 
   afterAll(async () => {
+    db.prepare('DELETE FROM classroom_collab_whiteboards WHERE lesson_id = ?').run(lessonId);
     db.prepare('DELETE FROM lessons WHERE id = ?').run(lessonId);
     db.prepare('DELETE FROM client_sessions WHERE id IN (?, ?)').run(teacherToken, studentToken);
     db.prepare('DELETE FROM users WHERE id IN (?, ?)').run(teacherId, studentId);
@@ -286,6 +287,109 @@ describe('上课流程扩展端点（classroom-extras）', () => {
     }
     expect(body.studentNotifications[0].markdown).toContain('张子豪本节参与积极');
     spy.mockRestore();
+  });
+});
+
+describe('小组协作白板持久化端点（collab-whiteboard）', () => {
+  it('匿名或学生访问返回 401/403，教师访问可正常读写并按班级隔离', async () => {
+    const testDb = kernelContainer.db;
+    const now = Date.now();
+    const lesId = 'les-collab-001';
+    const tId = 'usr-collab-teacher';
+    const sId = 'usr-collab-student';
+    const tTok = 'tok-collab-teacher';
+    const sTok = 'tok-collab-student';
+
+    testDb
+      .prepare(
+        'INSERT OR REPLACE INTO users (id, username, password_hash, role, name, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+      )
+      .run(tId, 'collab_teacher', 'placeholder', 'teacher', '协作教师', now);
+    testDb
+      .prepare(
+        'INSERT OR REPLACE INTO users (id, username, password_hash, role, name, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+      )
+      .run(sId, 'collab_student', 'placeholder', 'student', '协作学生', now);
+    testDb
+      .prepare('INSERT OR REPLACE INTO client_sessions (id, session_data, updated_at, expires_at) VALUES (?, ?, ?, ?)')
+      .run(tTok, JSON.stringify({ userId: tId, role: 'teacher', username: 'collab_teacher' }), now, now + 3600_000);
+    testDb
+      .prepare('INSERT OR REPLACE INTO client_sessions (id, session_data, updated_at, expires_at) VALUES (?, ?, ?, ?)')
+      .run(sTok, JSON.stringify({ userId: sId, role: 'student', username: 'collab_student' }), now, now + 3600_000);
+    testDb
+      .prepare('INSERT OR REPLACE INTO lessons (id, title, created_at, updated_at) VALUES (?, ?, ?, ?)')
+      .run(lesId, '协作白板测试课节', now, now);
+
+    const app = express();
+    app.use(express.json());
+    registerClassroomExtrasRoutes(app as unknown as Parameters<typeof registerClassroomExtrasRoutes>[0]);
+    const srv = createServer(app);
+    await new Promise<void>((resolve) => srv.listen(0, resolve));
+    const url = `http://127.0.0.1:${(srv.address() as AddressInfo).port}`;
+
+    interface CollabBoardResp {
+      board: {
+        missionPrompt: string;
+        groupingStrategy: string;
+        groups: unknown[];
+        strokes: unknown[];
+        likes: Record<string, number>;
+        spotlightGroupId: string | null;
+      } | null;
+    }
+
+    try {
+      const anonRes = await fetch(`${url}/api/classroom/sessions/${lesId}/collab-whiteboard`);
+      expect(anonRes.status).toBe(401);
+
+      const stuRes = await fetch(`${url}/api/classroom/sessions/${lesId}/collab-whiteboard`, {
+        headers: { Cookie: `edu_os_token=${sTok}` },
+      });
+      expect(stuRes.status).toBe(403);
+
+      const initialRes = await fetch(`${url}/api/classroom/sessions/${lesId}/collab-whiteboard?classId=cls-a`, {
+        headers: { Cookie: `edu_os_token=${tTok}` },
+      });
+      expect(initialRes.status).toBe(200);
+      expect(((await initialRes.json()) as CollabBoardResp).board).toBeNull();
+
+      const putRes = await fetch(`${url}/api/classroom/sessions/${lesId}/collab-whiteboard`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Cookie: `edu_os_token=${tTok}` },
+        body: JSON.stringify({
+          classId: 'cls-a',
+          missionPrompt: '画出滑块受力分析图',
+          groupingStrategy: 'homogeneous',
+          groups: [{ id: 'g1', name: '第 1 小组', memberIds: ['s1'], color: 'bg-indigo-500' }],
+          strokes: [{ id: 'st-1', groupId: 'g1', tool: 'pen', color: '#4f46e5', width: 3, points: [{ x: 1, y: 2 }] }],
+          likes: { g1: 3 },
+          inquiries: { g1: ['思路新颖'] },
+          spotlightGroupId: 'g1',
+        }),
+      });
+      expect(putRes.status).toBe(200);
+
+      const loadedA = (await fetch(`${url}/api/classroom/sessions/${lesId}/collab-whiteboard?classId=cls-a`, {
+        headers: { Cookie: `edu_os_token=${tTok}` },
+      }).then((r) => r.json())) as CollabBoardResp;
+      expect(loadedA.board?.missionPrompt).toBe('画出滑块受力分析图');
+      expect(loadedA.board?.groupingStrategy).toBe('homogeneous');
+      expect(loadedA.board?.groups).toHaveLength(1);
+      expect(loadedA.board?.strokes).toHaveLength(1);
+      expect(loadedA.board?.likes).toEqual({ g1: 3 });
+      expect(loadedA.board?.spotlightGroupId).toBe('g1');
+
+      const loadedB = (await fetch(`${url}/api/classroom/sessions/${lesId}/collab-whiteboard?classId=cls-b`, {
+        headers: { Cookie: `edu_os_token=${tTok}` },
+      }).then((r) => r.json())) as CollabBoardResp;
+      expect(loadedB.board).toBeNull();
+    } finally {
+      await new Promise<void>((resolve) => srv.close(() => resolve()));
+      testDb.prepare('DELETE FROM classroom_collab_whiteboards WHERE lesson_id = ?').run(lesId);
+      testDb.prepare('DELETE FROM lessons WHERE id = ?').run(lesId);
+      testDb.prepare('DELETE FROM client_sessions WHERE id IN (?, ?)').run(tTok, sTok);
+      testDb.prepare('DELETE FROM users WHERE id IN (?, ?)').run(tId, sId);
+    }
   });
 });
 
