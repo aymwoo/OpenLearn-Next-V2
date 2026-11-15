@@ -848,3 +848,64 @@ describe('packageSize and release time normalization & probing', () => {
     expect(headCalls).toBe(2);
   });
 });
+
+describe('downloadPluginPackage progress reporting', () => {
+  it('reports determinate percentages when Content-Length is present', async () => {
+    const chunk1 = Buffer.from('hello-');
+    const chunk2 = Buffer.from('world-zip');
+    const total = chunk1.length + chunk2.length;
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(chunk1);
+        controller.enqueue(chunk2);
+        controller.close();
+      },
+    });
+    const fetchImpl: FetchLike = async () =>
+      new Response(body, {
+        status: 200,
+        headers: { 'content-length': String(total) },
+      });
+
+    const events: Array<{ loaded: number; total: number | null; percent: number | null }> = [];
+    const pkg = await downloadPluginPackage('https://plugins.example.com/demo.zip', {
+      fetchImpl,
+      onProgress: (p) => events.push({ ...p }),
+    });
+
+    try {
+      expect(pkg.bytes).toBe(total);
+      expect(events[0]).toEqual({ loaded: 0, total, percent: 0 });
+      expect(events.some((e) => e.percent !== null && e.percent > 0 && e.percent < 100)).toBe(true);
+      expect(events[events.length - 1]).toEqual({ loaded: total, total, percent: 100 });
+    } finally {
+      fs.rmSync(pkg.zipPath, { force: true });
+    }
+  });
+
+  it('reports null total and null percent when Content-Length is missing', async () => {
+    const chunk = Buffer.from('stream-without-length');
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(chunk);
+        controller.close();
+      },
+    });
+    const fetchImpl: FetchLike = async () => new Response(body, { status: 200 });
+
+    const events: Array<{ loaded: number; total: number | null; percent: number | null }> = [];
+    const pkg = await downloadPluginPackage('https://plugins.example.com/unknown-len.zip', {
+      fetchImpl,
+      onProgress: (p) => events.push({ ...p }),
+    });
+
+    try {
+      expect(pkg.bytes).toBe(chunk.length);
+      expect(events.length).toBeGreaterThanOrEqual(2);
+      expect(events.every((e) => e.total === null && e.percent === null)).toBe(true);
+      expect(events[events.length - 1].loaded).toBe(chunk.length);
+    } finally {
+      fs.rmSync(pkg.zipPath, { force: true });
+    }
+  });
+});

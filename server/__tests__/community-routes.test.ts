@@ -284,6 +284,29 @@ describe('community plugin registry routes', () => {
       expect(res.status).toBe(400);
       expect(((await res.json()) as { error: string }).error).toMatch(/安全拦截: 非法下载地址/);
     });
+
+    it('streams SSE progress and error events when Accept: text/event-stream is requested', async () => {
+      const res = await fetch(`${baseUrl}/api/plugins/install-from-url`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'text/event-stream',
+          ...cookie(adminToken),
+        },
+        body: JSON.stringify({
+          downloadUrl: 'https://plugins.example.com/unreachable.zip',
+          expectedId: 'ext-homework-hub',
+        }),
+      });
+
+      expect(res.status).toBe(200);
+      expect(res.headers.get('content-type')).toContain('text/event-stream');
+      const text = await res.text();
+      expect(text).toContain('event: progress');
+      expect(text).toContain('"stage":"downloading"');
+      expect(text).toContain('event: error');
+      expect(text).toContain('"fallbackToClient":true');
+    });
   });
 
   describe('POST /api/plugins/upload-zip-raw 签名门禁与审计 (Issue #176)', () => {

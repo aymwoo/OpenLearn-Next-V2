@@ -199,6 +199,68 @@ describe('PluginCommunityPanel', () => {
       expect(await screen.findByText('社区注册表暂时没有可用插件')).toBeTruthy();
     });
 
+    it('displays loading spinner and indeterminate progress animation during initial load and manual refresh', async () => {
+      const pendingResolvers: Array<(res: Response) => void> = [];
+      let requestCount = 0;
+      const fetcher: typeof fetch = vi.fn((input) => {
+        const url = typeof input === 'string' ? input : input.toString();
+        if (!url.startsWith('/api/plugins/community')) {
+          return Promise.resolve(json({ success: false }, 404));
+        }
+        requestCount += 1;
+        return new Promise<Response>((resolve) => {
+          pendingResolvers.push(resolve);
+        });
+      }) as unknown as typeof fetch;
+
+      renderPanel({ fetcher });
+
+      // 初始载入中动画
+      const initialBanner = await screen.findByTestId('community-loading-indicator');
+      expect(within(initialBanner).getByText('正在载入插件社区…')).toBeTruthy();
+      expect(initialBanner.querySelector('.animate-spin')).toBeTruthy();
+      const initialProgress = initialBanner.querySelector('progress');
+      expect(initialProgress).toBeTruthy();
+      expect(initialProgress?.hasAttribute('value')).toBe(false);
+
+      const initialBtn = screen.getByTestId('community-refresh-btn') as HTMLButtonElement;
+      expect(initialBtn.disabled).toBe(true);
+      expect(initialBtn.getAttribute('aria-busy')).toBe('true');
+      expect(initialBtn.textContent).toContain('载入中…');
+      expect(initialBtn.querySelector('.animate-spin')).toBeTruthy();
+
+      // 完成首次加载
+      pendingResolvers.shift()?.(json(registryBody()));
+      expect(await screen.findByText('作业中心')).toBeTruthy();
+      expect(screen.queryByTestId('community-loading-indicator')).toBeNull();
+
+      const readyBtn = screen.getByTestId('community-refresh-btn') as HTMLButtonElement;
+      expect(readyBtn.disabled).toBe(false);
+      expect(readyBtn.textContent).toContain('刷新');
+
+      // 手动点击刷新，应立即进入刷新载入动画并禁用重复点击
+      fireEvent.click(readyBtn);
+      const refreshBanner = await screen.findByTestId('community-loading-indicator');
+      expect(within(refreshBanner).getByText('正在刷新插件社区…')).toBeTruthy();
+      expect(refreshBanner.querySelector('.animate-spin')).toBeTruthy();
+      const refreshProgress = refreshBanner.querySelector('progress');
+      expect(refreshProgress).toBeTruthy();
+      expect(refreshProgress?.getAttribute('aria-label')).toBe('插件社区刷新进度');
+      expect(refreshProgress?.hasAttribute('value')).toBe(false);
+
+      const refreshingBtn = screen.getByTestId('community-refresh-btn') as HTMLButtonElement;
+      expect(refreshingBtn.disabled).toBe(true);
+      expect(refreshingBtn.getAttribute('aria-busy')).toBe('true');
+      expect(refreshingBtn.textContent).toContain('刷新中…');
+      fireEvent.click(refreshingBtn);
+      expect(requestCount).toBe(2);
+
+      // 完成刷新后恢复展示最新插件卡片
+      pendingResolvers.shift()?.(json(registryBody({ plugins: [makePlugin({ name: '作业中心（已刷新）' })] })));
+      expect(await screen.findByText('作业中心（已刷新）')).toBeTruthy();
+      expect(screen.queryByTestId('community-loading-indicator')).toBeNull();
+    });
+
     it('surfaces a registry error and recovers on retry with a cache-busting refresh', async () => {
       let attempt = 0;
       const { fetcher, calls } = makeFetcher([
@@ -311,10 +373,11 @@ describe('PluginCommunityPanel', () => {
       fireEvent.click(screen.getByRole('button', { name: '安装' }));
       expect(screen.queryByTestId('community-install-risk-dialog')).toBeNull();
 
-      expect(await screen.findByText('安装完成，请在「发现」页启用')).toBeTruthy();
+      expect(await screen.findByText('安装完成，刷新页面后前端扩展点生效')).toBeTruthy();
 
       const installCall = calls.find((c) => c.url === '/api/plugins/install-from-url');
       expect(installCall?.init?.method).toBe('POST');
+      expect((installCall?.init?.headers as Record<string, string>)?.Accept).toBe('text/event-stream');
       expect(JSON.parse(String(installCall?.init?.body))).toEqual({
         downloadUrl: 'https://plugins.example.com/ext-homework-hub-1.2.0.zip',
         expectedId: 'ext-homework-hub',
@@ -343,7 +406,7 @@ describe('PluginCommunityPanel', () => {
 
       fireEvent.click(screen.getByRole('button', { name: '安装' }));
 
-      expect(await screen.findByText('安装完成，请在「发现」页启用')).toBeTruthy();
+      expect(await screen.findByText('安装完成，刷新页面后前端扩展点生效')).toBeTruthy();
 
       const installCall = calls.find((c) => c.url === '/api/plugins/install-from-url');
       expect(JSON.parse(String(installCall?.init?.body)).approvePublicRoutes).toBe(true);
@@ -446,6 +509,184 @@ describe('PluginCommunityPanel', () => {
       fireEvent.click(screen.getByRole('button', { name: '安装' }));
 
       expect(await screen.findByText('插件包超过 200MB 上限')).toBeTruthy();
+    });
+
+    it('shows loading spinner, disables duplicate clicks, and streams stage + percentage progress via SSE', async () => {
+      let controllerRef: ReadableStreamDefaultController<Uint8Array> | null = null;
+      const encoder = new TextEncoder();
+      let installPostCount = 0;
+
+      const fetcher = async (url: string) => {
+        if (url.startsWith('/api/plugins/community')) return json(registryBody());
+        if (url === '/api/plugins/install-from-url') {
+          installPostCount += 1;
+          const stream = new ReadableStream<Uint8Array>({
+            start(controller) {
+              controllerRef = controller;
+            },
+          });
+          return new Response(stream, {
+            status: 200,
+            headers: { 'content-type': 'text/event-stream; charset=utf-8' },
+          });
+        }
+        throw new Error(`unexpected: ${url}`);
+      };
+
+      renderPanel({ fetcher });
+      await screen.findByTestId(HOMEWORK_CARD);
+
+      const installBtn = screen.getByRole('button', { name: '安装' }) as HTMLButtonElement;
+      fireEvent.click(installBtn);
+
+      // 立即进入 loading 状态并禁用重复点击
+      const loadingBtn = await screen.findByRole('button', { name: '安装中…' });
+      expect((loadingBtn as HTMLButtonElement).disabled).toBe(true);
+      expect(loadingBtn.getAttribute('aria-busy')).toBe('true');
+      expect(loadingBtn.querySelector('.animate-spin')).toBeTruthy();
+
+      fireEvent.click(loadingBtn);
+      expect(installPostCount).toBe(1);
+
+      const pushSse = (event: string, data: unknown) => {
+        controllerRef!.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
+      };
+
+      // 阶段 1：下载中 + 百分比
+      pushSse('progress', { stage: 'downloading', percent: 33, loaded: 500, total: 1000, downloadPercent: 50 });
+      await waitFor(() => {
+        expect(screen.getByTestId('community-install-stage-ext-homework-hub').textContent).toBe('下载中');
+        expect(screen.getByTestId('community-install-percent-ext-homework-hub').textContent).toBe('33%');
+        const bar = screen.getByRole('progressbar');
+        expect(bar.getAttribute('data-indeterminate')).toBe('false');
+        expect(bar.getAttribute('aria-valuenow')).toBe('33');
+      });
+
+      // 阶段 2：校验签名
+      pushSse('progress', { stage: 'verifying', percent: 72 });
+      await waitFor(() => {
+        expect(screen.getByTestId('community-install-stage-ext-homework-hub').textContent).toBe('校验签名');
+        expect(screen.getByTestId('community-install-percent-ext-homework-hub').textContent).toBe('72%');
+      });
+
+      // 阶段 3：安装中
+      pushSse('progress', { stage: 'installing', percent: 85 });
+      await waitFor(() => {
+        expect(screen.getByTestId('community-install-stage-ext-homework-hub').textContent).toBe('安装中');
+        expect(screen.getByTestId('community-install-percent-ext-homework-hub').textContent).toBe('85%');
+      });
+
+      // 阶段 4：激活中
+      pushSse('progress', { stage: 'activating', percent: 95 });
+      await waitFor(() => {
+        expect(screen.getByTestId('community-install-stage-ext-homework-hub').textContent).toBe('激活中');
+        expect(screen.getByTestId('community-install-percent-ext-homework-hub').textContent).toBe('95%');
+      });
+
+      // 完成提示
+      pushSse('progress', { stage: 'complete', percent: 100 });
+      pushSse('result', { success: true, updated: false, activated: true, pluginId: 'uuid-1' });
+      controllerRef!.close();
+
+      expect(await screen.findByText('安装完成，刷新页面后前端扩展点生效')).toBeTruthy();
+      expect(screen.queryByTestId('community-install-progress-ext-homework-hub')).toBeNull();
+    });
+
+    it('degrades to an indeterminate progress bar while keeping stage label when Content-Length is missing', async () => {
+      let controllerRef: ReadableStreamDefaultController<Uint8Array> | null = null;
+      const encoder = new TextEncoder();
+
+      const fetcher = async (url: string) => {
+        if (url.startsWith('/api/plugins/community')) return json(registryBody());
+        if (url === '/api/plugins/install-from-url') {
+          const stream = new ReadableStream<Uint8Array>({
+            start(controller) {
+              controllerRef = controller;
+            },
+          });
+          return new Response(stream, {
+            status: 200,
+            headers: { 'content-type': 'text/event-stream; charset=utf-8' },
+          });
+        }
+        throw new Error(`unexpected: ${url}`);
+      };
+
+      renderPanel({ fetcher });
+      await screen.findByTestId(HOMEWORK_CARD);
+
+      fireEvent.click(screen.getByRole('button', { name: '安装' }));
+      await screen.findByTestId('community-install-progress-ext-homework-hub');
+
+      controllerRef!.enqueue(
+        encoder.encode(
+          `event: progress\ndata: ${JSON.stringify({ stage: 'downloading', percent: null, loaded: 2048, total: null })}\n\n`,
+        ),
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId('community-install-stage-ext-homework-hub').textContent).toBe('下载中');
+        expect(screen.getByTestId('community-install-percent-ext-homework-hub').textContent).toBe('大小未知');
+        const bar = screen.getByRole('progressbar');
+        expect(bar.getAttribute('data-indeterminate')).toBe('true');
+        expect(bar.getAttribute('aria-valuenow')).toBeNull();
+      });
+
+      controllerRef!.enqueue(
+        encoder.encode(
+          `event: result\ndata: ${JSON.stringify({ success: true, updated: false, activated: true })}\n\n`,
+        ),
+      );
+      controllerRef!.close();
+
+      expect(await screen.findByText('安装完成，刷新页面后前端扩展点生效')).toBeTruthy();
+    });
+
+    it('streams browser download progress and activates plugin during fallback when Content-Length is provided or omitted', async () => {
+      const downloadUrl = 'https://plugins.example.com/ext-homework-hub-1.2.0.zip';
+      let zipController: ReadableStreamDefaultController<Uint8Array> | null = null;
+      const { fetcher, calls } = makeFetcher([
+        (url) => (url.startsWith('/api/plugins/community') ? json(registryBody()) : undefined),
+        (url) =>
+          url === '/api/plugins/install-from-url'
+            ? json({ success: false, error: '服务端下载失败', fallbackToClient: true }, 400)
+            : undefined,
+        (url) => {
+          if (url !== downloadUrl) return undefined;
+          const stream = new ReadableStream<Uint8Array>({
+            start(controller) {
+              zipController = controller;
+            },
+          });
+          return new Response(stream, {
+            status: 200,
+            headers: { 'content-length': '10' },
+          });
+        },
+        (url) =>
+          url === '/api/plugins/upload-zip-raw'
+            ? json({ success: true, updated: false, pluginId: 'uuid-browser-1' })
+            : undefined,
+        (url) => (url === '/api/plugins/uuid-browser-1/toggle' ? json({ success: true, status: 'active' }) : undefined),
+      ]);
+
+      renderPanel({ fetcher });
+      await screen.findByTestId(HOMEWORK_CARD);
+
+      fireEvent.click(screen.getByRole('button', { name: '安装' }));
+
+      await waitFor(() => expect(zipController).not.toBeNull());
+      zipController!.enqueue(new Uint8Array([1, 2, 3, 4, 5]));
+      await waitFor(() => {
+        expect(screen.getByTestId('community-install-stage-ext-homework-hub').textContent).toBe('下载中');
+        expect(screen.getByTestId('community-install-percent-ext-homework-hub').textContent).toBe('33%');
+      });
+
+      zipController!.enqueue(new Uint8Array([6, 7, 8, 9, 10]));
+      zipController!.close();
+
+      expect(await screen.findByText('安装完成，刷新页面后前端扩展点生效')).toBeTruthy();
+      expect(calls.some((c) => c.url === '/api/plugins/uuid-browser-1/toggle')).toBe(true);
     });
   });
 

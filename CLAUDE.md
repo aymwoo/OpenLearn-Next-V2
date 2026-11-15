@@ -182,6 +182,7 @@ expect((ctx.services.commandBus as MockCommandBus).handlers.has('my.command')).t
 - **并发测试隔离**：Vitest 配置利用独立的临时数据库（根据 `VITEST_POOL_ID` 分配于 `/tmp/openlearn_test_dbs/`）实现完全零干扰的并行测试。
 - **代码规范**：统一遵循 Prettier 格式化（2 空格缩进，单引号）与 ESLint 规范。
 - **Git 提交**：严格遵守 Conventional Commits 标准，如 `feat:`, `fix:`, `refactor:`, `test:`, `docs:`, `chore:`。
+- **前端 Web 标准（`modern-web-guidance`）**：所有涉及前端 HTML / CSS / DOM 与浏览器原生能力的开发与改造，统一以 [GoogleChrome/modern-web-guidance](https://github.com/GoogleChrome/modern-web-guidance)（本地 Skill：[`.agents/skills/modern-web-guidance/SKILL.md`](.agents/skills/modern-web-guidance/SKILL.md)）为约定指南，先执行 `pnpx modern-web-guidance@latest search` / `retrieve` 核对语义、无障碍、动效偏好与 Baseline 回退策略再编码；详细规则见 `AGENTS.md`。
 
 ## AI Agent 开发与协作规范 (AI Agent Workflow)
 

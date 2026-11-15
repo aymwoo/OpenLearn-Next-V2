@@ -80,10 +80,154 @@ export interface PluginCommunityPanelProps {
 }
 
 type InstallPhase = 'installing' | 'success' | 'error';
+type InstallStage = 'downloading' | 'verifying' | 'installing' | 'activating' | 'complete';
 
 interface InstallState {
   phase: InstallPhase;
+  stage?: InstallStage;
+  /** 0-100；为 null 时表示长度未知（如响应缺少 Content-Length），退化为不确定进度条。 */
+  percent?: number | null;
+  loadedBytes?: number;
+  totalBytes?: number | null;
   message: string;
+}
+
+interface InstallResultPayload {
+  success?: boolean;
+  error?: string;
+  code?: string;
+  status?: number;
+  fallbackToClient?: boolean;
+  updated?: boolean;
+  newVersion?: string;
+  pluginId?: string;
+  activated?: boolean;
+  activationError?: string;
+}
+
+interface InstallProgressPayload {
+  stage?: InstallStage;
+  percent?: number | null;
+  loaded?: number;
+  total?: number | null;
+}
+
+const INSTALL_STAGE_ORDER: ReadonlyArray<Exclude<InstallStage, 'complete'>> = [
+  'downloading',
+  'verifying',
+  'installing',
+  'activating',
+];
+
+function getStageLabel(stage: InstallStage | undefined, zh: boolean): string {
+  switch (stage) {
+    case 'downloading':
+      return zh ? '下载中' : 'Downloading';
+    case 'verifying':
+      return zh ? '校验签名' : 'Verifying signature';
+    case 'installing':
+      return zh ? '安装中' : 'Installing';
+    case 'activating':
+      return zh ? '激活中' : 'Activating';
+    case 'complete':
+      return zh ? '已完成' : 'Complete';
+    default:
+      return zh ? '处理中' : 'Processing';
+  }
+}
+
+function getStageStepShortLabel(stage: Exclude<InstallStage, 'complete'>, zh: boolean): string {
+  switch (stage) {
+    case 'downloading':
+      return zh ? '下载' : 'Download';
+    case 'verifying':
+      return zh ? '验签' : 'Verify';
+    case 'installing':
+      return zh ? '安装' : 'Install';
+    case 'activating':
+      return zh ? '激活' : 'Activate';
+  }
+}
+
+function parseSseFrames(
+  buffer: string,
+  flush: boolean,
+): { frames: Array<{ event: string; data: string }>; rest: string } {
+  const normalized = buffer.replace(/\r\n/g, '\n');
+  const parts = normalized.split('\n\n');
+  const rest = flush ? '' : (parts.pop() ?? '');
+  const frames: Array<{ event: string; data: string }> = [];
+
+  for (const rawFrame of parts) {
+    const trimmed = rawFrame.trim();
+    if (!trimmed) continue;
+    let eventName = 'message';
+    const dataLines: string[] = [];
+    for (const line of rawFrame.split('\n')) {
+      if (line.startsWith(':')) continue;
+      if (line.startsWith('event:')) {
+        eventName = line.slice('event:'.length).trim();
+      } else if (line.startsWith('data:')) {
+        dataLines.push(line.slice('data:'.length).trimStart());
+      }
+    }
+    if (dataLines.length > 0) {
+      frames.push({ event: eventName, data: dataLines.join('\n') });
+    }
+  }
+  return { frames, rest };
+}
+
+async function consumeInstallSseStream(
+  response: Response,
+  onProgress: (payload: InstallProgressPayload) => void,
+): Promise<{ status: number; body: InstallResultPayload | null }> {
+  const reader = response.body!.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let resultBody: InstallResultPayload | null = null;
+  let errorBody: InstallResultPayload | null = null;
+
+  const processFrames = (frames: Array<{ event: string; data: string }>) => {
+    for (const frame of frames) {
+      let parsed: Record<string, unknown>;
+      try {
+        parsed = JSON.parse(frame.data) as Record<string, unknown>;
+      } catch {
+        continue;
+      }
+      if (frame.event === 'progress') {
+        onProgress(parsed as unknown as InstallProgressPayload);
+      } else if (frame.event === 'result') {
+        resultBody = parsed as unknown as InstallResultPayload;
+      } else if (frame.event === 'error') {
+        errorBody = parsed as unknown as InstallResultPayload;
+      }
+    }
+  };
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) {
+      buffer += decoder.decode();
+      const { frames } = parseSseFrames(buffer, true);
+      processFrames(frames);
+      break;
+    }
+    buffer += decoder.decode(value, { stream: true });
+    const { frames, rest } = parseSseFrames(buffer, false);
+    buffer = rest;
+    processFrames(frames);
+  }
+
+  if (errorBody) {
+    const errPayload = errorBody as InstallResultPayload;
+    return { status: typeof errPayload.status === 'number' ? errPayload.status : 400, body: errPayload };
+  }
+  if (resultBody) {
+    return { status: 200, body: resultBody };
+  }
+  return { status: response.status || 500, body: null };
 }
 
 type SortKey = 'recommended' | 'latest' | 'stars' | 'downloads' | 'name';
@@ -174,15 +318,15 @@ function SkeletonCard() {
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm flex flex-col gap-3 animate-pulse">
       <div className="flex items-start gap-3">
-        <div className="w-11 h-11 rounded-lg bg-gray-100 shrink-0" />
+        <div className="w-11 h-11 rounded-lg bg-gray-200/70 shrink-0" />
         <div className="flex-1 space-y-2">
-          <div className="h-4 bg-gray-100 rounded w-2/3" />
-          <div className="h-3 bg-gray-100 rounded w-1/3" />
+          <div className="h-4 bg-gray-200/70 rounded w-2/3" />
+          <div className="h-3 bg-gray-200/70 rounded w-1/3" />
         </div>
       </div>
-      <div className="h-3 bg-gray-100 rounded" />
-      <div className="h-3 bg-gray-100 rounded w-5/6" />
-      <div className="h-8 bg-gray-100 rounded-lg mt-2" />
+      <div className="h-3 bg-gray-200/70 rounded" />
+      <div className="h-3 bg-gray-200/70 rounded w-5/6" />
+      <div className="h-8 bg-gray-200/70 rounded-lg mt-2" />
     </div>
   );
 }
@@ -212,6 +356,8 @@ export function PluginCommunityPanel({
   const [sort, setSort] = useState<SortKey>('recommended');
   const [hideInstalled, setHideInstalled] = useState(false);
   const [installStates, setInstallStates] = useState<Record<string, InstallState>>({});
+  const activeInstallIdsRef = useRef<Set<string>>(new Set());
+  const registryRequestIdRef = useRef(0);
   /** 本次会话内已成功安装的 id，用于无需等待刷新即可更新卡片状态。 */
   const [justInstalled, setJustInstalled] = useState<Record<string, true>>({});
   const [configOpen, setConfigOpen] = useState(false);
@@ -241,6 +387,7 @@ export function PluginCommunityPanel({
 
   const loadRegistry = useCallback(
     async (forceRefresh: boolean, tokenOverride?: string) => {
+      const requestId = ++registryRequestIdRef.current;
       setStatus('loading');
       setError(null);
       const effectiveToken = tokenOverride !== undefined ? tokenOverride : giteeToken;
@@ -250,6 +397,7 @@ export function PluginCommunityPanel({
           effectiveToken ? { headers: { 'x-gitee-token': effectiveToken } } : undefined,
         );
         const body = (await res.json()) as CommunityRegistryResponse;
+        if (requestId !== registryRequestIdRef.current) return;
         if (!res.ok || !body?.success) {
           throw new Error(body?.error || (zh ? '服务端拒绝请求' : 'Request rejected by the server'));
         }
@@ -265,6 +413,7 @@ export function PluginCommunityPanel({
           setStatus('ready');
         }
       } catch (e) {
+        if (requestId !== registryRequestIdRef.current) return;
         setConfigNotice(null);
         setError(e instanceof Error ? e.message : String(e));
         setStatus('error');
@@ -525,22 +674,82 @@ export function PluginCommunityPanel({
 
   /** 服务端下载失败时的兜底：浏览器取包 + application/octet-stream 直传。 */
   const uploadViaBrowser = useCallback(
-    async (plugin: CommunityPlugin, approvePublic: boolean) => {
+    async (plugin: CommunityPlugin, approvePublic: boolean): Promise<InstallResultPayload | null> => {
       setInstallState(plugin.id, {
         phase: 'installing',
-        message: zh ? '服务端下载不可用，改为浏览器直传…' : 'Server download unavailable, transferring from browser…',
+        stage: 'downloading',
+        percent: null,
+        loadedBytes: 0,
+        totalBytes: null,
+        message: zh ? '服务端下载不可用，改为浏览器下载…' : 'Server download unavailable, downloading from browser…',
       });
 
       const zipResponse = await doFetch(plugin.downloadUrl);
       if (!zipResponse.ok) {
         throw new Error(`${zh ? '浏览器下载失败' : 'Browser download failed'}: HTTP ${zipResponse.status}`);
       }
-      const blob = await zipResponse.blob();
+
+      const rawLength = zipResponse.headers?.get?.('content-length');
+      const parsedLength = typeof rawLength === 'string' && rawLength.trim() !== '' ? Number(rawLength) : NaN;
+      const totalBytes = Number.isFinite(parsedLength) && parsedLength > 0 ? parsedLength : null;
+
+      let blob: Blob;
+      if (zipResponse.body && typeof zipResponse.body.getReader === 'function') {
+        const reader = zipResponse.body.getReader();
+        const chunks: BlobPart[] = [];
+        let loaded = 0;
+        setInstallState(plugin.id, {
+          phase: 'installing',
+          stage: 'downloading',
+          percent: totalBytes !== null ? 0 : null,
+          loadedBytes: 0,
+          totalBytes,
+          message: zh ? '下载中' : 'Downloading',
+        });
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          if (value && value.length > 0) {
+            chunks.push(new Uint8Array(value));
+            loaded += value.length;
+            const dlPercent = totalBytes !== null ? Math.min(100, Math.round((loaded / totalBytes) * 100)) : null;
+            setInstallState(plugin.id, {
+              phase: 'installing',
+              stage: 'downloading',
+              percent: dlPercent !== null ? Math.round(dlPercent * 0.65) : null,
+              loadedBytes: loaded,
+              totalBytes,
+              message: zh ? '下载中' : 'Downloading',
+            });
+          }
+        }
+        blob = new Blob(chunks, { type: 'application/zip' });
+      } else {
+        blob = await zipResponse.blob();
+      }
+
       if (blob.size === 0) throw new Error(zh ? '插件包为空' : 'The package is empty');
+
+      setInstallState(plugin.id, {
+        phase: 'installing',
+        stage: 'verifying',
+        percent: 72,
+        loadedBytes: blob.size,
+        totalBytes: totalBytes ?? blob.size,
+        message: zh ? '校验签名' : 'Verifying signature',
+      });
 
       const filename = zipFilenameFromUrl(plugin.downloadUrl);
       const isUpdating = isInstalled(plugin);
       const targetPluginId = installedUuidByManifestId.get(plugin.id) ?? plugin.id;
+
+      setInstallState(plugin.id, {
+        phase: 'installing',
+        stage: 'installing',
+        percent: 82,
+        message: zh ? '安装中' : 'Installing',
+      });
+
       const uploadResponse = await doFetch(ZIP_UPLOAD_ENDPOINT, {
         method: 'POST',
         headers: {
@@ -554,19 +763,43 @@ export function PluginCommunityPanel({
         },
         body: blob,
       });
-      const uploadBody = (await uploadResponse.json().catch(() => null)) as {
-        success?: boolean;
-        error?: string;
-        code?: string;
-        updated?: boolean;
-        newVersion?: string;
-      } | null;
+      const uploadBody = (await uploadResponse.json().catch(() => null)) as InstallResultPayload | null;
       if (!uploadResponse.ok || !uploadBody?.success) {
         if (uploadResponse.status === 403 && !uploadBody?.code) {
           throw new Error(zh ? '仅管理员可安装社区插件，请联系管理员。' : 'Only administrators can install plugins.');
         }
         throw new Error(uploadBody?.error || (zh ? '浏览器直传失败' : 'Browser upload failed'));
       }
+
+      if (!isUpdating && uploadBody.pluginId) {
+        setInstallState(plugin.id, {
+          phase: 'installing',
+          stage: 'activating',
+          percent: 95,
+          message: zh ? '激活中' : 'Activating',
+        });
+        try {
+          const toggleRes = await doFetch(`/api/plugins/${encodeURIComponent(uploadBody.pluginId)}/toggle`, {
+            method: 'POST',
+          });
+          if (!toggleRes.ok) {
+            const toggleBody = (await toggleRes.json().catch(() => null)) as { error?: string } | null;
+            return {
+              ...uploadBody,
+              activated: false,
+              activationError: toggleBody?.error || `HTTP ${toggleRes.status}`,
+            };
+          }
+          return { ...uploadBody, activated: true };
+        } catch (actErr) {
+          return {
+            ...uploadBody,
+            activated: false,
+            activationError: actErr instanceof Error ? actErr.message : String(actErr),
+          };
+        }
+      }
+
       return uploadBody;
     },
     [doFetch, installedUuidByManifestId, isInstalled, setInstallState, zh],
@@ -574,22 +807,32 @@ export function PluginCommunityPanel({
 
   const handleInstall = useCallback(
     async (plugin: CommunityPlugin, approvePublic: boolean) => {
+      if (activeInstallIdsRef.current.has(plugin.id)) return;
+      activeInstallIdsRef.current.add(plugin.id);
+
       const isUpdating = isInstalled(plugin) && plugin.hasUpdate;
       setInstallState(plugin.id, {
         phase: 'installing',
+        stage: 'downloading',
+        percent: null,
+        loadedBytes: 0,
+        totalBytes: null,
         message: isUpdating
           ? zh
             ? '正在创建更新前快照并下载新版本…'
             : 'Saving snapshot and downloading update…'
           : zh
-            ? '正在由服务端下载插件包…'
-            : 'Server is downloading the package…',
+            ? '下载中'
+            : 'Downloading',
       });
 
       try {
         const response = await doFetch(INSTALL_ENDPOINT, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            Accept: 'text/event-stream',
+          },
           body: JSON.stringify({
             downloadUrl: plugin.downloadUrl,
             expectedId: plugin.id,
@@ -598,23 +841,49 @@ export function PluginCommunityPanel({
             ...(plugin.signature ? { signature: plugin.signature } : {}),
           }),
         });
-        const body = (await response.json().catch(() => null)) as {
-          success?: boolean;
-          error?: string;
-          code?: string;
-          fallbackToClient?: boolean;
-          updated?: boolean;
-          newVersion?: string;
-        } | null;
+
+        const contentType = response.headers?.get?.('content-type') || '';
+        const isStream =
+          contentType.includes('text/event-stream') &&
+          Boolean(response.body) &&
+          typeof response.body?.getReader === 'function';
+
+        let body: InstallResultPayload | null = null;
+        let effectiveStatus = response.status;
+        let effectiveOk = response.ok;
+
+        if (isStream) {
+          const streamed = await consumeInstallSseStream(response, (ev) => {
+            const stage = ev.stage ?? 'downloading';
+            setInstallState(plugin.id, {
+              phase: 'installing',
+              stage,
+              percent: ev.percent !== undefined ? ev.percent : null,
+              loadedBytes: ev.loaded,
+              totalBytes: ev.total,
+              message: getStageLabel(stage, zh),
+            });
+          });
+          body = streamed.body;
+          effectiveStatus = streamed.status;
+          effectiveOk = Boolean(body?.success) && streamed.status < 400;
+        } else {
+          body = (await response.json().catch(() => null)) as InstallResultPayload | null;
+        }
 
         let effectiveUpdated = Boolean(body?.updated) || isUpdating;
         let resolvedVersion = body?.newVersion || plugin.version;
-        if (!response.ok || !body?.success) {
+        let resolvedActivated = body?.activated !== false && !body?.activationError;
+        let resolvedActivationError = body?.activationError;
+
+        if (!effectiveOk || !body?.success) {
           if (body?.fallbackToClient) {
             const fallbackBody = await uploadViaBrowser(plugin, approvePublic);
             effectiveUpdated = Boolean(fallbackBody?.updated) || isUpdating;
             resolvedVersion = fallbackBody?.newVersion || resolvedVersion;
-          } else if (response.status === 403 && !body?.code) {
+            resolvedActivated = fallbackBody?.activated !== false && !fallbackBody?.activationError;
+            resolvedActivationError = fallbackBody?.activationError;
+          } else if (effectiveStatus === 403 && !body?.code) {
             throw new Error(zh ? '仅管理员可安装社区插件，请联系管理员。' : 'Only administrators can install plugins.');
           } else {
             throw new Error(
@@ -635,13 +904,19 @@ export function PluginCommunityPanel({
         });
         setInstallState(plugin.id, {
           phase: 'success',
+          stage: 'complete',
+          percent: 100,
           message: effectiveUpdated
             ? zh
-              ? `已更新至 v${resolvedVersion}（已自动保存更新前快照），正在刷新…`
-              : `Updated to v${resolvedVersion} (pre-update snapshot saved), reloading…`
-            : zh
-              ? '安装完成，请在「发现」页启用'
-              : 'Installed — enable it on the Discover tab',
+              ? `已更新至 v${resolvedVersion}（已自动保存更新前快照），刷新页面后前端扩展点生效`
+              : `Updated to v${resolvedVersion} (pre-update snapshot saved) — refresh the page for frontend extension points to take effect`
+            : resolvedActivated
+              ? zh
+                ? '安装完成，刷新页面后前端扩展点生效'
+                : 'Installed — refresh the page for frontend extension points to take effect'
+              : zh
+                ? `已安装，但激活失败（${resolvedActivationError || '请检查日志'}），请在「发现」页手动启用`
+                : `Installed, but activation failed (${resolvedActivationError || 'check logs'}) — enable it on the Discover tab`,
         });
         onInstalled?.();
       } catch (e) {
@@ -649,6 +924,8 @@ export function PluginCommunityPanel({
           phase: 'error',
           message: e instanceof Error ? e.message : String(e),
         });
+      } finally {
+        activeInstallIdsRef.current.delete(plugin.id);
       }
     },
     [doFetch, isInstalled, onInstalled, onRegistryLoaded, setInstallState, uploadViaBrowser, zh],
@@ -1062,6 +1339,20 @@ export function PluginCommunityPanel({
     );
   }
 
+  const isRefreshing = status === 'loading' && data !== null;
+  const refreshButtonLabel =
+    status === 'loading'
+      ? isRefreshing
+        ? zh
+          ? '刷新中…'
+          : 'Refreshing…'
+        : zh
+          ? '载入中…'
+          : 'Loading…'
+      : zh
+        ? '刷新'
+        : 'Refresh';
+
   return (
     <div className="flex-1 overflow-y-auto p-6 bg-gray-50/30">
       {/* 工具栏 */}
@@ -1113,12 +1404,18 @@ export function PluginCommunityPanel({
 
         <button
           type="button"
+          data-testid="community-refresh-btn"
           onClick={() => void loadRegistry(true)}
           disabled={status === 'loading'}
-          className="flex items-center gap-1.5 text-xs font-semibold border border-gray-200 rounded-lg px-3 py-2 bg-white shadow-sm text-gray-600 hover:text-gray-900 hover:border-gray-300 transition-colors disabled:opacity-50 cursor-pointer"
+          aria-busy={status === 'loading'}
+          className="flex items-center gap-1.5 text-xs font-semibold border border-gray-200 rounded-lg px-3 py-2 bg-white shadow-sm text-gray-600 hover:text-gray-900 hover:border-gray-300 transition-colors disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer"
         >
-          {status === 'loading' ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
-          <span>{zh ? '刷新' : 'Refresh'}</span>
+          {status === 'loading' ? (
+            <Loader2 size={14} className="animate-spin text-indigo-600" aria-hidden="true" />
+          ) : (
+            <RefreshCw size={14} aria-hidden="true" />
+          )}
+          <span>{refreshButtonLabel}</span>
         </button>
 
         <button
@@ -1424,12 +1721,55 @@ export function PluginCommunityPanel({
         </div>
       )}
 
-      {/* 加载骨架 */}
+      {/* 加载状态指示与骨架 */}
       {status === 'loading' && (
-        <div className="grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-3 gap-4">
-          {Array.from({ length: 6 }, (_, i) => (
-            <SkeletonCard key={i} />
-          ))}
+        <div className="space-y-4">
+          <div
+            data-testid="community-loading-indicator"
+            role="status"
+            aria-live="polite"
+            className="bg-white border border-indigo-100 rounded-xl p-4 shadow-sm"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center shrink-0">
+                <Loader2 size={18} className="animate-spin text-indigo-600" aria-hidden="true" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold text-gray-900">
+                  {isRefreshing
+                    ? zh
+                      ? '正在刷新插件社区…'
+                      : 'Refreshing community plugins…'
+                    : zh
+                      ? '正在载入插件社区…'
+                      : 'Loading community plugins…'}
+                </p>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  {zh
+                    ? '正在获取最新插件目录与版本状态，请稍候'
+                    : 'Fetching the latest plugin catalog and release status…'}
+                </p>
+              </div>
+            </div>
+            <progress
+              className="community-loading-progress block w-full h-1.5 mt-3"
+              aria-label={
+                isRefreshing
+                  ? zh
+                    ? '插件社区刷新进度'
+                    : 'Refreshing community plugins'
+                  : zh
+                    ? '插件社区载入进度'
+                    : 'Loading community plugins'
+              }
+            />
+          </div>
+
+          <div className="grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-3 gap-4" aria-hidden="true">
+            {Array.from({ length: 6 }, (_, i) => (
+              <SkeletonCard key={i} />
+            ))}
+          </div>
         </div>
       )}
 
@@ -1472,17 +1812,40 @@ export function PluginCommunityPanel({
             const sizeLabel = formatPackageSize(plugin.packageSize);
             const starPending = Boolean(starPendingIds[plugin.id]);
             const giteeStarUrl = resolveGiteeStarUrl(plugin);
-            const installLabel = installed
-              ? plugin.hasUpdate
+            const isUpdatingCard = installed && plugin.hasUpdate;
+            const isInstallingCard = state?.phase === 'installing';
+            const installLabel = isInstallingCard
+              ? isUpdatingCard
                 ? zh
-                  ? `更新至 v${plugin.version}`
-                  : `Update to v${plugin.version}`
+                  ? '更新中…'
+                  : 'Updating…'
                 : zh
-                  ? '已安装'
-                  : 'Installed'
-              : zh
-                ? '安装'
-                : 'Install';
+                  ? '安装中…'
+                  : 'Installing…'
+              : installed
+                ? plugin.hasUpdate
+                  ? zh
+                    ? `更新至 v${plugin.version}`
+                    : `Update to v${plugin.version}`
+                  : zh
+                    ? '已安装'
+                    : 'Installed'
+                : zh
+                  ? '安装'
+                  : 'Install';
+            const activeStage = state?.stage ?? 'downloading';
+            const stageLabel = getStageLabel(activeStage, zh);
+            const hasPercent = typeof state?.percent === 'number' && Number.isFinite(state.percent);
+            const loadedLabel = state?.loadedBytes ? formatPackageSize(state.loadedBytes) : null;
+            const totalLabel = state?.totalBytes ? formatPackageSize(state.totalBytes) : null;
+            const byteProgressLabel =
+              loadedLabel && totalLabel
+                ? `${loadedLabel} / ${totalLabel}`
+                : loadedLabel
+                  ? zh
+                    ? `已下载 ${loadedLabel}`
+                    : `${loadedLabel} downloaded`
+                  : null;
 
             return (
               <article
@@ -1638,14 +2001,15 @@ export function PluginCommunityPanel({
                       onClick={() => {
                         void handleInstall(plugin, true);
                       }}
-                      disabled={state?.phase === 'installing' || (installed && !plugin.hasUpdate)}
+                      disabled={isInstallingCard || (installed && !plugin.hasUpdate)}
+                      aria-busy={isInstallingCard}
                       className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all flex items-center gap-1.5 shrink-0 disabled:cursor-default ${
                         installed && !plugin.hasUpdate
                           ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                           : 'bg-gradient-to-r from-indigo-600 to-violet-600 text-white hover:from-indigo-700 hover:to-violet-700 shadow-sm disabled:opacity-60 cursor-pointer'
                       }`}
                     >
-                      {state?.phase === 'installing' ? (
+                      {isInstallingCard ? (
                         <Loader2 size={12} className="animate-spin" />
                       ) : installed && !plugin.hasUpdate ? (
                         <CheckCircle2 size={12} />
@@ -1708,22 +2072,86 @@ export function PluginCommunityPanel({
                       )
                     )}
 
-                    {state && (
+                    {state && state.phase !== 'installing' && (
                       <span
                         className={`text-xs ${
                           state.phase === 'error'
                             ? 'text-rose-600 break-words flex-1 min-w-[12rem]'
-                            : state.phase === 'success'
-                              ? 'text-emerald-600 truncate'
-                              : 'text-gray-400 truncate'
+                            : 'text-emerald-600'
                         }`}
                         title={state.message}
-                        role={state.phase === 'error' ? 'alert' : undefined}
+                        role={state.phase === 'error' ? 'alert' : 'status'}
                       >
                         {state.message}
                       </span>
                     )}
                   </div>
+
+                  {isInstallingCard && (
+                    <div
+                      data-testid={`community-install-progress-${plugin.id}`}
+                      className="rounded-lg border border-indigo-100 bg-indigo-50/50 px-3 py-2.5 space-y-1.5"
+                    >
+                      <div className="flex items-center justify-between gap-2 text-xs">
+                        <span className="font-semibold text-indigo-800 inline-flex items-center gap-1.5 min-w-0">
+                          <Loader2 size={11} className="animate-spin shrink-0" />
+                          <span data-testid={`community-install-stage-${plugin.id}`}>{stageLabel}</span>
+                          {byteProgressLabel && (
+                            <span className="font-mono font-normal text-indigo-600/80 truncate">
+                              ({byteProgressLabel})
+                            </span>
+                          )}
+                        </span>
+                        <span
+                          data-testid={`community-install-percent-${plugin.id}`}
+                          className="font-mono font-semibold text-indigo-700 shrink-0"
+                        >
+                          {hasPercent ? `${state.percent}%` : zh ? '大小未知' : 'Unknown size'}
+                        </span>
+                      </div>
+                      <div
+                        role="progressbar"
+                        aria-label={stageLabel}
+                        aria-valuemin={0}
+                        aria-valuemax={100}
+                        aria-valuenow={hasPercent ? (state.percent ?? 0) : undefined}
+                        data-indeterminate={hasPercent ? 'false' : 'true'}
+                        className="h-1.5 w-full rounded-full bg-indigo-100 overflow-hidden"
+                      >
+                        {hasPercent ? (
+                          <div
+                            className="h-full rounded-full bg-gradient-to-r from-indigo-600 to-violet-600 transition-all duration-200"
+                            style={{ width: `${Math.max(0, Math.min(100, state.percent ?? 0))}%` }}
+                          />
+                        ) : (
+                          <div className="h-full w-2/5 rounded-full bg-gradient-to-r from-indigo-500 to-violet-500 animate-indeterminate-progress" />
+                        )}
+                      </div>
+                      <div className="flex items-center justify-between text-[11px] pt-0.5">
+                        {INSTALL_STAGE_ORDER.map((step, idx) => {
+                          const currentIdx = INSTALL_STAGE_ORDER.indexOf(
+                            activeStage === 'complete' ? 'activating' : activeStage,
+                          );
+                          const isDone = currentIdx > idx;
+                          const isActive = currentIdx === idx;
+                          return (
+                            <span
+                              key={step}
+                              className={
+                                isActive
+                                  ? 'font-semibold text-indigo-700'
+                                  : isDone
+                                    ? 'text-emerald-700'
+                                    : 'text-gray-400'
+                              }
+                            >
+                              {getStageStepShortLabel(step, zh)}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </article>
             );

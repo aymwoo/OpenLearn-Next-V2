@@ -76,10 +76,12 @@ export interface PluginUpdateOptions {
   executionMode?: PluginExecutionMode;
   allowDowngrade?: boolean;
   communityOfficial?: boolean;
+  onProgress?: (step: string, detail?: string) => void;
 }
 
 export interface PluginInstallOptions {
   communityOfficial?: boolean;
+  onProgress?: (step: string, detail?: string) => void;
 }
 
 export interface PluginUpdateResult {

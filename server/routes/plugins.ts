@@ -931,7 +931,42 @@ export function registerPluginsRoutes(ctx: ServerContext) {
 
   // 从社区注册表条目安装/更新插件
   // SEC-AUTH: 管理员专属 —— 服务端会下载并执行第三方代码，风险等级等同于 ZIP 安装。
+  // 支持 Accept: text/event-stream（或 body.stream === true）实时推送安装阶段与进度百分比，
+  // 默认仍返回标准 JSON 响应以保持与既有调用方的兼容。
   app.post('/api/plugins/install-from-url', requireAuth('administrator'), async (req, res) => {
+    const wantsStream = String(req.headers.accept || '').includes('text/event-stream') || req.body?.stream === true;
+    const sendSse = (event: string, data: unknown) => {
+      if (!wantsStream || res.writableEnded || res.destroyed) return;
+      res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+    };
+    const sendProgress = (progress: {
+      stage: 'downloading' | 'verifying' | 'installing' | 'activating' | 'complete';
+      percent: number | null;
+      loaded?: number;
+      total?: number | null;
+      downloadPercent?: number | null;
+      detail?: string;
+    }) => {
+      sendSse('progress', progress);
+    };
+    const failResponse = (status: number, body: Record<string, unknown>) => {
+      if (wantsStream) {
+        sendSse('error', { status, ...body });
+        if (!res.writableEnded) res.end();
+        return;
+      }
+      return res.status(status).json(body);
+    };
+    const finishResponse = (body: Record<string, unknown>) => {
+      if (wantsStream) {
+        sendProgress({ stage: 'complete', percent: 100 });
+        sendSse('result', body);
+        if (!res.writableEnded) res.end();
+        return;
+      }
+      return res.json(body);
+    };
+
     try {
       const {
         downloadUrl,
@@ -943,6 +978,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
         approveNetworkHosts,
         integrity,
         signature,
+        autoActivate,
       } = req.body || {};
 
       if (typeof downloadUrl !== 'string' || !downloadUrl.trim()) {
@@ -965,23 +1001,46 @@ export function registerPluginsRoutes(ctx: ServerContext) {
         });
       }
 
+      if (wantsStream) {
+        res.status(200);
+        res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+        res.setHeader('Cache-Control', 'no-cache, no-transform');
+        res.setHeader('Connection', 'keep-alive');
+        res.setHeader('X-Accel-Buffering', 'no');
+        res.flushHeaders?.();
+      }
+
       // 收窄到三种合法模式。用具名谓词而非内联比较 —— 加第四种模式时
       // 漏改这一处的后果是「该模式静默降级为默认」，且不产生任何报错。
       const executionMode = isValidExecutionMode(rawExecutionMode) ? rawExecutionMode : undefined;
 
+      sendProgress({ stage: 'downloading', percent: null, loaded: 0, total: null, downloadPercent: null });
       let pkg: DownloadedPackage;
       try {
-        pkg = await downloadPluginPackage(downloadUrl.trim());
-      } catch (e: any) {
+        pkg = await downloadPluginPackage(downloadUrl.trim(), {
+          onProgress: (dl) => {
+            const overallPercent = dl.percent !== null ? Math.round(dl.percent * 0.65) : null;
+            sendProgress({
+              stage: 'downloading',
+              percent: overallPercent,
+              loaded: dl.loaded,
+              total: dl.total,
+              downloadPercent: dl.percent,
+            });
+          },
+        });
+      } catch (e: unknown) {
         // 与 one-click-update 一致：服务端下载失败时让前端改为浏览器直传
         // 至 /api/plugins/upload-zip-raw，避免大包/网络环境导致整体失败。
-        return res.status(400).json({
+        const message = e instanceof Error ? e.message : String(e);
+        return failResponse(400, {
           success: false,
-          error: e?.message || '服务端下载插件包失败',
+          error: message || '服务端下载插件包失败',
           fallbackToClient: true,
         });
       }
 
+      sendProgress({ stage: 'verifying', percent: 72 });
       const attested = verifyCommunityPackage(
         pkg.zipPath,
         integrity,
@@ -991,19 +1050,38 @@ export function registerPluginsRoutes(ctx: ServerContext) {
       );
       if (!attested.ok) {
         removeTempZip(pkg.zipPath);
-        return res.status(400).json({ success: false, code: attested.code, error: attested.error });
+        return failResponse(400, { success: false, code: attested.code, error: attested.error });
       }
 
       const existing = expectedId ? kernelContainer.pluginHost.findByManifestId(expectedId) : null;
+      const emitHostProgress = (step: string, detail?: string) => {
+        if (step === 'validating') sendProgress({ stage: 'installing', percent: 80, detail });
+        else if (step === 'extracting') sendProgress({ stage: 'installing', percent: 85, detail });
+        else if (step === 'registering') sendProgress({ stage: 'installing', percent: 90, detail });
+        else if (step === 'activating') sendProgress({ stage: 'activating', percent: 95, detail });
+      };
 
       try {
         if (existing) {
+          sendProgress({ stage: 'installing', percent: 78 });
           const result = await kernelContainer.pluginDistributionManager.updateFromZip(pkg.zipPath, {
             targetPluginId: existing.pluginId,
             executionMode,
             allowDowngrade: Boolean(allowDowngrade),
             communityOfficial: true,
+            onProgress: emitHostProgress,
           });
+          const secFields = installationSecurityFields(
+            {
+              ...result.manifest,
+              executionMode: result.executionMode,
+              executionModeCoerced: result.executionModeCoerced,
+            },
+            result.pluginId,
+            approvePublicRoutes === true,
+            approveCapabilities === true,
+            approveNetworkHosts === true,
+          );
           recordSecurityAudit('plugin.updated', {
             actorId: getActorId(req),
             pluginId: result.pluginId,
@@ -1013,7 +1091,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
             snapshotId: result.snapshotId,
             via: 'install-from-url',
           });
-          return res.json({
+          return finishResponse({
             success: true,
             updated: true,
             pluginId: result.pluginId,
@@ -1021,53 +1099,71 @@ export function registerPluginsRoutes(ctx: ServerContext) {
             oldVersion: result.oldVersion,
             newVersion: result.newVersion,
             wasActive: result.wasActive,
+            activated: result.wasActive,
             snapshotId: result.snapshotId,
             filename: pkg.filename,
             bytes: pkg.bytes,
-            ...installationSecurityFields(
-              {
-                ...result.manifest,
-                executionMode: result.executionMode,
-                executionModeCoerced: result.executionModeCoerced,
-              },
-              result.pluginId,
-              approvePublicRoutes === true,
-              approveCapabilities === true,
-              approveNetworkHosts === true,
-            ),
+            ...secFields,
           });
         }
 
+        sendProgress({ stage: 'installing', percent: 78 });
         const result = await kernelContainer.pluginDistributionManager.installFromZip(pkg.zipPath, executionMode, {
           communityOfficial: true,
+          onProgress: emitHostProgress,
         });
+        const secFields = installationSecurityFields(
+          result.manifest,
+          result.pluginId,
+          approvePublicRoutes === true,
+          approveCapabilities === true,
+          approveNetworkHosts === true,
+        );
+
+        let activated = false;
+        let activationError: string | undefined;
+        if (autoActivate !== false) {
+          sendProgress({ stage: 'activating', percent: 95 });
+          try {
+            await kernelContainer.pluginHost.activatePlugin(result.pluginId);
+            activated = true;
+          } catch (actErr: unknown) {
+            activationError = actErr instanceof Error ? actErr.message : String(actErr) || '插件激活失败';
+            pluginLog.warn({ err: actErr, pluginId: result.pluginId }, 'Community plugin auto-activation failed');
+          }
+        }
+
         recordSecurityAudit('plugin.installed', {
           actorId: getActorId(req),
           pluginId: result.pluginId,
           manifestId: result.manifest?.id,
           via: 'url',
         });
-        res.json({
+        return finishResponse({
           success: true,
           updated: false,
           pluginId: result.pluginId,
           manifest: result.manifest,
           filename: pkg.filename,
           bytes: pkg.bytes,
-          ...installationSecurityFields(
-            result.manifest,
-            result.pluginId,
-            approvePublicRoutes === true,
-            approveCapabilities === true,
-            approveNetworkHosts === true,
-          ),
+          activated,
+          ...(activationError ? { activationError } : {}),
+          ...secFields,
         });
       } finally {
         // R-4：下载的临时 ZIP 在安装/更新完成后归还（内容已 copyFileSync 进插件目录）
         removeTempZip(pkg.zipPath);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       pluginLog.error(err);
+      if (wantsStream && res.headersSent) {
+        const rawMsg = err instanceof Error ? err.message : String(err);
+        const message =
+          process.env.NODE_ENV === 'production' ? 'Internal server error' : rawMsg || 'Internal server error';
+        sendSse('error', { status: 500, success: false, error: message });
+        if (!res.writableEnded) res.end();
+        return;
+      }
       sendSafeError(res, err);
     }
   });

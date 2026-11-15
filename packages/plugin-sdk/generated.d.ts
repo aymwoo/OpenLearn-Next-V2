@@ -1344,6 +1344,7 @@ declare class PluginHostError extends Error {
 /** @see packages/core/plugin-host/plugin-distribution-manager.ts */
 interface PluginInstallOptions {
     communityOfficial?: boolean;
+    onProgress?: (step: string, detail?: string) => void;
 }
 
 /** @see packages/core/plugin-host/errors.ts */
