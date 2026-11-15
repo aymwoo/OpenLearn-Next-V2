@@ -114,3 +114,19 @@ export function createSessionWriteLimiter(max: number) {
     validate: limiterValidation,
   });
 }
+
+/**
+ * 登录页公开学号查询专用限流（按客户端 IP 分桶）。
+ * 防止未登录访客通过高频遍历枚举全校学生姓名与学号。
+ */
+export function createStudentLookupLimiter(max: number) {
+  return rateLimit({
+    windowMs: 60 * 1000,
+    max,
+    keyGenerator: writeRateLimitKey,
+    message: { error: '学号查询过于频繁，请稍后再试。Too many student lookup requests, please try again later.' },
+    standardHeaders: true,
+    legacyHeaders: false,
+    validate: limiterValidation,
+  });
+}

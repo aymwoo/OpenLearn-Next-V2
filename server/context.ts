@@ -52,6 +52,7 @@ export interface ServerContext {
   app: express.Express;
   io: Server;
   loginLimiter: any;
+  studentLookupLimiter?: express.RequestHandler;
   aiLimiter: any;
   activityRegistry: ActivityRegistry;
   lessonActiveSegments: Map<string, string>;

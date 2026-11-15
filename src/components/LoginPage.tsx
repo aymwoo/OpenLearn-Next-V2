@@ -1,13 +1,36 @@
-import React, { useState, useEffect } from 'react';
-import { Lock, User, Users, Shield, GraduationCap, ArrowRight, AlertCircle, KeyRound } from 'lucide-react';
-import { listFromEnvelope } from '../utils/listEnvelope.js';
+import React, { useState, useEffect, useRef } from 'react';
+import {
+  Lock,
+  User,
+  Users,
+  Shield,
+  GraduationCap,
+  ArrowRight,
+  AlertCircle,
+  KeyRound,
+  Search,
+  X,
+  Check,
+} from 'lucide-react';
 import { useThemeStore } from '../store/themeStore';
 
-interface Student {
+interface PublicClassOption {
   id: string;
   name: string;
-  email: string;
-  student_number?: string;
+}
+
+interface StudentLookupItem {
+  name: string;
+  studentNumber: string;
+  classes: string[];
+}
+
+const HAN_CHAR_RE = /\p{Script=Han}/u;
+
+function isLookupNameValid(rawName: string): boolean {
+  const trimmed = rawName.trim();
+  if (!trimmed || trimmed.length > 64) return false;
+  return HAN_CHAR_RE.test(trimmed) || trimmed.replace(/\s+/g, '').length >= 2;
 }
 
 interface LoginPageProps {
@@ -53,31 +76,28 @@ export const LoginPage = React.memo(function LoginPage({ onLoginSuccess, lang }:
   const [teacherError, setTeacherError] = useState('');
   const [teacherSubmitting, setTeacherSubmitting] = useState(false);
 
-  // Student list state
-  const [students, setStudents] = useState<Student[]>([]);
-  const [selectedStudentId, setSelectedStudentId] = useState('');
+  // Student credentials & lookup state
   const [manualStudentId, setManualStudentId] = useState('');
   const [studentPassword, setStudentPassword] = useState('');
   const [studentError, setStudentError] = useState('');
   const [studentSubmitting, setStudentSubmitting] = useState(false);
 
-  useEffect(() => {
-    const fetchStudents = async () => {
-      try {
-        const res = await fetch('/api/students?pageSize=all');
-        if (res.ok) {
-          const data = listFromEnvelope<any>(await res.json());
-          setStudents(data);
-          if (data.length > 0) {
-            setSelectedStudentId(data[0].id);
-          }
-        }
-      } catch (err) {
-        console.warn('Failed to fetch student roster for login selection:', err);
-      }
-    };
-    fetchStudents();
-  }, []);
+  const [allowPublicStudentLookup, setAllowPublicStudentLookup] = useState(true);
+  const [isLookupOpen, setIsLookupOpen] = useState(false);
+  const [publicClasses, setPublicClasses] = useState<PublicClassOption[]>([]);
+  const [classesLoading, setClassesLoading] = useState(false);
+  const [lookupName, setLookupName] = useState('');
+  const [lookupClassId, setLookupClassId] = useState('');
+  const [lookupResults, setLookupResults] = useState<StudentLookupItem[]>([]);
+  const [lookupTruncated, setLookupTruncated] = useState(false);
+  const [lookupHasSearched, setLookupHasSearched] = useState(false);
+  const [lookupLoading, setLookupLoading] = useState(false);
+  const [lookupError, setLookupError] = useState('');
+
+  const lookupDialogRef = useRef<HTMLDialogElement>(null);
+  const lookupInputRef = useRef<HTMLInputElement>(null);
+  const studentPasswordInputRef = useRef<HTMLInputElement>(null);
+  const pressedOutsideRef = useRef(false);
 
   useEffect(() => {
     const fetchSiteInfo = async () => {
@@ -86,6 +106,7 @@ export const LoginPage = React.memo(function LoginPage({ onLoginSuccess, lang }:
         if (res.ok) {
           const data = await res.json();
           setSiteInfo(data);
+          setAllowPublicStudentLookup(data?.allowPublicStudentLookup !== false);
         }
       } catch (err) {
         console.warn('Failed to fetch site settings for login branding:', err);
@@ -156,12 +177,109 @@ export const LoginPage = React.memo(function LoginPage({ onLoginSuccess, lang }:
     }
   };
 
+  const fetchPublicClasses = async () => {
+    setClassesLoading(true);
+    try {
+      const res = await fetch('/api/auth/public-classes');
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data?.items)) {
+          setPublicClasses(data.items);
+        }
+      }
+    } catch {
+      // 公开班级列表加载失败时保留「全部班级」过滤，不阻塞按姓名查询
+    } finally {
+      setClassesLoading(false);
+    }
+  };
+
+  const openLookupDialog = () => {
+    setLookupError('');
+    setIsLookupOpen(true);
+    const el = lookupDialogRef.current;
+    if (el) {
+      if (typeof el.showModal === 'function') {
+        if (!el.open) el.showModal();
+      } else {
+        el.setAttribute('open', '');
+      }
+    }
+    if (typeof requestAnimationFrame === 'function') {
+      requestAnimationFrame(() => lookupInputRef.current?.focus());
+    } else {
+      lookupInputRef.current?.focus();
+    }
+    if (publicClasses.length === 0) {
+      void fetchPublicClasses();
+    }
+  };
+
+  const closeLookupDialog = () => {
+    const el = lookupDialogRef.current;
+    if (el) {
+      if (typeof el.close === 'function' && el.open) {
+        el.close();
+      } else {
+        el.removeAttribute('open');
+      }
+    }
+    setIsLookupOpen(false);
+  };
+
+  const handleLookupSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLookupError('');
+    if (!isLookupNameValid(lookupName)) {
+      setLookupError(
+        lang === 'zh'
+          ? '请输入至少 2 个字符（或至少 1 个汉字）进行查询'
+          : 'Please enter at least 2 characters (or 1 Chinese character)',
+      );
+      lookupInputRef.current?.focus();
+      return;
+    }
+
+    setLookupLoading(true);
+    try {
+      const params = new URLSearchParams({ name: lookupName.trim() });
+      if (lookupClassId) {
+        params.set('classId', lookupClassId);
+      }
+      const res = await fetch(`/api/auth/student-lookup?${params.toString()}`);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setLookupResults([]);
+        setLookupTruncated(false);
+        setLookupHasSearched(false);
+        setLookupError(
+          data?.error || (lang === 'zh' ? '查询失败，请稍后重试' : 'Lookup failed. Please try again later.'),
+        );
+        return;
+      }
+      setLookupResults(Array.isArray(data?.items) ? data.items : []);
+      setLookupTruncated(Boolean(data?.truncated));
+      setLookupHasSearched(true);
+    } catch {
+      setLookupError(lang === 'zh' ? '网络连接异常，请重试' : 'Network connection failure. Please try again.');
+    } finally {
+      setLookupLoading(false);
+    }
+  };
+
+  const handleSelectLookedUpStudent = (studentNumber: string) => {
+    setManualStudentId(studentNumber);
+    setStudentError('');
+    closeLookupDialog();
+    studentPasswordInputRef.current?.focus();
+  };
+
   const handleStudentLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setStudentError('');
-    const finalStudentId = manualStudentId.trim() || selectedStudentId;
+    const finalStudentId = manualStudentId.trim();
     if (!finalStudentId) {
-      setStudentError(lang === 'zh' ? '请选择或输入学号' : 'Please select or input Student ID');
+      setStudentError(lang === 'zh' ? '请输入学号' : 'Please enter Student ID');
       return;
     }
     if (!studentPassword.trim()) {
@@ -376,48 +494,23 @@ export const LoginPage = React.memo(function LoginPage({ onLoginSuccess, lang }:
             </div>
           )}
 
-          {students.length > 0 ? (
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-muted flex items-center gap-1.5">
-                <GraduationCap size={14} />
-                {lang === 'zh' ? '从学生花名册中快速选择' : 'Quick Access Student Select'}
-              </label>
-              <select
-                value={selectedStudentId}
-                onChange={(e) => {
-                  setSelectedStudentId(e.target.value);
-                  setManualStudentId('');
-                }}
-                data-theme-control="input"
-                className="w-full bg-surface-secondary border border-theme focus:border-primary-theme focus:ring-1 focus:ring-primary-theme rounded-xl text-xs sm:text-sm p-3 text-main outline-none transition-colors cursor-pointer"
-              >
-                {students.map((student) => (
-                  <option key={student.id} value={student.id}>
-                    {student.name} ({student.student_number || student.id})
-                  </option>
-                ))}
-              </select>
-              <p className="text-xs text-subtle font-medium">
-                {lang === 'zh'
-                  ? '✨ 在沙盒调试中，你可以直接下拉选择已有的学生账户一键登录为该生。'
-                  : '✨ Sandbox help: Quick select existing students on file to simulate as student.'}
-              </p>
-            </div>
-          ) : null}
-
-          <div className="relative flex py-2 items-center">
-            <div className="flex-grow border-t border-theme" />
-            <span className="flex-shrink mx-3 text-xs font-bold text-subtle uppercase tracking-wider">
-              {lang === 'zh' ? '或手动输入学号' : 'Or input key manually'}
-            </span>
-            <div className="flex-grow border-t border-theme" />
-          </div>
-
           <div className="space-y-1.5">
-            <label htmlFor="student-access-key" className="text-xs font-medium text-muted flex items-center gap-1.5">
-              <User size={13} />
-              {lang === 'zh' ? '学号 / Student ID' : 'Student Access Key'}
-            </label>
+            <div className="flex items-center justify-between gap-2">
+              <label htmlFor="student-access-key" className="text-xs font-medium text-muted flex items-center gap-1.5">
+                <User size={13} />
+                {lang === 'zh' ? '学号 / Student ID' : 'Student Access Key'}
+              </label>
+              {allowPublicStudentLookup && (
+                <button
+                  type="button"
+                  onClick={openLookupDialog}
+                  className="text-xs font-semibold text-primary-ink hover:text-primary-ink-hover inline-flex items-center gap-1 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 rounded px-1 py-0.5 transition-colors"
+                >
+                  <Search size={12} aria-hidden="true" />
+                  <span>{lang === 'zh' ? '忘记学号？查询学号' : 'Forgot ID? Look up'}</span>
+                </button>
+              )}
+            </div>
             <input
               id="student-access-key"
               name="studentAccessKey"
@@ -428,9 +521,8 @@ export const LoginPage = React.memo(function LoginPage({ onLoginSuccess, lang }:
               value={manualStudentId}
               onChange={(e) => {
                 setManualStudentId(e.target.value);
-                setSelectedStudentId('');
               }}
-              placeholder={lang === 'zh' ? '手工输入您的特有学号' : 'Enter specific numeric ID code'}
+              placeholder={lang === 'zh' ? '输入您的学号' : 'Enter your Student ID'}
               data-theme-control="input"
               className="w-full bg-surface-secondary border border-theme focus:border-primary-theme focus:ring-1 focus:ring-primary-theme rounded-xl text-xs sm:text-sm p-3 text-main outline-none placeholder-muted transition-colors"
             />
@@ -442,6 +534,7 @@ export const LoginPage = React.memo(function LoginPage({ onLoginSuccess, lang }:
               {lang === 'zh' ? '个人密码 / 临时班级密码' : 'Personal Password / Class Passcode'}
             </label>
             <input
+              ref={studentPasswordInputRef}
               id="student-password"
               name="studentPassword"
               type="password"
@@ -521,6 +614,209 @@ export const LoginPage = React.memo(function LoginPage({ onLoginSuccess, lang }:
           {loginLayout.order.map((regionId) => orderedSingleColumnBlocks[regionId])}
         </div>
       )}
+
+      {/* 原生模态 <dialog>（独立于登录 <form>，避免表单嵌套） */}
+      <dialog
+        ref={lookupDialogRef}
+        id="student-lookup-dialog"
+        aria-labelledby="student-lookup-dialog-title"
+        {...({ closedby: 'any' } as Record<string, string>)}
+        onClose={() => {
+          if (lookupDialogRef.current) {
+            lookupDialogRef.current.returnValue = '';
+          }
+          setIsLookupOpen(false);
+        }}
+        onPointerDown={(e) => {
+          if (typeof HTMLDialogElement !== 'undefined' && 'closedBy' in HTMLDialogElement.prototype) return;
+          const rect = e.currentTarget.getBoundingClientRect();
+          pressedOutsideRef.current =
+            e.clientX < rect.left || e.clientX > rect.right || e.clientY < rect.top || e.clientY > rect.bottom;
+        }}
+        onPointerUp={(e) => {
+          if (typeof HTMLDialogElement !== 'undefined' && 'closedBy' in HTMLDialogElement.prototype) return;
+          const rect = e.currentTarget.getBoundingClientRect();
+          const releasedOutside =
+            e.clientX < rect.left || e.clientX > rect.right || e.clientY < rect.top || e.clientY > rect.bottom;
+          if (pressedOutsideRef.current && releasedOutside) {
+            closeLookupDialog();
+          }
+          pressedOutsideRef.current = false;
+        }}
+        className="m-auto w-[calc(100vw-2rem)] max-w-md rounded-2xl border border-theme bg-surface text-main shadow-2xl p-0 overflow-hidden"
+      >
+        {isLookupOpen && (
+          <div className="p-5 sm:p-6 space-y-4">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-primary-theme/15 text-primary-ink">
+                  <Search size={16} aria-hidden="true" />
+                </span>
+                <h2 id="student-lookup-dialog-title" className="text-base font-bold text-main truncate">
+                  {lang === 'zh' ? '自助查询学号' : 'Student ID Lookup'}
+                </h2>
+              </div>
+              <button
+                type="button"
+                onClick={closeLookupDialog}
+                aria-label={lang === 'zh' ? '关闭学号查询弹窗' : 'Close student ID lookup dialog'}
+                className="p-1.5 rounded-lg text-muted hover:text-main hover:bg-surface-secondary transition-colors cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+              >
+                <X size={16} aria-hidden="true" />
+              </button>
+            </div>
+
+            <form
+              role="search"
+              onSubmit={handleLookupSubmit}
+              className="space-y-3"
+              aria-labelledby="student-lookup-dialog-title"
+            >
+              <div className="space-y-1.5">
+                <label htmlFor="student-lookup-class" className="text-xs font-medium text-muted block">
+                  {lang === 'zh' ? '所在班级（可选，用于区分重名）' : 'Class (optional, narrows duplicate names)'}
+                </label>
+                <select
+                  id="student-lookup-class"
+                  name="classId"
+                  value={lookupClassId}
+                  onChange={(e) => setLookupClassId(e.target.value)}
+                  disabled={classesLoading}
+                  className="w-full bg-surface-secondary border border-theme focus:border-primary-theme focus:ring-1 focus:ring-primary-theme rounded-xl text-xs sm:text-sm p-2.5 text-main outline-none transition-colors cursor-pointer"
+                >
+                  <option value="">{lang === 'zh' ? '全部班级' : 'All classes'}</option>
+                  {publicClasses.map((cls) => (
+                    <option key={cls.id} value={cls.id}>
+                      {cls.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-1.5">
+                <label htmlFor="student-lookup-name" className="text-xs font-medium text-muted block">
+                  {lang === 'zh' ? '学生姓名' : 'Student Name'}{' '}
+                  <span className="text-rose-500" aria-hidden="true">
+                    *
+                  </span>
+                </label>
+                <input
+                  ref={lookupInputRef}
+                  id="student-lookup-name"
+                  name="studentName"
+                  type="search"
+                  autoFocus
+                  autoCorrect="off"
+                  autoCapitalize="none"
+                  spellCheck={false}
+                  enterKeyHint="search"
+                  maxLength={64}
+                  required
+                  aria-describedby="student-lookup-name-help"
+                  aria-invalid={lookupError ? 'true' : undefined}
+                  value={lookupName}
+                  onChange={(e) => {
+                    setLookupName(e.target.value);
+                    if (lookupError) setLookupError('');
+                  }}
+                  placeholder={lang === 'zh' ? '输入姓名或名字关键词（如：张伟）' : 'Enter student name or keyword'}
+                  className="w-full bg-surface-secondary border border-theme focus:border-primary-theme focus:ring-1 focus:ring-primary-theme rounded-xl text-xs sm:text-sm p-2.5 text-main outline-none placeholder-muted transition-colors"
+                />
+                <p id="student-lookup-name-help" className="text-xs text-subtle">
+                  {lang === 'zh'
+                    ? '支持精确或模糊匹配，至少输入 2 个字符（或 1 个汉字），单次最多展示 10 条记录。'
+                    : 'Exact or partial match (at least 2 characters or 1 Chinese character; up to 10 results).'}
+                </p>
+              </div>
+
+              <button
+                type="submit"
+                disabled={lookupLoading}
+                className="w-full bg-primary-theme hover:opacity-95 disabled:opacity-50 text-white font-bold py-2.5 px-4 rounded-xl text-xs sm:text-sm flex items-center justify-center gap-2 transition-all cursor-pointer shadow-sm"
+              >
+                <Search size={14} aria-hidden="true" />
+                <span>
+                  {lookupLoading
+                    ? lang === 'zh'
+                      ? '正在查询...'
+                      : 'Searching...'
+                    : lang === 'zh'
+                      ? '查询学号'
+                      : 'Look Up Student ID'}
+                </span>
+              </button>
+            </form>
+
+            <div role="status" aria-live="polite" className="space-y-2">
+              {lookupError && (
+                <div className="p-3 bg-rose-500/10 border border-rose-500/40 text-rose-700 dark:text-rose-300 text-xs rounded-xl flex items-center gap-2">
+                  <AlertCircle size={15} className="shrink-0" aria-hidden="true" />
+                  <span>{lookupError}</span>
+                </div>
+              )}
+
+              {!lookupError && lookupHasSearched && lookupResults.length === 0 && (
+                <div className="p-4 rounded-xl border border-theme bg-surface-secondary text-center text-xs text-muted">
+                  {lang === 'zh'
+                    ? '未找到匹配的学生记录，请检查姓名拼写或切换班级后再试。'
+                    : 'No matching student found. Please check the spelling or try another class.'}
+                </div>
+              )}
+
+              {lookupTruncated && (
+                <div className="p-2.5 rounded-xl border border-amber-500/35 bg-amber-500/10 text-amber-800 dark:text-amber-200 text-xs">
+                  {lang === 'zh'
+                    ? '匹配结果超过 10 条，仅展示前 10 条。请输入更完整的姓名或选择班级缩小范围。'
+                    : 'More than 10 matches found (showing top 10). Enter a fuller name or select a class to narrow results.'}
+                </div>
+              )}
+            </div>
+
+            {lookupResults.length > 0 && (
+              <ul
+                className="max-h-60 overflow-y-auto space-y-2 pr-0.5"
+                aria-label={lang === 'zh' ? '查询结果' : 'Lookup results'}
+              >
+                {lookupResults.map((item) => {
+                  const classLabel =
+                    item.classes.length > 0
+                      ? item.classes.join(lang === 'zh' ? '、' : ', ')
+                      : lang === 'zh'
+                        ? '未分班'
+                        : 'Unassigned';
+                  return (
+                    <li
+                      key={`${item.studentNumber}-${item.name}`}
+                      className="flex items-center justify-between gap-3 p-3 rounded-xl border border-theme bg-surface-secondary/70"
+                    >
+                      <div className="min-w-0 space-y-0.5">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-sm font-bold text-main truncate">{item.name}</span>
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-surface border border-theme text-muted truncate max-w-[12rem]">
+                            {classLabel}
+                          </span>
+                        </div>
+                        <p className="text-xs text-primary-ink">
+                          {lang === 'zh' ? '学号：' : 'ID: '}
+                          <span className="font-mono font-semibold select-all">{item.studentNumber}</span>
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleSelectLookedUpStudent(item.studentNumber)}
+                        className="shrink-0 px-3 py-1.5 rounded-lg bg-primary-theme hover:opacity-95 text-white text-xs font-bold inline-flex items-center gap-1 cursor-pointer transition-opacity focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+                      >
+                        <Check size={13} aria-hidden="true" />
+                        <span>{lang === 'zh' ? '使用此学号' : 'Use ID'}</span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+        )}
+      </dialog>
     </main>
   );
 });

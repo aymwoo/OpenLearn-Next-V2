@@ -25,6 +25,7 @@ import { ThemeService } from '../services/theme-service.js';
 import { pluginApiGatewayMiddleware } from './plugin-api-gateway.js';
 import { clearPersonaProviderReferences } from '../ai-persona-registry.js';
 import { isSafeExternalUrl, fetchWithSafeRedirects } from '../utils/url-safety.js';
+import { isPublicStudentLookupEnabled } from '../utils/site-settings.js';
 import {
   AIFetchTimeoutError,
   AiProviderBlockedError,
@@ -2226,12 +2227,16 @@ export function registerPluginsRoutes(ctx: ServerContext) {
     try {
       const row = kernelContainer.db
         .prepare(
-          'SELECT site_name, slogan, logo_url, upload_max_file_mb, current_academic_year, academic_start_month, logout_clear_site_data, default_theme_id FROM site_settings WHERE id = ?',
+          'SELECT site_name, slogan, logo_url, upload_max_file_mb, current_academic_year, academic_start_month, logout_clear_site_data, allow_public_student_lookup, default_theme_id FROM site_settings WHERE id = ?',
         )
         .get('global') as any;
       const academicStartMonth = row?.academic_start_month ?? 9;
       const currentAcademicYear = row?.current_academic_year || getCurrentAcademicYear(academicStartMonth);
       const defaultThemeId = new ThemeService(kernelContainer.db).getDefaultSiteThemeId();
+      const allowPublicStudentLookup =
+        row?.allow_public_student_lookup === undefined || row?.allow_public_student_lookup === null
+          ? true
+          : Boolean(row.allow_public_student_lookup);
       res.json({
         siteName: row?.site_name || '',
         slogan: row?.slogan || '',
@@ -2241,6 +2246,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
         currentAcademicYear,
         academicStartMonth,
         logoutClearSiteData: Boolean(row?.logout_clear_site_data),
+        allowPublicStudentLookup,
         defaultThemeId,
       });
     } catch (e: any) {
@@ -2258,6 +2264,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
         currentAcademicYear,
         academicStartMonth,
         logoutClearSiteData,
+        allowPublicStudentLookup,
         defaultThemeId,
       } = req.body || {};
       // v0.6.1：上传大小上限校验（整数 1–90；90 受 express.json 110MB 全局
@@ -2276,6 +2283,14 @@ export function registerPluginsRoutes(ctx: ServerContext) {
           return res.status(400).json({ error: 'logoutClearSiteData 必须是布尔值' });
         }
         normalizedLogoutClearSiteData = logoutClearSiteData ? 1 : 0;
+      }
+
+      let normalizedAllowPublicStudentLookup: number | null = null;
+      if (allowPublicStudentLookup !== undefined && allowPublicStudentLookup !== null) {
+        if (typeof allowPublicStudentLookup !== 'boolean') {
+          return res.status(400).json({ error: 'allowPublicStudentLookup 必须是布尔值' });
+        }
+        normalizedAllowPublicStudentLookup = allowPublicStudentLookup ? 1 : 0;
       }
 
       let normalizedDefaultThemeId: string | null = null;
@@ -2312,12 +2327,13 @@ export function registerPluginsRoutes(ctx: ServerContext) {
 
       kernelContainer.db
         .prepare(
-          `INSERT INTO site_settings (id, site_name, slogan, logo_url, upload_max_file_mb, current_academic_year, academic_start_month, logout_clear_site_data, default_theme_id) VALUES ('global', ?, ?, ?, ?, ?, ?, ?, ?)
+          `INSERT INTO site_settings (id, site_name, slogan, logo_url, upload_max_file_mb, current_academic_year, academic_start_month, logout_clear_site_data, allow_public_student_lookup, default_theme_id) VALUES ('global', ?, ?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT(id) DO UPDATE SET site_name = excluded.site_name, slogan = excluded.slogan, logo_url = excluded.logo_url,
              upload_max_file_mb = COALESCE(excluded.upload_max_file_mb, site_settings.upload_max_file_mb),
              current_academic_year = COALESCE(excluded.current_academic_year, site_settings.current_academic_year),
              academic_start_month = COALESCE(excluded.academic_start_month, site_settings.academic_start_month),
              logout_clear_site_data = COALESCE(?, site_settings.logout_clear_site_data, 0),
+             allow_public_student_lookup = COALESCE(?, site_settings.allow_public_student_lookup, 1),
              default_theme_id = COALESCE(?, site_settings.default_theme_id, 'light')`,
         )
         .run(
@@ -2328,16 +2344,19 @@ export function registerPluginsRoutes(ctx: ServerContext) {
           normalizedAcademicYear ?? null,
           normalizedStartMonth ?? null,
           normalizedLogoutClearSiteData ?? 0,
+          normalizedAllowPublicStudentLookup ?? 1,
           normalizedDefaultThemeId ?? 'light',
           normalizedLogoutClearSiteData,
+          normalizedAllowPublicStudentLookup,
           normalizedDefaultThemeId,
         );
       const row = kernelContainer.db
         .prepare(
-          'SELECT upload_max_file_mb, current_academic_year, academic_start_month, logout_clear_site_data, default_theme_id FROM site_settings WHERE id = ?',
+          'SELECT upload_max_file_mb, current_academic_year, academic_start_month, logout_clear_site_data, allow_public_student_lookup, default_theme_id FROM site_settings WHERE id = ?',
         )
         .get('global') as any;
       const resolvedLogoutClear = Boolean(row?.logout_clear_site_data);
+      const resolvedAllowLookup = isPublicStudentLookupEnabled(kernelContainer.db);
       const resolvedDefaultThemeId = new ThemeService(kernelContainer.db).getDefaultSiteThemeId();
       res.json({
         success: true,
@@ -2346,12 +2365,14 @@ export function registerPluginsRoutes(ctx: ServerContext) {
           slogan: slogan || '',
           logoUrl: logoUrl || null,
           logoutClearSiteData: resolvedLogoutClear,
+          allowPublicStudentLookup: resolvedAllowLookup,
           defaultThemeId: resolvedDefaultThemeId,
         },
         uploadMaxFileMb: row?.upload_max_file_mb ?? null,
         currentAcademicYear: row?.current_academic_year ?? null,
         academicStartMonth: row?.academic_start_month ?? 9,
         logoutClearSiteData: resolvedLogoutClear,
+        allowPublicStudentLookup: resolvedAllowLookup,
         defaultThemeId: resolvedDefaultThemeId,
       });
     } catch (e: any) {

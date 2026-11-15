@@ -78,7 +78,7 @@ test.describe('课堂实时同步（跨端）', () => {
 
     // 学生登录：切到「学生自助端」页签 → 填学号 → 填密码
     await page.locator('button:has-text("学生自助端")').first().click();
-    const idInput = page.locator('input[placeholder*="手工输入您的特有学号"]');
+    const idInput = page.locator('#student-access-key');
     await expect(idInput).toBeVisible({ timeout: 30_000 });
     await idInput.fill(fx.studentNumber);
     await page.locator('input[placeholder*="输入个人密码或临时班级密码"]').fill(fx.studentPassword);
