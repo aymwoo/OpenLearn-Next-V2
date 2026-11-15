@@ -32,6 +32,7 @@ import {
 } from 'lucide-react';
 import { executeGrouping, type GroupingStrategy, type BreakoutGroup, type StudentCandidate } from './breakout-engine';
 import { ExtensionPointRenderer } from '../../../plugin-host/extension-point-renderer';
+import type { ClassroomSyncChannel } from '../../../services/classroom-sync-channel';
 
 // ── 类型 ────────────────────────────────────────────────────────────
 
@@ -59,10 +60,33 @@ export interface GroupCollabWhiteboardModalProps {
   availableStudents: Array<{ id: string; name: string; tier?: 'basic' | 'intermediate' | 'advanced' }>;
   addToast: (title: string, message: string, type?: 'info' | 'success' | 'warning' | 'error') => void;
   lang?: 'zh' | 'en';
+  syncChannel?: ClassroomSyncChannel | null;
+  initialGalleryMode?: boolean;
 }
 
 const COLORS = ['#4f46e5', '#06b6d4', '#a855f7', '#ec4899', '#f59e0b', '#10b981', '#ef4444', '#1e293b'];
 const PRESET_INQUIRY_TAGS = ['思路新颖', '极值合理', '受力严谨', '需补充推导'];
+
+const DEFAULT_GROUP_COLORS = ['bg-indigo-500', 'bg-emerald-500', 'bg-amber-500', 'bg-rose-500'];
+
+function createDefaultGroups(lang: 'zh' | 'en'): BreakoutGroup[] {
+  return Array.from({ length: 4 }).map((_, i) => ({
+    id: `group-${i + 1}`,
+    name: lang === 'zh' ? `第 ${i + 1} 小组` : `Group ${i + 1}`,
+    memberIds: [],
+    color: DEFAULT_GROUP_COLORS[i % DEFAULT_GROUP_COLORS.length],
+    focusTier: 'balanced',
+    likesCount: 0,
+    inquiryTags: [],
+    isSpotlight: false,
+  }));
+}
+
+function defaultMissionPrompt(lang: 'zh' | 'en'): string {
+  return lang === 'zh'
+    ? '随堂探究驱动题：请各小组针对本题受力与运动过程进行受力拆解绘图，并标出关键守恒量。'
+    : 'In-class Jigsaw Task: Collaborate to draw the state diagram and identify conserved quantities.';
+}
 
 export const GroupCollabWhiteboardModal: React.FC<GroupCollabWhiteboardModalProps> = ({
   isOpen,
@@ -72,10 +96,12 @@ export const GroupCollabWhiteboardModal: React.FC<GroupCollabWhiteboardModalProp
   availableStudents,
   addToast,
   lang = 'zh',
+  syncChannel,
+  initialGalleryMode = false,
 }) => {
-  const [groups, setGroups] = useState<BreakoutGroup[]>([]);
+  const [groups, setGroups] = useState<BreakoutGroup[]>(() => createDefaultGroups(lang));
   const [strokes, setStrokes] = useState<Stroke[]>([]);
-  const [activeGroupId, setActiveGroupId] = useState<string | null>(null);
+  const [activeGroupId, setActiveGroupId] = useState<string | null>(() => 'group-1');
   const [activeColor, setActiveColor] = useState<string>(COLORS[0]);
   const [activeWidth, setActiveWidth] = useState<number>(3);
   const [activeTool, setActiveTool] = useState<'pen' | 'rect' | 'circle' | 'eraser'>('pen');
@@ -84,42 +110,175 @@ export const GroupCollabWhiteboardModal: React.FC<GroupCollabWhiteboardModalProp
 
   // 随堂探究与画廊互评扩展状态
   const [groupingStrategy, setGroupingStrategy] = useState<GroupingStrategy>('heterogeneous');
-  const [isGalleryMode, setIsGalleryMode] = useState<boolean>(false);
-  const [missionPrompt, setMissionPrompt] = useState<string>(
-    lang === 'zh'
-      ? '随堂探究驱动题：请各小组针对本题受力与运动过程进行受力拆解绘图，并标出关键守恒量。'
-      : 'In-class Jigsaw Task: Collaborate to draw the state diagram and identify conserved quantities.',
-  );
+  const [isGalleryMode, setIsGalleryMode] = useState<boolean>(initialGalleryMode);
+  const [missionPrompt, setMissionPrompt] = useState<string>(() => defaultMissionPrompt(lang));
   const [groupLikes, setGroupLikes] = useState<Record<string, number>>({});
   const [groupInquiries, setGroupInquiries] = useState<Record<string, string[]>>({});
   const [spotlightGroupId, setSpotlightGroupId] = useState<string | null>(null);
+  const [syncStatus, setSyncStatus] = useState<'idle' | 'loading' | 'saving' | 'saved'>('idle');
 
   const canvasRef = useRef<SVGSVGElement | null>(null);
+  const activeContextKey = `${lessonId ?? ''}::${classId ?? ''}`;
+  const loadedContextKeyRef = useRef<string | null>(null);
+  const isHydratingRef = useRef<boolean>(false);
+  const lastSavedDigestRef = useRef<string>('');
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // 初始化默认 4 个小组
+  const buildPersistPayload = useCallback(
+    () => ({
+      classId: classId || '',
+      missionPrompt,
+      groupingStrategy,
+      groups,
+      strokes,
+      likes: groupLikes,
+      inquiries: groupInquiries,
+      spotlightGroupId,
+    }),
+    [classId, missionPrompt, groupingStrategy, groups, strokes, groupLikes, groupInquiries, spotlightGroupId],
+  );
+
+  const loadPersistedBoard = useCallback(
+    async (silent = false) => {
+      if (!lessonId || typeof fetch !== 'function') return;
+      isHydratingRef.current = true;
+      if (!silent) setSyncStatus('loading');
+      try {
+        const qs = classId ? `?classId=${encodeURIComponent(classId)}` : '';
+        const res = await fetch(`/api/classroom/sessions/${lessonId}/collab-whiteboard${qs}`);
+        if (!res || !res.ok) return;
+        const json = await res.json();
+        const board = json?.board;
+        if (board && Array.isArray(board.groups) && board.groups.length > 0) {
+          const nextGroups = board.groups as BreakoutGroup[];
+          const nextStrokes = Array.isArray(board.strokes) ? (board.strokes as Stroke[]) : [];
+          const nextLikes = board.likes && typeof board.likes === 'object' ? board.likes : {};
+          const nextInquiries = board.inquiries && typeof board.inquiries === 'object' ? board.inquiries : {};
+          const nextStrategy =
+            board.groupingStrategy === 'homogeneous' || board.groupingStrategy === 'random'
+              ? board.groupingStrategy
+              : 'heterogeneous';
+          const nextPrompt =
+            typeof board.missionPrompt === 'string' && board.missionPrompt
+              ? board.missionPrompt
+              : defaultMissionPrompt(lang);
+          const nextSpotlight = board.spotlightGroupId ?? null;
+
+          lastSavedDigestRef.current = JSON.stringify({
+            classId: classId || '',
+            missionPrompt: nextPrompt,
+            groupingStrategy: nextStrategy,
+            groups: nextGroups,
+            strokes: nextStrokes,
+            likes: nextLikes,
+            inquiries: nextInquiries,
+            spotlightGroupId: nextSpotlight,
+          });
+          setGroups(nextGroups);
+          setStrokes(nextStrokes);
+          setGroupLikes(nextLikes);
+          setGroupInquiries(nextInquiries);
+          setGroupingStrategy(nextStrategy);
+          setMissionPrompt(nextPrompt);
+          setSpotlightGroupId(nextSpotlight);
+          setActiveGroupId((prev) =>
+            prev && nextGroups.some((g) => g.id === prev) ? prev : (nextGroups[0]?.id ?? null),
+          );
+          setSyncStatus('saved');
+        }
+      } catch {
+        // 离线或单测无后端时保留本地状态
+      } finally {
+        isHydratingRef.current = false;
+        setSyncStatus((prev) => (prev === 'loading' ? 'idle' : prev));
+      }
+    },
+    [lessonId, classId, lang],
+  );
+
+  // 切换课节/班级或首次打开时从后端恢复持久化数据；关闭模态窗不再销毁已有画布与分组
   useEffect(() => {
-    if (isOpen && groups.length === 0) {
-      const defaultColors = ['bg-indigo-500', 'bg-emerald-500', 'bg-amber-500', 'bg-rose-500'];
-      const initialGroups: BreakoutGroup[] = Array.from({ length: 4 }).map((_, i) => ({
-        id: `group-${i + 1}`,
-        name: lang === 'zh' ? `第 ${i + 1} 小组` : `Group ${i + 1}`,
-        memberIds: [],
-        color: defaultColors[i % defaultColors.length],
-        focusTier: 'balanced',
-        likesCount: 0,
-        inquiryTags: [],
-        isSpotlight: false,
-      }));
-      setGroups(initialGroups);
-      setActiveGroupId(initialGroups[0].id);
+    if (!isOpen) return;
+    if (initialGalleryMode) {
+      setIsGalleryMode(true);
     }
-    if (!isOpen) {
-      setGroups([]);
+    if (loadedContextKeyRef.current !== activeContextKey) {
+      loadedContextKeyRef.current = activeContextKey;
+      const fallbackGroups = createDefaultGroups(lang);
+      const fallbackPrompt = defaultMissionPrompt(lang);
+      lastSavedDigestRef.current = JSON.stringify({
+        classId: classId || '',
+        missionPrompt: fallbackPrompt,
+        groupingStrategy: 'heterogeneous',
+        groups: fallbackGroups,
+        strokes: [],
+        likes: {},
+        inquiries: {},
+        spotlightGroupId: null,
+      });
+      setGroups(fallbackGroups);
       setStrokes([]);
-      setActiveGroupId(null);
-      setIsGalleryMode(false);
+      setGroupLikes({});
+      setGroupInquiries({});
+      setSpotlightGroupId(null);
+      setGroupingStrategy('heterogeneous');
+      setMissionPrompt(fallbackPrompt);
+      setActiveGroupId(fallbackGroups[0]?.id ?? null);
+      void loadPersistedBoard(false);
+    } else {
+      void loadPersistedBoard(true);
     }
-  }, [isOpen, lang]);
+  }, [isOpen, activeContextKey, classId, initialGalleryMode, lang, loadPersistedBoard]);
+
+  // 监听同屏/跨窗协同更新信号，实现多端即时同步
+  useEffect(() => {
+    if (!isOpen || !syncChannel) return;
+    return syncChannel.onMessage((msg) => {
+      if (msg.type === 'GROUP_COLLAB_UPDATED' && msg.payload.lessonId === lessonId) {
+        void loadPersistedBoard(true);
+      }
+    });
+  }, [isOpen, syncChannel, lessonId, loadPersistedBoard]);
+
+  // 自动防抖落库持久化 + 协同通道广播
+  useEffect(() => {
+    if (!isOpen || !lessonId || typeof fetch !== 'function' || isHydratingRef.current) return;
+    const payload = buildPersistPayload();
+    const digest = JSON.stringify(payload);
+    if (digest === lastSavedDigestRef.current) return;
+
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(async () => {
+      try {
+        setSyncStatus('saving');
+        const res = await fetch(`/api/classroom/sessions/${lessonId}/collab-whiteboard`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: digest,
+        });
+        if (res && res.ok) {
+          lastSavedDigestRef.current = digest;
+          setSyncStatus('saved');
+          syncChannel?.broadcastGroupCollabUpdated(isGalleryMode);
+        }
+      } catch {
+        setSyncStatus('idle');
+      }
+    }, 400);
+
+    return () => {
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    };
+  }, [isOpen, lessonId, buildPersistPayload, syncChannel, isGalleryMode]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [isOpen, onClose]);
 
   // 智能一键自动分配
   const autoAssign = useCallback(() => {
@@ -297,7 +456,12 @@ export const GroupCollabWhiteboardModal: React.FC<GroupCollabWhiteboardModalProp
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[118] bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 animate-fade-in">
+    <div
+      className="fixed inset-0 z-[118] bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 animate-fade-in"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="group-collab-modal-title"
+    >
       <div className="bg-surface border border-theme rounded-2xl shadow-2xl w-full max-w-7xl h-[92vh] flex flex-col overflow-hidden text-main">
         {/* ── 顶部导航栏 ─────────────────────────────────────────── */}
         <div className="bg-surface-secondary px-5 py-3 border-b border-theme flex items-center justify-between shrink-0">
@@ -307,12 +471,34 @@ export const GroupCollabWhiteboardModal: React.FC<GroupCollabWhiteboardModalProp
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-sm font-extrabold text-main">
+                <h2 id="group-collab-modal-title" className="text-sm font-extrabold text-main">
                   {lang === 'zh' ? '随堂小组协作与画廊互评' : 'Group Collaboration & Gallery Walk'}
                 </h2>
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 font-mono">
                   Jigsaw & Battle
                 </span>
+                {syncStatus !== 'idle' && (
+                  <span
+                    data-testid="group-collab-sync-status"
+                    className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                      syncStatus === 'saved'
+                        ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
+                        : 'bg-amber-500/10 text-amber-700 dark:text-amber-300'
+                    }`}
+                  >
+                    {syncStatus === 'loading'
+                      ? lang === 'zh'
+                        ? '恢复进度中…'
+                        : 'Loading…'
+                      : syncStatus === 'saving'
+                        ? lang === 'zh'
+                          ? '正在同步保存…'
+                          : 'Saving…'
+                        : lang === 'zh'
+                          ? '已云端持久保存'
+                          : 'Saved'}
+                  </span>
+                )}
               </div>
               <p className="text-2xs text-muted mt-0.5">
                 {groups.length} {lang === 'zh' ? '个探究小组' : 'groups'} ·{' '}

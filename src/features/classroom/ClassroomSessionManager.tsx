@@ -21,6 +21,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { ClassroomSessionDeleteModal } from './ClassroomSessionDeleteModal';
+import { ExtensionPointRenderer } from '../../plugin-host/extension-point-renderer';
 
 export interface ClassroomSessionStats {
   pollCount: number;
@@ -304,6 +305,7 @@ export function ClassroomSessionManager({
         </div>
 
         <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
+          <ExtensionPointRenderer slot="classroom.sessions.action" slotProps={{ totalSessions: total, lang }} />
           <button
             type="button"
             onClick={() => void fetchSessions()}

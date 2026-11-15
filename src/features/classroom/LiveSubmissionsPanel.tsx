@@ -1,6 +1,7 @@
 import React from 'react';
 import { Search, RefreshCw, Trophy, Zap, Database, FileText, Eye, Check } from 'lucide-react';
 import { AccessibleTableRegion } from '../../components/AccessibleTableRegion';
+import { ExtensionPointRenderer } from '../../plugin-host/extension-point-renderer';
 
 export const FINISHED_STATUSES = ['completed', 'submitted', 'finished'];
 export const IN_PROGRESS_STATUSES = ['active', 'inprogress', 'started'];
@@ -128,6 +129,16 @@ export function LiveSubmissionsPanel({
             <Trophy size={12} className="text-amber-500" />
             <span>{lang === 'zh' ? '优秀榜' : 'Top 5'}</span>
           </button>
+
+          <ExtensionPointRenderer
+            slot="classroom.submissions.toolbar"
+            slotProps={{
+              lessonId: selectedLesson,
+              classId: liveClassSelectedClassId,
+              count: displayAttempts.length,
+              lang,
+            }}
+          />
         </div>
       </div>
 

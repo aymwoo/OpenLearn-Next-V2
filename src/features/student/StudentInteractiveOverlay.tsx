@@ -16,6 +16,11 @@ import { StudentCountdownBanner } from './StudentCountdownBanner';
 import { ExtensionPointRenderer } from '../../plugin-host/extension-point-renderer';
 import { AdaptiveExitTicketModal } from '../classroom/exit-ticket/AdaptiveExitTicketModal';
 import { getOptionalSocket } from '../../services/socket-service';
+import {
+  ClassroomSyncChannel,
+  CLASSROOM_SYNC_CHANNEL_NAME,
+  type ShowcaseDiffBroadcastWork,
+} from '../../services/classroom-sync-channel';
 import { assessmentApi, type StudentAttemptPayload, type StudentResultPayload } from '../assessment/api';
 import { AssessmentRunner, ResultView } from '../assessment/student/StudentAssessmentsView';
 
@@ -83,6 +88,12 @@ export function StudentInteractiveOverlay({
   const [assessmentResult, setAssessmentResult] = useState<StudentResultPayload | null>(null);
   const [assessmentLoading, setAssessmentLoading] = useState(false);
   const [assessmentError, setAssessmentError] = useState<string | null>(null);
+  const [macroNotification, setMacroNotification] = useState<{ title?: string; message: string } | null>(null);
+  const [syncedDiffView, setSyncedDiffView] = useState<{
+    layout: 'dual' | 'triple' | 'quad';
+    works: ShowcaseDiffBroadcastWork[];
+    anonymous?: boolean;
+  } | null>(null);
 
   const buzzerArmedTimeRef = useRef<number>(Date.now());
   /**
@@ -262,6 +273,36 @@ export function StudentInteractiveOverlay({
       }
     };
   }, [lessonId, lang]);
+
+  // 订阅教师端多屏对比投屏与课堂宏指令广播
+  useEffect(() => {
+    if (!lessonId) return;
+    const channel = new ClassroomSyncChannel(CLASSROOM_SYNC_CHANNEL_NAME, lessonId, classId);
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const unsub = channel.onMessage((msg) => {
+      if (msg.type === 'TEACHER_MACRO_NOTIFICATION') {
+        if (msg.payload.lessonId && msg.payload.lessonId !== lessonId) return;
+        setMacroNotification({ title: msg.payload.title, message: msg.payload.message });
+        if (timer) clearTimeout(timer);
+        timer = setTimeout(() => setMacroNotification(null), 8000);
+      } else if (msg.type === 'TEACHER_SHOWCASE_DIFF_SYNC') {
+        if (msg.payload.lessonId && msg.payload.lessonId !== lessonId) return;
+        const works = Array.isArray(msg.payload.works) ? msg.payload.works : [];
+        if (works.length > 0) {
+          setSyncedDiffView({
+            layout: msg.payload.layout,
+            works,
+            anonymous: msg.payload.anonymous,
+          });
+        }
+      }
+    });
+    return () => {
+      if (timer) clearTimeout(timer);
+      unsub();
+      channel.destroy();
+    };
+  }, [lessonId, classId]);
 
   const startClassroomAssessmentAttempt = async () => {
     if (!classroomAssessment) return;
@@ -457,6 +498,89 @@ export function StudentInteractiveOverlay({
     <>
       {/* 课堂倒计时横幅（与教师端实时同步） */}
       <StudentCountdownBanner lessonId={lessonId} lang={lang} />
+
+      {/* 教师课堂宏指令广播横幅 */}
+      {macroNotification && (
+        <div
+          data-testid="student-macro-notification-banner"
+          className="fixed top-20 left-1/2 -translate-x-1/2 z-[75] max-w-lg w-[calc(100%-2rem)] bg-indigo-600 text-white px-4 py-2.5 rounded-2xl shadow-xl border border-indigo-400/50 flex items-center justify-between gap-3 animate-in fade-in slide-in-from-top-2 duration-200"
+          role="status"
+        >
+          <div className="flex items-center gap-2 min-w-0">
+            <Bell size={16} className="shrink-0 text-amber-200" />
+            <div className="min-w-0">
+              {macroNotification.title && (
+                <div className="text-[11px] font-bold text-indigo-100 truncate">{macroNotification.title}</div>
+              )}
+              <div className="text-xs font-extrabold truncate">{macroNotification.message}</div>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setMacroNotification(null)}
+            className="p-1 rounded-lg hover:bg-white/20 text-white/80 hover:text-white cursor-pointer shrink-0"
+            aria-label={lang === 'zh' ? '关闭广播提示' : 'Dismiss notification'}
+          >
+            <X size={14} />
+          </button>
+        </div>
+      )}
+
+      {/* 教师下发的多屏作答对比投屏只读视窗 */}
+      {syncedDiffView && (
+        <div
+          data-testid="student-synced-diff-modal"
+          className="fixed inset-0 z-[80] bg-black/70 backdrop-blur-xs flex items-center justify-center p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label={lang === 'zh' ? '教师推送的作业对比展示' : 'Teacher Broadcasted Showcase Diff'}
+        >
+          <div className="bg-surface border border-theme rounded-2xl shadow-2xl max-w-5xl w-full max-h-[85vh] flex flex-col overflow-hidden text-main">
+            <div className="px-4 py-3 border-b border-theme bg-surface-secondary flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Sparkles size={16} className="text-purple-500" />
+                <span className="text-sm font-black">
+                  {lang === 'zh' ? '教师大屏同屏对比讲评' : 'Live Teacher Showcase Comparison'}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSyncedDiffView(null)}
+                className="p-1.5 rounded-lg hover:bg-surface text-muted hover:text-main cursor-pointer"
+                aria-label={lang === 'zh' ? '关闭对比视窗' : 'Close comparison view'}
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <div
+              className={`p-4 overflow-y-auto grid gap-3 ${
+                syncedDiffView.works.length <= 2 ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1 md:grid-cols-2'
+              }`}
+            >
+              {syncedDiffView.works.map((w, idx) => (
+                <div key={w.studentId} className="border border-theme rounded-xl p-3 bg-surface-secondary/40 space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-extrabold text-main">
+                      {syncedDiffView.anonymous
+                        ? `${lang === 'zh' ? '作答方案' : 'Solution'} ${String.fromCharCode(65 + idx)}`
+                        : w.studentName}
+                    </span>
+                    {typeof w.accuracyScore === 'number' && (
+                      <span className="text-[11px] font-mono font-bold text-primary-ink px-2 py-0.5 rounded-full bg-primary-theme/10">
+                        {w.accuracyScore} pts
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-xs font-bold text-muted">{w.title}</div>
+                  <pre className="text-xs whitespace-pre-wrap break-words bg-surface p-2.5 rounded-lg border border-theme/70 max-h-60 overflow-y-auto font-mono">
+                    {w.content}
+                  </pre>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 课中插件浮层槽位：插件可在此渲染随堂答题等模态弹窗
           （学生上课中被锁定在课节视图，仪表盘的 student.view 槽位不可见） */}

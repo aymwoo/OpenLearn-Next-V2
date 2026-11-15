@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   Presentation,
   Shuffle,
@@ -48,6 +48,9 @@ import { ExtensionPointRenderer } from '../plugin-host/extension-point-renderer'
 import { useOptionalPluginHost } from '../plugin-host/plugin-host-context';
 import { ClassroomSyncChannel, CLASSROOM_SYNC_CHANNEL_NAME } from '../services/classroom-sync-channel';
 import { getOptionalSocket, onSocketInstance } from '../services/socket-service';
+import { classroomMacroEngine } from '../features/classroom/ecosystem/macro-engine/classroom-macro-engine';
+import { buildShowcaseDiffCandidateWorks } from '../features/classroom/showcase-diff/build-diff-works';
+import type { DiffScreenLayout, DiffStudentWork } from '../features/classroom/showcase-diff/types';
 import { useErrorStore, errorStore } from '../store/errorStore';
 import { ClassroomInteractiveCockpit } from '../features/classroom/ClassroomInteractiveCockpit';
 import { PreClassReadyView } from '../features/classroom/PreClassReadyView';
@@ -387,9 +390,11 @@ export function LiveClassroomView({
   const [isMasteryPredictionOpen, setIsMasteryPredictionOpen] = useState(false);
   const [isDiagnosticCenterOpen, setIsDiagnosticCenterOpen] = useState(false);
   const [isGroupCollabOpen, setIsGroupCollabOpen] = useState(false);
+  const [collabInitialGalleryMode, setCollabInitialGalleryMode] = useState(false);
   const [isShowcaseDiffOpen, setIsShowcaseDiffOpen] = useState(false);
   const [isMacroRunnerOpen, setIsMacroRunnerOpen] = useState(false);
   const [isHardwareSettingsOpen, setIsHardwareSettingsOpen] = useState(false);
+  const [isSocketConnected, setIsSocketConnected] = useState<boolean>(() => Boolean(getOptionalSocket()?.connected));
   /** 真实开课时间（来自 classroom_sessions.started_at），用于计算已用时长 */
   const [sessionStartedAt, setSessionStartedAt] = useState<number | null>(null);
   /**
@@ -637,7 +642,7 @@ export function LiveClassroomView({
     autoAssign: handleAutoAssignPeerReview,
   } = usePeerReviewData({
     lessonId: selectedLesson,
-    enabled: isPeerReviewShowcaseOpen && isActiveClassroomView,
+    enabled: (isPeerReviewShowcaseOpen || isShowcaseDiffOpen) && isActiveClassroomView,
     topPerformersEnabled: isActiveClassroomView,
     onTerminalError: reportLessonAccessError,
     attempts,
@@ -1310,6 +1315,188 @@ export function LiveClassroomView({
     };
   }, [selectedLesson, liveClassSelectedClassId]);
 
+  // 订阅真实 Socket.IO 连接态，驱动顶部「Live Broadcaster」状态指示灯
+  useEffect(() => {
+    let cleanupListeners: (() => void) | null = null;
+    const offReady = onSocketInstance((socket) => {
+      cleanupListeners?.();
+      setIsSocketConnected(Boolean(socket.connected));
+      const handleConnect = () => setIsSocketConnected(true);
+      const handleDisconnect = () => setIsSocketConnected(false);
+      socket.on('connect', handleConnect);
+      socket.on('disconnect', handleDisconnect);
+      socket.on('connect_error', handleDisconnect);
+      cleanupListeners = () => {
+        socket.off('connect', handleConnect);
+        socket.off('disconnect', handleDisconnect);
+        socket.off('connect_error', handleDisconnect);
+      };
+    });
+    return () => {
+      offReady();
+      cleanupListeners?.();
+    };
+  }, []);
+
+  const showcaseCandidateWorks = useMemo(
+    () => buildShowcaseDiffCandidateWorks(showcaseWorks, attempts, students),
+    [showcaseWorks, attempts, students],
+  );
+
+  const handleSyncShowcaseDiffToClass = useCallback(
+    (data: { selectedIds: string[]; layout: DiffScreenLayout; works?: DiffStudentWork[]; anonymous?: boolean }) => {
+      syncChannelRef.current?.broadcastShowcaseDiff({
+        selectedIds: data.selectedIds,
+        layout: data.layout,
+        anonymous: data.anonymous,
+        works: (data.works || []).map((w) => ({
+          studentId: w.studentId,
+          studentName: w.studentName,
+          title: w.title || '',
+          content: w.content,
+          source: w.source,
+          tags: w.tags,
+          accuracyScore: w.accuracyScore,
+        })),
+      });
+      setLiveClassFeed((prev) => [
+        {
+          id: `diff-sync-${Date.now()}`,
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+          type: 'info',
+          message:
+            lang === 'zh'
+              ? `已将 ${data.selectedIds.length} 份学生作答 (${data.layout.toUpperCase()}) 同步投屏至全班。`
+              : `Synced ${data.selectedIds.length} student works (${data.layout}) to class.`,
+        },
+        ...prev,
+      ]);
+    },
+    [lang],
+  );
+
+  // 将 ClassroomMacroEngine 的真实步骤执行器绑定到当前授课上下文（替代无执行器的空跑）
+  const macroRuntimeRef = useRef<{
+    selectedLesson: string | null;
+    classId: string | null;
+    lang: string;
+    toggleLock: (lock: boolean, mode?: 'full' | 'navigation') => Promise<void>;
+    fetchAttempts: () => void;
+    addToast: typeof addToast;
+  }>({
+    selectedLesson,
+    classId: liveClassSelectedClassId,
+    lang,
+    toggleLock: async () => {},
+    fetchAttempts: () => {},
+    addToast,
+  });
+
+  useEffect(() => {
+    classroomMacroEngine.setStepExecutor(async (step) => {
+      const ctx = macroRuntimeRef.current;
+      const appendFeed = (message: string, type: 'info' | 'warning' = 'info') => {
+        setLiveClassFeed((prev) => [
+          {
+            id: `macro-${step.id}-${Date.now()}`,
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+            type,
+            message,
+          },
+          ...prev,
+        ]);
+      };
+
+      switch (step.actionType) {
+        case 'BROADCAST_NOTIFICATION': {
+          const msg = String(step.payload?.message || step.title);
+          syncChannelRef.current?.broadcastMacroNotification(msg, step.title);
+          appendFeed(`[宏动作] 广播全班：${msg}`);
+          ctx.addToast(step.title, msg, 'info');
+          break;
+        }
+        case 'LOCK_STUDENT_SCREENS': {
+          const lockMode: 'full' | 'navigation' = step.payload?.subCanvasReadOnly ? 'navigation' : 'full';
+          if (ctx.classId && ctx.selectedLesson) {
+            await ctx.toggleLock(true, lockMode);
+          } else {
+            appendFeed(`[宏动作] ${step.title}（未选择班级，跳过远端锁屏请求）`, 'warning');
+          }
+          break;
+        }
+        case 'START_COUNTDOWN': {
+          const duration = Number(step.payload?.durationSeconds) || 180;
+          window.dispatchEvent(
+            new CustomEvent('openlearn:countdown:trigger_start', {
+              detail: { duration, label: step.title },
+            }),
+          );
+          appendFeed(`[宏动作] 已启动全班倒计时（${duration} 秒）`);
+          break;
+        }
+        case 'NAVIGATE_VIEW': {
+          const target = String(step.payload?.target || '');
+          if (target === 'top_performers_leaderboard') {
+            setMiddleTab('top_performers');
+          } else if (target === 'submissions') {
+            setMiddleTab('submissions');
+          } else {
+            setMiddleTab('whiteboard');
+          }
+          appendFeed(`[宏动作] 主工作区已切换至 ${target || 'whiteboard'}`);
+          break;
+        }
+        case 'AUTO_COLLECT_QUIZ': {
+          ctx.fetchAttempts();
+          setMiddleTab('submissions');
+          syncChannelRef.current?.broadcastMacroNotification(
+            ctx.lang === 'zh' ? '随堂检测时间到，已触发自动收卷与作答汇总！' : 'Time up! Collecting quiz responses.',
+            step.title,
+          );
+          appendFeed(`[宏动作] 已刷新并切换至实时作答汇总清单`);
+          break;
+        }
+        case 'OPEN_GALLERY_WALK': {
+          setCollabInitialGalleryMode(true);
+          setIsGroupCollabOpen(true);
+          const duration = Number(step.payload?.durationSeconds);
+          if (duration > 0) {
+            window.dispatchEvent(
+              new CustomEvent('openlearn:countdown:trigger_start', {
+                detail: { duration, label: step.title },
+              }),
+            );
+          }
+          appendFeed(`[宏动作] 已开启小组协作画廊互评展台`);
+          break;
+        }
+        case 'HIGHLIGHT_WHITEBOARD': {
+          setMiddleTab('whiteboard');
+          window.dispatchEvent(
+            new CustomEvent('openlearn:whiteboard:focus', {
+              detail: { zoomScale: Number(step.payload?.zoomScale) || 1.25 },
+            }),
+          );
+          syncChannelRef.current?.broadcastMacroNotification(
+            ctx.lang === 'zh' ? '老师已在主屏黑板聚焦核心讲解区域，请注意观看！' : 'Focus on main whiteboard!',
+            step.title,
+          );
+          ctx.addToast(
+            step.title,
+            ctx.lang === 'zh' ? '已切回主屏白板并广播课堂聚焦提示。' : 'Focused whiteboard and notified class.',
+            'info',
+          );
+          appendFeed(`[宏动作] 教师白板已切回聚焦视图`);
+          break;
+        }
+      }
+      return true;
+    });
+    return () => {
+      classroomMacroEngine.setStepExecutor(async () => true);
+    };
+  }, []);
+
   // Reactive state broadcasts
   useEffect(() => {
     syncChannelRef.current?.setLessonContext(selectedLesson, liveClassSelectedClassId);
@@ -1557,6 +1744,17 @@ export function LiveClassroomView({
       setLockingClass(false);
     }
   };
+
+  useEffect(() => {
+    macroRuntimeRef.current = {
+      selectedLesson,
+      classId: liveClassSelectedClassId,
+      lang,
+      toggleLock: handleToggleClassLock,
+      fetchAttempts,
+      addToast,
+    };
+  });
 
   // Lock single student with mode support ('full' | 'navigation')
   const handleToggleStudentLock = async (
@@ -2345,7 +2543,10 @@ export function LiveClassroomView({
             lang={lang as any}
             onOpenDiagnosticCenter={() => setIsDiagnosticCenterOpen(true)}
             onOpenMasteryPrediction={() => setIsMasteryPredictionOpen(true)}
-            onOpenGroupCollab={() => setIsGroupCollabOpen(true)}
+            onOpenGroupCollab={() => {
+              setCollabInitialGalleryMode(false);
+              setIsGroupCollabOpen(true);
+            }}
             onOpenShowcaseDiff={() => setIsShowcaseDiffOpen(true)}
             onOpenPeerReviewShowcase={() => setIsPeerReviewShowcaseOpen(true)}
             onOpenParentNotification={() => setIsParentNotificationOpen(true)}
@@ -2607,8 +2808,23 @@ export function LiveClassroomView({
                         </span>
                       </button>
                     )}
-                    <span className="text-primary-ink font-mono tracking-widest animate-pulse flex items-center gap-1">
-                      <Activity size={10} /> Live Broadcaster Connected
+                    <span
+                      data-testid="live-broadcaster-status"
+                      className={`font-mono tracking-widest flex items-center gap-1 ${
+                        isSocketConnected ? 'text-primary-ink animate-pulse' : 'text-amber-600 dark:text-amber-400'
+                      }`}
+                      title={
+                        isSocketConnected
+                          ? lang === 'zh'
+                            ? '实时广播信令通道已连接'
+                            : 'Socket.IO real-time broadcaster connected'
+                          : lang === 'zh'
+                            ? '实时信令连接断开/重连中，将自动恢复'
+                            : 'Socket.IO disconnected / reconnecting'
+                      }
+                    >
+                      <Activity size={10} />{' '}
+                      {isSocketConnected ? 'Live Broadcaster Connected' : 'Broadcaster Reconnecting'}
                     </span>
                     <button
                       type="button"
@@ -2780,6 +2996,16 @@ export function LiveClassroomView({
                       <span>{lang === 'zh' ? '抽问' : 'Pick'}</span>
                     </button>
                   )}
+                  <ExtensionPointRenderer
+                    slot="classroom.monitor.header_action"
+                    slotProps={{
+                      lessonId: selectedLesson,
+                      classId: liveClassSelectedClassId,
+                      studentCount: students.length,
+                      onlineCount: onlineStudentIds.length,
+                      lang,
+                    }}
+                  />
                 </div>
                 <span
                   className="text-xs font-mono font-bold px-2 py-0.5 rounded-full border border-theme bg-surface-secondary text-muted shrink-0 flex items-center gap-1"
@@ -3591,9 +3817,16 @@ export function LiveClassroomView({
         isDiagnosticCenterOpen={isDiagnosticCenterOpen}
         onCloseDiagnosticCenter={() => setIsDiagnosticCenterOpen(false)}
         isGroupCollabOpen={isGroupCollabOpen}
-        onCloseGroupCollab={() => setIsGroupCollabOpen(false)}
+        onCloseGroupCollab={() => {
+          setIsGroupCollabOpen(false);
+          setCollabInitialGalleryMode(false);
+        }}
+        syncChannel={syncChannelRef.current}
+        collabInitialGalleryMode={collabInitialGalleryMode}
         isShowcaseDiffOpen={isShowcaseDiffOpen}
         onCloseShowcaseDiff={() => setIsShowcaseDiffOpen(false)}
+        showcaseCandidateWorks={showcaseCandidateWorks}
+        onSyncShowcaseDiffToClass={handleSyncShowcaseDiffToClass}
         isMacroRunnerOpen={isMacroRunnerOpen}
         onCloseMacroRunner={() => setIsMacroRunnerOpen(false)}
         isHardwareSettingsOpen={isHardwareSettingsOpen}

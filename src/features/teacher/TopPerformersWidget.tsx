@@ -22,6 +22,7 @@ import {
 import { onSocketInstance } from '../../services/socket-service';
 import type { Lesson, ClassType, ScheduleType, StudentType } from '../../store/appStore';
 import { isTerminalResourceStatus } from '../../utils/polling-guard';
+import { ExtensionPointRenderer } from '../../plugin-host/extension-point-renderer';
 
 export interface TopPerformerStudent {
   rank: number;
@@ -474,6 +475,16 @@ export function TopPerformersWidget({
           >
             <Download size={14} />
           </button>
+
+          <ExtensionPointRenderer
+            slot="classroom.top_performers.action"
+            slotProps={{
+              lessonId: selectedLessonId,
+              classId,
+              performersCount: topPerformers.length,
+              lang,
+            }}
+          />
         </div>
       </div>
 

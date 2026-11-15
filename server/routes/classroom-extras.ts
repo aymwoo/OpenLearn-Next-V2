@@ -237,6 +237,140 @@ ${snapshot.studentSnapshots
       sendSafeError(res, e);
     }
   });
+
+  // ── #3 小组协作白板与画廊互评持久化 ────────────────────────────────
+  app.get(
+    '/api/classroom/sessions/:lessonId/collab-whiteboard',
+    requireAuth('teacher', 'administrator'),
+    (req, res) => {
+      try {
+        const { lessonId } = req.params;
+        const session = (req as unknown as { session?: Parameters<typeof authorizeLessonStaff>[1] }).session;
+        if (rejectUnless(res, authorizeLessonStaff(kernelContainer.db, session, lessonId))) return;
+        const classId = typeof req.query.classId === 'string' ? req.query.classId : '';
+        interface CollabWhiteboardRow {
+          lesson_id: string;
+          class_id: string;
+          mission_prompt: string;
+          grouping_strategy: string;
+          groups_json: string;
+          strokes_json: string;
+          likes_json: string;
+          inquiries_json: string;
+          spotlight_group_id: string | null;
+          updated_by: string | null;
+          updated_at: number;
+        }
+        const row = kernelContainer.db
+          .prepare(
+            `SELECT lesson_id, class_id, mission_prompt, grouping_strategy, groups_json, strokes_json,
+                    likes_json, inquiries_json, spotlight_group_id, updated_by, updated_at
+             FROM classroom_collab_whiteboards
+             WHERE lesson_id = ? AND class_id = ?
+             LIMIT 1`,
+          )
+          .get(lessonId, classId) as CollabWhiteboardRow | undefined;
+
+        if (!row) {
+          return res.json({ success: true, board: null });
+        }
+
+        const safeParse = <T>(raw: unknown, fallback: T): T => {
+          if (typeof raw !== 'string' || !raw) return fallback;
+          try {
+            return JSON.parse(raw) as T;
+          } catch {
+            return fallback;
+          }
+        };
+
+        return res.json({
+          success: true,
+          board: {
+            lessonId: row.lesson_id,
+            classId: row.class_id || null,
+            missionPrompt: row.mission_prompt || '',
+            groupingStrategy: row.grouping_strategy || 'heterogeneous',
+            groups: safeParse(row.groups_json, []),
+            strokes: safeParse(row.strokes_json, []),
+            likes: safeParse(row.likes_json, {}),
+            inquiries: safeParse(row.inquiries_json, {}),
+            spotlightGroupId: row.spotlight_group_id || null,
+            updatedBy: row.updated_by || null,
+            updatedAt: row.updated_at,
+          },
+        });
+      } catch (e: unknown) {
+        sendSafeError(res, e);
+      }
+    },
+  );
+
+  app.put(
+    '/api/classroom/sessions/:lessonId/collab-whiteboard',
+    requireAuth('teacher', 'administrator'),
+    (req, res) => {
+      try {
+        const { lessonId } = req.params;
+        const session = (req as unknown as { session?: Parameters<typeof authorizeLessonStaff>[1] }).session;
+        if (rejectUnless(res, authorizeLessonStaff(kernelContainer.db, session, lessonId))) return;
+
+        const body = req.body ?? {};
+        const classId = typeof body.classId === 'string' ? body.classId : '';
+        const missionPrompt = typeof body.missionPrompt === 'string' ? body.missionPrompt.slice(0, 2000) : '';
+        const groupingStrategy =
+          body.groupingStrategy === 'homogeneous' || body.groupingStrategy === 'random'
+            ? body.groupingStrategy
+            : 'heterogeneous';
+        const groups = Array.isArray(body.groups) ? body.groups.slice(0, 32) : [];
+        const strokes = Array.isArray(body.strokes) ? body.strokes.slice(0, 5000) : [];
+        const likes = body.likes && typeof body.likes === 'object' && !Array.isArray(body.likes) ? body.likes : {};
+        const inquiries =
+          body.inquiries && typeof body.inquiries === 'object' && !Array.isArray(body.inquiries) ? body.inquiries : {};
+        const spotlightGroupId = typeof body.spotlightGroupId === 'string' ? body.spotlightGroupId : null;
+        const updatedAt = Date.now();
+        const actorId = getActorId(req) ?? null;
+        const id = `collab-${lessonId}-${classId || 'default'}`;
+
+        kernelContainer.db
+          .prepare(
+            `INSERT INTO classroom_collab_whiteboards (
+               id, lesson_id, class_id, mission_prompt, grouping_strategy,
+               groups_json, strokes_json, likes_json, inquiries_json,
+               spotlight_group_id, updated_by, updated_at
+             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             ON CONFLICT(lesson_id, class_id) DO UPDATE SET
+               mission_prompt = excluded.mission_prompt,
+               grouping_strategy = excluded.grouping_strategy,
+               groups_json = excluded.groups_json,
+               strokes_json = excluded.strokes_json,
+               likes_json = excluded.likes_json,
+               inquiries_json = excluded.inquiries_json,
+               spotlight_group_id = excluded.spotlight_group_id,
+               updated_by = excluded.updated_by,
+               updated_at = excluded.updated_at`,
+          )
+          .run(
+            id,
+            lessonId,
+            classId,
+            missionPrompt,
+            groupingStrategy,
+            JSON.stringify(groups),
+            JSON.stringify(strokes),
+            JSON.stringify(likes),
+            JSON.stringify(inquiries),
+            spotlightGroupId,
+            actorId,
+            updatedAt,
+          );
+
+        return res.json({ success: true, updatedAt });
+      } catch (e: unknown) {
+        sendSafeError(res, e);
+      }
+    },
+  );
 }
 
 /**

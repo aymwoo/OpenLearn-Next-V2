@@ -43,6 +43,7 @@ import type {
 } from './types';
 import { DIFF_STAMP_PRESETS, HIGHLIGHTER_COLORS, PEN_COLORS } from './diff-presets';
 import { DiffAnnotationCanvas } from './DiffAnnotationCanvas';
+import { ExtensionPointRenderer } from '../../../plugin-host/extension-point-renderer';
 
 export interface ShowcaseDiffModalProps {
   isOpen: boolean;
@@ -52,7 +53,12 @@ export interface ShowcaseDiffModalProps {
   candidateWorks?: DiffStudentWork[];
   addToast?: (title: string, message: string, type?: 'info' | 'success' | 'warning' | 'error') => void;
   lang?: 'zh' | 'en';
-  onSyncToClass?: (data: { selectedIds: string[]; layout: DiffScreenLayout }) => void;
+  onSyncToClass?: (data: {
+    selectedIds: string[];
+    layout: DiffScreenLayout;
+    works?: DiffStudentWork[];
+    anonymous?: boolean;
+  }) => void;
 }
 
 export const ShowcaseDiffModal: React.FC<ShowcaseDiffModalProps> = ({
@@ -65,9 +71,9 @@ export const ShowcaseDiffModal: React.FC<ShowcaseDiffModalProps> = ({
   lang = 'zh',
   onSyncToClass,
 }) => {
-  // 生成候选池数据（如果未从外部传入真实作答数据，则依据现有学生生成启发式解题样本）
+  // 候选池数据：一旦从宿主显式传入真实作答集合（即使为空数组），严格以真实数据为准，不虚构假样本
   const worksPool = useMemo<DiffStudentWork[]>(() => {
-    if (propWorks && propWorks.length > 0) return propWorks;
+    if (propWorks !== undefined) return propWorks;
 
     const baseStudents = availableStudents;
     if (!baseStudents || baseStudents.length === 0) return [];
@@ -148,9 +154,12 @@ const L = T - V; // 拉格朗日量
   });
 
   useEffect(() => {
-    if (selectedIds.length === 0 && worksPool.length > 0) {
-      setSelectedIds(worksPool.slice(0, 2).map((w) => w.studentId));
-    }
+    setSelectedIds((prev) => {
+      const validSet = new Set(worksPool.map((w) => w.studentId));
+      const kept = prev.filter((id) => validSet.has(id));
+      if (kept.length > 0) return kept;
+      return worksPool.slice(0, 2).map((w) => w.studentId);
+    });
   }, [worksPool]);
 
   const [isAnonymous, setIsAnonymous] = useState(false);
@@ -232,7 +241,23 @@ const L = T - V; // 拉格朗日量
 
   // 广播推流到学生端大屏
   const handleBroadcastSync = () => {
-    onSyncToClass?.({ selectedIds, layout });
+    if (activeWorks.length === 0) {
+      addToast?.(
+        lang === 'zh' ? '暂无可广播作品' : 'Nothing to Broadcast',
+        lang === 'zh' ? '请先从候选池选择至少 1 份真实学生作答。' : 'Select at least one student submission first.',
+        'warning',
+      );
+      return;
+    }
+    if (!onSyncToClass) {
+      addToast?.(
+        lang === 'zh' ? '广播通道未连接' : 'Sync Channel Unavailable',
+        lang === 'zh' ? '当前宿主未提供课堂广播通道，未能下发至学生机。' : 'Classroom sync handler is not attached.',
+        'warning',
+      );
+      return;
+    }
+    onSyncToClass({ selectedIds, layout, works: activeWorks, anonymous: isAnonymous });
     addToast?.(
       lang === 'zh' ? '📡 大屏同步已下发' : '📡 Broadcast Sent',
       lang === 'zh' ? '已将当前多屏对比与教师实时批注图层推送到全班学生机' : 'Synced diff viewport to students.',
@@ -240,10 +265,24 @@ const L = T - V; // 拉格朗日量
     );
   };
 
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[120] bg-black/60 backdrop-blur-md flex items-center justify-center p-3 md:p-6 animate-fade-in select-none">
+    <div
+      className="fixed inset-0 z-[120] bg-black/60 backdrop-blur-md flex items-center justify-center p-3 md:p-6 animate-fade-in select-none"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="showcase-diff-modal-title"
+    >
       <div className="bg-surface border border-theme rounded-2xl shadow-2xl w-full max-w-[96vw] h-[94vh] flex flex-col overflow-hidden text-main">
         {/* ── 顶部主控导航栏 ────────────────────────────────────────── */}
         <div className="bg-surface-secondary/80 px-5 py-3 border-b border-theme flex flex-wrap items-center justify-between gap-3 shrink-0">
@@ -253,7 +292,7 @@ const L = T - V; // 拉格朗日量
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-sm font-black text-main tracking-tight">
+                <h2 id="showcase-diff-modal-title" className="text-sm font-black text-main tracking-tight">
                   {lang === 'zh' ? '优秀作业 / 屏幕一键多屏对比投屏批注' : 'Showcase & Multi-Screen Diff'}
                 </h2>
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 dark:bg-purple-900/60 text-purple-700 dark:text-purple-300 font-mono">
@@ -305,6 +344,17 @@ const L = T - V; // 拉格朗日量
               <Share2 size={13} />
               <span>{lang === 'zh' ? '同步广播至全班' : 'Broadcast to Class'}</span>
             </button>
+
+            <ExtensionPointRenderer
+              slot="classroom.showcase_diff.action"
+              slotProps={{
+                selectedIds,
+                layout,
+                worksCount: activeWorks.length,
+                isAnonymous,
+                lang,
+              }}
+            />
 
             <button
               onClick={onClose}
