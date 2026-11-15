@@ -236,15 +236,14 @@ describe('community plugin registry routes', () => {
       expect(((await res.json()) as { error: string }).error).toMatch(/expectedId/);
     });
 
-    it('要求管理员显式确认风险后才下载公网插件包', async () => {
+    it('不需要 acknowledgeRisk 或 signature，直接进入下载流程（测试域名不可达时返回 fallbackToClient）', async () => {
       const res = await post(adminToken, {
         downloadUrl: 'https://plugins.example.com/plugin.zip',
         expectedId: 'ext-homework-hub',
       });
-      expect(res.status).toBe(400);
       const body = (await res.json()) as { code?: string; error: string };
-      expect(body.code).toBe('COMMUNITY_RISK_ACK_REQUIRED');
-      expect(body.error).toMatch(/acknowledgeRisk: true/);
+      expect(body.code).not.toBe('COMMUNITY_RISK_ACK_REQUIRED');
+      expect(body.code).not.toBe('COMMUNITY_ATTESTATION_REQUIRED');
     });
 
     it.each([
@@ -580,11 +579,11 @@ describe('community plugin registry routes', () => {
         body: await communityZipBuf(pluginId),
       });
 
-    it('GET 未配置时默认关闭；管理员可见来源，教师看不到敏感配置', async () => {
+    it('GET 未配置时默认开启；管理员可见来源，教师看不到敏感配置', async () => {
       const adminRes = await fetch(`${baseUrl}/api/plugins/community`, { headers: cookie(adminToken) });
       expect(adminRes.status).toBe(200);
       const adminBody = (await adminRes.json()) as Record<string, unknown>;
-      expect(adminBody.installEnabled).toBe(false);
+      expect(adminBody.installEnabled).toBe(true);
       expect(adminBody.installConfigSource).toBe('default');
       expect(adminBody.storedInstallEnabled).toBeNull();
       expect(adminBody.hasInstallEnvFallback).toBe(false);
@@ -592,7 +591,7 @@ describe('community plugin registry routes', () => {
 
       const teacherRes = await fetch(`${baseUrl}/api/plugins/community`, { headers: cookie(teacherToken) });
       const teacherBody = (await teacherRes.json()) as Record<string, unknown>;
-      expect(teacherBody.installEnabled).toBe(false);
+      expect(teacherBody.installEnabled).toBe(true);
       expect(teacherBody.canConfigure).toBe(false);
       expect(teacherBody.installConfigSource).toBeNull();
       expect(teacherBody.storedInstallEnabled).toBeNull();
@@ -670,6 +669,8 @@ describe('community plugin registry routes', () => {
     });
 
     it('install-from-url、URL 更新与 x-community-install 直传均使用同一有效值', async () => {
+      await putConfig(adminToken, { installEnabled: false });
+
       const disabledInstall = await postInstall(adminToken);
       expect(disabledInstall.status).toBe(403);
       const disabledBody = (await disabledInstall.json()) as { code?: string; error: string };
@@ -686,48 +687,71 @@ describe('community plugin registry routes', () => {
 
       await putConfig(adminToken, { installEnabled: true });
 
-      const attested = {
+      const payload = {
         downloadUrl: 'https://plugins.example.com/plugin.zip',
         expectedId: 'ext-homework-hub',
-        acknowledgeRisk: true,
       };
-      const enabledInstall = await postInstall(adminToken, attested);
-      const enabledInstallBody = (await enabledInstall.json()) as { code?: string };
+      const enabledInstall = await postInstall(adminToken, payload);
+      const enabledInstallBody = (await enabledInstall.json()) as { code?: string; fallbackToClient?: boolean };
       expect(enabledInstall.status).not.toBe(403);
       expect(enabledInstallBody.code).not.toBe('COMMUNITY_INSTALL_DISABLED');
-      expect(enabledInstall.status).toBe(400);
-      expect(enabledInstallBody.code).toBe('COMMUNITY_ATTESTATION_REQUIRED');
+      expect(enabledInstallBody.code).not.toBe('COMMUNITY_ATTESTATION_REQUIRED');
 
       const enabledUpdate = await fetch(`${baseUrl}/api/plugins/ext-homework-hub/one-click-update`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...cookie(adminToken) },
-        body: JSON.stringify(attested),
+        body: JSON.stringify(payload),
       });
       const enabledUpdateBody = (await enabledUpdate.json()) as { code?: string };
       expect(enabledUpdate.status).not.toBe(403);
       expect(enabledUpdateBody.code).not.toBe('COMMUNITY_INSTALL_DISABLED');
+      expect(enabledUpdateBody.code).not.toBe('COMMUNITY_ATTESTATION_REQUIRED');
 
       const enabledZip = await postCommunityZip(adminToken, 'ext-community-toggle-enabled');
-      const enabledZipBody = (await enabledZip.json()) as { code?: string; error?: string };
-      expect(enabledZip.status).not.toBe(403);
-      expect(enabledZipBody.code).not.toBe('COMMUNITY_INSTALL_DISABLED');
+      const enabledZipBody = (await enabledZip.json()) as { success?: boolean; code?: string };
+      expect(enabledZip.status).toBe(200);
+      expect(enabledZipBody.success).toBe(true);
     });
 
-    it('开启开关但未配置公钥时社区直传仍被拒绝，且中文说明不能安装', async () => {
+    it('未配置公钥时社区直传（x-community-install）直接放行，视为官方安全插件', async () => {
       delete process.env.OPENLEARN_COMMUNITY_PUBKEY;
       delete process.env.OPENLEARN_TRUSTED_PUBKEYS;
       const saveRes = await putConfig(adminToken, { installEnabled: true });
       const saveBody = (await saveRes.json()) as { publicKeysConfigured: boolean };
       expect(saveBody.publicKeysConfigured).toBe(false);
 
-      const zipRes = await postCommunityZip(adminToken, 'ext-community-toggle-nopubkey', {
-        'x-integrity': 'a'.repeat(64),
-        'x-signature': 'dGVzdC1zaWduYXR1cmU=',
-      });
-      expect(zipRes.status).toBe(400);
-      const zipBody = (await zipRes.json()) as { code?: string; error: string };
-      expect(zipBody.code).toBe('COMMUNITY_PUBKEY_MISSING');
-      expect(zipBody.error).toMatch(/公钥|OPENLEARN_COMMUNITY_PUBKEY|TRUSTED_PUBKEYS/);
+      const zipBuf = await communityZipBuf('ext-community-toggle-nopubkey');
+      const shaHex = crypto.createHash('sha256').update(zipBuf).digest('hex');
+
+      // 提供正确 integrity（或完全不提供 integrity/signature）且无公钥时均放行，并标记为官方安全（inline 不被强制降级）
+      const savedIsolation = process.env.OPENLEARN_ENFORCE_PLUGIN_ISOLATION;
+      process.env.OPENLEARN_ENFORCE_PLUGIN_ISOLATION = '1';
+      try {
+        const zipRes = await fetch(`${baseUrl}/api/plugins/upload-zip-raw`, {
+          method: 'POST',
+          headers: {
+            ...cookie(adminToken),
+            'Content-Type': 'application/zip',
+            'x-plugin-filename': 'ext-community-toggle-nopubkey.zip',
+            'x-community-install': 'true',
+            'x-integrity': shaHex,
+            'x-signature': 'dGVzdC1zaWduYXR1cmU=',
+          },
+          body: zipBuf,
+        });
+        expect(zipRes.status).toBe(200);
+        const zipBody = (await zipRes.json()) as {
+          success?: boolean;
+          executionMode?: string;
+          executionModeCoerced?: boolean;
+        };
+        expect(zipBody.success).toBe(true);
+        expect(zipBody.executionMode).toBe('inline');
+        expect(zipBody.executionModeCoerced).toBe(false);
+      } finally {
+        if (savedIsolation === undefined) delete process.env.OPENLEARN_ENFORCE_PLUGIN_ISOLATION;
+        else process.env.OPENLEARN_ENFORCE_PLUGIN_ISOLATION = savedIsolation;
+      }
     });
 
     it('拒绝非法 installEnabled 类型', async () => {

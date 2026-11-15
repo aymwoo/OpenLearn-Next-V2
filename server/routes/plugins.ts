@@ -45,10 +45,11 @@ import JSZip from 'jszip';
 import {
   COMMUNITY_INSTALL_DISABLED_MESSAGE,
   COMMUNITY_INSTALL_ENV,
+  communityPublicKeys,
+  hashMatches,
   resolveCommunityInstallConfig,
   setStoredCommunityInstallEnabled,
   verifyCommunityPackage,
-  communityPublicKeys,
 } from '../services/community-attest.js';
 import { verifyPluginPackage } from '../../packages/core/security/plugin-signature.js';
 import {
@@ -82,9 +83,6 @@ import type { ServerContext } from '../context.js';
 import { createLogger } from '../../packages/core/observability/logger.js';
 
 const pluginLog = createLogger('plugins');
-
-const COMMUNITY_RISK_ACK_MESSAGE =
-  '安装社区插件会在本机执行第三方代码。默认以独立子进程运行，不继承宿主的密钥类环境变量，但仍具备该系统用户被权限模型允许的能力。请在确认风险后重试（请求体 acknowledgeRisk: true）。插件清单里的 auth: false 不会自动公开，需要同时传入 approvePublicRoutes: true，或安装后调用 POST /api/plugins/:id/public-routes。';
 
 function headerFlag(req: express.Request, name: string): boolean {
   return String(req.headers[name] || '').toLowerCase() === 'true';
@@ -218,9 +216,9 @@ async function assertCommunityZipAttestation(
   const isSigned = hasExtSignature || hasEmbeddedSignature;
   const allowUnsigned = headerFlag(req, 'x-allow-unsigned');
 
-  // 如果声明了社区安装，或者包含签名/完整性声明
-  if (isCommunityFlag || isSigned || hasExtIntegrity) {
-    if (isCommunityFlag && !resolveCommunityInstallConfig(kernelContainer.db).enabled) {
+  // 社区安装：始终被认为是官方的、安全的；跳过公钥与签名校验，仅在提供 x-integrity 时校验文件哈希
+  if (isCommunityFlag) {
+    if (!resolveCommunityInstallConfig(kernelContainer.db).enabled) {
       return {
         ok: false,
         status: 403,
@@ -232,7 +230,6 @@ async function assertCommunityZipAttestation(
       };
     }
 
-    const trustedKeys = communityPublicKeys();
     const verifyRes = await verifyPluginPackage({
       packageSource: zipPath,
       sourceType: 'community',
@@ -242,7 +239,6 @@ async function assertCommunityZipAttestation(
         integrity: hasExtIntegrity ? (req.headers['x-integrity'] as string) : undefined,
         signature: hasExtSignature ? (req.headers['x-signature'] as string) : undefined,
       },
-      trustedPublicKeys: trustedKeys,
     });
 
     if (!verifyRes.ok) {
@@ -251,8 +247,8 @@ async function assertCommunityZipAttestation(
         status: 400,
         body: {
           success: false,
-          code: verifyRes.code || 'COMMUNITY_SIGNATURE_INVALID',
-          error: verifyRes.error || '社区插件包签名或完整性校验失败',
+          code: verifyRes.code || 'COMMUNITY_INTEGRITY_MISMATCH',
+          error: verifyRes.error || '社区插件包完整性校验失败',
         },
       };
     }
@@ -262,6 +258,61 @@ async function assertCommunityZipAttestation(
       signatureStatus: 'verified',
       publisher: verifyRes.publisher,
       integrity: verifyRes.integrity,
+    };
+  }
+
+  // 非社区直传但显式包含签名或完整性声明的本地上传包：
+  // 仅在宿主配置了受信任公钥时校验签名；未配置公钥时不再因缺失公钥拒绝。
+  if (isSigned || hasExtIntegrity) {
+    const trustedKeys = communityPublicKeys();
+    if (trustedKeys.length > 0) {
+      const verifyRes = await verifyPluginPackage({
+        packageSource: zipPath,
+        sourceType: 'local',
+        metadata: {
+          id: pkgManifest?.id,
+          version: pkgManifest?.version,
+          integrity: hasExtIntegrity ? (req.headers['x-integrity'] as string) : undefined,
+          signature: hasExtSignature ? (req.headers['x-signature'] as string) : undefined,
+        },
+        trustedPublicKeys: trustedKeys,
+      });
+
+      if (!verifyRes.ok) {
+        return {
+          ok: false,
+          status: 400,
+          body: {
+            success: false,
+            code: verifyRes.code === 'LOCAL_SIGNATURE_INVALID' ? 'COMMUNITY_SIGNATURE_INVALID' : verifyRes.code,
+            error: verifyRes.error || '插件包签名或完整性校验失败',
+          },
+        };
+      }
+
+      return {
+        ok: true,
+        signatureStatus: verifyRes.status === 'verified' ? 'verified' : 'unverified_local_acknowledged',
+        publisher: verifyRes.publisher,
+        integrity: verifyRes.integrity,
+      };
+    }
+
+    if (hasExtIntegrity && !hashMatches(zipPath, req.headers['x-integrity'] as string)) {
+      return {
+        ok: false,
+        status: 400,
+        body: {
+          success: false,
+          code: 'LOCAL_INTEGRITY_MISMATCH',
+          error: '本地插件包完整性哈希校验失败，内容与声明不符',
+        },
+      };
+    }
+
+    return {
+      ok: true,
+      signatureStatus: 'unverified_local_acknowledged',
     };
   }
 
@@ -613,6 +664,8 @@ export function registerPluginsRoutes(ctx: ServerContext) {
             kernelContainer.db.prepare('SELECT execution_mode FROM plugins WHERE id = ?').get(found.pluginId) as
               { execution_mode?: string } | undefined
           )?.execution_mode,
+          process.env,
+          kernelContainer.pluginHost.getPluginFilePath(found.pluginId),
         ).mode,
       });
     } catch (e: any) {
@@ -777,7 +830,6 @@ export function registerPluginsRoutes(ctx: ServerContext) {
         expectedId,
         allowDowngrade,
         executionMode: rawExecutionMode,
-        acknowledgeRisk,
         approvePublicRoutes,
         approveCapabilities,
         approveNetworkHosts,
@@ -797,26 +849,11 @@ export function registerPluginsRoutes(ctx: ServerContext) {
         return res.status(400).json({ success: false, error: `安全拦截: 非法下载地址 (${urlCheck.reason})` });
       }
 
-      // 管理员必须显式确认，避免社区一键安装在没有风险提示的情况下下载并执行第三方代码。
-      if (acknowledgeRisk !== true) {
-        return res.status(400).json({
-          success: false,
-          code: 'COMMUNITY_RISK_ACK_REQUIRED',
-          error: COMMUNITY_RISK_ACK_MESSAGE,
-        });
-      }
       if (!resolveCommunityInstallConfig(kernelContainer.db).enabled) {
         return res.status(403).json({
           success: false,
           code: 'COMMUNITY_INSTALL_DISABLED',
           error: COMMUNITY_INSTALL_DISABLED_MESSAGE,
-        });
-      }
-      if (typeof integrity !== 'string' || !integrity.trim() || typeof signature !== 'string' || !signature.trim()) {
-        return res.status(400).json({
-          success: false,
-          code: 'COMMUNITY_ATTESTATION_REQUIRED',
-          error: '社区包必须同时提供 integrity 与 signature',
         });
       }
 
@@ -857,6 +894,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
             targetPluginId: existing.pluginId,
             executionMode,
             allowDowngrade: Boolean(allowDowngrade),
+            communityOfficial: true,
           });
           return res.json({
             success: true,
@@ -882,7 +920,9 @@ export function registerPluginsRoutes(ctx: ServerContext) {
           });
         }
 
-        const result = await kernelContainer.pluginDistributionManager.installFromZip(pkg.zipPath, executionMode);
+        const result = await kernelContainer.pluginDistributionManager.installFromZip(pkg.zipPath, executionMode, {
+          communityOfficial: true,
+        });
         recordSecurityAudit('plugin.installed', {
           actorId: getActorId(req),
           pluginId: result.pluginId,
@@ -949,14 +989,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
     let zipPath: string | undefined;
     try {
       const targetPluginId = decodeURIComponent(req.params.id);
-      const { downloadUrl, acknowledgeRisk, integrity, signature } = req.body || {};
-      if (acknowledgeRisk !== true) {
-        return res.status(400).json({
-          success: false,
-          code: 'COMMUNITY_RISK_ACK_REQUIRED',
-          error: COMMUNITY_RISK_ACK_MESSAGE,
-        });
-      }
+      const { downloadUrl, integrity, signature } = req.body || {};
 
       if (downloadUrl) {
         const urlCheck = isSafeExternalUrl(downloadUrl);
@@ -971,13 +1004,6 @@ export function registerPluginsRoutes(ctx: ServerContext) {
             success: false,
             code: 'COMMUNITY_INSTALL_DISABLED',
             error: COMMUNITY_INSTALL_DISABLED_MESSAGE,
-          });
-        }
-        if (typeof integrity !== 'string' || !integrity.trim() || typeof signature !== 'string' || !signature.trim()) {
-          return res.status(400).json({
-            success: false,
-            code: 'COMMUNITY_ATTESTATION_REQUIRED',
-            error: '社区包必须同时提供 integrity 与 signature',
           });
         }
         // Server-side download with timeout fallback signal
@@ -1041,6 +1067,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
       const result = await kernelContainer.pluginDistributionManager.updateFromZip(zipPath, {
         targetPluginId,
         allowDowngrade: false,
+        communityOfficial: true,
       });
 
       res.json({
@@ -1516,14 +1543,8 @@ export function registerPluginsRoutes(ctx: ServerContext) {
       const approvePublicRoutes = headerFlag(req, 'x-approve-public-routes');
       const approveCapabilities = headerFlag(req, 'x-approve-capabilities');
       const approveNetworkHosts = headerFlag(req, 'x-approve-network-hosts');
+      const isCommunityInstall = headerFlag(req, 'x-community-install');
 
-      if (modeHeader === 'update' && !headerFlag(req, 'x-acknowledge-risk')) {
-        return res.status(400).json({
-          success: false,
-          code: 'COMMUNITY_RISK_ACK_REQUIRED',
-          error: COMMUNITY_RISK_ACK_MESSAGE,
-        });
-      }
       const expectedId = targetPluginId
         ? (kernelContainer.pluginHost.getPluginManifest(targetPluginId)?.id ?? targetPluginId)
         : undefined;
@@ -1537,6 +1558,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
           targetPluginId,
           executionMode,
           allowDowngrade,
+          communityOfficial: isCommunityInstall,
         });
         recordSecurityAudit('plugin.installed', {
           actorId: getActorId(req),
@@ -1577,7 +1599,9 @@ export function registerPluginsRoutes(ctx: ServerContext) {
         });
       }
 
-      const result = await kernelContainer.pluginDistributionManager.installFromZip(zipPath, executionMode);
+      const result = await kernelContainer.pluginDistributionManager.installFromZip(zipPath, executionMode, {
+        communityOfficial: isCommunityInstall,
+      });
       recordSecurityAudit('plugin.installed', {
         actorId: getActorId(req),
         pluginId: result.pluginId,
@@ -1630,13 +1654,6 @@ export function registerPluginsRoutes(ctx: ServerContext) {
     let zipPath: string | undefined;
     try {
       const targetPluginId = decodeURIComponent(req.params.id);
-      if (!headerFlag(req, 'x-acknowledge-risk')) {
-        return res.status(400).json({
-          success: false,
-          code: 'COMMUNITY_RISK_ACK_REQUIRED',
-          error: COMMUNITY_RISK_ACK_MESSAGE,
-        });
-      }
       zipPath = await streamBodyToTempZip(req, res, zipUploadLimitBytes);
       const expectedUpdateId = kernelContainer.pluginHost.getPluginManifest(targetPluginId)?.id ?? targetPluginId;
       const attestation = await assertCommunityZipAttestation(req, zipPath, expectedUpdateId);
@@ -1652,6 +1669,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
         targetPluginId,
         executionMode,
         allowDowngrade,
+        communityOfficial: headerFlag(req, 'x-community-install'),
       });
       recordSecurityAudit('plugin.installed', {
         actorId: getActorId(req),
