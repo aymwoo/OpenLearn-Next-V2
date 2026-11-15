@@ -101,15 +101,16 @@
 
 ### `users`
 
-| 列              | 类型        | 说明                                       |
-| --------------- | ----------- | ------------------------------------------ |
-| `id`            | TEXT PK     | 用户 ID                                    |
-| `username`      | TEXT UNIQUE | 用户名                                     |
-| `password_hash` | TEXT        | 密码哈希                                   |
-| `role`          | TEXT        | `administrator` / `teacher` / `student` 等 |
-| `name`          | TEXT        | 姓名                                       |
-| `status`        | TEXT        | `active` 等                                |
-| `created_at`    | INTEGER     | 时间戳                                     |
+| 列              | 类型        | 说明                                                  |
+| --------------- | ----------- | ----------------------------------------------------- |
+| `id`            | TEXT PK     | 用户 ID                                               |
+| `username`      | TEXT UNIQUE | 用户名                                                |
+| `password_hash` | TEXT        | 密码哈希                                              |
+| `role`          | TEXT        | `administrator` / `teacher` / `student` 等            |
+| `name`          | TEXT        | 姓名                                                  |
+| `status`        | TEXT        | `active` 等                                           |
+| `tour_status`   | TEXT        | 新手引导向导状态：`pending` / `completed` / `skipped` |
+| `created_at`    | INTEGER     | 时间戳                                                |
 
 ### `client_sessions`
 
@@ -475,7 +476,7 @@ MFE 远端登记。MFE 执行边界已移除，表保留作历史数据兼容。
 
 <!-- AUTO-GENERATED:table-inventory BEGIN -->
 
-共 **90** 张表（迁移 54 个，金样生成于 2026-11-15T04:03:22.773Z）。列清单为列名（类型与约束见迁移 SQL）：
+共 **90** 张表（迁移 55 个，金样生成于 2026-11-15T05:50:58.694Z）。列清单为列名（类型与约束见迁移 SQL）：
 
 - `_academic_year_backfill`: backfilled_at, id
 - `_class_passcode_encryption`: id, note
@@ -564,7 +565,7 @@ MFE 远端登记。MFE 执行边界已移除，表保留作历史数据兼容。
 - `theme_versions`: asset_manifest_json, created_at, manifest_json, styles_css, theme_id, uploader_id, version
 - `themes`: author, created_at, description, id, latest_version, manifest_json, name, platform_max_version, platform_min_version, status, styles_css, supports_modes, updated_at, uploader_id, uploader_name
 - `user_theme_preferences`: appearance_json, installed_version, mode, principal_key, theme_id, updated_at
-- `users`: avatar, created_at, id, must_change_password, name, password_hash, role, status, username
+- `users`: avatar, created_at, id, must_change_password, name, password_hash, role, status, tour_status, username
 - `vfs_nodes`: content, created_at, id, name, parent_id, type, updated_at
 - `whiteboard_elements`: created_at, data, id, lesson_id, type
 

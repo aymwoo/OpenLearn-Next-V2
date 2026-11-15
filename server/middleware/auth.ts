@@ -21,6 +21,7 @@ export interface Session {
   role: string;
   subRole?: string;
   avatar?: string | null;
+  tourStatus?: 'pending' | 'completed' | 'skipped';
   permissions?: string[];
   [key: string]: unknown;
 }

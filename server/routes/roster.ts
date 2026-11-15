@@ -4,7 +4,7 @@ import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
 import { verifyPassword, hashPassword as bcryptHashPassword } from '../../packages/core/db/index.js';
-import { getCookieToken, getValidSession, getActorId, requireAuth } from '../middleware/auth.js';
+import { getCookieToken, getValidSession, getActorId, requireAuth, type Session } from '../middleware/auth.js';
 import { requireScopedAuth } from '../middleware/data-scope.js';
 import { validateMagicBytes, BLOCKED_EXTENSIONS } from './shared.js';
 import { sendSafeError } from '../utils/error-handler.js';
@@ -358,6 +358,28 @@ export function registerRosterRoutes(ctx: ServerContext) {
     }
   });
 
+  type TourStatus = 'pending' | 'completed' | 'skipped';
+
+  const normalizeTourStatus = (raw: unknown): TourStatus => {
+    return raw === 'completed' || raw === 'skipped' ? raw : 'pending';
+  };
+
+  const enrichSessionTourStatus = <T extends { role?: string; userId?: string; tourStatus?: TourStatus }>(
+    session: T,
+  ): T => {
+    if (session.role !== 'teacher' || !session.userId) return session;
+    try {
+      const row = kernelContainer.db.prepare('SELECT tour_status FROM users WHERE id = ?').get(session.userId) as
+        { tour_status?: string | null } | undefined;
+      return {
+        ...session,
+        tourStatus: normalizeTourStatus(row?.tour_status),
+      };
+    } catch {
+      return session;
+    }
+  };
+
   app.get('/api/auth/session', (req, res) => {
     try {
       const token = getCookieToken(req);
@@ -365,10 +387,11 @@ export function registerRosterRoutes(ctx: ServerContext) {
         return res.json({ session: null });
       }
       // SEC-AUTH-03: 使用 getValidSession 自动检查过期
-      const session = getValidSession(token);
-      if (!session) {
+      const rawSession = getValidSession(token);
+      if (!rawSession) {
         return res.json({ session: null });
       }
+      const session = enrichSessionTourStatus(rawSession);
       res.json({ session, ...(session as any) });
     } catch (e: any) {
       sendSafeError(res, e);
@@ -379,9 +402,45 @@ export function registerRosterRoutes(ctx: ServerContext) {
     try {
       const token = getCookieToken(req);
       if (!token) return res.json({ session: null, role: null });
-      const session = getValidSession(token);
-      if (!session) return res.json({ session: null, role: null });
+      const rawSession = getValidSession(token);
+      if (!rawSession) return res.json({ session: null, role: null });
+      const session = enrichSessionTourStatus(rawSession);
       res.json({ session, ...(session as any) });
+    } catch (e: any) {
+      sendSafeError(res, e);
+    }
+  });
+
+  /**
+   * PUT /api/auth/onboarding — 持久化当前登录教师/管理员的新手向导完成/跳过状态（按账号隔离）。
+   */
+  app.put('/api/auth/onboarding', requireScopedAuth('self'), (req, res) => {
+    try {
+      const session = (req as any).session as Session | undefined;
+      const status = req.body?.status;
+      if (status !== 'completed' && status !== 'skipped') {
+        return res.status(400).json({ error: 'Invalid onboarding status. Expected "completed" or "skipped".' });
+      }
+      const userId = session?.userId;
+      if (!session || session.role !== 'teacher' || !userId) {
+        return res.status(403).json({ error: 'Onboarding tour status is only tracked for staff accounts' });
+      }
+      const result = kernelContainer.db.prepare('UPDATE users SET tour_status = ? WHERE id = ?').run(status, userId);
+      if (result.changes === 0) {
+        return res.status(404).json({ error: 'User account not found' });
+      }
+      const token = getCookieToken(req);
+      if (token) {
+        try {
+          const updatedSession = { ...session, tourStatus: status };
+          kernelContainer.db
+            .prepare('UPDATE client_sessions SET session_data = ? WHERE id = ?')
+            .run(JSON.stringify(updatedSession), token);
+        } catch (syncErr) {
+          rlog.warn({ err: syncErr }, '[Auth] Failed to sync tourStatus in client_sessions');
+        }
+      }
+      return res.json({ success: true, tourStatus: status });
     } catch (e: any) {
       sendSafeError(res, e);
     }
@@ -784,6 +843,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
           subRole: userObj.role,
           name: userObj.name,
           avatar: userObj.avatar ?? null,
+          tourStatus: normalizeTourStatus(userObj.tour_status),
           ...(mustChangePassword ? { mustChangePassword: true } : {}),
         };
       } else if (entrance === 'student') {

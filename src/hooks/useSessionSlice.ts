@@ -1,6 +1,41 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import type { useToast } from './useToast';
-import { fetchAuthSession } from '../services/sessionService.js';
+import { fetchAuthSession, saveOnboardingStatus } from '../services/sessionService.js';
+
+const LEGACY_TOUR_COMPLETED_KEY = 'edu_os_tour_completed';
+const TOUR_STATUS_KEY_PREFIX = 'edu_os_tour_status:';
+
+function getTourAccountKey(s: { userId?: string; id?: string; username?: string } | null): string | null {
+  if (!s) return null;
+  return s.userId || s.id || s.username || null;
+}
+
+function readStoredTourStatus(accountKey: string | null): 'completed' | 'skipped' | null {
+  if (typeof window === 'undefined' || !window.localStorage) return null;
+  try {
+    if (accountKey) {
+      const raw = window.localStorage.getItem(`${TOUR_STATUS_KEY_PREFIX}${accountKey}`);
+      if (raw === 'completed' || raw === 'skipped') return raw;
+    }
+    // 兼容已有 Playwright E2E 与历史单键存储
+    if (window.localStorage.getItem(LEGACY_TOUR_COMPLETED_KEY) === 'true') {
+      return 'completed';
+    }
+  } catch {
+    // localStorage 不可用时降级，由服务端状态与内存守卫兜底
+  }
+  return null;
+}
+
+function writeStoredTourStatus(accountKey: string | null, status: 'completed' | 'skipped'): boolean {
+  if (typeof window === 'undefined' || !window.localStorage || !accountKey) return false;
+  try {
+    window.localStorage.setItem(`${TOUR_STATUS_KEY_PREFIX}${accountKey}`, status);
+    return true;
+  } catch {
+    return false;
+  }
+}
 import { useSessionBootstrap } from './useSessionBootstrap';
 import { useStudentViewState } from './useStudentViewState';
 import { useAppStore, appStore } from '../store/appStore';
@@ -238,15 +273,69 @@ export function useSessionSlice({ lang, addToast, fetchStudents }: SessionSliceP
   }, [teacherTab, setTeacherTab, isStudentTabMode, isStageDisplayMode]);
 
   const [isTourOpen, setIsTourOpen] = useState(false);
+  const dismissedTourUsersRef = useRef<Set<string>>(new Set());
   const [isApprovalsCollapsed, setIsApprovalsCollapsed] = useState(false);
   const [isProcessesCollapsed, setIsProcessesCollapsed] = useState(false);
 
-  // Auto trigger help tour guide for new admin users
+  const dismissTour = useCallback(
+    async (status: 'completed' | 'skipped') => {
+      const currentSession = appStore.getState().session;
+      const accountKey = getTourAccountKey(currentSession);
+      const guardKey = accountKey ?? '__anonymous__';
+
+      dismissedTourUsersRef.current.add(guardKey);
+      setIsTourOpen(false);
+
+      if (!currentSession) return;
+
+      const storedLocally = writeStoredTourStatus(accountKey, status);
+      let persistedOnServer = false;
+      try {
+        const res = await saveOnboardingStatus(status);
+        persistedOnServer = Boolean(res.ok);
+      } catch {
+        persistedOnServer = false;
+      }
+
+      if (persistedOnServer) {
+        const latestSession = appStore.getState().session;
+        if (latestSession && getTourAccountKey(latestSession) === accountKey) {
+          setSession({ ...latestSession, tourStatus: status });
+        }
+        return;
+      }
+
+      addToast(
+        lang === 'zh'
+          ? storedLocally
+            ? '向导状态已在本地保存，但同步至服务器失败，切换设备或清理存储后可能会再次提示。'
+            : '向导状态未能保存到服务器与本地存储，本次会话内已为您抑制重复弹出。'
+          : storedLocally
+            ? 'Tour state was saved locally, but syncing to the server failed.'
+            : 'Failed to save tour status to the server or local storage; suppressed for this session.',
+        'warning',
+      );
+    },
+    [addToast, lang, setSession],
+  );
+
+  // Auto trigger help tour guide for new admin users (after session hydration & mandatory password gate)
   useEffect(() => {
-    if (session?.subRole === 'administrator' && localStorage.getItem('edu_os_tour_completed') !== 'true') {
-      setIsTourOpen(true);
+    if (!session || session.mustChangePassword) {
+      setIsTourOpen(false);
+      return;
     }
-  }, [session]);
+    if (sessionLoading || isStudentTabMode) return;
+    if (session.subRole !== 'administrator') return;
+
+    const accountKey = getTourAccountKey(session);
+    const guardKey = accountKey ?? '__anonymous__';
+    if (dismissedTourUsersRef.current.has(guardKey)) return;
+    if (session.tourStatus === 'completed' || session.tourStatus === 'skipped') return;
+    if (readStoredTourStatus(accountKey) !== null) return;
+
+    setIsTourOpen(true);
+  }, [sessionLoading, session, isStudentTabMode]);
 
   // Automatically collapse system navigation when entering interactive classroom
   useEffect(() => {
@@ -311,6 +400,7 @@ export function useSessionSlice({ lang, addToast, fetchStudents }: SessionSliceP
     setTeacherTab,
     isTourOpen,
     setIsTourOpen,
+    dismissTour,
     isApprovalsCollapsed,
     setIsApprovalsCollapsed,
     isProcessesCollapsed,

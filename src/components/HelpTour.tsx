@@ -1,15 +1,16 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { HelpCircle, ChevronLeft, ChevronRight, X, Sparkles, AlertCircle, Play } from 'lucide-react';
+import React, { useState, useEffect, useRef, useCallback, useId } from 'react';
+import { ChevronLeft, ChevronRight, X, Sparkles, AlertCircle, Play } from 'lucide-react';
 
 interface HelpTourProps {
   isOpen: boolean;
   onClose: () => void;
+  onDismiss?: (status: 'completed' | 'skipped') => void | Promise<void>;
   lang: 'zh' | 'en';
   onSeedSuccess: (data: { classId: string; scheduleId: string; lessonId: string }) => void;
   onJumpTab: (tab: string) => void;
 }
 
-export function HelpTour({ isOpen, onClose, lang, onSeedSuccess, onJumpTab }: HelpTourProps) {
+export function HelpTour({ isOpen, onClose, onDismiss, lang, onSeedSuccess, onJumpTab }: HelpTourProps) {
   const [currentStep, setCurrentStep] = useState(0);
   const [seeding, setSeeding] = useState(false);
   const [errorFeedback, setErrorFeedback] = useState<string | null>(null);
@@ -17,6 +18,8 @@ export function HelpTour({ isOpen, onClose, lang, onSeedSuccess, onJumpTab }: He
   const [highlightStyle, setHighlightStyle] = useState<React.CSSProperties>({ display: 'none' });
   const [popoverStyle, setPopoverStyle] = useState<React.CSSProperties>({ display: 'none' });
   const popoverRef = useRef<HTMLDivElement>(null);
+  const seedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const headingId = useId();
 
   // Steps definition
   const steps = [
@@ -55,8 +58,57 @@ export function HelpTour({ isOpen, onClose, lang, onSeedSuccess, onJumpTab }: He
     },
   ];
 
+  const handleDismiss = useCallback(
+    (status: 'completed' | 'skipped') => {
+      if (onDismiss) {
+        void onDismiss(status);
+        return;
+      }
+      try {
+        localStorage.setItem('edu_os_tour_completed', 'true');
+      } catch {
+        // 忽略本地存储写入失败，仍允许关闭当前弹窗
+      }
+      onClose();
+    },
+    [onClose, onDismiss],
+  );
+
+  // 每次重新打开时重置到第 0 步，并清理未触发的自动跳转定时器
+  useEffect(() => {
+    if (isOpen) {
+      setCurrentStep(0);
+      setErrorFeedback(null);
+      setSeedResult(null);
+      setSeeding(false);
+    } else if (seedTimerRef.current) {
+      clearTimeout(seedTimerRef.current);
+      seedTimerRef.current = null;
+    }
+    return () => {
+      if (seedTimerRef.current) {
+        clearTimeout(seedTimerRef.current);
+        seedTimerRef.current = null;
+      }
+    };
+  }, [isOpen]);
+
+  // Esc 快捷键跳过/关闭向导
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        handleDismiss('skipped');
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, handleDismiss]);
+
   const handleSeedData = async () => {
     setSeeding(true);
+    setErrorFeedback(null);
     try {
       const res = await fetch('/api/admin/seed-demo', { method: 'POST' });
       if (res.ok) {
@@ -69,7 +121,8 @@ export function HelpTour({ isOpen, onClose, lang, onSeedSuccess, onJumpTab }: He
             lessonId: data.lessonId,
           });
           // Proceed to next step automatically
-          setTimeout(() => {
+          if (seedTimerRef.current) clearTimeout(seedTimerRef.current);
+          seedTimerRef.current = setTimeout(() => {
             setCurrentStep(2);
           }, 1500);
         }
@@ -94,10 +147,9 @@ export function HelpTour({ isOpen, onClose, lang, onSeedSuccess, onJumpTab }: He
   };
 
   const handleFinishAndStartClass = () => {
-    localStorage.setItem('edu_os_tour_completed', 'true');
     // If we have seeded a class, jump to the live classroom
     onJumpTab('live_class');
-    onClose();
+    handleDismiss('completed');
   };
 
   // Update target element highlighting layout
@@ -203,10 +255,18 @@ export function HelpTour({ isOpen, onClose, lang, onSeedSuccess, onJumpTab }: He
   const currentStepData = steps[currentStep];
 
   return (
-    <div className="fixed inset-0 overflow-hidden select-none" style={{ zIndex: 9998 }}>
+    <div
+      className="fixed inset-0 overflow-hidden select-none"
+      style={{ zIndex: 9998 }}
+      onClick={(e) => {
+        if (!popoverRef.current?.contains(e.target as Node)) {
+          handleDismiss('skipped');
+        }
+      }}
+    >
       {/* Fullscreen Overlay Mask if no element highlight, else handled by box-shadow */}
       {currentStepData && !currentStepData.targetId && (
-        <div className="fixed inset-0 bg-slate-900/65 backdrop-blur-2xs transition-opacity" onClick={onClose} />
+        <div className="fixed inset-0 bg-slate-900/65 backdrop-blur-2xs transition-opacity" />
       )}
 
       {/* Highlighting dashed hole */}
@@ -215,18 +275,27 @@ export function HelpTour({ isOpen, onClose, lang, onSeedSuccess, onJumpTab }: He
       {/* Help Card Popover Container */}
       <div
         ref={popoverRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={headingId}
+        tabIndex={-1}
         style={popoverStyle}
         className="bg-white rounded-2xl border border-slate-150/60 shadow-2xl p-5 md:p-6 text-gray-900 font-sans flex flex-col justify-between"
       >
         <div>
           {/* Header */}
           <div className="flex justify-between items-start mb-3">
-            <h3 className="font-extrabold text-sm md:text-base text-gray-900 flex items-center gap-1.5 leading-tight">
+            <h3
+              id={headingId}
+              className="font-extrabold text-sm md:text-base text-gray-900 flex items-center gap-1.5 leading-tight"
+            >
               <Sparkles size={16} className="text-indigo-500 animate-pulse shrink-0" />
               {currentStepData.title}
             </h3>
             <button
-              onClick={onClose}
+              type="button"
+              onClick={() => handleDismiss('skipped')}
+              aria-label={lang === 'zh' ? '跳过并关闭向导' : 'Skip and close tour'}
               className="text-gray-400 hover:text-gray-600 rounded-lg p-0.5 transition-colors cursor-pointer"
             >
               <X size={16} />
@@ -240,7 +309,7 @@ export function HelpTour({ isOpen, onClose, lang, onSeedSuccess, onJumpTab }: He
 
           {/* Action box inside Step 1 (Seeding) */}
           {currentStepData.actionable && (
-            <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-3.5 mb-5 flex flex-col items-center justify-center">
+            <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-3.5 mb-5 flex flex-col items-center justify-center gap-2">
               {seedResult ? (
                 <div className="flex items-center gap-2 text-emerald-600 text-xs font-bold animate-bounce">
                   <Play size={12} className="fill-emerald-600" />
@@ -248,6 +317,7 @@ export function HelpTour({ isOpen, onClose, lang, onSeedSuccess, onJumpTab }: He
                 </div>
               ) : (
                 <button
+                  type="button"
                   onClick={handleSeedData}
                   disabled={seeding}
                   className="w-full flex items-center justify-center gap-1.5 py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs md:text-sm rounded-lg hover:shadow-md transition-all cursor-pointer disabled:bg-indigo-400"
@@ -272,6 +342,15 @@ export function HelpTour({ isOpen, onClose, lang, onSeedSuccess, onJumpTab }: He
                   )}
                 </button>
               )}
+              {errorFeedback && (
+                <div
+                  role="alert"
+                  className="w-full flex items-start gap-1.5 text-xs text-rose-600 bg-rose-50 border border-rose-200 rounded-lg px-2.5 py-2"
+                >
+                  <AlertCircle size={14} className="shrink-0 mt-0.5" />
+                  <span>{errorFeedback}</span>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -290,25 +369,28 @@ export function HelpTour({ isOpen, onClose, lang, onSeedSuccess, onJumpTab }: He
 
           {/* Navigation buttons */}
           <div className="flex items-center gap-2">
-            {currentStep > 0 ? (
+            <button
+              type="button"
+              onClick={() => handleDismiss('skipped')}
+              className="px-3 py-1.5 border border-slate-200 rounded-lg text-xs font-semibold text-slate-500 hover:bg-slate-50 transition-colors cursor-pointer"
+            >
+              {lang === 'zh' ? '跳过向导' : 'Skip Tour'}
+            </button>
+
+            {currentStep > 0 && (
               <button
+                type="button"
                 onClick={() => setCurrentStep((prev) => prev - 1)}
                 className="flex items-center gap-1 px-3 py-1.5 border border-slate-200 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-50 transition-colors cursor-pointer"
               >
                 <ChevronLeft size={12} />
                 {lang === 'zh' ? '上一步' : 'Back'}
               </button>
-            ) : (
-              <button
-                onClick={onClose}
-                className="px-3 py-1.5 border border-slate-200 rounded-lg text-xs font-semibold text-slate-500 hover:bg-slate-50 transition-colors cursor-pointer"
-              >
-                {lang === 'zh' ? '跳过向导' : 'Skip Tour'}
-              </button>
             )}
 
             {currentStep < steps.length - 1 ? (
               <button
+                type="button"
                 onClick={() => setCurrentStep((prev) => prev + 1)}
                 className="flex items-center gap-1 px-3 py-1.5 bg-slate-900 text-white rounded-lg text-xs font-semibold hover:bg-slate-800 transition-colors cursor-pointer"
               >
@@ -317,6 +399,7 @@ export function HelpTour({ isOpen, onClose, lang, onSeedSuccess, onJumpTab }: He
               </button>
             ) : (
               <button
+                type="button"
                 onClick={handleFinishAndStartClass}
                 className="flex items-center gap-1 px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold shadow-sm transition-colors cursor-pointer"
               >
