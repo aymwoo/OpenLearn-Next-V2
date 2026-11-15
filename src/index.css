@@ -656,3 +656,24 @@ dialog::backdrop {
   background-color: rgb(15 23 42 / 0.55);
   backdrop-filter: blur(4px);
 }
+
+@keyframes indeterminate-progress {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(350%);
+  }
+}
+
+.animate-indeterminate-progress {
+  animation: indeterminate-progress 1.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-indeterminate-progress {
+    animation: none;
+    width: 100%;
+    opacity: 0.7;
+  }
+}
