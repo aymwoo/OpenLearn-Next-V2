@@ -52,8 +52,8 @@ export function CommandPaletteHost(): React.ReactElement | null {
   // Cmd/Ctrl + K 开合。输入框聚焦时同样允许唤起（命令面板自己接管焦点）。
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key.toLowerCase() !== 'k') return;
       if (!event.metaKey && !event.ctrlKey) return;
+      if (typeof event.key !== 'string' || event.key.toLowerCase() !== 'k') return;
       event.preventDefault();
       setIsOpen((prev) => !prev);
     };
