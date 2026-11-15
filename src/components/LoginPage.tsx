@@ -29,9 +29,19 @@ interface LoginSiteInfo {
   logoUrl: string | null;
 }
 
+function getBuildAppVersion(): string {
+  return typeof __APP_VERSION__ === 'string' ? __APP_VERSION__.trim() : '';
+}
+
+function formatVersionBadge(rawVersion: string): string {
+  const cleaned = rawVersion.trim().replace(/^v/i, '');
+  return cleaned ? `v${cleaned}` : '';
+}
+
 export const LoginPage = React.memo(function LoginPage({ onLoginSuccess, lang }: LoginPageProps) {
   const [activeTab, setActiveTab] = useState<'teacher' | 'student'>('teacher');
   const [siteInfo, setSiteInfo] = useState<LoginSiteInfo | null>(null);
+  const [appVersion, setAppVersion] = useState<string>(getBuildAppVersion);
   // 种子账号仍在用默认口令（口令 = 用户名）时才为真 —— 服务端判定，改密后自动转 false
   const [defaultSeedAccounts, setDefaultSeedAccounts] = useState<string[]>([]);
 
@@ -99,6 +109,27 @@ export const LoginPage = React.memo(function LoginPage({ onLoginSuccess, lang }:
       }
     };
     fetchSeedStatus();
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const fetchInstanceVersion = async () => {
+      try {
+        const res = await fetch('/health');
+        if (!res.ok) return;
+        const data = await res.json();
+        const runtimeVersion = typeof data?.version === 'string' ? data.version.trim() : '';
+        if (!cancelled && runtimeVersion) {
+          setAppVersion(runtimeVersion);
+        }
+      } catch {
+        // 降级保留构建期注入的 __APP_VERSION__
+      }
+    };
+    fetchInstanceVersion();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const handleTeacherLogin = async (e: React.FormEvent) => {
@@ -171,6 +202,8 @@ export const LoginPage = React.memo(function LoginPage({ onLoginSuccess, lang }:
         ? 'items-end'
         : 'items-center';
 
+  const versionBadge = formatVersionBadge(appVersion);
+
   const brandBlock = (
     <div key="brand" data-login-region="brand" className={isSplit ? 'text-left space-y-3' : 'text-center mb-6'}>
       {siteInfo?.logoUrl ? (
@@ -195,9 +228,14 @@ export const LoginPage = React.memo(function LoginPage({ onLoginSuccess, lang }:
         className={`text-2xl sm:text-3xl font-black text-main tracking-tight flex items-center ${isSplit ? 'justify-start' : 'justify-center'} gap-2`}
       >
         {siteInfo?.siteName || 'OpenLearn Next'}{' '}
-        <span className="text-primary-ink font-medium text-xs bg-primary-theme/15 px-2 py-0.5 rounded-full border border-primary-theme/30 theme-accent-badge">
-          V2.0
-        </span>
+        {versionBadge && (
+          <span
+            data-testid="login-version-badge"
+            className="text-primary-ink font-medium text-xs bg-primary-theme/15 px-2 py-0.5 rounded-full border border-primary-theme/30 theme-accent-badge"
+          >
+            {versionBadge}
+          </span>
+        )}
       </h1>
       <p className="text-muted text-xs sm:text-sm mt-1">
         {siteInfo?.slogan ||
