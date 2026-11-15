@@ -1126,5 +1126,106 @@ describe('PluginCommunityPanel', () => {
         expect(cards[0].getAttribute('data-testid')).toBe('community-card-old-popular');
       });
     });
+
+    it('sends x-install-mode=update and x-target-plugin-id during browser upload fallback when updating', async () => {
+      const { calls, fetcher } = makeFetcher([
+        (url) =>
+          url.startsWith('/api/plugins/community')
+            ? json(
+                registryBody({
+                  plugins: [
+                    makePlugin({
+                      id: 'ext-homework-hub',
+                      version: '1.2.0',
+                      installedVersion: '1.0.0',
+                      hasUpdate: true,
+                    }),
+                  ],
+                }),
+              )
+            : undefined,
+        (url) =>
+          url === '/api/plugins/install-from-url'
+            ? json({ success: false, fallbackToClient: true, error: 'timeout' }, 400)
+            : undefined,
+        (url) => (url === 'https://plugins.example.com/ext-homework-hub-1.2.0.zip' ? zip() : undefined),
+        (url) =>
+          url === '/api/plugins/upload-zip-raw'
+            ? json({ success: true, updated: true, newVersion: '1.2.0' })
+            : undefined,
+      ]);
+
+      render(
+        <PluginCommunityPanel
+          installedPlugins={[
+            {
+              id: 'uuid-homework-1',
+              manifest: JSON.stringify({ id: 'ext-homework-hub', version: '1.0.0' }),
+            },
+          ]}
+          lang="zh"
+          fetcher={fetcher}
+        />,
+      );
+
+      const updateBtn = await screen.findByRole('button', { name: /更新至 v1\.2\.0/ });
+      fireEvent.click(updateBtn);
+
+      await waitFor(() => {
+        const uploadCall = calls.find((c) => c.url === '/api/plugins/upload-zip-raw');
+        expect(uploadCall).toBeDefined();
+        const headers = uploadCall?.init?.headers as Record<string, string>;
+        expect(headers['x-install-mode']).toBe('update');
+        expect(headers['x-target-plugin-id']).toBe('uuid-homework-1');
+      });
+
+      expect(await screen.findByText(/已更新至 v1\.2\.0/)).toBeDefined();
+    });
+
+    it('keeps installed plugins with hasUpdate=true visible even when hideInstalled is checked', async () => {
+      const { fetcher } = makeFetcher([
+        (url) =>
+          url.startsWith('/api/plugins/community')
+            ? json(
+                registryBody({
+                  plugins: [
+                    makePlugin({
+                      id: 'ext-up-to-date',
+                      name: '已是最新版',
+                      version: '1.0.0',
+                      installedVersion: '1.0.0',
+                      hasUpdate: false,
+                    }),
+                    makePlugin({
+                      id: 'ext-has-update',
+                      name: '有新版本可升级',
+                      version: '2.0.0',
+                      installedVersion: '1.0.0',
+                      hasUpdate: true,
+                    }),
+                  ],
+                }),
+              )
+            : undefined,
+      ]);
+
+      render(
+        <PluginCommunityPanel
+          installedPlugins={[
+            { id: 'ext-up-to-date', manifest: JSON.stringify({ id: 'ext-up-to-date', version: '1.0.0' }) },
+            { id: 'ext-has-update', manifest: JSON.stringify({ id: 'ext-has-update', version: '1.0.0' }) },
+          ]}
+          lang="zh"
+          fetcher={fetcher}
+        />,
+      );
+
+      await screen.findByText('已是最新版');
+      const hideCheckbox = screen.getByRole('checkbox', { name: /隐藏已安装/ });
+      fireEvent.click(hideCheckbox);
+
+      expect(screen.queryByText('已是最新版')).toBeNull();
+      expect(screen.getByText('有新版本可升级')).toBeDefined();
+    });
   });
 });

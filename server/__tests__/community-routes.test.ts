@@ -985,4 +985,110 @@ describe('community plugin registry routes', () => {
       }
     });
   });
+
+  describe('plugin snapshot and rollback routes', () => {
+    it('enforces administrator auth and validates snapshotId format', async () => {
+      expect((await fetch(`${baseUrl}/api/plugins/ext-demo/snapshots`)).status).toBe(401);
+      expect((await fetch(`${baseUrl}/api/plugins/ext-demo/snapshots`, { headers: cookie(teacherToken) })).status).toBe(
+        403,
+      );
+      expect(
+        (
+          await fetch(`${baseUrl}/api/plugins/ext-demo/rollback`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...cookie(teacherToken) },
+            body: JSON.stringify({}),
+          })
+        ).status,
+      ).toBe(403);
+      expect(
+        (
+          await fetch(`${baseUrl}/api/plugins/ext-demo/snapshots/snap-valid-1`, {
+            method: 'DELETE',
+            headers: cookie(teacherToken),
+          })
+        ).status,
+      ).toBe(403);
+
+      const badRollback = await fetch(`${baseUrl}/api/plugins/ext-demo/rollback`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...cookie(adminToken) },
+        body: JSON.stringify({ snapshotId: '../evil' }),
+      });
+      expect(badRollback.status).toBe(400);
+
+      const badDelete = await fetch(`${baseUrl}/api/plugins/ext-demo/snapshots/${encodeURIComponent('bad..id')}`, {
+        method: 'DELETE',
+        headers: cookie(adminToken),
+      });
+      expect(badDelete.status).toBe(400);
+    });
+
+    it('lists snapshots, executes rollback, and deletes a snapshot for admins', async () => {
+      const listSpy = vi.spyOn(kernelContainer.pluginHost, 'listPluginSnapshots').mockReturnValue([
+        {
+          snapshotId: 'snap-1731667200000-abcd1234',
+          pluginId: 'uuid-demo',
+          manifestId: 'ext-demo',
+          pluginName: 'Demo Plugin',
+          fromVersion: '1.0.0',
+          toVersion: '1.1.0',
+          status: 'ready',
+          createdAt: 1731667200000,
+          wasActive: true,
+          executionMode: 'inline',
+          tableCount: 1,
+          rowCount: 3,
+          storageRows: 2,
+          configRows: 1,
+          migrationVersion: 1,
+          sizeBytes: 2048,
+        },
+      ]);
+      const rollbackSpy = vi.spyOn(kernelContainer.pluginHost, 'rollbackPluginToSnapshot').mockResolvedValue({
+        pluginId: 'uuid-demo',
+        manifestId: 'ext-demo',
+        restoredVersion: '1.0.0',
+        fromVersion: '1.1.0',
+        snapshotId: 'snap-1731667200000-abcd1234',
+        wasActive: true,
+      });
+      const deleteSpy = vi.spyOn(kernelContainer.pluginHost, 'deletePluginSnapshot').mockReturnValue(true);
+
+      try {
+        const listRes = await fetch(`${baseUrl}/api/plugins/ext-demo/snapshots`, { headers: cookie(adminToken) });
+        expect(listRes.status).toBe(200);
+        const listBody = (await listRes.json()) as { success: boolean; snapshots: Array<{ snapshotId: string }> };
+        expect(listBody.success).toBe(true);
+        expect(listBody.snapshots).toHaveLength(1);
+        expect(listSpy).toHaveBeenCalledWith('ext-demo');
+
+        const rbRes = await fetch(`${baseUrl}/api/plugins/ext-demo/rollback`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...cookie(adminToken) },
+          body: JSON.stringify({ snapshotId: 'snap-1731667200000-abcd1234' }),
+        });
+        expect(rbRes.status).toBe(200);
+        const rbBody = (await rbRes.json()) as { success: boolean; restoredVersion: string };
+        expect(rbBody.success).toBe(true);
+        expect(rbBody.restoredVersion).toBe('1.0.0');
+        expect(rollbackSpy).toHaveBeenCalledWith(
+          'ext-demo',
+          'snap-1731667200000-abcd1234',
+          `user:${adminId}:administrator`,
+        );
+
+        const delRes = await fetch(`${baseUrl}/api/plugins/ext-demo/snapshots/snap-1731667200000-abcd1234`, {
+          method: 'DELETE',
+          headers: cookie(adminToken),
+        });
+        expect(delRes.status).toBe(200);
+        expect(deleteSpy).toHaveBeenCalledWith('ext-demo', 'snap-1731667200000-abcd1234');
+      } finally {
+        listSpy.mockRestore();
+        rollbackSpy.mockRestore();
+        deleteSpy.mockRestore();
+      }
+    });
+  });
 });

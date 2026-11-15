@@ -28,6 +28,15 @@ import { ICapabilityServiceToken } from '../di/interfaces.js';
 import type { ICapabilityService } from '../di/interfaces.js';
 import { OPENLEARN_VERSION } from '../version.js';
 import { createPluginStaticMiddleware } from './base.js';
+import {
+  createPluginUpdateSnapshot,
+  deletePluginSnapshot as deletePluginSnapshotFiles,
+  finalizePluginUpdateSnapshot,
+  listPluginSnapshots as listPluginSnapshotMetas,
+  removePluginUpdateSnapshot,
+  restorePluginSnapshot,
+  type PluginSnapshotMeta,
+} from './update-snapshot.js';
 import type { PluginHost } from './index.js';
 
 export abstract class PluginHostInstall extends PluginHostReload {
@@ -608,6 +617,7 @@ export abstract class PluginHostInstall extends PluginHostReload {
     wasActive: boolean;
     executionMode: PluginExecutionMode;
     executionModeCoerced: boolean;
+    snapshotId?: string;
   }> {
     // 审计 R-4：更新与安装共用同一条队列（install-from-url 对已存在插件走
     // update 分支，与 install 并发时同样叠加内存峰值）。
@@ -631,6 +641,7 @@ export abstract class PluginHostInstall extends PluginHostReload {
     wasActive: boolean;
     executionMode: PluginExecutionMode;
     executionModeCoerced: boolean;
+    snapshotId?: string;
   }> {
     if (!this.esmLoader) {
       throw new Error('Cannot update ZIP plugin: no esmLoader injected');
@@ -710,15 +721,6 @@ export abstract class PluginHostInstall extends PluginHostReload {
     const manifestPath = this.getPluginManifestPath(pluginId);
     const zipFilePath = path.join(pluginDir, 'package.zip');
 
-    if (options.communityOfficial) {
-      fs.mkdirSync(pluginDir, { recursive: true });
-      fs.writeFileSync(
-        path.join(pluginDir, COMMUNITY_OFFICIAL_MARKER),
-        JSON.stringify({ official: true, source: 'community', updatedAt: Date.now() }),
-        'utf-8',
-      );
-    }
-
     const previousStatus = existingRow.status;
     const currentState = this.pluginStates.get(pluginId) ?? PluginState.INSTALLED;
     const wasActive = currentState === PluginState.ACTIVE ? true : previousStatus === 'active';
@@ -734,21 +736,22 @@ export abstract class PluginHostInstall extends PluginHostReload {
     }
     const executionMode = updateDecision.mode;
 
-    // Snapshot old files for crude rollback on inactive path failures
-    const backupDir = path.join(pluginDir, '.update-backup');
-    try {
-      if (fs.existsSync(backupDir)) fs.rmSync(backupDir, { recursive: true, force: true });
-      fs.mkdirSync(backupDir, { recursive: true });
-      for (const name of ['index.js', 'manifest.json', 'package.zip', 'frontend.js']) {
-        const src = path.join(pluginDir, name);
-        if (fs.existsSync(src)) fs.copyFileSync(src, path.join(backupDir, name));
-      }
-    } catch {
-      // backup is best-effort
-    }
+    // 升级前强制生成完整快照（文件 + SQLite 私有表/storage/config/migrations/grants），失败则阻断升级
+    this.emitProgress(manifest.id, 'validating', 'Creating pre-update snapshot...');
+    const snapshotHandle = createPluginUpdateSnapshot(this.db, this.pluginsDir, pluginId, {
+      wasActive,
+      executionMode: oldMode,
+    });
 
     try {
       fs.mkdirSync(pluginDir, { recursive: true });
+      if (options.communityOfficial) {
+        fs.writeFileSync(
+          path.join(pluginDir, COMMUNITY_OFFICIAL_MARKER),
+          JSON.stringify({ official: true, source: 'community', updatedAt: Date.now() }),
+          'utf-8',
+        );
+      }
       // R-4：bundle 与 ZIP 均 copyFileSync 落盘（不持内存副本）
       fs.copyFileSync(bundledPath, filePath);
       fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2), 'utf-8');
@@ -817,13 +820,7 @@ export abstract class PluginHostInstall extends PluginHostReload {
       }
 
       // Contribution registry refresh (manifest.id keyed)
-      if (manifest.contributes) {
-        this.contributionRegistry.register(manifest.id, manifest.contributes);
-      } else if (manifest.classroomTools && manifest.classroomTools.length > 0) {
-        this.contributionRegistry.registerClassroomTools(manifest.id, manifest.classroomTools as ClassroomToolConfig[]);
-      } else {
-        this.contributionRegistry.unregister(manifest.id);
-      }
+      this.syncContributionRegistry(manifest);
 
       // Persist metadata — keep UUID; do not touch config/migrations tables
       this.db
@@ -847,11 +844,9 @@ export abstract class PluginHostInstall extends PluginHostReload {
         if (oldMode !== executionMode) {
           // Mode switch: full deactivate + activate under new mode
           try {
-            // 判据用 requiresIsolatedExecution（审计 F-1）：oldMode 为 'process' 时
-            // 也必须走 deactivateWorker 停掉子进程，否则 createWorker 会撞
-            // "Worker already exists"，新模式永远激活不了。
-            if (requiresIsolatedExecution(oldMode)) await this.deactivateWorker(pluginId);
-            else await this.deactivatePlugin(pluginId);
+            // 判据用 requiresIsolatedExecution（审计 F-1）：统一经 deactivateRuntimeForModes 停掉子进程/实例，
+            // 否则 createWorker 会撞 "Worker already exists"，新模式永远激活不了。
+            await this.deactivateRuntimeForModes(pluginId, oldMode);
           } catch (e) {
             console.warn(`[PluginHost] deactivate before mode-switch update failed for "${pluginId}":`, e);
           }
@@ -893,15 +888,15 @@ export abstract class PluginHostInstall extends PluginHostReload {
         }
       }
 
-      // Cleanup backup
-      try {
-        if (fs.existsSync(backupDir)) fs.rmSync(backupDir, { recursive: true, force: true });
-      } catch {
-        /* ignore */
-      }
+      const finalizedSnapshot = finalizePluginUpdateSnapshot(
+        this.pluginsDir,
+        pluginId,
+        snapshotHandle.snapshotDir,
+        newVersion,
+      );
 
       console.log(
-        `[PluginHost] Plugin "${manifest.id}" updated ${oldVersion} → ${newVersion} (${pluginId}), wasActive=${wasActive}`,
+        `[PluginHost] Plugin "${manifest.id}" updated ${oldVersion} → ${newVersion} (${pluginId}), wasActive=${wasActive}, snapshot=${finalizedSnapshot.snapshotId}`,
       );
       this.emitProgress(manifest.id, 'complete', 'Update complete');
       return {
@@ -913,34 +908,209 @@ export abstract class PluginHostInstall extends PluginHostReload {
         wasActive,
         executionMode,
         executionModeCoerced: updateDecision.coerced,
+        snapshotId: finalizedSnapshot.snapshotId,
       };
     } catch (err) {
-      // Best-effort restore of key files for inactive updates; active reload has its own rollback
+      // 升级失败：先停掉残留实例或 worker，再按完整快照回滚文件与数据库
       try {
-        if (fs.existsSync(backupDir)) {
-          for (const name of ['index.js', 'manifest.json', 'package.zip', 'frontend.js']) {
-            const b = path.join(backupDir, name);
-            if (fs.existsSync(b)) fs.copyFileSync(b, path.join(pluginDir, name));
-          }
-          // 回滚路径：写回的是旧 manifest，version 必须取**旧行**的值。
-          // 若这里填新 manifest 的 version，会造成「索引列比真源新」的不一致 ——
-          // 那比 version 列为 NULL 更难排查（NULL 语义明确是「未知」）。
-          this.db
-            .prepare(`UPDATE plugins SET name = ?, manifest = ?, execution_mode = ?, version = ? WHERE id = ?`)
-            .run(existingRow.name, existingRow.manifest, existingRow.execution_mode, existingRow.version, pluginId);
-        }
-      } catch (restoreErr) {
-        console.error(`[PluginHost] Failed to restore backup after update error:`, restoreErr);
-      }
-      try {
-        if (fs.existsSync(backupDir)) fs.rmSync(backupDir, { recursive: true, force: true });
+        await this.deactivateRuntimeForModes(pluginId, oldMode, executionMode);
       } catch {
-        /* ignore */
+        /* ignore cleanup worker/plugin deactivation failure */
       }
+      try {
+        if (this.pluginInstances.has(pluginId)) {
+          await this.deactivatePlugin(pluginId);
+        }
+      } catch {
+        /* ignore cleanup deactivation failure */
+      }
+      try {
+        if (this._workerManager) {
+          await this._workerManager.terminateWorker(pluginId);
+        }
+      } catch {
+        /* ignore worker termination failure */
+      }
+      try {
+        const { oldManifest: restoredManifest } = restorePluginSnapshot(
+          this.db,
+          this.pluginsDir,
+          pluginId,
+          snapshotHandle.meta.snapshotId,
+        );
+        this.syncContributionRegistry(restoredManifest);
+        if (wasActive) {
+          this.setPluginState(pluginId, PluginState.INACTIVE, { persistDb: false });
+          try {
+            await this.activatePlugin(pluginId);
+          } catch (reactivateErr) {
+            console.error(
+              `[PluginHost] Failed to reactivate restored plugin "${manifest.id}" after update failure:`,
+              reactivateErr,
+            );
+            this.setPluginState(pluginId, PluginState.ERROR, { persistDb: true });
+          }
+        } else {
+          this.setPluginState(
+            pluginId,
+            currentState === PluginState.UNINSTALLED ? PluginState.INSTALLED : currentState,
+            { persistDb: true },
+          );
+        }
+        recordSecurityAudit('plugin.update_auto_rolled_back', {
+          actor: 'system',
+          targetType: 'plugin',
+          targetId: manifest.id,
+          pluginId,
+          fromVersion: oldVersion,
+          toVersion: newVersion,
+          snapshotId: snapshotHandle.meta.snapshotId,
+          reason: err instanceof Error ? err.message : String(err),
+        });
+      } catch (restoreErr) {
+        console.error(`[PluginHost] Failed to restore snapshot after update error:`, restoreErr);
+      }
+      removePluginUpdateSnapshot(snapshotHandle.snapshotDir);
       throw err;
     } finally {
       // R-4：更新路径同样归还独立临时 bundle（成功已 copyFileSync 进插件目录）
       removeTempFile(bundledPath);
     }
+  }
+
+  private async deactivateRuntimeForModes(pluginId: string, ...modes: PluginExecutionMode[]): Promise<void> {
+    if (modes.some((m) => requiresIsolatedExecution(m))) {
+      await this.deactivateWorker(pluginId);
+    } else {
+      await this.deactivatePlugin(pluginId);
+    }
+  }
+
+  private syncContributionRegistry(manifest: Manifest): void {
+    if (manifest.contributes) {
+      this.contributionRegistry.register(manifest.id, manifest.contributes);
+    } else if (manifest.classroomTools && manifest.classroomTools.length > 0) {
+      this.contributionRegistry.registerClassroomTools(manifest.id, manifest.classroomTools as ClassroomToolConfig[]);
+    } else {
+      this.contributionRegistry.unregister(manifest.id);
+    }
+  }
+
+  /** 将插件 ID 或 manifest.id 解析为已安装插件的数据库 UUID。 */
+  private resolveInstalledPluginRecord(pluginIdOrManifestId: string): {
+    pluginId: string;
+    manifestId: string;
+  } {
+    const direct = this.db.prepare('SELECT id, manifest FROM plugins WHERE id = ?').get(pluginIdOrManifestId) as
+      { id: string; manifest: string } | undefined;
+    if (direct) {
+      const m = JSON.parse(direct.manifest) as Manifest;
+      return { pluginId: direct.id, manifestId: m.id || direct.id };
+    }
+    const found = this.findByManifestId(pluginIdOrManifestId);
+    if (!found) {
+      throw new Error(`Plugin "${pluginIdOrManifestId}" is not installed`);
+    }
+    return { pluginId: found.pluginId, manifestId: found.manifest.id || pluginIdOrManifestId };
+  }
+
+  /** 列出插件可用的更新前快照（按创建时间倒序）。 */
+  listPluginSnapshots(pluginIdOrManifestId: string): PluginSnapshotMeta[] {
+    const { pluginId } = this.resolveInstalledPluginRecord(pluginIdOrManifestId);
+    return listPluginSnapshotMetas(this.pluginsDir, pluginId);
+  }
+
+  /** 删除插件的指定更新前快照。 */
+  deletePluginSnapshot(pluginIdOrManifestId: string, snapshotId: string): boolean {
+    const { pluginId } = this.resolveInstalledPluginRecord(pluginIdOrManifestId);
+    return deletePluginSnapshotFiles(this.pluginsDir, pluginId, snapshotId);
+  }
+
+  /** 将已安装插件回滚到更新前快照（完整恢复文件、数据库表/存储/配置与运行状态）。 */
+  async rollbackPluginToSnapshot(
+    pluginIdOrManifestId: string,
+    snapshotId?: string,
+    actor: string = 'system',
+  ): Promise<{
+    pluginId: string;
+    manifestId: string;
+    restoredVersion: string;
+    fromVersion: string;
+    snapshotId: string;
+    wasActive: boolean;
+  }> {
+    return this.enqueueInstall(async () => {
+      const { pluginId, manifestId } = this.resolveInstalledPluginRecord(pluginIdOrManifestId);
+      if (this.isSystemPluginRecord(pluginId, manifestId)) {
+        throw new Error(`Cannot rollback system plugin: ${manifestId}`);
+      }
+
+      const snapshots = listPluginSnapshotMetas(this.pluginsDir, pluginId);
+      const targetSnapshot = snapshotId ? snapshots.find((s) => s.snapshotId === snapshotId) : snapshots[0];
+      if (!targetSnapshot) {
+        throw new Error(
+          snapshotId
+            ? `Snapshot "${snapshotId}" not found for plugin "${manifestId}"`
+            : `No rollback snapshot available for plugin "${manifestId}"`,
+        );
+      }
+
+      const rowBefore = this.db.prepare('SELECT version, status FROM plugins WHERE id = ?').get(pluginId) as
+        { version: string | null; status: string } | undefined;
+      const fromVersion = rowBefore?.version ?? targetSnapshot.toVersion ?? '0.0.0';
+      const currentState = this.pluginStates.get(pluginId) ?? PluginState.INSTALLED;
+      const currentMode = normalizeExecutionMode(this.getExecutionMode(pluginId));
+      const wasActiveBeforeRollback = currentState === PluginState.ACTIVE || rowBefore?.status === 'active';
+
+      if (wasActiveBeforeRollback) {
+        try {
+          await this.deactivateRuntimeForModes(pluginId, currentMode);
+        } catch (err) {
+          console.warn(`[PluginHost] Deactivate before rollback failed for "${pluginId}":`, err);
+        }
+      }
+      if (this._workerManager) {
+        try {
+          await this._workerManager.terminateWorker(pluginId);
+        } catch {
+          /* ignore */
+        }
+      }
+
+      const { meta, oldManifest } = restorePluginSnapshot(
+        this.db,
+        this.pluginsDir,
+        pluginId,
+        targetSnapshot.snapshotId,
+      );
+      this.syncContributionRegistry(oldManifest);
+
+      const shouldActivate = wasActiveBeforeRollback || meta.wasActive;
+      if (shouldActivate) {
+        this.setPluginState(pluginId, PluginState.INACTIVE, { persistDb: false });
+        await this.activatePlugin(pluginId);
+      } else {
+        this.setPluginState(pluginId, PluginState.INSTALLED, { persistDb: true });
+      }
+
+      recordSecurityAudit('plugin.rolled_back', {
+        actor,
+        targetType: 'plugin',
+        targetId: oldManifest.id || manifestId,
+        pluginId,
+        fromVersion,
+        restoredVersion: meta.fromVersion,
+        snapshotId: meta.snapshotId,
+      });
+
+      return {
+        pluginId,
+        manifestId: oldManifest.id || manifestId,
+        restoredVersion: meta.fromVersion,
+        fromVersion,
+        snapshotId: meta.snapshotId,
+        wasActive: shouldActivate,
+      };
+    });
   }
 }

@@ -38,6 +38,8 @@ const RESERVED_ACTIONS = new Set([
   'check-update',
   'one-click-update',
   'public-routes',
+  'snapshots',
+  'rollback',
 ]);
 
 /** 响应头危险黑名单：绝对禁止插件向外部注入或篡改 */
@@ -263,8 +265,8 @@ export async function pluginApiGatewayMiddleware(req: Request, res: Response, ne
   const rawPluginId = req.params.pluginId;
   const capturedSubPath = (req.params as Record<string, string | undefined>)[0] || '';
 
-  // 1. 系统保留动作避让检查：如果子路径是单个保留词且为特定方法，交由后续核心路由处理
-  if (RESERVED_ACTIONS.has(capturedSubPath)) {
+  // 1. 系统保留动作避让检查：如果子路径是保留管理动作（含 snapshots/:snapshotId），交由后续核心路由处理
+  if (RESERVED_ACTIONS.has(capturedSubPath) || capturedSubPath.startsWith('snapshots/')) {
     return next();
   }
 

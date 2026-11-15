@@ -1,8 +1,10 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import React from 'react';
-import { render, screen, fireEvent, cleanup } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
 import { PluginStorePanel } from '../plugin-center/sub-views/PluginStorePanel';
 import { PluginLogsPanel } from '../plugin-center/sub-views/PluginLogsPanel';
+import { PluginSnapshotRollbackModal } from '../PluginSnapshotRollbackModal';
+import { PluginCenter } from '../PluginCenter';
 
 describe('PluginCenter Sub-components', () => {
   afterEach(() => {
@@ -136,6 +138,167 @@ describe('PluginCenter Sub-components', () => {
 
       expect(screen.getByPlaceholderText('搜索日志内容...')).toBeDefined();
       expect(screen.getByText('自动刷新 (3s)')).toBeDefined();
+    });
+  });
+
+  describe('PluginSnapshotRollbackModal', () => {
+    it('loads snapshots and requires two-step confirmation before rolling back', async () => {
+      const calls: Array<{ url: string; method?: string }> = [];
+      const onRolledBack = vi.fn();
+      const fetcher = vi.fn(async (url: string, init?: RequestInit) => {
+        calls.push({ url, method: init?.method });
+        if (url.endsWith('/snapshots')) {
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({
+              success: true,
+              snapshots: [
+                {
+                  snapshotId: 'snap-100',
+                  pluginId: 'uuid-1',
+                  manifestId: 'ext-demo',
+                  pluginName: 'Demo',
+                  fromVersion: '1.0.0',
+                  toVersion: '2.0.0',
+                  status: 'ready',
+                  createdAt: Date.UTC(2026, 10, 15),
+                  wasActive: true,
+                  executionMode: 'inline',
+                  tableCount: 2,
+                  rowCount: 15,
+                  storageRows: 4,
+                  configRows: 3,
+                  migrationVersion: 2,
+                  sizeBytes: 4096,
+                },
+              ],
+            }),
+          } as unknown as Response;
+        }
+        if (url.endsWith('/rollback')) {
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({
+              success: true,
+              restoredVersion: '1.0.0',
+              fromVersion: '2.0.0',
+            }),
+          } as unknown as Response;
+        }
+        throw new Error(`Unexpected fetch: ${url}`);
+      });
+
+      render(
+        <PluginSnapshotRollbackModal
+          plugin={{ id: 'uuid-1', name: 'Demo', version: '2.0.0', manifestId: 'ext-demo' }}
+          lang="zh"
+          onClose={vi.fn()}
+          onRolledBack={onRolledBack}
+          fetcher={fetcher}
+        />,
+      );
+
+      await screen.findByText(/2 张私有表 \/ 15 行/);
+      const firstRollbackBtn = screen.getByRole('button', { name: /回滚至 v1\.0\.0/ });
+      fireEvent.click(firstRollbackBtn);
+
+      // Step 2 confirm button appears; no rollback POST fired until confirmed
+      expect(calls.some((c) => c.url.endsWith('/rollback'))).toBe(false);
+      const confirmBtn = screen.getByRole('button', { name: /确认回滚/ });
+      fireEvent.click(confirmBtn);
+
+      await waitFor(() => {
+        expect(onRolledBack).toHaveBeenCalledWith({ restoredVersion: '1.0.0', fromVersion: '2.0.0' });
+      });
+    });
+  });
+
+  describe('PluginCenter cross-tab community update discovery', () => {
+    it('surfaces community plugin updates on both Community tab badge and Discover tab cards', async () => {
+      vi.spyOn(globalThis, 'fetch').mockImplementation(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url === '/api/plugins/market') {
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({ success: true, market: [] }),
+          } as unknown as Response;
+        }
+        if (url === '/api/plugins/community') {
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({
+              success: true,
+              plugins: [
+                {
+                  id: 'ext-community-demo',
+                  name: '社区示例插件',
+                  description: '新版本修复重要问题',
+                  author: 'aymwoo',
+                  version: '1.5.0',
+                  downloadUrl: 'https://plugins.example.com/ext-community-demo-1.5.0.zip',
+                  icon: '📦',
+                  homepage: null,
+                  repository: 'https://gitee.com/aymwoo/ext-community-demo',
+                  license: 'MIT',
+                  tags: ['教学'],
+                  capabilities: [],
+                  minPlatformVersion: null,
+                  publishedAt: null,
+                  downloads: 10,
+                  stars: 5,
+                  verified: true,
+                  featured: false,
+                  installedVersion: '1.0.0',
+                  hasUpdate: true,
+                },
+              ],
+            }),
+          } as unknown as Response;
+        }
+        throw new Error(`Unexpected fetch: ${url}`);
+      });
+
+      try {
+        render(
+          <PluginCenter
+            plugins={[
+              {
+                id: 'uuid-community-demo',
+                name: '社区示例插件',
+                status: 'active',
+                created_at: Date.now(),
+                manifest: JSON.stringify({
+                  id: 'ext-community-demo',
+                  name: '社区示例插件',
+                  version: '1.0.0',
+                  description: '旧版',
+                }),
+              },
+            ]}
+            lang="zh"
+            isAdmin={true}
+            storeTab="store"
+            setStoreTab={vi.fn()}
+            pluginCode=""
+            setPluginCode={vi.fn()}
+            installingPlugin={false}
+            onInstall={vi.fn()}
+            onZipUpload={vi.fn()}
+            onToggle={vi.fn()}
+            onDelete={vi.fn()}
+          />,
+        );
+
+        expect(await screen.findByText(/新版本 v1\.5\.0/)).toBeDefined();
+        expect(screen.getByRole('button', { name: /⚡ 更新/ })).toBeDefined();
+        expect(screen.getByTestId('community-update-badge').textContent).toBe('1');
+      } finally {
+        vi.restoreAllMocks();
+      }
     });
   });
 });
