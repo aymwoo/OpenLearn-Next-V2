@@ -197,6 +197,8 @@ export interface SessionType {
   mustChangePassword?: boolean;
   /** Issue #94: 学生仍在使用初始默认口令 123456 —— 不阻塞使用，仅提示建议修改 */
   usedDefaultPassword?: boolean;
+  /** Issue #530: 新手引导向导状态（按账号持久化） */
+  tourStatus?: 'pending' | 'completed' | 'skipped';
 }
 
 // ── Toast ──────────────────────────────────────────────────────────────────

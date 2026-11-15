@@ -204,6 +204,7 @@ export interface AppModalsProps {
   // Help Tour & Courseware Hub
   isTourOpen?: boolean;
   setIsTourOpen?: (v: boolean) => void;
+  dismissTour?: (status: 'completed' | 'skipped') => Promise<void> | void;
   handleSeedSuccess?: (data: any) => void;
   setTeacherTab?: (v: string) => void;
   showCoursewareHub?: boolean;
@@ -290,6 +291,7 @@ export function AppModals(props: AppModalsProps = {}) {
     setSubAssignmentTab = a?.setSubAssignmentTab ?? (() => {}),
     isTourOpen = a?.isTourOpen ?? false,
     setIsTourOpen = a?.setIsTourOpen ?? (() => {}),
+    dismissTour = a?.dismissTour,
     handleSeedSuccess = a?.handleSeedSuccess ?? (() => {}),
     setTeacherTab = a?.setTeacherTab ?? (() => {}),
     showCoursewareHub = a?.showCoursewareHub ?? false,
@@ -535,6 +537,7 @@ export function AppModals(props: AppModalsProps = {}) {
       <HelpTour
         isOpen={isTourOpen}
         onClose={() => setIsTourOpen(false)}
+        onDismiss={dismissTour}
         lang={lang as 'zh' | 'en'}
         onSeedSuccess={handleSeedSuccess}
         onJumpTab={(tab) => setTeacherTab(tab)}

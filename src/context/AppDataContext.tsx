@@ -146,6 +146,7 @@ export type AppExtras = {
   // ── AppModals 局部状态 ─────────────────────────────────────────────
   isTourOpen: boolean;
   setIsTourOpen: Dispatch<SetStateAction<boolean>>;
+  dismissTour?: (status: 'completed' | 'skipped') => Promise<void> | void;
   handleSeedSuccess: (data: { classId: string; scheduleId: string; lessonId: string }) => Promise<void>;
 
   /** 课程发布向导：AI 大纲生成进行中 */

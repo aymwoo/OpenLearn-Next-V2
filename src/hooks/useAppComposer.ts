@@ -200,6 +200,7 @@ export function useAppComposer() {
     selectedAgentProvider: lessons.selectedAgentProvider,
     isTourOpen: session.isTourOpen,
     setIsTourOpen: session.setIsTourOpen,
+    dismissTour: session.dismissTour,
     handleSeedSuccess: lessons.handleSeedSuccess,
     wizardIsGeneratingOutline: lessons.wizardIsGeneratingOutline,
     handleGenerateOutline: lessons.handleGenerateOutline,

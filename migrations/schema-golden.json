@@ -1,7 +1,7 @@
 {
   "_comment": "数据库结构金样（自动生成，勿手改）：空库跑完 migrations/ 全部迁移后的表→列快照。启动时 assertSchemaMatchesGolden 以子集校验（实际库缺金样结构即拒绝启动；多出的表/列不报错）。改迁移后请运行 pnpm db:gen-golden 再生成。",
-  "migrationCount": 54,
-  "generatedAt": "2026-11-15T04:03:22.773Z",
+  "migrationCount": 55,
+  "generatedAt": "2026-11-15T05:50:58.694Z",
   "tables": {
     "_academic_year_backfill": ["backfilled_at", "id"],
     "_class_passcode_encryption": ["id", "note"],
@@ -723,6 +723,7 @@
       "password_hash",
       "role",
       "status",
+      "tour_status",
       "username"
     ],
     "vfs_nodes": ["content", "created_at", "id", "name", "parent_id", "type", "updated_at"],

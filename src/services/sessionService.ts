@@ -38,3 +38,22 @@ export async function fetchSiteSettings(): Promise<{ ok: boolean; data?: any }> 
 export async function postLogout(): Promise<void> {
   await fetch('/api/auth/logout', { method: 'POST' });
 }
+
+export async function saveOnboardingStatus(status: 'completed' | 'skipped'): Promise<{
+  ok: boolean;
+  status: number;
+  data?: { success?: boolean; tourStatus?: 'completed' | 'skipped'; error?: string };
+}> {
+  const res = await fetch('/api/auth/onboarding', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status }),
+  });
+  let data: any;
+  try {
+    data = await res.json();
+  } catch {
+    data = {};
+  }
+  return { ok: res.ok, status: res.status, data };
+}
