@@ -9,8 +9,15 @@ export interface VersionCheckResult {
   latestVersion: string | null;
   isPrerelease: boolean;
   downloadUrl: string | null;
+  releaseUrl?: string | null;
   changelog: string | null;
   error?: string;
+}
+
+export interface CheckVersionOptions {
+  forceRefresh?: boolean;
+  fetchImpl?: typeof fetch;
+  gitExecImpl?: (url: string) => string;
 }
 
 interface CacheEntry {
@@ -21,8 +28,8 @@ interface CacheEntry {
 const cache = new Map<string, CacheEntry>();
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
-function cacheKey(source: UpdateSource): string {
-  return `${source.type}:${source.repo}`;
+function cacheKey(source: UpdateSource, installedVersion: string): string {
+  return `${source.type}:${source.repo}:${installedVersion}`;
 }
 
 function cached(key: string): VersionCheckResult | null {
@@ -132,8 +139,14 @@ interface ReleaseItem {
 function latestFromReleases(
   releases: ReleaseItem[],
   installed: string,
-  source: UpdateSource,
-): { version: string | null; isPrerelease: boolean; downloadUrl: string | null; changelog: string | null } {
+): {
+  version: string | null;
+  isPrerelease: boolean;
+  downloadUrl: string | null;
+  releaseUrl: string | null;
+  changelog: string | null;
+} {
+  const installedCoerced = semver.valid(installed) ?? semver.coerce(installed)?.version ?? '0.0.0';
   const parsed = releases
     .map((r) => {
       const cleaned = r.tag_name.replace(/^v/, '');
@@ -142,18 +155,21 @@ function latestFromReleases(
     })
     .filter((r): r is ReleaseItem & { parsed: semver.SemVer; cleaned: string } => r !== null);
 
-  if (parsed.length === 0) return { version: null, isPrerelease: false, downloadUrl: null, changelog: null };
+  if (parsed.length === 0) {
+    return { version: null, isPrerelease: false, downloadUrl: null, releaseUrl: null, changelog: null };
+  }
 
   // Stable first
   const stable = parsed.filter((r) => !r.prerelease);
   const latestStable = stable.length > 0 ? stable.reduce((a, b) => (semver.gt(b.parsed, a.parsed) ? b : a)) : null;
 
-  if (latestStable && semver.gt(latestStable.parsed, installed)) {
-    const zipAsset = latestStable.assets?.find((a) => a.name.endsWith('.zip'));
+  if (latestStable && semver.gt(latestStable.parsed, installedCoerced)) {
+    const zipAsset = latestStable.assets?.find((a) => a.name.toLowerCase().endsWith('.zip'));
     return {
       version: latestStable.cleaned,
       isPrerelease: false,
-      downloadUrl: zipAsset?.browser_download_url ?? latestStable.html_url,
+      downloadUrl: zipAsset?.browser_download_url ?? null,
+      releaseUrl: latestStable.html_url ?? null,
       changelog: latestStable.body ?? null,
     };
   }
@@ -162,28 +178,34 @@ function latestFromReleases(
   const pre = parsed.filter((r) => r.prerelease);
   const latestPre = pre.length > 0 ? pre.reduce((a, b) => (semver.gt(b.parsed, a.parsed) ? b : a)) : null;
 
-  if (latestPre && semver.gt(latestPre.parsed, installed)) {
-    const zipAsset = latestPre.assets?.find((a) => a.name.endsWith('.zip'));
+  if (latestPre && semver.gt(latestPre.parsed, installedCoerced)) {
+    const zipAsset = latestPre.assets?.find((a) => a.name.toLowerCase().endsWith('.zip'));
     return {
       version: latestPre.cleaned,
       isPrerelease: true,
-      downloadUrl: zipAsset?.browser_download_url ?? latestPre.html_url,
+      downloadUrl: zipAsset?.browser_download_url ?? null,
+      releaseUrl: latestPre.html_url ?? null,
       changelog: latestPre.body ?? null,
     };
   }
 
-  return { version: null, isPrerelease: false, downloadUrl: null, changelog: null };
+  return { version: null, isPrerelease: false, downloadUrl: null, releaseUrl: null, changelog: null };
 }
 
 // ── Public API ──────────────────────────────────────────────────────────────
 
-export async function checkVersion(source: UpdateSource, installedVersion: string): Promise<VersionCheckResult> {
+export async function checkVersion(
+  source: UpdateSource,
+  installedVersion: string,
+  options: CheckVersionOptions = {},
+): Promise<VersionCheckResult> {
   const base: VersionCheckResult = {
     hasUpdate: false,
     installedVersion,
     latestVersion: null,
     isPrerelease: false,
     downloadUrl: null,
+    releaseUrl: null,
     changelog: null,
   };
 
@@ -193,65 +215,99 @@ export async function checkVersion(source: UpdateSource, installedVersion: strin
     return { ...base, error: '无效的更新源：仅支持 owner/name 形式的 GitHub / Gitee 仓库' };
   }
 
-  const key = cacheKey(safeSource);
-  const hit = cached(key);
-  if (hit) return { ...hit, installedVersion };
+  const key = cacheKey(safeSource, installedVersion);
+  if (!options.forceRefresh) {
+    const hit = cached(key);
+    if (hit) return { ...hit, installedVersion };
+  }
 
-  // Strategy 1: git ls-remote
+  const installedCoerced = semver.valid(installedVersion) ?? semver.coerce(installedVersion)?.version ?? '0.0.0';
+  let gitTagHint: { version: string; isPrerelease: boolean } | null = null;
+
+  // Strategy 1: git ls-remote (detect new semver tag fast; do NOT short-circuit before fetching release ZIP asset)
   try {
     const url = repoUrl(safeSource);
-    // SEC: 使用 execFileSync（参数数组，不经过 shell）替代 execSync 字符串拼接，
-    // 消除 repo 中的 shell 元字符导致的命令注入。
-    const stdout = execFileSync('git', ['ls-remote', '--tags', url], {
-      timeout: 8000,
-      encoding: 'utf-8',
-      stdio: ['ignore', 'pipe', 'pipe'],
-    }) as string;
+    const stdout = options.gitExecImpl
+      ? options.gitExecImpl(url)
+      : (execFileSync('git', ['ls-remote', '--tags', url], {
+          timeout: 8000,
+          encoding: 'utf-8',
+          stdio: ['ignore', 'pipe', 'pipe'],
+        }) as string);
     const tags = parseTagsFromLsRemote(stdout);
-    const { version, isPrerelease } = latestSemver(tags, installedVersion);
+    const { version, isPrerelease } = latestSemver(tags, installedCoerced);
     if (version) {
-      const result = {
-        ...base,
-        hasUpdate: true,
-        latestVersion: version,
-        isPrerelease,
-        downloadUrl: null,
-      };
-      setCache(key, result);
-      return result;
+      gitTagHint = { version, isPrerelease };
     }
-    // No update found via tags — fall through to HTTP API for downloadUrl
   } catch {
     // git unavailable or network error — fall through to HTTP API
   }
 
-  // Strategy 2: HTTP API
+  // Strategy 2: HTTP Releases API (provides exact .zip asset downloadUrl + release notes)
+  const fetchFn = options.fetchImpl ?? fetch;
   try {
     const apiUrl = apiReleasesUrl(safeSource);
-    const resp = await fetch(apiUrl, {
+    const resp = await fetchFn(apiUrl, {
       headers: { 'User-Agent': 'OpenLearnV2-PluginUpdater/1.0' },
       signal: AbortSignal.timeout(10000),
     });
     if (!resp.ok) {
+      if (gitTagHint) {
+        const result: VersionCheckResult = {
+          ...base,
+          hasUpdate: true,
+          latestVersion: gitTagHint.version,
+          isPrerelease: gitTagHint.isPrerelease,
+          downloadUrl: null,
+          releaseUrl:
+            safeSource.type === 'github-release'
+              ? `https://github.com/${safeSource.repo}/releases/tag/v${gitTagHint.version}`
+              : `https://gitee.com/${safeSource.repo}/releases/tag/v${gitTagHint.version}`,
+        };
+        setCache(key, result);
+        return result;
+      }
       return { ...base, error: `更新源响应异常: HTTP ${resp.status}` };
     }
-    const releases: ReleaseItem[] = await resp.json();
-    const { version, isPrerelease, downloadUrl, changelog } = latestFromReleases(
+    const releases = (await resp.json()) as ReleaseItem[];
+    const { version, isPrerelease, downloadUrl, releaseUrl, changelog } = latestFromReleases(
       releases,
       installedVersion,
-      safeSource,
     );
+    const resolvedVersion = version ?? gitTagHint?.version ?? null;
     const result: VersionCheckResult = {
       ...base,
-      hasUpdate: version !== null,
-      latestVersion: version,
-      isPrerelease,
+      hasUpdate: resolvedVersion !== null,
+      latestVersion: resolvedVersion,
+      isPrerelease: version ? isPrerelease : (gitTagHint?.isPrerelease ?? false),
       downloadUrl,
+      releaseUrl:
+        releaseUrl ??
+        (gitTagHint
+          ? safeSource.type === 'github-release'
+            ? `https://github.com/${safeSource.repo}/releases/tag/v${gitTagHint.version}`
+            : `https://gitee.com/${safeSource.repo}/releases/tag/v${gitTagHint.version}`
+          : null),
       changelog,
     };
     setCache(key, result);
     return result;
   } catch (e: any) {
+    if (gitTagHint) {
+      const result: VersionCheckResult = {
+        ...base,
+        hasUpdate: true,
+        latestVersion: gitTagHint.version,
+        isPrerelease: gitTagHint.isPrerelease,
+        downloadUrl: null,
+        releaseUrl:
+          safeSource.type === 'github-release'
+            ? `https://github.com/${safeSource.repo}/releases/tag/v${gitTagHint.version}`
+            : `https://gitee.com/${safeSource.repo}/releases/tag/v${gitTagHint.version}`,
+      };
+      setCache(key, result);
+      return result;
+    }
     const msg =
       e.cause?.code === 'ENOTFOUND' || e.message?.includes('fetch')
         ? '无法连接到更新源：网络不可达'

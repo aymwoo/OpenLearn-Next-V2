@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Puzzle,
   Code,
@@ -19,10 +19,12 @@ import { PluginSettingsModal } from './PluginSettingsModal';
 import { PluginInstallWizard } from './PluginInstallWizard';
 import { PluginStorePanel } from './plugin-center/sub-views/PluginStorePanel';
 import { PluginCommunityPanel } from './plugin-center/sub-views/PluginCommunityPanel';
+import type { CommunityPlugin } from './plugin-center/sub-views/community-format';
 import { PluginDevPanel } from './plugin-center/sub-views/PluginDevPanel';
 import { PluginLogsPanel } from './plugin-center/sub-views/PluginLogsPanel';
 import { PluginDataPanel } from './plugin-center/sub-views/PluginDataPanel';
 import { PluginUninstallDialog } from './PluginUninstallDialog';
+import { PluginSnapshotRollbackModal } from './PluginSnapshotRollbackModal';
 import { sanitizeHref } from '../../packages/core/security/url-safety.js';
 export type { PluginType, PluginCenterProps } from './plugin-center/types';
 
@@ -78,8 +80,15 @@ export function PluginCenter({
   const [zipProcessing, setZipProcessing] = useState(false);
 
   const [settingsPlugin, setSettingsPlugin] = useState<{ id: string; name: string; manifest: string } | null>(null);
+  const [snapshotModalPlugin, setSnapshotModalPlugin] = useState<{
+    id: string;
+    name: string;
+    version?: string;
+    manifestId?: string;
+  } | null>(null);
 
   const [marketMap, setMarketMap] = useState<Map<string, any>>(new Map());
+  const [communityPlugins, setCommunityPlugins] = useState<CommunityPlugin[]>([]);
   const [oneClickUpdatingId, setOneClickUpdatingId] = useState<string | null>(null);
   const [checkingUpdateId, setCheckingUpdateId] = useState<string | null>(null);
   const [changelogModalPlugin, setChangelogModalPlugin] = useState<any | null>(null);
@@ -99,10 +108,71 @@ export function PluginCenter({
         }
       })
       .catch(() => {});
+
+    fetch('/api/plugins/community')
+      .then((r) => r.json())
+      .then((data) => {
+        if (data?.success && Array.isArray(data.plugins) && isMounted) {
+          setCommunityPlugins(data.plugins);
+        }
+      })
+      .catch(() => {});
+
     return () => {
       isMounted = false;
     };
   }, []);
+
+  // 合并「发现」Tab 自身更新检查结果与社区注册表发现的可更新插件，消除跨 Tab 更新盲区
+  const { mergedMarketMap, communityUpdateCount, storeUpdateCount } = useMemo(() => {
+    const merged = new Map<string, any>(marketMap);
+    let communityUpdates = 0;
+
+    for (const cp of communityPlugins) {
+      if (!cp.hasUpdate) continue;
+      communityUpdates += 1;
+      const existing = merged.get(cp.id);
+      if (!existing || !existing.hasUpdate) {
+        merged.set(cp.id, {
+          manifestId: cp.id,
+          hasUpdate: true,
+          latestVersion: cp.version,
+          downloadUrl: cp.downloadUrl || null,
+          releaseUrl: cp.homepage || cp.repository || null,
+          changelog: (cp as CommunityPlugin & { changelog?: string | null }).changelog || cp.description || null,
+          repository: cp.repository || cp.homepage || null,
+          integrity: cp.integrity || undefined,
+          signature: cp.signature || undefined,
+          source: 'community',
+        });
+      } else if (!existing.downloadUrl && cp.downloadUrl) {
+        merged.set(cp.id, {
+          ...existing,
+          downloadUrl: cp.downloadUrl,
+          integrity: existing.integrity ?? cp.integrity ?? undefined,
+          signature: existing.signature ?? cp.signature ?? undefined,
+        });
+      }
+    }
+
+    let storeUpdates = 0;
+    for (const p of plugins) {
+      let manifestId = p.id;
+      try {
+        const parsed = JSON.parse(p.manifest);
+        if (parsed?.id) manifestId = parsed.id;
+      } catch {
+        /* ignore */
+      }
+      if (merged.get(manifestId)?.hasUpdate) storeUpdates += 1;
+    }
+
+    return {
+      mergedMarketMap: merged,
+      communityUpdateCount: communityUpdates,
+      storeUpdateCount: storeUpdates,
+    };
+  }, [communityPlugins, marketMap, plugins]);
 
   // 社区插件安装完成后需要重新加载：插件的前端贡献点（导航/组件）是在
   // 启动时注册的，仅刷新列表不足以让新插件真正生效。与一键热更新保持一致。
@@ -136,37 +206,42 @@ export function PluginCenter({
   };
 
   const handleOneClickUpdate = async (pluginId: string, marketItem?: any) => {
+    if (!marketItem?.downloadUrl) {
+      const targetPlugin = plugins.find((p) => p.id === pluginId);
+      setChangelogModalPlugin(
+        targetPlugin ? { ...targetPlugin, marketItem } : { id: pluginId, name: pluginId, marketItem },
+      );
+      return;
+    }
     setOneClickUpdatingId(pluginId);
     setUpdateToast(
-      lang === 'zh' ? '正在连接市场执行一键无缝热更新...' : 'Connecting to market for one-click hot update...',
+      lang === 'zh' ? '正在创建更新前快照并执行一键热更新...' : 'Saving pre-update snapshot and hot-updating...',
     );
 
     try {
-      const body = marketItem?.downloadUrl
-        ? JSON.stringify({
-            downloadUrl: marketItem.downloadUrl,
-            ...(marketItem.integrity ? { integrity: marketItem.integrity } : {}),
-            ...(marketItem.signature ? { signature: marketItem.signature } : {}),
-          })
-        : JSON.stringify({});
+      const body = JSON.stringify({
+        downloadUrl: marketItem.downloadUrl,
+        ...(marketItem.integrity ? { integrity: marketItem.integrity } : {}),
+        ...(marketItem.signature ? { signature: marketItem.signature } : {}),
+      });
       const res = await fetch(`/api/plugins/${encodeURIComponent(pluginId)}/one-click-update`, {
         method: 'POST',
-        headers: body ? { 'Content-Type': 'application/json' } : undefined,
+        headers: { 'Content-Type': 'application/json' },
         body,
       }).then((r) => r.json());
 
       if (res?.success) {
         setUpdateToast(
           lang === 'zh'
-            ? `🎉 插件已成功热更新至 v${res.newVersion || '1.2.0'}！`
-            : `🎉 Hot updated to v${res.newVersion || '1.2.0'}!`,
+            ? `🎉 插件已热更新至 v${res.newVersion || marketItem.latestVersion || '最新版本'}（已保存更新前快照）！`
+            : `🎉 Hot updated to v${res.newVersion || marketItem.latestVersion || 'latest'} (snapshot saved)!`,
         );
         setTimeout(() => window.location.reload(), 1200);
       } else if (res?.fallbackToClient && marketItem?.downloadUrl) {
         setUpdateToast(
           lang === 'zh'
-            ? '服务端下载超时，切换至浏览器直传...'
-            : 'Server download timed out, switching to browser transfer...',
+            ? '服务端下载超时，切换至浏览器直传（仍会生成快照）...'
+            : 'Server download timed out, switching to browser transfer (with snapshot)...',
         );
         try {
           const zipResp = await fetch(marketItem.downloadUrl);
@@ -186,7 +261,11 @@ export function PluginCenter({
             body: rawZipBytes,
           }).then((r) => r.json());
           if (uploadRes?.success) {
-            setUpdateToast(lang === 'zh' ? `🎉 插件已成功热更新！` : `🎉 Hot updated!`);
+            setUpdateToast(
+              lang === 'zh'
+                ? `🎉 插件已热更新至 v${uploadRes.newVersion || marketItem.latestVersion || '最新版本'}（已保存更新前快照）！`
+                : `🎉 Hot updated (snapshot saved)!`,
+            );
             setTimeout(() => window.location.reload(), 1200);
           } else {
             setUpdateToast(`❌ 更新失败: ${uploadRes?.error || '客户端上传失败'}`);
@@ -264,23 +343,36 @@ export function PluginCenter({
               <div className="flex bg-gray-200/50 p-1 rounded-lg">
                 <button
                   onClick={() => setStoreTab('store')}
-                  className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors cursor-pointer ${
+                  className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors flex items-center gap-1.5 cursor-pointer ${
                     storeTab === 'store'
                       ? 'bg-white shadow text-indigo-600 font-bold'
                       : 'text-gray-600 hover:text-gray-900'
                   }`}
                 >
-                  {lang === 'zh' ? '发现' : 'Discover'}
+                  <span>{lang === 'zh' ? '发现' : 'Discover'}</span>
+                  {storeUpdateCount > 0 && (
+                    <span className="px-1.5 py-0.5 text-[10px] font-bold rounded-full bg-indigo-600 text-white leading-none">
+                      {storeUpdateCount}
+                    </span>
+                  )}
                 </button>
                 <button
                   onClick={() => setStoreTab('community')}
-                  className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors flex items-center gap-1 cursor-pointer ${
+                  className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors flex items-center gap-1.5 cursor-pointer ${
                     storeTab === 'community'
                       ? 'bg-white shadow text-indigo-600 font-bold'
                       : 'text-gray-600 hover:text-gray-900'
                   }`}
                 >
-                  <Store size={14} /> {lang === 'zh' ? '社区' : 'Community'}
+                  <Store size={14} /> <span>{lang === 'zh' ? '社区' : 'Community'}</span>
+                  {communityUpdateCount > 0 && (
+                    <span
+                      data-testid="community-update-badge"
+                      className="px-1.5 py-0.5 text-[10px] font-bold rounded-full bg-amber-500 text-white leading-none"
+                    >
+                      {communityUpdateCount}
+                    </span>
+                  )}
                 </button>
                 <button
                   onClick={() => setStoreTab('dev')}
@@ -380,14 +472,16 @@ export function PluginCenter({
             <PluginStorePanel
               plugins={plugins}
               lang={lang}
+              isAdmin={isAdmin}
               showSystemPlugins={showSystemPlugins}
-              marketMap={marketMap}
+              marketMap={mergedMarketMap}
               checkingUpdateId={checkingUpdateId}
               oneClickUpdatingId={oneClickUpdatingId}
               handleCheckUpdate={handleCheckUpdate}
               handleOneClickUpdate={handleOneClickUpdate}
               setChangelogModalPlugin={setChangelogModalPlugin}
               setSettingsPlugin={setSettingsPlugin}
+              onOpenSnapshots={setSnapshotModalPlugin}
               setUpdateTargetPluginId={setUpdateTargetPluginId}
               updateFileInputRef={updateFileInputRef}
               onToggle={onToggle}
@@ -399,6 +493,7 @@ export function PluginCenter({
               lang={lang}
               canConfigure={isAdmin}
               onInstalled={handleCommunityInstalled}
+              onRegistryLoaded={setCommunityPlugins}
             />
           ) : storeTab === 'logs' ? (
             <PluginLogsPanel lang={lang} />
@@ -535,11 +630,38 @@ export function PluginCenter({
                   <span>🚀 {lang === 'zh' ? '立即一键热更新' : 'Update Now'}</span>
                 </button>
               ) : (
-                <span className="px-3 py-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg">
-                  {lang === 'zh'
-                    ? '本地源更新：请重新构建 ZIP 后在「开发」页上传更新'
-                    : 'Local source update: rebuild the ZIP and upload it in the Dev tab'}
-                </span>
+                <div className="flex items-center gap-2 flex-wrap">
+                  {sanitizeHref(
+                    changelogModalPlugin.marketItem?.releaseUrl || changelogModalPlugin.marketItem?.repository,
+                  ) && (
+                    <a
+                      href={
+                        sanitizeHref(
+                          changelogModalPlugin.marketItem?.releaseUrl || changelogModalPlugin.marketItem?.repository,
+                        ) as string
+                      }
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-3 py-2 text-xs font-semibold rounded-lg border border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 flex items-center gap-1"
+                    >
+                      <span>{lang === 'zh' ? '前往 Release 页面下载' : 'Download from Release'}</span>
+                      <ExternalLink size={12} />
+                    </a>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const targetId = changelogModalPlugin.id;
+                      setChangelogModalPlugin(null);
+                      setUpdateTargetPluginId(targetId);
+                      updateFileInputRef.current?.click();
+                    }}
+                    className="px-3 py-2 text-xs font-semibold rounded-lg bg-amber-600 text-white hover:bg-amber-700 cursor-pointer flex items-center gap-1"
+                  >
+                    <Upload size={12} />
+                    <span>{lang === 'zh' ? '上传 ZIP 更新' : 'Upload ZIP'}</span>
+                  </button>
+                </div>
               )}
             </div>
           </div>
@@ -563,6 +685,23 @@ export function PluginCenter({
             const target = deleteTarget;
             setDeleteTarget(null);
             onDelete(target.id, dataPolicy);
+          }}
+        />
+      )}
+
+      {snapshotModalPlugin && (
+        <PluginSnapshotRollbackModal
+          plugin={snapshotModalPlugin}
+          lang={lang}
+          onClose={() => setSnapshotModalPlugin(null)}
+          onRolledBack={(res) => {
+            setSnapshotModalPlugin(null);
+            setUpdateToast(
+              lang === 'zh'
+                ? `已安全回滚至 v${res.restoredVersion}，正在刷新…`
+                : `Rolled back safely to v${res.restoredVersion}, reloading…`,
+            );
+            setTimeout(() => window.location.reload(), 1000);
           }}
         />
       )}

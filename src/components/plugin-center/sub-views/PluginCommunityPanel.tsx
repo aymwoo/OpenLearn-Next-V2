@@ -73,6 +73,8 @@ export interface PluginCommunityPanelProps {
   canConfigure?: boolean;
   /** 安装成功后回调，父组件可据此刷新已安装列表。 */
   onInstalled?: () => void;
+  /** 注册表加载成功后通知父组件（用于跨标签页同步可更新提示）。 */
+  onRegistryLoaded?: (plugins: CommunityPlugin[]) => void;
   /** 测试注入点；默认使用全局 fetch。 */
   fetcher?: (input: string, init?: RequestInit) => Promise<Response>;
 }
@@ -190,6 +192,7 @@ export function PluginCommunityPanel({
   lang,
   canConfigure: canConfigureProp,
   onInstalled,
+  onRegistryLoaded,
   fetcher,
 }: PluginCommunityPanelProps) {
   const zh = lang === 'zh';
@@ -251,6 +254,9 @@ export function PluginCommunityPanel({
           throw new Error(body?.error || (zh ? '服务端拒绝请求' : 'Request rejected by the server'));
         }
         setData(body);
+        if (Array.isArray(body.plugins)) {
+          onRegistryLoaded?.(body.plugins);
+        }
         if (body.error) {
           setConfigNotice(null);
           setError(body.error);
@@ -264,7 +270,7 @@ export function PluginCommunityPanel({
         setStatus('error');
       }
     },
-    [doFetch, giteeToken, zh],
+    [doFetch, giteeToken, onRegistryLoaded, zh],
   );
 
   useEffect(() => {
@@ -330,19 +336,27 @@ export function PluginCommunityPanel({
     };
   }, [pendingExternalStarPluginId, refreshSinglePluginStars]);
 
-  /** 本地已安装的 manifest.id；与注册表 id 对齐用于展示「已安装 / 可更新」。 */
-  const installedManifestIds = useMemo(() => {
+  /** 本地已安装的 manifest.id 与数据库行 UUID 映射，用于更新与「已安装 / 可更新」判断。 */
+  const { installedManifestIds, installedUuidByManifestId } = useMemo(() => {
     const ids = new Set<string>();
+    const uuids = new Map<string, string>();
     for (const plugin of installedPlugins) {
       try {
         const parsed = JSON.parse(plugin.manifest);
-        if (typeof parsed?.id === 'string' && parsed.id) ids.add(parsed.id);
+        if (typeof parsed?.id === 'string' && parsed.id) {
+          ids.add(parsed.id);
+          uuids.set(parsed.id, plugin.id);
+        } else {
+          ids.add(plugin.id);
+          uuids.set(plugin.id, plugin.id);
+        }
       } catch {
         // 单行 manifest 损坏时退回到数据库 id
         ids.add(plugin.id);
+        uuids.set(plugin.id, plugin.id);
       }
     }
-    return ids;
+    return { installedManifestIds: ids, installedUuidByManifestId: uuids };
   }, [installedPlugins]);
 
   const isInstalled = useCallback(
@@ -365,7 +379,7 @@ export function PluginCommunityPanel({
   const visiblePlugins = useMemo(() => {
     const needle = query.trim().toLowerCase();
     let list = (data?.plugins ?? []).filter((plugin) => {
-      if (hideInstalled && isInstalled(plugin)) return false;
+      if (hideInstalled && isInstalled(plugin) && !plugin.hasUpdate) return false;
       if (activeTag && !plugin.tags.includes(activeTag)) return false;
       if (!needle) return true;
       return [plugin.name, plugin.id, plugin.description, plugin.author, plugin.tags.join(' ')]
@@ -525,12 +539,15 @@ export function PluginCommunityPanel({
       if (blob.size === 0) throw new Error(zh ? '插件包为空' : 'The package is empty');
 
       const filename = zipFilenameFromUrl(plugin.downloadUrl);
+      const isUpdating = isInstalled(plugin);
+      const targetPluginId = installedUuidByManifestId.get(plugin.id) ?? plugin.id;
       const uploadResponse = await doFetch(ZIP_UPLOAD_ENDPOINT, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/octet-stream',
           'x-filename': encodeURIComponent(filename),
           'x-community-install': 'true',
+          ...(isUpdating ? { 'x-install-mode': 'update', 'x-target-plugin-id': targetPluginId } : {}),
           ...(plugin.integrity ? { 'x-integrity': plugin.integrity } : {}),
           ...(plugin.signature ? { 'x-signature': plugin.signature } : {}),
           ...(approvePublic ? { 'x-approve-public-routes': 'true' } : {}),
@@ -541,6 +558,8 @@ export function PluginCommunityPanel({
         success?: boolean;
         error?: string;
         code?: string;
+        updated?: boolean;
+        newVersion?: string;
       } | null;
       if (!uploadResponse.ok || !uploadBody?.success) {
         if (uploadResponse.status === 403 && !uploadBody?.code) {
@@ -548,15 +567,23 @@ export function PluginCommunityPanel({
         }
         throw new Error(uploadBody?.error || (zh ? '浏览器直传失败' : 'Browser upload failed'));
       }
+      return uploadBody;
     },
-    [doFetch, setInstallState, zh],
+    [doFetch, installedUuidByManifestId, isInstalled, setInstallState, zh],
   );
 
   const handleInstall = useCallback(
     async (plugin: CommunityPlugin, approvePublic: boolean) => {
+      const isUpdating = isInstalled(plugin) && plugin.hasUpdate;
       setInstallState(plugin.id, {
         phase: 'installing',
-        message: zh ? '正在由服务端下载插件包…' : 'Server is downloading the package…',
+        message: isUpdating
+          ? zh
+            ? '正在创建更新前快照并下载新版本…'
+            : 'Saving snapshot and downloading update…'
+          : zh
+            ? '正在由服务端下载插件包…'
+            : 'Server is downloading the package…',
       });
 
       try {
@@ -580,20 +607,41 @@ export function PluginCommunityPanel({
           newVersion?: string;
         } | null;
 
+        let effectiveUpdated = Boolean(body?.updated) || isUpdating;
+        let resolvedVersion = body?.newVersion || plugin.version;
         if (!response.ok || !body?.success) {
           if (body?.fallbackToClient) {
-            await uploadViaBrowser(plugin, approvePublic);
+            const fallbackBody = await uploadViaBrowser(plugin, approvePublic);
+            effectiveUpdated = Boolean(fallbackBody?.updated) || isUpdating;
+            resolvedVersion = fallbackBody?.newVersion || resolvedVersion;
           } else if (response.status === 403 && !body?.code) {
             throw new Error(zh ? '仅管理员可安装社区插件，请联系管理员。' : 'Only administrators can install plugins.');
           } else {
-            throw new Error(body?.error || (zh ? '安装失败' : 'Installation failed'));
+            throw new Error(
+              body?.error ||
+                (zh ? (isUpdating ? '更新失败' : '安装失败') : isUpdating ? 'Update failed' : 'Installation failed'),
+            );
           }
         }
 
         setJustInstalled((prev) => ({ ...prev, [plugin.id]: true }));
+        setData((prev) => {
+          if (!prev) return prev;
+          const nextPlugins = prev.plugins.map((item) =>
+            item.id === plugin.id ? { ...item, installedVersion: resolvedVersion, hasUpdate: false } : item,
+          );
+          onRegistryLoaded?.(nextPlugins);
+          return { ...prev, plugins: nextPlugins };
+        });
         setInstallState(plugin.id, {
           phase: 'success',
-          message: zh ? '安装完成，请在「发现」页启用' : 'Installed — enable it on the Discover tab',
+          message: effectiveUpdated
+            ? zh
+              ? `已更新至 v${resolvedVersion}（已自动保存更新前快照），正在刷新…`
+              : `Updated to v${resolvedVersion} (pre-update snapshot saved), reloading…`
+            : zh
+              ? '安装完成，请在「发现」页启用'
+              : 'Installed — enable it on the Discover tab',
         });
         onInstalled?.();
       } catch (e) {
@@ -603,7 +651,7 @@ export function PluginCommunityPanel({
         });
       }
     },
-    [doFetch, onInstalled, setInstallState, uploadViaBrowser, zh],
+    [doFetch, isInstalled, onInstalled, onRegistryLoaded, setInstallState, uploadViaBrowser, zh],
   );
 
   const validateRegistryUrl = useCallback(

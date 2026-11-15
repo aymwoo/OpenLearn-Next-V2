@@ -1003,6 +1003,15 @@ export function registerPluginsRoutes(ctx: ServerContext) {
             allowDowngrade: Boolean(allowDowngrade),
             communityOfficial: true,
           });
+          recordSecurityAudit('plugin.updated', {
+            actorId: getActorId(req),
+            pluginId: result.pluginId,
+            manifestId: result.manifest?.id,
+            oldVersion: result.oldVersion,
+            newVersion: result.newVersion,
+            snapshotId: result.snapshotId,
+            via: 'install-from-url',
+          });
           return res.json({
             success: true,
             updated: true,
@@ -1011,6 +1020,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
             oldVersion: result.oldVersion,
             newVersion: result.newVersion,
             wasActive: result.wasActive,
+            snapshotId: result.snapshotId,
             filename: pkg.filename,
             bytes: pkg.bytes,
             ...installationSecurityFields(
@@ -1084,7 +1094,9 @@ export function registerPluginsRoutes(ctx: ServerContext) {
         return res.json({ success: true, hasUpdate: false, message: '该插件未声明更新源' });
       }
 
-      const result = await checkVersion(src, manifest.version || '0.0.0');
+      const result = await checkVersion(src, manifest.version || '0.0.0', {
+        forceRefresh: Boolean(req.body?.forceRefresh),
+      });
       res.json({ success: true, ...result });
     } catch (e: any) {
       sendSafeError(res, e);
@@ -1119,7 +1131,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
           // 这里只做了字面量校验就 fetch —— 实测 `redirect:'follow'` 会把 302
           // 目标引到内网且不复检，构成完整 SSRF 链。
           const resp = await fetchWithSafeRedirects(downloadUrl, {
-            timeoutMs: 15_000,
+            timeoutMs: 60_000,
             headers: { 'User-Agent': 'OpenLearnV2-PluginUpdater/1.0' },
           });
           if (!resp.ok) {
@@ -1177,6 +1189,16 @@ export function registerPluginsRoutes(ctx: ServerContext) {
         communityOfficial: true,
       });
 
+      recordSecurityAudit('plugin.updated', {
+        actorId: getActorId(req),
+        pluginId: result.pluginId,
+        manifestId: result.manifest?.id,
+        oldVersion: result.oldVersion,
+        newVersion: result.newVersion,
+        snapshotId: result.snapshotId,
+        via: 'one-click-update',
+      });
+
       res.json({
         success: true,
         updated: true,
@@ -1185,6 +1207,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
         oldVersion: result.oldVersion,
         newVersion: result.newVersion || '1.2.0',
         wasActive: result.wasActive,
+        snapshotId: result.snapshotId,
       });
     } catch (err: any) {
       pluginLog.error(err);
@@ -1530,6 +1553,76 @@ export function registerPluginsRoutes(ctx: ServerContext) {
     }
   });
 
+  // ── Plugin Update Snapshots & Safe Rollback (Admin Only; registered BEFORE /:id(*) catch-alls) ──
+  app.get('/api/plugins/:id(*)/snapshots', requireAuth('administrator'), (req, res) => {
+    try {
+      const targetId = decodeURIComponent(req.params.id);
+      const snapshots = kernelContainer.pluginHost.listPluginSnapshots(targetId);
+      res.json({ success: true, snapshots });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes('is not installed')) {
+        return res.status(404).json({ success: false, error: msg });
+      }
+      pluginLog.error(err);
+      sendSafeError(res, err);
+    }
+  });
+
+  app.post('/api/plugins/:id(*)/rollback', requireAuth('administrator'), async (req, res) => {
+    try {
+      const targetId = decodeURIComponent(req.params.id);
+      const snapshotId = typeof req.body?.snapshotId === 'string' ? req.body.snapshotId.trim() : undefined;
+      if (snapshotId && !/^[A-Za-z0-9_-]{4,120}$/.test(snapshotId)) {
+        return res.status(400).json({ success: false, error: '非法的快照 ID 格式' });
+      }
+      const result = await kernelContainer.pluginHost.rollbackPluginToSnapshot(targetId, snapshotId, getActorId(req));
+      res.json({ success: true, ...result });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes('is not installed')) {
+        return res.status(404).json({ success: false, error: msg });
+      }
+      if (
+        msg.includes('No rollback snapshot') ||
+        msg.includes('not found') ||
+        msg.includes('Cannot rollback system plugin') ||
+        msg.includes('incomplete')
+      ) {
+        return res.status(400).json({ success: false, error: msg });
+      }
+      pluginLog.error(err);
+      sendSafeError(res, err);
+    }
+  });
+
+  app.delete('/api/plugins/:id(*)/snapshots/:snapshotId', requireAuth('administrator'), (req, res) => {
+    try {
+      const targetId = decodeURIComponent(req.params.id);
+      const snapshotId = decodeURIComponent(req.params.snapshotId);
+      if (!/^[A-Za-z0-9_-]{4,120}$/.test(snapshotId)) {
+        return res.status(400).json({ success: false, error: '非法的快照 ID 格式' });
+      }
+      const deleted = kernelContainer.pluginHost.deletePluginSnapshot(targetId, snapshotId);
+      if (!deleted) {
+        return res.status(404).json({ success: false, error: `快照 "${snapshotId}" 不存在` });
+      }
+      recordSecurityAudit('plugin.snapshot.deleted', {
+        actorId: getActorId(req),
+        pluginId: targetId,
+        snapshotId,
+      });
+      res.json({ success: true, deleted: true, snapshotId });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes('is not installed')) {
+        return res.status(404).json({ success: false, error: msg });
+      }
+      pluginLog.error(err);
+      sendSafeError(res, err);
+    }
+  });
+
   app.delete('/api/plugins/:id(*)', requireAuth('administrator'), async (req, res) => {
     try {
       const rawId = decodeURIComponent(req.params.id);
@@ -1692,6 +1785,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
           oldVersion: result.oldVersion,
           newVersion: result.newVersion,
           wasActive: result.wasActive,
+          snapshotId: result.snapshotId,
           filename,
           ...installationSecurityFields(
             {
@@ -1803,6 +1897,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
         oldVersion: result.oldVersion,
         newVersion: result.newVersion,
         wasActive: result.wasActive,
+        snapshotId: result.snapshotId,
         ...installationSecurityFields(
           {
             ...result.manifest,

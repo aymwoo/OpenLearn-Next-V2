@@ -14,6 +14,7 @@ import { PluginHostInstall } from './install.js';
 import { PluginState, normalizeExecutionMode, requiresIsolatedExecution } from './types.js';
 import { isSafePluginTablePrefix, pluginTablePrefix, listAllowedPluginTablePrefixes } from './plugin-tables.js';
 import { clearPublicRouteApprovals } from './public-routes.js';
+import { purgePluginSnapshots } from './update-snapshot.js';
 import {
   deleteOrphanDataRecord,
   exportPluginDataToSql,
@@ -247,6 +248,8 @@ export abstract class PluginHostUninstall extends PluginHostInstall {
       }
       // 清理可能残留的历史登记（例如上次 keep 卸载后重装又卸载）
       deleteOrphanDataRecord(this.db, manifestId, pluginId);
+      // 彻底清除数据时同时清理该插件的更新快照
+      purgePluginSnapshots(this.pluginsDir, pluginId);
       if (totalDropped > 0) {
         console.log(`[PluginHost] Dropped ${totalDropped} plugin tables for "${pluginId}"`);
       }

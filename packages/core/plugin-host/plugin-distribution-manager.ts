@@ -91,6 +91,7 @@ export interface PluginUpdateResult {
   wasActive: boolean;
   executionMode?: PluginExecutionMode;
   executionModeCoerced?: boolean;
+  snapshotId?: string;
 }
 
 export interface IPluginDistributionManager {

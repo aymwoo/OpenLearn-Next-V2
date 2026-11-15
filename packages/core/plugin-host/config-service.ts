@@ -118,6 +118,18 @@ interface SharedConfigState {
 
 const sharedStates = new WeakMap<object, Map<string, SharedConfigState>>();
 
+/**
+ * 清除指定插件在内存中的配置缓存（供更新快照回滚后同步数据库状态）。
+ */
+export function invalidatePluginConfigCache(db: object, manifestId: string): void {
+  const byManifest = sharedStates.get(db);
+  if (!byManifest) return;
+  const state = byManifest.get(manifestId);
+  if (state) {
+    state.values.clear();
+  }
+}
+
 const instanceCleanup = new FinalizationRegistry<{ state: SharedConfigState; ref: WeakRef<ConfigService> }>(
   ({ state, ref }) => {
     state.instances.delete(ref);

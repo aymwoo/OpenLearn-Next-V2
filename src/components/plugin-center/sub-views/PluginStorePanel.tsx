@@ -11,6 +11,7 @@ import {
   Calendar,
   Upload,
   Trash2,
+  History,
 } from 'lucide-react';
 import { LegacyPluginBadge } from '../../LegacyPluginBadge';
 import { usePluginHostStore } from '../../../plugin-host/plugin-host-store';
@@ -20,6 +21,7 @@ import { sanitizeHref } from '../../../../packages/core/security/url-safety.js';
 export interface PluginStorePanelProps {
   plugins: PluginType[];
   lang: Language;
+  isAdmin?: boolean;
   showSystemPlugins: boolean;
   marketMap: Map<string, any>;
   checkingUpdateId: string | null;
@@ -28,6 +30,7 @@ export interface PluginStorePanelProps {
   handleOneClickUpdate: (pluginId: string, marketItem?: any) => Promise<void>;
   setChangelogModalPlugin: (plugin: any) => void;
   setSettingsPlugin: (plugin: { id: string; name: string; manifest: string } | null) => void;
+  onOpenSnapshots?: (plugin: { id: string; name: string; version?: string; manifestId?: string }) => void;
   setUpdateTargetPluginId: (id: string | null) => void;
   updateFileInputRef: React.RefObject<HTMLInputElement | null>;
   onToggle: (id: string) => void;
@@ -37,6 +40,7 @@ export interface PluginStorePanelProps {
 export function PluginStorePanel({
   plugins,
   lang,
+  isAdmin = true,
   showSystemPlugins,
   marketMap,
   checkingUpdateId,
@@ -45,6 +49,7 @@ export function PluginStorePanel({
   handleOneClickUpdate,
   setChangelogModalPlugin,
   setSettingsPlugin,
+  onOpenSnapshots,
   setUpdateTargetPluginId,
   updateFileInputRef,
   onToggle,
@@ -420,22 +425,36 @@ export function PluginStorePanel({
                       </span>
                     </button>
 
-                    {/* 快捷一键更新（仅在发现新版本时显式呈现） */}
+                    {/* 快捷一键更新（仅在发现新版本时显式呈现；无直接 ZIP 下载地址时打开版本说明/Release 引导） */}
                     {hasUpdate && (
                       <button
-                        onClick={() => handleOneClickUpdate(plugin.id, marketItem)}
+                        onClick={() => {
+                          if (marketItem?.downloadUrl) {
+                            void handleOneClickUpdate(plugin.id, marketItem);
+                          } else {
+                            setChangelogModalPlugin({ ...plugin, marketItem });
+                          }
+                        }}
                         disabled={oneClickUpdatingId === plugin.id}
                         className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-700 hover:to-indigo-700 shadow-sm transition-all flex items-center gap-1 shrink-0 disabled:opacity-50 cursor-pointer"
                         title={
-                          lang === 'zh'
-                            ? `热更新至 v${marketItem.latestVersion}`
-                            : `Update to v${marketItem.latestVersion}`
+                          marketItem?.downloadUrl
+                            ? lang === 'zh'
+                              ? `热更新至 v${marketItem.latestVersion}`
+                              : `Update to v${marketItem.latestVersion}`
+                            : lang === 'zh'
+                              ? `查看 v${marketItem.latestVersion} 更新详情`
+                              : `View v${marketItem.latestVersion} update details`
                         }
                       >
                         {oneClickUpdatingId === plugin.id ? (
                           <RefreshCw size={11} className="animate-spin" />
                         ) : (
-                          <span>⚡ {lang === 'zh' ? '更新' : 'Update'}</span>
+                          <span>
+                            {marketItem?.downloadUrl
+                              ? `⚡ ${lang === 'zh' ? '更新' : 'Update'}`
+                              : `⚡ ${lang === 'zh' ? '新版本' : 'Update'}`}
+                          </span>
                         )}
                       </button>
                     )}
@@ -502,6 +521,24 @@ export function PluginStorePanel({
                               >
                                 <FileText size={13} className="text-indigo-500" />
                                 <span>{lang === 'zh' ? '版本新特性' : 'Release Notes'}</span>
+                              </button>
+                            )}
+
+                            {!isSystem && isAdmin && onOpenSnapshots && (
+                              <button
+                                onClick={() => {
+                                  setOpenMenuPluginId(null);
+                                  onOpenSnapshots({
+                                    id: plugin.id,
+                                    name: plugin.name,
+                                    version: manifestInfo.version,
+                                    manifestId: manifestInfo.manifestId || plugin.id,
+                                  });
+                                }}
+                                className="w-full text-left px-3 py-1.5 text-gray-700 hover:bg-gray-50 flex items-center gap-2 transition-colors cursor-pointer"
+                              >
+                                <History size={13} className="text-amber-600" />
+                                <span>{lang === 'zh' ? '历史快照与回滚' : 'Snapshots & Rollback'}</span>
                               </button>
                             )}
 

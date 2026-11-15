@@ -64,3 +64,8 @@ export {
   type ExportPluginDataResult,
   type PurgePluginDataResult,
 } from './orphan-data.js';
+export {
+  DEFAULT_PLUGIN_SNAPSHOT_RETENTION,
+  type PluginSnapshotMeta,
+  resolveSnapshotRetention,
+} from './update-snapshot.js';
