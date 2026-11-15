@@ -5,6 +5,7 @@ import { ICoursewareRuntimeScriptRegistryToken } from '../../packages/core/di/in
 import { getCookieToken, getValidSession } from '../middleware/auth.js';
 import { BRIDGE_SDK_CODE } from '../utils/bridge-sdk.js';
 import { sanitizeExternalFontsInHtml } from '../../packages/core/security/font-sanitizer.js';
+import { resolveHookTelemetryPolicy } from '../services/runtime-policies.js';
 
 export { validateMagicBytes, BLOCKED_EXTENSIONS } from '../utils/upload.js';
 
@@ -173,7 +174,7 @@ export function injectLmsSdk(htmlContent: string, req: any, cwInfo: { id: string
 window.__LMS_STUDENT__ = ${JSON.stringify(studentInfo)};
 window.__LMS_HOST_ORIGIN__ = ${JSON.stringify(hostOrigin)};
 window.__LMS_ENFORCE_ORIGIN__ = ${process.env.NODE_ENV === 'production'};
-window.__LMS_HOOK_TELEMETRY__ = ${process.env.BRIDGE_HOOK_TELEMETRY === 'off' ? 'false' : 'true'};
+window.__LMS_HOOK_TELEMETRY__ = ${resolveHookTelemetryPolicy(kernelContainer.db).enabled ? 'true' : 'false'};
 window.__LMS_COURSEWARE__ = {
   uuid: ${JSON.stringify(cwInfo.uuid)},
   name: ${JSON.stringify(cwInfo.name)}

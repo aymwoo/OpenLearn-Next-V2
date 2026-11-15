@@ -18,6 +18,11 @@ export type ZipInstallOptions = {
    * 插件的出站请求会被拒（fail-closed）。回环/私有/通配符即使勾选也不会被授予。
    */
   approveNetworkHosts?: boolean;
+  /**
+   * 当站点策略收紧后，管理员对本包未签名风险的逐次确认。
+   * 仅在确认未签名本地 ZIP 时传 true；签名包不得设置。
+   */
+  allowUnsigned?: boolean;
 };
 
 type SandboxChoice = 'worker' | 'inline' | 'process';
@@ -256,6 +261,9 @@ export function PluginInstallWizard({
   } | null>(null);
   const [allowDowngrade, setAllowDowngrade] = useState(false);
   const [confirmInUse, setConfirmInUse] = useState(false);
+  const [zipHasSignature, setZipHasSignature] = useState(false);
+  const [allowUnsignedByDefault, setAllowUnsignedByDefault] = useState(true);
+  const [acknowledgeUnsigned, setAcknowledgeUnsigned] = useState(false);
 
   useEffect(() => {
     if (isOpen && file) {
@@ -276,7 +284,11 @@ export function PluginInstallWizard({
       setExistingInstall(null);
       setAllowDowngrade(false);
       setConfirmInUse(false);
+      setZipHasSignature(false);
+      setAcknowledgeUnsigned(false);
+      setAllowUnsignedByDefault(true);
       parseZip(file);
+      void loadUnsignedPolicy();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, file]);
@@ -287,6 +299,7 @@ export function PluginInstallWizard({
     try {
       const zip = await JSZip.loadAsync(zipFile);
       setZipObj(zip);
+      setZipHasSignature(Boolean(zip.file('signature.json')));
 
       const manifestFile = zip.file('manifest.json');
       if (!manifestFile) {
@@ -319,6 +332,18 @@ export function PluginInstallWizard({
       setError(err.message || 'ZIP parse error');
     } finally {
       setProcessing(false);
+    }
+  };
+
+  const loadUnsignedPolicy = async () => {
+    try {
+      const res = await fetch('/api/admin/runtime-policies');
+      const body = await res.json().catch(() => null);
+      if (res.ok && typeof body?.policies?.allowUnsigned?.allowByDefault === 'boolean') {
+        setAllowUnsignedByDefault(body.policies.allowUnsigned.allowByDefault);
+      }
+    } catch {
+      /* 保留历史默认（允许未签名），上传时仍由服务端门禁裁决 */
     }
   };
 
@@ -498,13 +523,20 @@ export function PluginInstallWizard({
       !!(manifest?.classroomTools && manifest.classroomTools.length > 0) ||
       !!(manifest?.contributes && Object.keys(manifest.contributes).length > 0));
 
+  const needsUnsignedAck = !zipHasSignature && allowUnsignedByDefault === false;
+
   const canProceedInstall = (() => {
     if (!file || !manifest) return false;
     if (existingInstall?.isSystem) return false;
     if (isDowngrade && !allowDowngrade) return false;
     if (isInUse && !confirmInUse) return false;
+    if (needsUnsignedAck && !acknowledgeUnsigned) return false;
     return true;
   })();
+
+  const unsignedInstallOpts = {
+    allowUnsigned: needsUnsignedAck && acknowledgeUnsigned,
+  };
 
   const handleInstall = async () => {
     if (!file || !canProceedInstall) return;
@@ -528,6 +560,7 @@ export function PluginInstallWizard({
         approvePublicRoutes,
         approveCapabilities,
         approveNetworkHosts,
+        ...unsignedInstallOpts,
       });
       setProgressPct(100);
       setProgressMsg(lang === 'zh' ? (isUpgrade ? '更新完成' : '安装完成') : isUpgrade ? 'Updated' : 'Complete');
@@ -547,6 +580,9 @@ export function PluginInstallWizard({
 
   const handleExpressInstall = async () => {
     if (!file || processing || installing) return;
+    if (needsUnsignedAck && !acknowledgeUnsigned) {
+      return;
+    }
     setAgreedToTerms(true);
     setAllowDowngrade(true);
     setConfirmInUse(true);
@@ -571,6 +607,7 @@ export function PluginInstallWizard({
         approvePublicRoutes: true,
         approveCapabilities: true,
         approveNetworkHosts: true,
+        ...unsignedInstallOpts,
       });
       setProgressPct(100);
       setProgressMsg(lang === 'zh' ? (isUpgrade ? '更新完成' : '安装完成') : isUpgrade ? 'Updated' : 'Complete');
@@ -811,6 +848,37 @@ export function PluginInstallWizard({
                       )}
                     </div>
                   )}
+
+                  {needsUnsignedAck && (
+                    <div
+                      className="rounded-xl border border-red-200 bg-red-50/70 p-3"
+                      data-testid="unsigned-plugin-ack"
+                    >
+                      <p className="text-xs font-extrabold text-red-800">
+                        {lang === 'zh'
+                          ? '未签名本地插件：当前站点策略已收紧'
+                          : 'Unsigned local plugin: site policy is tightened'}
+                      </p>
+                      <p className="text-xs text-red-700 mt-1 leading-relaxed">
+                        {lang === 'zh'
+                          ? '此 ZIP 不含 signature.json。允许未签名不等于全信任，也不会绕过签名错误、公钥、网络限制、权限或沙箱。请逐次确认后再安装。一键极速安装不能跳过此项。'
+                          : 'This ZIP has no signature.json. Allowing unsigned packages is not full trust and cannot bypass signature errors, public keys, network limits, permissions, or the sandbox. Confirm each upload. Express install cannot skip this.'}
+                      </p>
+                      <label className="mt-2 flex items-start gap-2 text-xs font-bold text-red-800 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          className="mt-0.5"
+                          checked={acknowledgeUnsigned}
+                          onChange={(e) => setAcknowledgeUnsigned(e.target.checked)}
+                        />
+                        <span>
+                          {lang === 'zh'
+                            ? '我已了解未签名包的风险，并确认本次上传该未签名本地插件。'
+                            : 'I understand the unsigned-package risk and confirm this unsigned local upload.'}
+                        </span>
+                      </label>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -1048,6 +1116,36 @@ export function PluginInstallWizard({
               {/* Step 5: Sandbox config */}
               {step === 4 && (
                 <div className="flex flex-col gap-4">
+                  {needsUnsignedAck && (
+                    <div
+                      className="rounded-xl border border-red-200 bg-red-50/70 p-3"
+                      data-testid="unsigned-plugin-ack"
+                    >
+                      <p className="text-xs font-extrabold text-red-800">
+                        {lang === 'zh'
+                          ? '未签名本地插件：当前站点策略已收紧'
+                          : 'Unsigned local plugin: site policy is tightened'}
+                      </p>
+                      <p className="text-xs text-red-700 mt-1 leading-relaxed">
+                        {lang === 'zh'
+                          ? '此 ZIP 不含 signature.json。允许未签名不等于全信任，也不会绕过签名错误、公钥、网络限制、权限或沙箱。请逐次确认后再安装。一键极速安装不能跳过此项。'
+                          : 'This ZIP has no signature.json. Allowing unsigned packages is not full trust and cannot bypass signature errors, public keys, network limits, permissions, or the sandbox. Confirm each upload. Express install cannot skip this.'}
+                      </p>
+                      <label className="mt-2 flex items-start gap-2 text-xs font-bold text-red-800 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          className="mt-0.5"
+                          checked={acknowledgeUnsigned}
+                          onChange={(e) => setAcknowledgeUnsigned(e.target.checked)}
+                        />
+                        <span>
+                          {lang === 'zh'
+                            ? '我已了解未签名包的风险，并确认本次上传该未签名本地插件。'
+                            : 'I understand the unsigned-package risk and confirm this unsigned local upload.'}
+                        </span>
+                      </label>
+                    </div>
+                  )}
                   {existingInstall && (
                     <div
                       className={`rounded-xl border p-3 text-xs ${
@@ -1086,6 +1184,7 @@ export function PluginInstallWizard({
                           <span>{lang === 'zh' ? '已知晓课中热更新风险' : 'I accept live-class hot-update risk'}</span>
                         </label>
                       )}
+
                       {!canProceedInstall && (
                         <p className="mt-2 text-red-600 font-semibold">
                           {lang === 'zh'
@@ -1335,8 +1434,17 @@ export function PluginInstallWizard({
               <button
                 type="button"
                 onClick={handleExpressInstall}
-                className="flex items-center gap-1.5 px-3.5 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white rounded-lg text-xs font-bold shadow-xs transition-all cursor-pointer"
-                title={lang === 'zh' ? '同意全套权限与提示，直接安装完成' : 'Approve terms and install directly'}
+                disabled={needsUnsignedAck && !acknowledgeUnsigned}
+                className="flex items-center gap-1.5 px-3.5 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white rounded-lg text-xs font-bold shadow-xs transition-all cursor-pointer disabled:from-gray-300 disabled:to-gray-300 disabled:cursor-not-allowed"
+                title={
+                  needsUnsignedAck && !acknowledgeUnsigned
+                    ? lang === 'zh'
+                      ? '请先确认未签名风险，一键极速安装不能跳过此项'
+                      : 'Confirm the unsigned-package risk first; express install cannot skip it'
+                    : lang === 'zh'
+                      ? '同意全套权限与提示，直接安装完成'
+                      : 'Approve terms and install directly'
+                }
               >
                 <Zap size={13} className="fill-amber-200" />
                 <span>

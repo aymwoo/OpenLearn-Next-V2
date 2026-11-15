@@ -29,6 +29,7 @@ import {
 import { AiProvidersPanel, type AIProvider } from '../features/admin/AiProvidersPanel';
 import { DemoDataPanel } from '../features/admin/DemoDataPanel';
 import { FileStoragePanel } from '../features/admin/FileStoragePanel';
+import { AdminRuntimePoliciesPanel } from '../features/admin/AdminRuntimePoliciesPanel';
 import { ExtensionPointRenderer } from '../plugin-host/extension-point-renderer';
 import { BUILTIN_THEMES, useThemeStore } from '../store/themeStore';
 import { ThemeCenterModal } from './ThemeCenterModal';
@@ -1572,6 +1573,9 @@ export function AdminPanel({
                   </div>
                 </form>
               </div>
+
+              {/* 运行时策略：遥测 / 访问日志 / 未签名插件（仅管理员） */}
+              {isAdmin && <AdminRuntimePoliciesPanel lang={lang} />}
 
               {/* 文件存储与路径布局策略 */}
               <FileStoragePanel lang={lang} />
