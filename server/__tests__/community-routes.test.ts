@@ -735,4 +735,158 @@ describe('community plugin registry routes', () => {
       expect(res.status).toBe(400);
     });
   });
+
+  describe('community plugin stars (+⭐) & reviews', () => {
+    const studentId = 'usr-community-student';
+    const studentToken = 'tok-community-student';
+    const scopedPluginId = '@ext/class-manager';
+
+    beforeAll(() => {
+      const now = Date.now();
+      kernelContainer.db
+        .prepare(
+          'INSERT OR REPLACE INTO users (id, username, password_hash, role, name, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+        )
+        .run(studentId, 'community_student', 'placeholder', 'student', '社区学生', now);
+      kernelContainer.db
+        .prepare(
+          'INSERT OR REPLACE INTO client_sessions (id, session_data, updated_at, expires_at) VALUES (?, ?, ?, ?)',
+        )
+        .run(
+          studentToken,
+          JSON.stringify({ userId: studentId, role: 'student', username: 'community_student' }),
+          now,
+          now + 60 * 60 * 1000,
+        );
+    });
+
+    afterEach(() => {
+      kernelContainer.db.prepare('DELETE FROM community_plugin_stars WHERE plugin_id = ?').run(scopedPluginId);
+      kernelContainer.db.prepare('DELETE FROM community_plugin_reviews WHERE plugin_id = ?').run(scopedPluginId);
+    });
+
+    afterAll(() => {
+      kernelContainer.db.prepare('DELETE FROM client_sessions WHERE id = ?').run(studentToken);
+      kernelContainer.db.prepare('DELETE FROM users WHERE id = ?').run(studentId);
+    });
+
+    it('rejects anonymous and student callers for star & review mutations', async () => {
+      expect((await fetch(`${baseUrl}/api/plugins/community/star`, { method: 'POST' })).status).toBe(401);
+      expect(
+        (
+          await fetch(`${baseUrl}/api/plugins/community/star`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...cookie(studentToken) },
+            body: JSON.stringify({ pluginId: scopedPluginId }),
+          })
+        ).status,
+      ).toBe(403);
+      expect(
+        (
+          await fetch(`${baseUrl}/api/plugins/community/reviews`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...cookie(studentToken) },
+            body: JSON.stringify({ pluginId: scopedPluginId, rating: 5, comment: 'nice' }),
+          })
+        ).status,
+      ).toBe(403);
+    });
+
+    it('toggles GitHub-style +⭐ per user and counts across users (including scoped @scope/name IDs)', async () => {
+      const postStar = (token: string, body: unknown) =>
+        fetch(`${baseUrl}/api/plugins/community/star`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...cookie(token) },
+          body: JSON.stringify(body),
+        });
+
+      const t1 = await postStar(teacherToken, { pluginId: scopedPluginId });
+      expect(t1.status).toBe(200);
+      expect(await t1.json()).toMatchObject({ success: true, pluginId: scopedPluginId, starred: true, starCount: 1 });
+
+      const a1 = await postStar(adminToken, { pluginId: scopedPluginId });
+      expect(a1.status).toBe(200);
+      expect(await a1.json()).toMatchObject({ success: true, pluginId: scopedPluginId, starred: true, starCount: 2 });
+
+      // 教师再次点击取消标星
+      const t2 = await postStar(teacherToken, { pluginId: scopedPluginId });
+      expect(t2.status).toBe(200);
+      expect(await t2.json()).toMatchObject({ success: true, pluginId: scopedPluginId, starred: false, starCount: 1 });
+    });
+
+    it('validates, creates, updates, lists, and deletes plugin reviews', async () => {
+      const postReview = (token: string, body: unknown) =>
+        fetch(`${baseUrl}/api/plugins/community/reviews`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...cookie(token) },
+          body: JSON.stringify(body),
+        });
+
+      // 非法评分应被拒绝
+      const badRating = await postReview(teacherToken, { pluginId: scopedPluginId, rating: 6, comment: 'bad' });
+      expect(badRating.status).toBe(400);
+
+      // 教师提交 4 星评价
+      const r1 = await postReview(teacherToken, {
+        pluginId: scopedPluginId,
+        rating: 4,
+        comment: '分组很顺手',
+        pluginVersion: '0.3.15',
+      });
+      expect(r1.status).toBe(200);
+      expect(await r1.json()).toMatchObject({
+        success: true,
+        summary: { reviewCount: 1, averageRating: 4, myRating: 4 },
+        review: { authorName: '社区教师', rating: 4, comment: '分组很顺手', pluginVersion: '0.3.15', isOwn: true },
+      });
+
+      // 管理员提交 5 星评价，均分变为 4.5
+      const r2 = await postReview(adminToken, { pluginId: scopedPluginId, rating: 5, comment: '课堂很稳' });
+      expect(r2.status).toBe(200);
+      expect(await r2.json()).toMatchObject({
+        success: true,
+        summary: { reviewCount: 2, averageRating: 4.5, myRating: 5 },
+      });
+
+      // 教师修改自己的评价为 5 星（幂等更新，不产生重复记录）
+      const r1Update = await postReview(teacherToken, {
+        pluginId: scopedPluginId,
+        rating: 5,
+        comment: '更新：满分推荐',
+      });
+      expect(r1Update.status).toBe(200);
+      expect(await r1Update.json()).toMatchObject({
+        success: true,
+        summary: { reviewCount: 2, averageRating: 5, myRating: 5 },
+      });
+
+      // 列表查询
+      const listRes = await fetch(
+        `${baseUrl}/api/plugins/community/reviews?pluginId=${encodeURIComponent(scopedPluginId)}`,
+        { headers: cookie(teacherToken) },
+      );
+      expect(listRes.status).toBe(200);
+      const listBody = (await listRes.json()) as {
+        success: boolean;
+        summary: { reviewCount: number; averageRating: number };
+        reviews: Array<{ isOwn: boolean; comment: string }>;
+      };
+      expect(listBody.summary).toMatchObject({ reviewCount: 2, averageRating: 5 });
+      expect(listBody.reviews).toHaveLength(2);
+      expect(listBody.reviews[0].isOwn).toBe(true);
+      expect(listBody.reviews[0].comment).toBe('更新：满分推荐');
+
+      // 教师删除自己的评价
+      const delRes = await fetch(
+        `${baseUrl}/api/plugins/community/reviews?pluginId=${encodeURIComponent(scopedPluginId)}`,
+        { method: 'DELETE', headers: cookie(teacherToken) },
+      );
+      expect(delRes.status).toBe(200);
+      expect(await delRes.json()).toMatchObject({
+        success: true,
+        deleted: true,
+        summary: { reviewCount: 1, averageRating: 5, myRating: null },
+      });
+    });
+  });
 });

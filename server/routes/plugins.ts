@@ -34,6 +34,7 @@ import { buildOpenAIChatUrl, validateAiProviderUrl } from '../../packages/core/a
 import {
   COMMUNITY_REGISTRY_ENV,
   CommunityRegistryConfigError,
+  enrichCommunityPackageSizes,
   fetchCommunityRegistry,
   downloadPluginPackage,
   isValidPluginId,
@@ -41,6 +42,14 @@ import {
   setStoredCommunityRegistryUrl,
   type DownloadedPackage,
 } from '../services/community-registry.js';
+import {
+  CommunityFeedbackError,
+  deletePluginReview,
+  getFeedbackSummaries,
+  listPluginReviews,
+  togglePluginStar,
+  upsertPluginReview,
+} from '../services/community-feedback.js';
 import JSZip from 'jszip';
 import {
   COMMUNITY_INSTALL_DISABLED_MESSAGE,
@@ -679,6 +688,27 @@ export function registerPluginsRoutes(ctx: ServerContext) {
         installed: listInstalledManifestVersions(),
         forceRefresh: String(req.query.refresh || '') === '1',
       });
+      const withSizes = await enrichCommunityPackageSizes(result.plugins);
+      const userId = String((req as any).session?.userId ?? '').trim() || null;
+      const summaries = getFeedbackSummaries(
+        kernelContainer.db,
+        withSizes.map((p) => p.id),
+        userId,
+      );
+      const enrichedPlugins = withSizes.map((entry) => {
+        const fb = summaries.get(entry.id);
+        const localStars = fb?.starCount ?? 0;
+        return {
+          ...entry,
+          upstreamStars: entry.stars,
+          localStars,
+          stars: (entry.stars ?? 0) + localStars,
+          starred: fb?.starred ?? false,
+          reviewCount: fb?.reviewCount ?? 0,
+          averageRating: fb?.averageRating ?? null,
+          myRating: fb?.myRating ?? null,
+        };
+      });
       const install = resolveCommunityInstallConfig(kernelContainer.db);
       res.json({
         success: true,
@@ -693,6 +723,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
         hasInstallEnvFallback: isAdmin ? install.hasEnvFallback : null,
         publicKeysConfigured: isAdmin ? install.publicKeysConfigured : null,
         ...result,
+        plugins: enrichedPlugins,
       });
     } catch (e: any) {
       sendSafeError(res, e);
@@ -762,6 +793,100 @@ export function registerPluginsRoutes(ctx: ServerContext) {
       });
     } catch (e: any) {
       if (e instanceof CommunityRegistryConfigError) {
+        return res.status(400).json({ success: false, error: e.message });
+      }
+      sendSafeError(res, e);
+    }
+  });
+
+  // GitHub 风格一键 +Star / 取消 Star（教师与管理员可用，按 user_id 幂等记录）
+  app.post('/api/plugins/community/star', requireScopedAuth('class-staff'), (req, res) => {
+    try {
+      const userId = String((req as { session?: { userId?: string } }).session?.userId ?? '').trim();
+      if (!userId) return res.status(401).json({ success: false, error: '未登录' });
+      const { pluginId, desired } = (req.body || {}) as { pluginId?: unknown; desired?: unknown };
+      if (typeof pluginId !== 'string' || !isValidPluginId(pluginId.trim())) {
+        return res.status(400).json({ success: false, error: 'pluginId 格式非法' });
+      }
+      if (desired !== undefined && typeof desired !== 'boolean') {
+        return res.status(400).json({ success: false, error: 'desired 必须是布尔值' });
+      }
+      const outcome = togglePluginStar(kernelContainer.db, pluginId, userId, desired);
+      res.json({ success: true, ...outcome });
+    } catch (e: unknown) {
+      if (e instanceof CommunityFeedbackError) {
+        return res.status(400).json({ success: false, error: e.message });
+      }
+      sendSafeError(res, e);
+    }
+  });
+
+  // 读取社区插件评价列表与统计摘要
+  app.get('/api/plugins/community/reviews', requireScopedAuth('authenticated'), (req, res) => {
+    try {
+      const pluginId = typeof req.query.pluginId === 'string' ? req.query.pluginId.trim() : '';
+      if (!pluginId || !isValidPluginId(pluginId)) {
+        return res.status(400).json({ success: false, error: 'pluginId 格式非法' });
+      }
+      const userId = String((req as { session?: { userId?: string } }).session?.userId ?? '').trim() || null;
+      const listing = listPluginReviews(kernelContainer.db, pluginId, userId);
+      res.json({ success: true, ...listing });
+    } catch (e: unknown) {
+      if (e instanceof CommunityFeedbackError) {
+        return res.status(400).json({ success: false, error: e.message });
+      }
+      sendSafeError(res, e);
+    }
+  });
+
+  // 提交或更新当前用户对社区插件的评分与评价（1-5 星 + 评语）
+  app.post('/api/plugins/community/reviews', requireScopedAuth('class-staff'), (req, res) => {
+    try {
+      const userId = String((req as { session?: { userId?: string } }).session?.userId ?? '').trim();
+      if (!userId) return res.status(401).json({ success: false, error: '未登录' });
+      const { pluginId, rating, comment, pluginVersion } = (req.body || {}) as {
+        pluginId?: unknown;
+        rating?: unknown;
+        comment?: unknown;
+        pluginVersion?: unknown;
+      };
+      if (typeof pluginId !== 'string' || !isValidPluginId(pluginId.trim())) {
+        return res.status(400).json({ success: false, error: 'pluginId 格式非法' });
+      }
+      const saved = upsertPluginReview(kernelContainer.db, {
+        pluginId,
+        userId,
+        rating: rating as number,
+        comment: comment as string | undefined,
+        pluginVersion: pluginVersion as string | null | undefined,
+      });
+      res.json({ success: true, ...saved });
+    } catch (e: unknown) {
+      if (e instanceof CommunityFeedbackError) {
+        return res.status(400).json({ success: false, error: e.message });
+      }
+      sendSafeError(res, e);
+    }
+  });
+
+  // 删除当前用户对社区插件的评价
+  app.delete('/api/plugins/community/reviews', requireScopedAuth('class-staff'), (req, res) => {
+    try {
+      const userId = String((req as { session?: { userId?: string } }).session?.userId ?? '').trim();
+      if (!userId) return res.status(401).json({ success: false, error: '未登录' });
+      const rawId =
+        typeof req.query.pluginId === 'string'
+          ? req.query.pluginId
+          : typeof req.body?.pluginId === 'string'
+            ? req.body.pluginId
+            : '';
+      if (!rawId.trim() || !isValidPluginId(rawId.trim())) {
+        return res.status(400).json({ success: false, error: 'pluginId 格式非法' });
+      }
+      const outcome = deletePluginReview(kernelContainer.db, rawId, userId);
+      res.json({ success: true, ...outcome });
+    } catch (e: unknown) {
+      if (e instanceof CommunityFeedbackError) {
         return res.status(400).json({ success: false, error: e.message });
       }
       sendSafeError(res, e);

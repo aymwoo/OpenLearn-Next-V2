@@ -845,4 +845,224 @@ describe('PluginCommunityPanel', () => {
       );
     });
   });
+
+  describe('release metadata, +⭐ starring, and reviews', () => {
+    it('displays release date and formatted ZIP package size on the card', async () => {
+      const { fetcher } = makeFetcher([
+        (url) =>
+          url.startsWith('/api/plugins/community')
+            ? json(
+                registryBody({
+                  plugins: [
+                    makePlugin({
+                      publishedAt: '2026-11-14T17:41:25+08:00',
+                      packageSize: 25680,
+                    }),
+                    makePlugin({
+                      id: 'ext-large',
+                      name: '大型插件',
+                      publishedAt: '2026-11-10T08:00:00Z',
+                      packageSize: 1759186,
+                    }),
+                  ],
+                }),
+              )
+            : undefined,
+      ]);
+
+      renderPanel({ fetcher });
+      const card1 = within(await screen.findByTestId(HOMEWORK_CARD));
+      expect(card1.getByText('发布于 2026-11-14')).toBeTruthy();
+      expect(card1.getByText('25.1 KB')).toBeTruthy();
+
+      const card2 = within(screen.getByTestId('community-card-ext-large'));
+      expect(card2.getByText('发布于 2026-11-10')).toBeTruthy();
+      expect(card2.getByText('1.68 MB')).toBeTruthy();
+    });
+
+    it('toggles GitHub-style +⭐ star count on click', async () => {
+      let starred = false;
+      const { fetcher, calls } = makeFetcher([
+        (url) =>
+          url === '/api/plugins/community'
+            ? json(
+                registryBody({
+                  plugins: [makePlugin({ stars: 45, upstreamStars: 45, localStars: 0, starred: false })],
+                }),
+              )
+            : undefined,
+        (url, init) => {
+          if (url === '/api/plugins/community/star' && init?.method === 'POST') {
+            starred = !starred;
+            return json({
+              success: true,
+              pluginId: 'ext-homework-hub',
+              starred,
+              starCount: starred ? 1 : 0,
+            });
+          }
+          return undefined;
+        },
+      ]);
+
+      renderPanel({ fetcher });
+      await screen.findByTestId(HOMEWORK_CARD);
+
+      const starBtn = screen.getByTestId('community-star-ext-homework-hub');
+      expect(starBtn.getAttribute('aria-pressed')).toBe('false');
+      expect(starBtn.textContent).toContain('+⭐');
+      expect(starBtn.textContent).toContain('45');
+
+      fireEvent.click(starBtn);
+      await waitFor(() => {
+        expect(starBtn.getAttribute('aria-pressed')).toBe('true');
+        expect(starBtn.textContent).toContain('已⭐');
+        expect(starBtn.textContent).toContain('46');
+      });
+
+      const starCall = calls.find((c) => c.url === '/api/plugins/community/star');
+      expect(JSON.parse(String(starCall?.init?.body))).toEqual({ pluginId: 'ext-homework-hub' });
+
+      fireEvent.click(starBtn);
+      await waitFor(() => {
+        expect(starBtn.getAttribute('aria-pressed')).toBe('false');
+        expect(starBtn.textContent).toContain('45');
+      });
+    });
+
+    it('opens the review dialog, submits a review, updates the card rating badge, and deletes own review', async () => {
+      let reviews = [
+        {
+          id: 'rev-1',
+          pluginId: 'ext-homework-hub',
+          userId: 'other-teacher',
+          authorName: '李老师',
+          authorRole: 'teacher',
+          rating: 4,
+          comment: '课堂收作业很方便',
+          pluginVersion: '1.2.0' as string | null,
+          createdAt: Date.UTC(2026, 10, 10),
+          updatedAt: Date.UTC(2026, 10, 10),
+          isOwn: false,
+        },
+      ];
+
+      const currentSummary = () => {
+        const own = reviews.find((r) => r.isOwn);
+        const avg =
+          reviews.length > 0
+            ? Math.round((reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length) * 10) / 10
+            : null;
+        return {
+          starCount: 0,
+          starred: false,
+          reviewCount: reviews.length,
+          averageRating: avg,
+          myRating: own ? own.rating : null,
+        };
+      };
+
+      const { fetcher } = makeFetcher([
+        (url) =>
+          url === '/api/plugins/community'
+            ? json(
+                registryBody({
+                  plugins: [
+                    makePlugin({
+                      packageSize: 25680,
+                      reviewCount: 1,
+                      averageRating: 4,
+                      myRating: null,
+                    }),
+                  ],
+                }),
+              )
+            : undefined,
+        (url, init) => {
+          if (url.startsWith('/api/plugins/community/reviews')) {
+            if (!init?.method || init.method === 'GET') {
+              return json({ success: true, pluginId: 'ext-homework-hub', summary: currentSummary(), reviews });
+            }
+            if (init.method === 'POST') {
+              const body = JSON.parse(String(init.body)) as { rating: number; comment: string; pluginVersion?: string };
+              const own = {
+                id: 'rev-own',
+                pluginId: 'ext-homework-hub',
+                userId: 'me',
+                authorName: '张老师',
+                authorRole: 'teacher',
+                rating: body.rating,
+                comment: body.comment,
+                pluginVersion: body.pluginVersion ?? null,
+                createdAt: Date.UTC(2026, 10, 15),
+                updatedAt: Date.UTC(2026, 10, 15),
+                isOwn: true,
+              };
+              reviews = [own, ...reviews.filter((r) => !r.isOwn)];
+              return json({ success: true, pluginId: 'ext-homework-hub', summary: currentSummary(), review: own });
+            }
+            if (init.method === 'DELETE') {
+              reviews = reviews.filter((r) => !r.isOwn);
+              return json({ success: true, pluginId: 'ext-homework-hub', deleted: true, summary: currentSummary() });
+            }
+          }
+          return undefined;
+        },
+      ]);
+
+      renderPanel({ fetcher });
+      const reviewBtn = await screen.findByTestId('community-review-btn-ext-homework-hub');
+      expect(reviewBtn.textContent).toContain('4.0★ (1)');
+
+      fireEvent.click(reviewBtn);
+      const dialog = within(await screen.findByTestId('community-review-dialog'));
+      expect(dialog.getByText('课堂收作业很方便')).toBeTruthy();
+
+      fireEvent.change(dialog.getByLabelText('使用评价（可选）'), { target: { value: '非常好用，强烈推荐！' } });
+      fireEvent.click(dialog.getByRole('button', { name: '提交评价' }));
+
+      await waitFor(() => {
+        expect(dialog.getByText('非常好用，强烈推荐！', { selector: 'p' })).toBeTruthy();
+        expect(reviewBtn.textContent).toContain('4.5★ (2)');
+      });
+
+      fireEvent.click(dialog.getByRole('button', { name: '删除我的评价' }));
+      await waitFor(() => {
+        expect(dialog.queryByText('非常好用，强烈推荐！', { selector: 'p' })).toBeNull();
+        expect(reviewBtn.textContent).toContain('4.0★ (1)');
+      });
+    });
+
+    it('sorts plugins by latest release and most starred', async () => {
+      const { fetcher } = makeFetcher([
+        (url) =>
+          url.startsWith('/api/plugins/community')
+            ? json(
+                registryBody({
+                  plugins: [
+                    makePlugin({ id: 'old-popular', name: '旧但高星', publishedAt: '2026-01-01T00:00:00Z', stars: 99 }),
+                    makePlugin({ id: 'new-quiet', name: '最新插件', publishedAt: '2026-11-14T12:00:00Z', stars: 2 }),
+                  ],
+                }),
+              )
+            : undefined,
+      ]);
+
+      renderPanel({ fetcher });
+      await screen.findByText('旧但高星');
+
+      const sortSelect = screen.getByLabelText('排序方式');
+      fireEvent.change(sortSelect, { target: { value: 'latest' } });
+      await waitFor(() => {
+        const cards = screen.getAllByRole('article');
+        expect(cards[0].getAttribute('data-testid')).toBe('community-card-new-quiet');
+      });
+
+      fireEvent.change(sortSelect, { target: { value: 'stars' } });
+      await waitFor(() => {
+        const cards = screen.getAllByRole('article');
+        expect(cards[0].getAttribute('data-testid')).toBe('community-card-old-popular');
+      });
+    });
+  });
 });

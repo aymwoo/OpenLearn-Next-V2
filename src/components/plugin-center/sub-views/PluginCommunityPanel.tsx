@@ -4,10 +4,13 @@ import {
   AlertTriangle,
   BadgeCheck,
   CheckCircle2,
+  Clock,
   Download,
   ExternalLink,
   Github,
+  HardDrive,
   Loader2,
+  MessageSquare,
   Package,
   RefreshCw,
   Search,
@@ -18,6 +21,17 @@ import {
   Store,
   X,
 } from 'lucide-react';
+import {
+  computeUpdatedStarTotal,
+  formatCount,
+  formatPackageSize,
+  formatReleaseDate,
+  type CommunityPlugin,
+  type CommunityPluginFeedbackSummary,
+} from './community-format';
+import { PluginReviewDialog } from './PluginReviewDialog';
+
+export type { CommunityPlugin };
 
 /**
  * 社区插件市场（Community Plugin Registry）。
@@ -29,31 +43,6 @@ import {
  *
  * 类型与文案刻意保持自包含（不引入 i18n / store 模块），便于独立测试。
  */
-
-export interface CommunityPlugin {
-  id: string;
-  name: string;
-  description: string;
-  author: string;
-  version: string;
-  downloadUrl: string;
-  icon: string | null;
-  homepage: string | null;
-  repository: string | null;
-  license: string | null;
-  tags: string[];
-  capabilities: string[];
-  minPlatformVersion: string | null;
-  publishedAt: string | null;
-  downloads: number | null;
-  stars: number | null;
-  verified: boolean;
-  integrity?: string | null;
-  signature?: string | null;
-  featured: boolean;
-  installedVersion: string | null;
-  hasUpdate: boolean;
-}
 
 interface CommunityRegistryResponse {
   success?: boolean;
@@ -96,10 +85,11 @@ interface InstallState {
   message: string;
 }
 
-type SortKey = 'recommended' | 'downloads' | 'name';
+type SortKey = 'recommended' | 'latest' | 'stars' | 'rating' | 'downloads' | 'name';
 
 const REGISTRY_ENDPOINT = '/api/plugins/community';
 const CONFIG_ENDPOINT = '/api/plugins/community/config';
+const STAR_ENDPOINT = '/api/plugins/community/star';
 const INSTALL_ENDPOINT = '/api/plugins/install-from-url';
 const ZIP_UPLOAD_ENDPOINT = '/api/plugins/upload-zip-raw';
 
@@ -120,13 +110,6 @@ function hostOf(url: string | null): string | null {
   } catch {
     return null;
   }
-}
-
-function formatCount(value: number | null, lang: string): string | null {
-  if (value === null) return null;
-  if (value >= 10000) return lang === 'zh' ? `${(value / 10000).toFixed(1)} 万` : `${(value / 1000).toFixed(1)}k`;
-  if (value >= 1000) return lang === 'zh' ? `${value}` : `${(value / 1000).toFixed(1)}k`;
-  return String(value);
 }
 
 /** 卡片的图标槽：支持 emoji、图片 URL，缺失时回落到名称首字母。 */
@@ -213,6 +196,9 @@ export function PluginCommunityPanel({
   const [installSaving, setInstallSaving] = useState(false);
   const [installError, setInstallError] = useState<string | null>(null);
   const [installNotice, setInstallNotice] = useState<string | null>(null);
+  const [starPendingIds, setStarPendingIds] = useState<Record<string, boolean>>({});
+  const [starError, setStarError] = useState<string | null>(null);
+  const [reviewTargetId, setReviewTargetId] = useState<string | null>(null);
 
   const canConfigure = canConfigureProp ?? data?.canConfigure ?? true;
 
@@ -291,13 +277,101 @@ export function PluginCommunityPanel({
         .includes(needle);
     });
 
-    if (sort === 'downloads') {
+    if (sort === 'latest') {
+      list = [...list].sort((a, b) => {
+        const ta = a.publishedAt ? Date.parse(a.publishedAt) : NaN;
+        const tb = b.publishedAt ? Date.parse(b.publishedAt) : NaN;
+        return (Number.isFinite(tb) ? tb : -1) - (Number.isFinite(ta) ? ta : -1);
+      });
+    } else if (sort === 'stars') {
+      list = [...list].sort((a, b) => (b.stars ?? -1) - (a.stars ?? -1));
+    } else if (sort === 'rating') {
+      list = [...list].sort(
+        (a, b) => (b.averageRating ?? -1) - (a.averageRating ?? -1) || (b.reviewCount ?? 0) - (a.reviewCount ?? 0),
+      );
+    } else if (sort === 'downloads') {
       list = [...list].sort((a, b) => (b.downloads ?? -1) - (a.downloads ?? -1));
     } else if (sort === 'name') {
       list = [...list].sort((a, b) => a.name.localeCompare(b.name));
     }
     return list;
   }, [activeTag, data, hideInstalled, isInstalled, query, sort]);
+
+  const reviewTarget = useMemo(
+    () => (reviewTargetId ? (data?.plugins.find((p) => p.id === reviewTargetId) ?? null) : null),
+    [data, reviewTargetId],
+  );
+
+  const handleToggleStar = useCallback(
+    async (plugin: CommunityPlugin) => {
+      if (starPendingIds[plugin.id]) return;
+      setStarError(null);
+      setStarPendingIds((prev) => ({ ...prev, [plugin.id]: true }));
+      try {
+        const res = await doFetch(STAR_ENDPOINT, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ pluginId: plugin.id }),
+        });
+        const body = (await res.json().catch(() => null)) as {
+          success?: boolean;
+          error?: string;
+          starred?: boolean;
+          starCount?: number;
+        } | null;
+        if (!res.ok || !body?.success || typeof body.starred !== 'boolean' || typeof body.starCount !== 'number') {
+          throw new Error(body?.error || (zh ? '标星操作失败' : 'Failed to update star'));
+        }
+        const nextStarred = body.starred;
+        const nextLocalCount = body.starCount;
+        setData((prev) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            plugins: prev.plugins.map((item) => {
+              if (item.id !== plugin.id) return item;
+              return {
+                ...item,
+                starred: nextStarred,
+                localStars: nextLocalCount,
+                stars: computeUpdatedStarTotal(item, nextLocalCount),
+              };
+            }),
+          };
+        });
+      } catch (e) {
+        setStarError(e instanceof Error ? e.message : String(e));
+      } finally {
+        setStarPendingIds((prev) => {
+          const copy = { ...prev };
+          delete copy[plugin.id];
+          return copy;
+        });
+      }
+    },
+    [doFetch, starPendingIds, zh],
+  );
+
+  const handleReviewsChanged = useCallback((pluginId: string, nextSummary: CommunityPluginFeedbackSummary) => {
+    setData((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        plugins: prev.plugins.map((item) => {
+          if (item.id !== pluginId) return item;
+          return {
+            ...item,
+            starred: nextSummary.starred,
+            localStars: nextSummary.starCount,
+            stars: computeUpdatedStarTotal(item, nextSummary.starCount),
+            reviewCount: nextSummary.reviewCount,
+            averageRating: nextSummary.averageRating,
+            myRating: nextSummary.myRating,
+          };
+        }),
+      };
+    });
+  }, []);
 
   const setInstallState = useCallback((id: string, next: InstallState | null) => {
     setInstallStates((prev) => {
@@ -847,6 +921,9 @@ export function PluginCommunityPanel({
           className="px-3 py-2 text-sm bg-white border border-gray-200 rounded-lg text-gray-600 cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-500/30"
         >
           <option value="recommended">{zh ? '推荐排序' : 'Recommended'}</option>
+          <option value="latest">{zh ? '最新发布' : 'Latest release'}</option>
+          <option value="stars">{zh ? '最多标星' : 'Most starred'}</option>
+          <option value="rating">{zh ? '评分最高' : 'Top rated'}</option>
           <option value="downloads">{zh ? '下载最多' : 'Most downloaded'}</option>
           <option value="name">{zh ? '按名称' : 'By name'}</option>
         </select>
@@ -944,6 +1021,23 @@ export function PluginCommunityPanel({
           </div>
           {renderRegistryConfigForm()}
         </section>
+      )}
+
+      {starError && (
+        <div
+          role="alert"
+          className="mb-4 px-4 py-2.5 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-700 flex items-center justify-between gap-2"
+        >
+          <span>{starError}</span>
+          <button
+            type="button"
+            onClick={() => setStarError(null)}
+            aria-label={zh ? '关闭提示' : 'Dismiss notice'}
+            className="text-rose-500 hover:text-rose-800 cursor-pointer"
+          >
+            <X size={13} />
+          </button>
+        </div>
       )}
 
       {!configOpen && renderInstallToggle({ compact: true })}
@@ -1087,6 +1181,10 @@ export function PluginCommunityPanel({
           {visiblePlugins.map((plugin) => {
             const state = installStates[plugin.id];
             const installed = isInstalled(plugin);
+            const releaseDate = formatReleaseDate(plugin.publishedAt, lang);
+            const sizeLabel = formatPackageSize(plugin.packageSize);
+            const starPending = Boolean(starPendingIds[plugin.id]);
+            const reviewCount = plugin.reviewCount ?? 0;
             const installLabel = installed
               ? plugin.hasUpdate
                 ? zh
@@ -1178,20 +1276,43 @@ export function PluginCommunityPanel({
                   </div>
                 )}
 
+                {/* 发布时间与安装包大小 */}
+                {(releaseDate || sizeLabel) && (
+                  <div
+                    data-testid={`community-release-meta-${plugin.id}`}
+                    className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500"
+                  >
+                    {releaseDate && (
+                      <span
+                        className="inline-flex items-center gap-1"
+                        title={zh ? `发布时间: ${releaseDate.full}` : `Released: ${releaseDate.full}`}
+                      >
+                        <Clock size={11} className="text-gray-400 shrink-0" />
+                        <time dateTime={plugin.publishedAt ?? undefined}>
+                          {zh ? `发布于 ${releaseDate.short}` : `Released ${releaseDate.short}`}
+                        </time>
+                      </span>
+                    )}
+                    {sizeLabel && (
+                      <span
+                        className="inline-flex items-center gap-1 font-mono"
+                        title={zh ? `ZIP 包大小: ${sizeLabel}` : `ZIP package size: ${sizeLabel}`}
+                      >
+                        <HardDrive size={11} className="text-gray-400 shrink-0" />
+                        <span>{sizeLabel}</span>
+                      </span>
+                    )}
+                  </div>
+                )}
+
                 {/* 元信息 */}
                 <div className="mt-auto flex flex-col gap-2 pt-1">
                   <div className="flex items-center justify-between text-xs text-gray-400 border-t border-gray-100 pt-2 gap-2 flex-wrap">
-                    <div className="flex items-center gap-3 min-w-0">
+                    <div className="flex items-center gap-2.5 min-w-0 flex-wrap">
                       {plugin.downloads !== null && (
                         <span className="inline-flex items-center gap-1" title={zh ? '下载量' : 'Downloads'}>
                           <Download size={10} />
                           {formatCount(plugin.downloads, lang)}
-                        </span>
-                      )}
-                      {plugin.stars !== null && (
-                        <span className="inline-flex items-center gap-1" title={zh ? '收藏数' : 'Stars'}>
-                          <Star size={10} />
-                          {formatCount(plugin.stars, lang)}
                         </span>
                       )}
                       {plugin.license && <span className="font-mono">{plugin.license}</span>}
@@ -1223,7 +1344,7 @@ export function PluginCommunityPanel({
                     </div>
                   </div>
 
-                  {/* 操作区 */}
+                  {/* 操作区：安装 + GitHub 风格 +⭐ + 评价 */}
                   <div className="flex flex-wrap items-center gap-2">
                     <button
                       type="button"
@@ -1247,6 +1368,65 @@ export function PluginCommunityPanel({
                       )}
                       <span>{installLabel}</span>
                     </button>
+
+                    <button
+                      type="button"
+                      data-testid={`community-star-${plugin.id}`}
+                      aria-pressed={Boolean(plugin.starred)}
+                      disabled={starPending}
+                      onClick={() => void handleToggleStar(plugin)}
+                      title={
+                        plugin.starred
+                          ? zh
+                            ? '取消标星'
+                            : 'Unstar plugin'
+                          : zh
+                            ? '点赞标星 (+⭐)'
+                            : 'Star plugin (+⭐)'
+                      }
+                      className={`inline-flex items-center rounded-lg border text-xs font-semibold transition-colors shrink-0 cursor-pointer disabled:opacity-60 ${
+                        plugin.starred
+                          ? 'bg-amber-50 border-amber-300 text-amber-800 hover:bg-amber-100'
+                          : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50 hover:border-gray-300'
+                      }`}
+                    >
+                      <span className="inline-flex items-center gap-1 px-2 py-1.5">
+                        <Star
+                          size={12}
+                          className={plugin.starred ? 'fill-amber-400 text-amber-500' : 'text-gray-400'}
+                        />
+                        <span>{plugin.starred ? (zh ? '已⭐' : 'Starred') : '+⭐'}</span>
+                      </span>
+                      <span
+                        className={`px-2 py-1.5 border-l font-mono ${
+                          plugin.starred ? 'border-amber-200 bg-amber-100/60' : 'border-gray-200 bg-gray-50'
+                        }`}
+                      >
+                        {formatCount(plugin.stars ?? 0, lang)}
+                      </span>
+                    </button>
+
+                    <button
+                      type="button"
+                      data-testid={`community-review-btn-${plugin.id}`}
+                      onClick={() => setReviewTargetId(plugin.id)}
+                      title={zh ? '查看与发表插件评价' : 'View and write plugin reviews'}
+                      className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-colors shrink-0 cursor-pointer ${
+                        plugin.myRating
+                          ? 'bg-indigo-50/70 border-indigo-200 text-indigo-700 hover:bg-indigo-100/70'
+                          : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                      }`}
+                    >
+                      <MessageSquare size={12} />
+                      <span>
+                        {reviewCount > 0 && plugin.averageRating !== null && plugin.averageRating !== undefined
+                          ? `${plugin.averageRating.toFixed(1)}★ (${reviewCount})`
+                          : zh
+                            ? '写评价'
+                            : 'Review'}
+                      </span>
+                    </button>
+
                     {state && (
                       <span
                         className={`text-xs ${
@@ -1335,6 +1515,15 @@ export function PluginCommunityPanel({
           </div>
         </div>
       )}
+      <PluginReviewDialog
+        plugin={reviewTarget}
+        lang={lang}
+        starPending={reviewTarget ? Boolean(starPendingIds[reviewTarget.id]) : false}
+        onClose={() => setReviewTargetId(null)}
+        onToggleStar={(target) => void handleToggleStar(target)}
+        onReviewsChanged={handleReviewsChanged}
+        fetcher={doFetch}
+      />
     </div>
   );
 }
