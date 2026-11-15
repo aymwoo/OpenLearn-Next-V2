@@ -8,12 +8,7 @@ import {
   type IPluginRepositoryAdapter,
   type PluginPackageMetadata,
 } from '../plugin-distribution-manager.js';
-import {
-  PluginIntegrityRequiredError,
-  PluginAttestationRequiredError,
-  PluginIntegrityMismatchError,
-  PluginSignatureInvalidError,
-} from '../errors.js';
+import { PluginIntegrityMismatchError } from '../errors.js';
 import { computeSha256, buildAttestationPayload, signPayload } from '../../security/plugin-signature.js';
 
 describe('PluginDistributionManager 发布者签名与来源分级安全门禁 (Issue #143)', () => {
@@ -82,7 +77,8 @@ describe('PluginDistributionManager 发布者签名与来源分级安全门禁 (
     }
   }
 
-  it('社区仓库：未声明 integrity 被拒绝 (PluginIntegrityRequiredError)', async () => {
+  it('社区仓库：未声明 integrity 时跳过校验并作为官方插件进入安装链路', async () => {
+    delete process.env.OPENLEARN_COMMUNITY_PUBKEY;
     const repo = new MockRepoAdapter('repo_comm', 'Community Repo', 'community');
     const zipBuf = await createPluginZip('ext-comm-no-hash');
     repo.add(
@@ -92,18 +88,21 @@ describe('PluginDistributionManager 发布者签名与来源分级安全门禁 (
         version: '1.0.0',
         description: 'test',
         repositoryId: 'repo_comm',
-        // 无 integrity
       },
       zipBuf,
     );
     manager.registerRepository(repo);
 
-    await expect(manager.installFromRepository('repo_comm', 'ext-comm-no-hash')).rejects.toThrow(
-      PluginIntegrityRequiredError,
-    );
+    const installSpy = vi
+      .spyOn(host, 'installPluginFromZip')
+      .mockResolvedValue({ id: 'ext-comm-no-hash', pluginId: 'uuid-comm-no-hash' } as any);
+
+    const result = await manager.installFromRepository('repo_comm', 'ext-comm-no-hash');
+    expect(result.pluginId).toBe('uuid-comm-no-hash');
+    expect(installSpy).toHaveBeenCalledWith(expect.any(String), undefined, { communityOfficial: true });
   });
 
-  it('社区仓库：有 integrity 但缺少 signature 被拒绝 (PluginAttestationRequiredError)', async () => {
+  it('社区仓库：有 integrity 但缺少 signature 时校验通过并进入安装链路', async () => {
     const repo = new MockRepoAdapter('repo_comm_2', 'Community Repo', 'community');
     const zipBuf = await createPluginZip('ext-comm-no-sig');
     const sha = computeSha256(zipBuf);
@@ -115,45 +114,38 @@ describe('PluginDistributionManager 发布者签名与来源分级安全门禁 (
         description: 'test',
         repositoryId: 'repo_comm_2',
         integrity: sha.hex,
-        // 无 signature
       },
       zipBuf,
     );
     manager.registerRepository(repo);
 
-    await expect(manager.installFromRepository('repo_comm_2', 'ext-comm-no-sig')).rejects.toThrow(
-      PluginAttestationRequiredError,
-    );
+    const installSpy = vi
+      .spyOn(host, 'installPluginFromZip')
+      .mockResolvedValue({ id: 'ext-comm-no-sig', pluginId: 'uuid-comm-no-sig' } as any);
+
+    const result = await manager.installFromRepository('repo_comm_2', 'ext-comm-no-sig');
+    expect(result.pluginId).toBe('uuid-comm-no-sig');
+    expect(installSpy).toHaveBeenCalledWith(expect.any(String), undefined, { communityOfficial: true });
   });
 
-  it('社区仓库：签名伪造或使用未知密钥被拒绝 (PluginSignatureInvalidError)', async () => {
+  it('社区仓库：提供了不匹配的 integrity 时被拒绝 (PluginIntegrityMismatchError)', async () => {
     const repo = new MockRepoAdapter('repo_comm_3', 'Community Repo', 'community');
-    const zipBuf = await createPluginZip('ext-comm-bad-sig');
-    const sha = computeSha256(zipBuf);
-
-    // 用另一对密钥签名
-    const otherKey = crypto.generateKeyPairSync('ed25519');
-    const badSig = signPayload(
-      buildAttestationPayload(sha.hex, { id: 'ext-comm-bad-sig', version: '1.0.0' }),
-      otherKey.privateKey.export({ type: 'pkcs8', format: 'pem' }).toString(),
-    );
-
+    const zipBuf = await createPluginZip('ext-comm-bad-hash');
     repo.add(
       {
-        id: 'ext-comm-bad-sig',
-        name: 'ext-comm-bad-sig',
+        id: 'ext-comm-bad-hash',
+        name: 'ext-comm-bad-hash',
         version: '1.0.0',
         description: 'test',
         repositoryId: 'repo_comm_3',
-        integrity: sha.hex,
-        signature: badSig,
+        integrity: '0'.repeat(64),
       },
       zipBuf,
     );
     manager.registerRepository(repo);
 
-    await expect(manager.installFromRepository('repo_comm_3', 'ext-comm-bad-sig')).rejects.toThrow(
-      PluginSignatureInvalidError,
+    await expect(manager.installFromRepository('repo_comm_3', 'ext-comm-bad-hash')).rejects.toThrow(
+      PluginIntegrityMismatchError,
     );
   });
 

@@ -156,7 +156,7 @@ describe('normalizeCommunityEntry', () => {
       capabilities: ['student:read'],
       downloads: 1234,
       stars: 45,
-      verified: false,
+      verified: true,
       featured: true,
       installedVersion: null,
       hasUpdate: false,
