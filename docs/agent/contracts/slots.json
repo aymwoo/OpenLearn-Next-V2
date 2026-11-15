@@ -30,8 +30,11 @@
     "classroom.countdown.action",
     "classroom.countdown.widget",
     "classroom.diagnostic.feed",
+    "classroom.hardware_bridge.addon",
     "classroom.header.action",
     "classroom.leaderboard.action",
+    "classroom.macro_runner.action",
+    "classroom.monitor.header_action",
     "classroom.notification.tabs",
     "classroom.pacing.dashboard",
     "classroom.portal.course_badge",
@@ -50,8 +53,13 @@
     "classroom.seating.seat_badge",
     "classroom.seating.summary",
     "classroom.seating.toolbar",
+    "classroom.sessions.action",
+    "classroom.showcase_diff.action",
     "classroom.stage.display.ticker",
+    "classroom.submissions.toolbar",
     "classroom.tool",
+    "classroom.toolbar.quick_action",
+    "classroom.top_performers.action",
     "classroom.topbar.action",
     "classroom.topbar.pill",
     "command_palette.item",
@@ -138,5 +146,5 @@
     "anchor:whiteboard-toolbar:presentation",
     "anchor:whiteboard-toolbar:rollcall"
   ],
-  "total": 125
+  "total": 133
 }

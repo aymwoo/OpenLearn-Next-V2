@@ -181,7 +181,16 @@ export type ExtensionSlot =
   | 'timetable.import.source'
   | 'timetable.entry.action'
   // ── 全局壳层后台任务 ──
-  | 'header.async_task.item';
+  | 'header.async_task.item'
+  // ── 互动课堂顶栏与课中高级教学弹窗扩展槽（Pure Additive）──
+  | 'classroom.toolbar.quick_action' // 课堂顶部右侧快捷工具栏扩展（与告警/学情/协作按钮并排）
+  | 'classroom.monitor.header_action' // 右侧「学生专注力监控」栏头部操作扩展
+  | 'classroom.submissions.toolbar' // 课中「实时提交数据」工具栏扩展
+  | 'classroom.top_performers.action' // 「随堂测验榜 (Top Performers)」顶部动作区扩展
+  | 'classroom.showcase_diff.action' // 「多屏对比投屏批注」模态窗顶栏动作扩展
+  | 'classroom.macro_runner.action' // 「课堂宏动作编排中枢」动作区扩展
+  | 'classroom.hardware_bridge.addon' // 「硬件教具生态网关」设置与监控面板扩展
+  | 'classroom.sessions.action'; // 「课堂会话与档案管理」顶栏动作扩展
 
 // v0.2.6: 锚点槽位（开放命名空间）
 export type AnchorSlot = `anchor:${string}`;
@@ -378,6 +387,14 @@ export type AnyExtensionSlot = ExtensionSlot | AnchorSlot | (string & {});
 | `header.async_task.item`             | `src/components/AppHeader.tsx`                                                                                                          | `{ lang, activeRole, teacherTab, setTeacherTab }`                                                                              |
 | `command_palette.item`               | `src/features/command-palette/command-palette.tsx`（数据型，宿主渲染命令项）                                                            | `{ title, description, category, keywords, commandType, payload, shortcut }`                                                   |
 | `quick_insert.item`                  | `src/features/quick-insert/quick-insert-menu.tsx`（数据型，宿主渲染斜杠菜单项）                                                         | `{ title, description, category, keywords, commandType, payload }`                                                             |
+| `classroom.toolbar.quick_action`     | `src/features/classroom/ClassroomToolbarQuickActions.tsx`                                                                               | `{ lessonId, lang }`                                                                                                           |
+| `classroom.monitor.header_action`    | `src/components/LiveClassroomView.tsx`（右侧「学生专注力监控」栏标题区）                                                                | `{ lessonId, classId, studentCount, onlineCount, lang }`                                                                       |
+| `classroom.submissions.toolbar`      | `src/features/classroom/LiveSubmissionsPanel.tsx`                                                                                       | `{ lessonId, classId, count, lang }`                                                                                           |
+| `classroom.top_performers.action`    | `src/features/teacher/TopPerformersWidget.tsx`                                                                                          | `{ lessonId, classId, performersCount, lang }`                                                                                 |
+| `classroom.showcase_diff.action`     | `src/features/classroom/showcase-diff/ShowcaseDiffModal.tsx`                                                                            | `{ selectedIds, layout, worksCount, isAnonymous, lang }`                                                                       |
+| `classroom.macro_runner.action`      | `src/features/classroom/ecosystem/macro-engine/ClassroomMacroRunnerModal.tsx`                                                           | `{ selectedMacroId, status, lessonId, classId }`                                                                               |
+| `classroom.hardware_bridge.addon`    | `src/features/classroom/ecosystem/hardware-bridge/HardwareBridgeSettingsModal.tsx`                                                      | `{ simEnabled, eventCount }`                                                                                                   |
+| `classroom.sessions.action`          | `src/features/classroom/ClassroomSessionManager.tsx`                                                                                    | `{ totalSessions, lang }`                                                                                                      |
 
 #### 1.1 锚点槽位（`anchor:*`，8 个）
 
@@ -1393,20 +1410,84 @@ manifest 声明式写法同样可用（`contributes` 已收录这两个键）：
 
 > **远程 / Worker 插件唯一可见的 UI 入口就是这两个槽位。** 它们不渲染插件自己的 UI，因此无法借它们绕过前端沙箱能力边界——宿主只按声明的 `commandType` 派发命令。
 
+### 12.8 互动课堂顶栏与高级教学弹窗扩展槽位
+
+为避免破坏既有课堂扩展点，以下 8 个槽位以纯增量方式挂载于互动白板上课页顶部快捷区、右侧监控栏、实时提交/测验榜面板及高级教学弹窗内部，供插件追加紧凑型操作按钮或面板扩展：
+
+- **`classroom.toolbar.quick_action`**：`ClassroomToolbarQuickActions.tsx`（顶部右侧快捷工具图标区）—— `{ lessonId, lang }`，适合追加轻量级快捷弹窗入口图标按钮。
+- **`classroom.monitor.header_action`**：`LiveClassroomView.tsx`（右侧「学生专注力监控」栏标题区）—— `{ lessonId, classId, studentCount, onlineCount, lang }`，适合追加点名、小组监控或专注度统计动作。
+- **`classroom.submissions.toolbar`**：`LiveSubmissionsPanel.tsx`（课中「实时提交数据」工具栏）—— `{ lessonId, classId, count, lang }`，适合追加作答导出、筛选或批量点评按钮。
+- **`classroom.top_performers.action`**：`TopPerformersWidget.tsx`（随堂测验榜顶部动作区）—— `{ lessonId, classId, performersCount, lang }`，适合追加榜首激励或数据广播动作。
+- **`classroom.showcase_diff.action`**：`ShowcaseDiffModal.tsx`（多屏对比投屏批注顶栏）—— `{ selectedIds, layout, worksCount, isAnonymous, lang }`，适合追加AI讲评生成、批注归档等按钮。
+- **`classroom.macro_runner.action`**：`ClassroomMacroRunnerModal.tsx`（课堂宏动作编排中枢动作区）—— `{ selectedMacroId, status, lessonId, classId }`，适合注入自定义教学宏步骤扩展或执行后联动触发器。
+- **`classroom.hardware_bridge.addon`**：`HardwareBridgeSettingsModal.tsx`（硬件教具生态网关设置与监控面板内）—— `{ simEnabled, eventCount }`，适合追加串口/蓝牙/物联网硬件适配器配置卡。
+- **`classroom.sessions.action`**：`ClassroomSessionManager.tsx`（课堂会话与档案管理顶栏动作区）—— `{ totalSessions, lang }`，适合追加批量归档或外部系统同步动作。
+
+```tsx
+// 互动课堂顶栏快捷区与高级弹窗增量槽位注册示例
+ctx.ui.registerExtensionPoint('classroom.toolbar.quick_action', {
+  id: 'ext-quick-tool/toolbar',
+  label: '随堂扩展工具',
+  component: () => import('./QuickToolbarButton'),
+});
+
+ctx.ui.registerExtensionPoint('classroom.monitor.header_action', {
+  id: 'ext-quick-tool/monitor-action',
+  label: '监控筛选',
+  component: () => import('./MonitorHeaderAction'),
+});
+
+ctx.ui.registerExtensionPoint('classroom.submissions.toolbar', {
+  id: 'ext-quick-tool/submissions-export',
+  label: '导出提交',
+  component: () => import('./SubmissionsToolbarAction'),
+});
+
+ctx.ui.registerExtensionPoint('classroom.top_performers.action', {
+  id: 'ext-quick-tool/top-award',
+  label: '一键嘉奖',
+  component: () => import('./TopPerformersAction'),
+});
+
+ctx.ui.registerExtensionPoint('classroom.showcase_diff.action', {
+  id: 'ext-quick-tool/diff-ai',
+  label: 'AI 对比点评',
+  component: () => import('./ShowcaseDiffAction'),
+});
+
+ctx.ui.registerExtensionPoint('classroom.macro_runner.action', {
+  id: 'ext-quick-tool/macro-addon',
+  label: '自定义宏联动',
+  component: () => import('./MacroRunnerAction'),
+});
+
+ctx.ui.registerExtensionPoint('classroom.hardware_bridge.addon', {
+  id: 'ext-quick-tool/serial-bridge',
+  label: '串口答题器接入',
+  component: () => import('./HardwareBridgeAddon'),
+});
+
+ctx.ui.registerExtensionPoint('classroom.sessions.action', {
+  id: 'ext-quick-tool/session-sync',
+  label: '同步教务归档',
+  component: () => import('./SessionsAction'),
+});
+```
+
 ---
 
 ## 13. 统计口径
 
-| 指标                                                           | 数值                                      |
-| -------------------------------------------------------------- | ----------------------------------------- |
-| `ExtensionSlot` 联合类型成员                                   | **125**                                   |
-| 生产调用点（`src/**/*.tsx`，排除 `__tests__`）上的固定名槽位值 | **121**（`99` / `98` / `116` 为历史记录） |
-| 其中属于 `ExtensionSlot` 联合类型                              | **121**                                   |
-| 不在联合类型内但有渲染器的字符串槽位                           | **0**                                     |
-| 已挂载的 `anchor:*` 锚点槽位                                   | **8**                                     |
-| 无渲染器的 `ExtensionSlot` 成员（数据型 / 服务端消费）         | **4**（见 §12.7、§11.6）                  |
-| `ExtensionPointRenderer` 唯一槽位值总数（固定名 + 锚点）       | 随版本增长（含 8 个 `anchor:*` 锚点）     |
-| 在本页有使用说明的槽位（含 props 表 / 专项小节 / 代码示例）    | **133 / 133**                             |
+| 指标                                                           | 数值                                              |
+| -------------------------------------------------------------- | ------------------------------------------------- |
+| `ExtensionSlot` 联合类型成员                                   | **133**                                           |
+| 生产调用点（`src/**/*.tsx`，排除 `__tests__`）上的固定名槽位值 | **129**（`99` / `98` / `116` / `121` 为历史记录） |
+| 其中属于 `ExtensionSlot` 联合类型                              | **129**                                           |
+| 不在联合类型内但有渲染器的字符串槽位                           | **0**                                             |
+| 已挂载的 `anchor:*` 锚点槽位                                   | **8**                                             |
+| 无渲染器的 `ExtensionSlot` 成员（数据型 / 服务端消费）         | **4**（见 §12.7、§11.6）                          |
+| `ExtensionPointRenderer` 唯一槽位值总数（固定名 + 锚点）       | 随版本增长（含 8 个 `anchor:*` 锚点）             |
+| 在本页有使用说明的槽位（含 props 表 / 专项小节 / 代码示例）    | **141 / 141**                                     |
 
 > 复核命令：`python3 audit-tools/extract_slots.py --repo .`（槽位清单真值）与 `python3 audit-tools/slots_coverage.py --repo .`（文档覆盖分级）。两者均已接入 `bash audit-tools/run.sh`：**L0（文档中完全不存在）计为 drift 并阻断门禁**，L1/L2 仅作提示输出。
 >
@@ -1415,3 +1496,4 @@ manifest 声明式写法同样可用（`contributes` 已收录这两个键）：
 > 2026-10-17 更新（Issue #86）：机房排座新增 `computer_lab.seating.toolbar` / `computer_lab.unassigned.item` / `computer_lab.seating.sidebar` 3 个槽位，并支持拖拽调座与点击/拖拽交换。
 > 2026-10-26 复核（v0.7.4）：`assignment.file.preview` 于 v0.7.4 加入 `ExtensionSlot`，成员数由 119 增至 **120**。该槽位见 §10.1。
 > 2026-11-14 更新：白板域新增 `whiteboard.selection.toolbar`、`whiteboard.context_menu`、`whiteboard.pagebar.action`、`whiteboard.page_drawer.action`、`whiteboard.properties.addon` 5 个扩展槽位，`ExtensionSlot` 成员数由 120 增至 **125**（总槽位数含 8 个锚点共 **133** 个），详见 §10。
+> 2026-11-15 更新：互动课堂顶栏与高级弹窗新增 `classroom.toolbar.quick_action`、`classroom.monitor.header_action`、`classroom.submissions.toolbar`、`classroom.top_performers.action`、`classroom.showcase_diff.action`、`classroom.macro_runner.action`、`classroom.hardware_bridge.addon`、`classroom.sessions.action` 8 个增量扩展槽位，`ExtensionSlot` 成员数由 125 增至 **133**（总槽位数含 8 个锚点共 **141** 个），详见 §12.8。

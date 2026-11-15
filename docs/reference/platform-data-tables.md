@@ -476,7 +476,7 @@ MFE 远端登记。MFE 执行边界已移除，表保留作历史数据兼容。
 
 <!-- AUTO-GENERATED:table-inventory BEGIN -->
 
-共 **90** 张表（迁移 55 个，金样生成于 2026-11-15T05:50:58.694Z）。列清单为列名（类型与约束见迁移 SQL）：
+共 **91** 张表（迁移 56 个，金样生成于 2026-11-15T07:17:47.233Z）。列清单为列名（类型与约束见迁移 SQL）：
 
 - `_academic_year_backfill`: backfilled_at, id
 - `_class_passcode_encryption`: id, note
@@ -500,6 +500,7 @@ MFE 远端登记。MFE 执行边界已移除，表保留作历史数据兼容。
 - `class_students`: class_id, joined_at, student_id
 - `classes`: class_passcode, class_passcode_expires_at, created_at, description, id, lab_id, name, owner_user_id
 - `classroom_buzzers`: created_at, id, lesson_id, session_id, status, title, winner_response_time_ms, winner_student_id, winner_student_name
+- `classroom_collab_whiteboards`: class_id, grouping_strategy, groups_json, id, inquiries_json, lesson_id, likes_json, mission_prompt, spotlight_group_id, strokes_json, updated_at, updated_by
 - `classroom_danmaku`: created_at, id, lesson_id, sender_id, sender_name, session_id, text, top_percent, type, voice_duration_seconds
 - `classroom_exit_tickets`: challenge_answer, core_answer, created_at, feedback, id, is_correct, lesson_id, puzzled_concept, rating, session_id, student_id, student_name, tier_level
 - `classroom_feed`: actor_id, actor_name, class_id, created_at, id, lesson_id, message, session_id, source, type
