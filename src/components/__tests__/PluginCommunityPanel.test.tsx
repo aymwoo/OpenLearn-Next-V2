@@ -199,6 +199,68 @@ describe('PluginCommunityPanel', () => {
       expect(await screen.findByText('社区注册表暂时没有可用插件')).toBeTruthy();
     });
 
+    it('displays loading spinner and indeterminate progress animation during initial load and manual refresh', async () => {
+      const pendingResolvers: Array<(res: Response) => void> = [];
+      let requestCount = 0;
+      const fetcher: typeof fetch = vi.fn((input) => {
+        const url = typeof input === 'string' ? input : input.toString();
+        if (!url.startsWith('/api/plugins/community')) {
+          return Promise.resolve(json({ success: false }, 404));
+        }
+        requestCount += 1;
+        return new Promise<Response>((resolve) => {
+          pendingResolvers.push(resolve);
+        });
+      }) as unknown as typeof fetch;
+
+      renderPanel({ fetcher });
+
+      // 初始载入中动画
+      const initialBanner = await screen.findByTestId('community-loading-indicator');
+      expect(within(initialBanner).getByText('正在载入插件社区…')).toBeTruthy();
+      expect(initialBanner.querySelector('.animate-spin')).toBeTruthy();
+      const initialProgress = initialBanner.querySelector('progress');
+      expect(initialProgress).toBeTruthy();
+      expect(initialProgress?.hasAttribute('value')).toBe(false);
+
+      const initialBtn = screen.getByTestId('community-refresh-btn') as HTMLButtonElement;
+      expect(initialBtn.disabled).toBe(true);
+      expect(initialBtn.getAttribute('aria-busy')).toBe('true');
+      expect(initialBtn.textContent).toContain('载入中…');
+      expect(initialBtn.querySelector('.animate-spin')).toBeTruthy();
+
+      // 完成首次加载
+      pendingResolvers.shift()?.(json(registryBody()));
+      expect(await screen.findByText('作业中心')).toBeTruthy();
+      expect(screen.queryByTestId('community-loading-indicator')).toBeNull();
+
+      const readyBtn = screen.getByTestId('community-refresh-btn') as HTMLButtonElement;
+      expect(readyBtn.disabled).toBe(false);
+      expect(readyBtn.textContent).toContain('刷新');
+
+      // 手动点击刷新，应立即进入刷新载入动画并禁用重复点击
+      fireEvent.click(readyBtn);
+      const refreshBanner = await screen.findByTestId('community-loading-indicator');
+      expect(within(refreshBanner).getByText('正在刷新插件社区…')).toBeTruthy();
+      expect(refreshBanner.querySelector('.animate-spin')).toBeTruthy();
+      const refreshProgress = refreshBanner.querySelector('progress');
+      expect(refreshProgress).toBeTruthy();
+      expect(refreshProgress?.getAttribute('aria-label')).toBe('插件社区刷新进度');
+      expect(refreshProgress?.hasAttribute('value')).toBe(false);
+
+      const refreshingBtn = screen.getByTestId('community-refresh-btn') as HTMLButtonElement;
+      expect(refreshingBtn.disabled).toBe(true);
+      expect(refreshingBtn.getAttribute('aria-busy')).toBe('true');
+      expect(refreshingBtn.textContent).toContain('刷新中…');
+      fireEvent.click(refreshingBtn);
+      expect(requestCount).toBe(2);
+
+      // 完成刷新后恢复展示最新插件卡片
+      pendingResolvers.shift()?.(json(registryBody({ plugins: [makePlugin({ name: '作业中心（已刷新）' })] })));
+      expect(await screen.findByText('作业中心（已刷新）')).toBeTruthy();
+      expect(screen.queryByTestId('community-loading-indicator')).toBeNull();
+    });
+
     it('surfaces a registry error and recovers on retry with a cache-busting refresh', async () => {
       let attempt = 0;
       const { fetcher, calls } = makeFetcher([

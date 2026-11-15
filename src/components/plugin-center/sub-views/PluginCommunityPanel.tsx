@@ -318,15 +318,15 @@ function SkeletonCard() {
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm flex flex-col gap-3 animate-pulse">
       <div className="flex items-start gap-3">
-        <div className="w-11 h-11 rounded-lg bg-gray-100 shrink-0" />
+        <div className="w-11 h-11 rounded-lg bg-gray-200/70 shrink-0" />
         <div className="flex-1 space-y-2">
-          <div className="h-4 bg-gray-100 rounded w-2/3" />
-          <div className="h-3 bg-gray-100 rounded w-1/3" />
+          <div className="h-4 bg-gray-200/70 rounded w-2/3" />
+          <div className="h-3 bg-gray-200/70 rounded w-1/3" />
         </div>
       </div>
-      <div className="h-3 bg-gray-100 rounded" />
-      <div className="h-3 bg-gray-100 rounded w-5/6" />
-      <div className="h-8 bg-gray-100 rounded-lg mt-2" />
+      <div className="h-3 bg-gray-200/70 rounded" />
+      <div className="h-3 bg-gray-200/70 rounded w-5/6" />
+      <div className="h-8 bg-gray-200/70 rounded-lg mt-2" />
     </div>
   );
 }
@@ -357,6 +357,7 @@ export function PluginCommunityPanel({
   const [hideInstalled, setHideInstalled] = useState(false);
   const [installStates, setInstallStates] = useState<Record<string, InstallState>>({});
   const activeInstallIdsRef = useRef<Set<string>>(new Set());
+  const registryRequestIdRef = useRef(0);
   /** 本次会话内已成功安装的 id，用于无需等待刷新即可更新卡片状态。 */
   const [justInstalled, setJustInstalled] = useState<Record<string, true>>({});
   const [configOpen, setConfigOpen] = useState(false);
@@ -386,6 +387,7 @@ export function PluginCommunityPanel({
 
   const loadRegistry = useCallback(
     async (forceRefresh: boolean, tokenOverride?: string) => {
+      const requestId = ++registryRequestIdRef.current;
       setStatus('loading');
       setError(null);
       const effectiveToken = tokenOverride !== undefined ? tokenOverride : giteeToken;
@@ -395,6 +397,7 @@ export function PluginCommunityPanel({
           effectiveToken ? { headers: { 'x-gitee-token': effectiveToken } } : undefined,
         );
         const body = (await res.json()) as CommunityRegistryResponse;
+        if (requestId !== registryRequestIdRef.current) return;
         if (!res.ok || !body?.success) {
           throw new Error(body?.error || (zh ? '服务端拒绝请求' : 'Request rejected by the server'));
         }
@@ -410,6 +413,7 @@ export function PluginCommunityPanel({
           setStatus('ready');
         }
       } catch (e) {
+        if (requestId !== registryRequestIdRef.current) return;
         setConfigNotice(null);
         setError(e instanceof Error ? e.message : String(e));
         setStatus('error');
@@ -1335,6 +1339,20 @@ export function PluginCommunityPanel({
     );
   }
 
+  const isRefreshing = status === 'loading' && data !== null;
+  const refreshButtonLabel =
+    status === 'loading'
+      ? isRefreshing
+        ? zh
+          ? '刷新中…'
+          : 'Refreshing…'
+        : zh
+          ? '载入中…'
+          : 'Loading…'
+      : zh
+        ? '刷新'
+        : 'Refresh';
+
   return (
     <div className="flex-1 overflow-y-auto p-6 bg-gray-50/30">
       {/* 工具栏 */}
@@ -1386,12 +1404,18 @@ export function PluginCommunityPanel({
 
         <button
           type="button"
+          data-testid="community-refresh-btn"
           onClick={() => void loadRegistry(true)}
           disabled={status === 'loading'}
-          className="flex items-center gap-1.5 text-xs font-semibold border border-gray-200 rounded-lg px-3 py-2 bg-white shadow-sm text-gray-600 hover:text-gray-900 hover:border-gray-300 transition-colors disabled:opacity-50 cursor-pointer"
+          aria-busy={status === 'loading'}
+          className="flex items-center gap-1.5 text-xs font-semibold border border-gray-200 rounded-lg px-3 py-2 bg-white shadow-sm text-gray-600 hover:text-gray-900 hover:border-gray-300 transition-colors disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer"
         >
-          {status === 'loading' ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
-          <span>{zh ? '刷新' : 'Refresh'}</span>
+          {status === 'loading' ? (
+            <Loader2 size={14} className="animate-spin text-indigo-600" aria-hidden="true" />
+          ) : (
+            <RefreshCw size={14} aria-hidden="true" />
+          )}
+          <span>{refreshButtonLabel}</span>
         </button>
 
         <button
@@ -1697,12 +1721,55 @@ export function PluginCommunityPanel({
         </div>
       )}
 
-      {/* 加载骨架 */}
+      {/* 加载状态指示与骨架 */}
       {status === 'loading' && (
-        <div className="grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-3 gap-4">
-          {Array.from({ length: 6 }, (_, i) => (
-            <SkeletonCard key={i} />
-          ))}
+        <div className="space-y-4">
+          <div
+            data-testid="community-loading-indicator"
+            role="status"
+            aria-live="polite"
+            className="bg-white border border-indigo-100 rounded-xl p-4 shadow-sm"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center shrink-0">
+                <Loader2 size={18} className="animate-spin text-indigo-600" aria-hidden="true" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold text-gray-900">
+                  {isRefreshing
+                    ? zh
+                      ? '正在刷新插件社区…'
+                      : 'Refreshing community plugins…'
+                    : zh
+                      ? '正在载入插件社区…'
+                      : 'Loading community plugins…'}
+                </p>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  {zh
+                    ? '正在获取最新插件目录与版本状态，请稍候'
+                    : 'Fetching the latest plugin catalog and release status…'}
+                </p>
+              </div>
+            </div>
+            <progress
+              className="community-loading-progress block w-full h-1.5 mt-3"
+              aria-label={
+                isRefreshing
+                  ? zh
+                    ? '插件社区刷新进度'
+                    : 'Refreshing community plugins'
+                  : zh
+                    ? '插件社区载入进度'
+                    : 'Loading community plugins'
+              }
+            />
+          </div>
+
+          <div className="grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-3 gap-4" aria-hidden="true">
+            {Array.from({ length: 6 }, (_, i) => (
+              <SkeletonCard key={i} />
+            ))}
+          </div>
         </div>
       )}
 

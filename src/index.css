@@ -677,3 +677,63 @@ dialog::backdrop {
     opacity: 0.7;
   }
 }
+
+progress.community-loading-progress {
+  appearance: none;
+  border: 0 solid;
+  overflow: clip;
+  container-type: inline-size;
+  border-radius: 1e5px;
+  background: #e0e7ff;
+  --progress-bar-fill: #4f46e5;
+  --progress-bar-indeterminate-size: 30%;
+  --progress-bar-indeterminate-animation-duration: 1.4s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  progress.community-loading-progress {
+    --progress-bar-indeterminate-animation-duration: 10s;
+  }
+}
+
+progress.community-loading-progress:dir(rtl) {
+  --progress-bar-indeterminate-animation: community-progress-indeterminate
+    var(--progress-bar-indeterminate-animation-duration) infinite linear reverse;
+}
+
+progress.community-loading-progress:indeterminate {
+  --progress-bar-animation: var(
+    --progress-bar-indeterminate-animation,
+    community-progress-indeterminate var(--progress-bar-indeterminate-animation-duration) infinite linear
+  );
+}
+
+progress.community-loading-progress::-webkit-progress-bar {
+  background: transparent;
+}
+
+progress.community-loading-progress::-webkit-progress-value {
+  background: var(--progress-bar-fill);
+  border-radius: 1e5px;
+  animation: var(--progress-bar-animation, revert-rule);
+}
+
+progress.community-loading-progress::-moz-progress-bar {
+  background: var(--progress-bar-fill);
+  border-radius: 1e5px;
+  animation: var(--progress-bar-animation, revert-rule);
+}
+
+@keyframes community-progress-indeterminate {
+  from,
+  to {
+    inline-size: var(--progress-bar-indeterminate-size);
+    margin-right: auto;
+  }
+  from {
+    translate: -100%;
+  }
+  to {
+    translate: 100cqi;
+  }
+}
