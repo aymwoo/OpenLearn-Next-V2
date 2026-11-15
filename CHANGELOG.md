@@ -10,8 +10,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [0.7.16] - 2026-11-15
+
 ### Features
 
+- **登录页学生端自助查询学号并一键回填（Issue #538, PR #539）**：
+  - 新增迁移 `056_public_student_lookup.sql`（同步更新 `migrations/README.md` 与 `migrations/schema-golden.json`），在站点设置中增加开关控制是否允许登录页公开按姓名查询学号（默认安全受控、支持限流保护）；
+  - 在 `server/routes/roster.ts` 与 `server/services/roster-service.ts` 提供学生学号查询接口，在 `src/components/AdminPanel.tsx` 提供管理员开关配置，并在 `src/components/LoginPage.tsx` 学生端支持检索与一键回填学号。
+- **社区插件更新提醒与更新前快照回滚（PR #537）**：
+  - 在 `packages/core/plugin-host/update-snapshot.ts` 与安装流程新增更新前插件快照备份与回滚能力，结合 `server/services/version-fetcher.ts` 检测社区插件可用更新；
+  - 在 `PluginCenter.tsx` / `PluginCommunityPanel.tsx` / `PluginStorePanel.tsx` 展示更新提示并新增 `PluginSnapshotRollbackModal.tsx` 支持一键回退历史快照。
+- **社区插件市场展示发布时间、ZIP 体积与实时 Gitee Star（PR #525）**：
+  - 新增 `server/services/gitee-stars.ts` 并扩展 `community-registry.ts` 与插件中心社区卡片，展示插件发布时间、压缩包大小与 Gitee 仓库实时 Star 数。
+- **社区插件按官方同等流程直装（PR #523）**：
+  - 移除社区插件安装时的额外公钥与风险分级拦截门禁，简化社区插件安装体验。
+- **互动白板上下文扩展槽、沙盒视图渲染器与现代 Web 增强（PR #517）**：
+  - 为白板工具栏、页面栏与属性侧栏新增上下文 UI 扩展槽并支持前端沙盒视图渲染，补充现代 Web 工具封装，同步更新插槽与架构文档契约。
 - **管理后台「站点信息设置」新增「运行时策略」入口**，将课件网络遥测、HTTP 访问日志与未签名本地插件策略改为可管理配置：
   - 新增迁移 `053_runtime_admin_policies.sql`（`site_settings.bridge_hook_telemetry` / `http_access_log_mode` / `http_access_log_ignore` / `http_slow_ms` / `allow_unsigned_plugins` 均默认 `NULL`，禁止写成默认值以免掩盖环境变量回退），同步更新 `migrations/README.md` 与 `schema-golden.json`；
   - 生效优先级为 **界面显式值（含显式关闭）> 未配置时环境变量回退 > 历史默认**。管理员可将存储值清为 `null` 以恢复 ENV/默认；保存不会改写真实 `.env`；
@@ -58,6 +72,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixes
 
+- **登录页展示 `/health` 实时实例版本号（PR #536）**：登录页版本徽标改为从 `/health` 动态读取平台实例版本号，替代硬编码 `V2.0`。
+- **课堂实时工具栏接线与非破坏性插件扩展槽（PR #535）**：新增迁移 `055_classroom_collab_whiteboard.sql` 与协作白板路由，完善课堂工具栏功能、分组协作白板、宏运行与插件扩展槽。
+- **新手引导 Tour 按账号持久化关闭状态并支持全步骤跳过（PR #534）**：新增迁移 `054_user_onboarding_tour_status.sql`，支持将引导关闭状态按用户持久化到服务端并在所有步骤直接跳过。
+- **恢复默认官方 Gitee 社区注册表地址（PR #532, #533）**：修复默认社区注册表地址配置，未覆盖时默认指向官方 Gitee 注册表。
+- **命令面板快捷键缺失 `event.key` 保护（PR #531）**：在 `CommandPaletteHost.tsx` 键盘监听中防护缺失 `event.key` 的事件对象。
+- **`AccessibleDialog` 忽略过期异步关闭事件（PR #526, #527）**：修复弹窗快速重开或卸载时旧异步关闭事件触发误关闭的问题。
+- **消除课堂 403 轮询刷屏、字体 CSP 报错与缺失 `favicon`（PR #518, #520）**：补全 `public/favicon.ico` / `public/favicon.svg`、字体 CSP 防护并优化无权限/非活跃课堂轮询逻辑。
+- **插件 SQL 守卫支持 `ON CONFLICT DO UPDATE SET`（PR #496）**：在 `packages/core/plugin-host/sql-guard.ts` 放行合法的 UPSERT 语句。
+- **稳定互动白板画布尺寸以消除滚动条闪烁（Fixes #485）**：按滚动条不变的 padding 盒模型计算舞台大小并预留滚动条宽度，阻断 ResizeObserver 触发的闪烁循环。
+- **全仓代码审计与一致性问题修复（PR #480）**：统一服务端与前端路径解析、定时器清理、CORS、日期处理及冗余逻辑清理。
 - **社区插件安装误报「仅管理员可安装」（Issue #514）**：
   - 修复 `src/components/plugin-center/sub-views/PluginCommunityPanel.tsx` 在 `handleInstall` 与 `uploadViaBrowser` 中将所有 `HTTP 403` 无差别映射为「仅管理员可安装社区插件，请联系管理员。」的问题；改为仅在 `403` 无业务错误码（角色鉴权失败）时展示权限提示，当服务端返回具体 `code`（如未开启 `OPENLEARN_COMMUNITY_INSTALL=1` 时的 `COMMUNITY_INSTALL_DISABLED` 或 `FORBIDDEN_DEFAULT_PASSWORD`）时直接透传 `body.error`，并将卡片错误提示由单行截断改为允许换行展示。
 
