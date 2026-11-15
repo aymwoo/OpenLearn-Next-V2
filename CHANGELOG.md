@@ -10,6 +10,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [0.7.17] - 2026-11-15
+
+### Features
+
+- **社区插件安装与刷新加载反馈体验优化（PR #541，同步 Gitee !3 / !4）**：
+  - 为社区插件市场卡片安装操作增加加载旋转指示、进度条动画（`src/index.css` `@keyframes indeterminate-progress` 与减动效降级适配）及安装进度反馈，并联动 `PluginCenter.tsx` / `PluginCommunityPanel.tsx` 与服务端社区注册表/安装流程（`server/routes/plugins.ts`、`server/services/community-registry.ts`、`packages/core/plugin-host/install.ts`）；
+  - 为社区插件列表刷新增加加载横幅与 `<progress className="community-loading-progress">` 进度条动画，补齐前后端回归测试并更新 `docs/plugin/community-plugin-registry.md`。
+
+### Docs
+
+- **前端开发规范增强（PR #541，同步 Gitee !5）**：在 `AGENTS.md` 与 `CLAUDE.md` 中补充前端 HTML/CSS/客户端 JS 开发优先调用 `modern-web-guidance` 技能的要求。
+
 ## [0.7.16] - 2026-11-15
 
 ### Features
