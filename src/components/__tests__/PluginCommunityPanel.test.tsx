@@ -2,7 +2,11 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import React from 'react';
 import { render, screen, fireEvent, waitFor, within, cleanup } from '@testing-library/react';
-import { PluginCommunityPanel, type CommunityPlugin } from '../plugin-center/sub-views/PluginCommunityPanel';
+import {
+  DEFAULT_COMMUNITY_REGISTRY_URL,
+  PluginCommunityPanel,
+  type CommunityPlugin,
+} from '../plugin-center/sub-views/PluginCommunityPanel';
 
 // 与缺失的 vitest.config.ts（jsdom + globals + setup 文件）无关：本用例以文件级
 // `@vitest-environment jsdom` 固定 DOM 环境，并显式清理 DOM —— globals 关闭时
@@ -51,8 +55,9 @@ interface RegistryBody {
   error?: string;
   envVar?: string;
   canConfigure?: boolean;
-  configSource?: 'database' | 'env' | 'none';
+  configSource?: 'database' | 'env' | 'default' | 'none';
   databaseUrl?: string | null;
+  defaultUrl?: string | null;
   hasEnvFallback?: boolean;
   installEnabled?: boolean;
   installConfigSource?: 'database' | 'env' | 'default' | null;
@@ -740,6 +745,87 @@ describe('PluginCommunityPanel', () => {
 
       fireEvent.click(screen.getByRole('button', { name: '修改插件源' }));
       expect(screen.getByTestId('community-registry-config-panel')).toBeTruthy();
+    });
+
+    it('displays the official Gitee registry JSON URL in the edit input when the user has not customized it', async () => {
+      const { fetcher } = makeFetcher([
+        (url) =>
+          url.startsWith('/api/plugins/community')
+            ? json(
+                registryBody({
+                  configured: true,
+                  source: DEFAULT_COMMUNITY_REGISTRY_URL,
+                  configSource: 'default',
+                  databaseUrl: null,
+                  defaultUrl: DEFAULT_COMMUNITY_REGISTRY_URL,
+                  hasEnvFallback: false,
+                  canConfigure: true,
+                }),
+              )
+            : undefined,
+      ]);
+
+      renderPanel({ fetcher });
+      await screen.findByText('作业中心');
+
+      fireEvent.click(screen.getByRole('button', { name: '插件源设置' }));
+      const panel = screen.getByTestId('community-registry-config-panel');
+      expect(within(panel).getByText('当前来源：官方默认（Gitee）')).toBeTruthy();
+      const input = within(panel).getByLabelText('社区插件注册表 JSON 地址') as HTMLInputElement;
+      expect(input.value).toBe(DEFAULT_COMMUNITY_REGISTRY_URL);
+    });
+
+    it('resets a database override back to the official Gitee default when no env fallback exists', async () => {
+      let dbUrl: string | null = 'https://custom.example.com/plugins.json';
+
+      const { fetcher, calls } = makeFetcher([
+        (url, init) => {
+          if (url === '/api/plugins/community/config' && init?.method === 'PUT') {
+            const parsed = JSON.parse(String(init.body)) as { registryUrl: string | null };
+            dbUrl = parsed.registryUrl;
+            return json({
+              success: true,
+              configSource: dbUrl ? 'database' : 'default',
+              databaseUrl: dbUrl,
+              activeUrl: dbUrl ?? DEFAULT_COMMUNITY_REGISTRY_URL,
+              defaultUrl: DEFAULT_COMMUNITY_REGISTRY_URL,
+              hasEnvFallback: false,
+            });
+          }
+          if (url.startsWith('/api/plugins/community')) {
+            return json(
+              registryBody({
+                configured: true,
+                source: dbUrl ?? DEFAULT_COMMUNITY_REGISTRY_URL,
+                configSource: dbUrl ? 'database' : 'default',
+                databaseUrl: dbUrl,
+                defaultUrl: DEFAULT_COMMUNITY_REGISTRY_URL,
+                hasEnvFallback: false,
+                canConfigure: true,
+              }),
+            );
+          }
+          return undefined;
+        },
+      ]);
+
+      renderPanel({ fetcher });
+      await screen.findByText('作业中心');
+
+      fireEvent.click(screen.getByRole('button', { name: '插件源设置' }));
+      const panel = screen.getByTestId('community-registry-config-panel');
+      expect(within(panel).getByText('当前来源：界面配置（覆盖官方默认）')).toBeTruthy();
+      fireEvent.click(within(panel).getByRole('button', { name: '恢复官方默认' }));
+
+      await waitFor(() => expect(screen.getByText('gitee.com')).toBeTruthy());
+      const clearCall = calls.filter((c) => c.url === '/api/plugins/community/config').pop();
+      expect(JSON.parse(String(clearCall?.init?.body))).toEqual({ registryUrl: null });
+
+      fireEvent.click(screen.getByRole('button', { name: '插件源设置' }));
+      const reopenedInput = within(screen.getByTestId('community-registry-config-panel')).getByLabelText(
+        '社区插件注册表 JSON 地址',
+      ) as HTMLInputElement;
+      expect(reopenedInput.value).toBe(DEFAULT_COMMUNITY_REGISTRY_URL);
     });
   });
 

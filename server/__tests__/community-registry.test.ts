@@ -5,6 +5,7 @@ import { Readable } from 'node:stream';
 import Database from 'better-sqlite3';
 import {
   COMMUNITY_REGISTRY_ENV,
+  DEFAULT_COMMUNITY_REGISTRY_URL,
   CommunityRegistryConfigError,
   __resetCommunityRegistryCache,
   annotateInstallState,
@@ -306,8 +307,9 @@ describe('resolveCommunityRegistryUrl', () => {
     delete process.env[COMMUNITY_REGISTRY_ENV];
   });
 
-  it('returns null when the env var is unset', () => {
-    expect(resolveCommunityRegistryUrl()).toBeNull();
+  it('falls back to the official Gitee default URL when env var is unset, and returns null only when explicitly empty', () => {
+    expect(resolveCommunityRegistryUrl()).toBe(DEFAULT_COMMUNITY_REGISTRY_URL);
+    expect(resolveCommunityRegistryUrl(null)).toBeNull();
     expect(resolveCommunityRegistryUrl('   ')).toBeNull();
   });
 
@@ -343,13 +345,14 @@ describe('site_settings community_registry_url persistence', () => {
     db.close();
   });
 
-  it('returns configSource=none when neither database nor env is configured', () => {
+  it('falls back to the official Gitee default (configSource=default) when neither database nor env is configured', () => {
     expect(getStoredCommunityRegistryUrl(db)).toBeNull();
     expect(resolveCommunityRegistryConfig(db)).toEqual({
-      activeUrl: null,
+      activeUrl: DEFAULT_COMMUNITY_REGISTRY_URL,
       databaseUrl: null,
       envUrl: null,
-      configSource: 'none',
+      defaultUrl: DEFAULT_COMMUNITY_REGISTRY_URL,
+      configSource: 'default',
       hasEnvFallback: false,
     });
   });
@@ -360,6 +363,7 @@ describe('site_settings community_registry_url persistence', () => {
       activeUrl: 'https://env.example.com/plugins.json',
       databaseUrl: null,
       envUrl: 'https://env.example.com/plugins.json',
+      defaultUrl: DEFAULT_COMMUNITY_REGISTRY_URL,
       configSource: 'env',
       hasEnvFallback: true,
     });
@@ -372,6 +376,7 @@ describe('site_settings community_registry_url persistence', () => {
       activeUrl: REGISTRY_URL,
       databaseUrl: REGISTRY_URL,
       envUrl: 'https://env.example.com/plugins.json',
+      defaultUrl: DEFAULT_COMMUNITY_REGISTRY_URL,
       configSource: 'database',
       hasEnvFallback: true,
     });
@@ -382,8 +387,22 @@ describe('site_settings community_registry_url persistence', () => {
       activeUrl: 'https://env.example.com/plugins.json',
       databaseUrl: null,
       envUrl: 'https://env.example.com/plugins.json',
+      defaultUrl: DEFAULT_COMMUNITY_REGISTRY_URL,
       configSource: 'env',
       hasEnvFallback: true,
+    });
+  });
+
+  it('clears database override back to the official Gitee default when no env fallback is set', () => {
+    setStoredCommunityRegistryUrl(db, REGISTRY_URL);
+    const cleared = setStoredCommunityRegistryUrl(db, null);
+    expect(cleared).toEqual({
+      activeUrl: DEFAULT_COMMUNITY_REGISTRY_URL,
+      databaseUrl: null,
+      envUrl: null,
+      defaultUrl: DEFAULT_COMMUNITY_REGISTRY_URL,
+      configSource: 'default',
+      hasEnvFallback: false,
     });
   });
 
@@ -410,10 +429,10 @@ describe('fetchCommunityRegistry', () => {
     delete process.env[COMMUNITY_REGISTRY_ENV];
   });
 
-  it('reports configured=false without any network call when the URL is unset', async () => {
+  it('reports configured=false without any network call when the URL is explicitly null', async () => {
     delete process.env[COMMUNITY_REGISTRY_ENV];
     const fetchImpl = vi.fn<FetchLike>();
-    const result = await fetchCommunityRegistry({ fetchImpl });
+    const result = await fetchCommunityRegistry({ url: null, fetchImpl });
 
     expect(fetchImpl).not.toHaveBeenCalled();
     expect(result).toMatchObject({ configured: false, plugins: [], source: null, fetchedAt: null });

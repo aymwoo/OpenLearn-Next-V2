@@ -67,8 +67,9 @@ interface CommunityRegistryResponse {
   error?: string;
   envVar?: string;
   canConfigure?: boolean;
-  configSource?: 'database' | 'env' | 'none';
+  configSource?: 'database' | 'env' | 'default' | 'none';
   databaseUrl?: string | null;
+  defaultUrl?: string | null;
   hasEnvFallback?: boolean;
   installEnabled?: boolean;
   installConfigSource?: 'database' | 'env' | 'default' | null;
@@ -102,6 +103,12 @@ const REGISTRY_ENDPOINT = '/api/plugins/community';
 const CONFIG_ENDPOINT = '/api/plugins/community/config';
 const INSTALL_ENDPOINT = '/api/plugins/install-from-url';
 const ZIP_UPLOAD_ENDPOINT = '/api/plugins/upload-zip-raw';
+export const DEFAULT_COMMUNITY_REGISTRY_URL =
+  'https://gitee.com/aymwoo/openlearn-next-plugins/raw/master/community-plugins.json';
+
+function resolveDisplayRegistryUrl(body?: CommunityRegistryResponse | null): string {
+  return body?.databaseUrl ?? body?.source ?? body?.defaultUrl ?? DEFAULT_COMMUNITY_REGISTRY_URL;
+}
 
 /** 从 downloadUrl 推断 ZIP 文件名，供浏览器直传时带上 x-filename。 */
 function zipFilenameFromUrl(downloadUrl: string): string {
@@ -205,7 +212,7 @@ export function PluginCommunityPanel({
   /** 本次会话内已成功安装的 id，用于无需等待刷新即可更新卡片状态。 */
   const [justInstalled, setJustInstalled] = useState<Record<string, true>>({});
   const [configOpen, setConfigOpen] = useState(false);
-  const [registryUrlInput, setRegistryUrlInput] = useState('');
+  const [registryUrlInput, setRegistryUrlInput] = useState(DEFAULT_COMMUNITY_REGISTRY_URL);
   const [configSaving, setConfigSaving] = useState(false);
   const [configError, setConfigError] = useState<string | null>(null);
   const [configNotice, setConfigNotice] = useState<string | null>(null);
@@ -246,6 +253,12 @@ export function PluginCommunityPanel({
   useEffect(() => {
     void loadRegistry(false);
   }, [loadRegistry]);
+
+  useEffect(() => {
+    if (!registryInputDirty && data) {
+      setRegistryUrlInput(resolveDisplayRegistryUrl(data));
+    }
+  }, [data, registryInputDirty]);
 
   /** 本地已安装的 manifest.id；与注册表 id 对齐用于展示「已安装 / 可更新」。 */
   const installedManifestIds = useMemo(() => {
@@ -433,7 +446,7 @@ export function PluginCommunityPanel({
   );
 
   const openConfigPanel = useCallback(() => {
-    setRegistryUrlInput(data?.databaseUrl ?? data?.source ?? '');
+    setRegistryUrlInput(resolveDisplayRegistryUrl(data));
     setConfigError(null);
     setRegistryInputDirty(false);
     setConfigOpen(true);
@@ -461,6 +474,8 @@ export function PluginCommunityPanel({
         const body = (await res.json().catch(() => null)) as {
           success?: boolean;
           error?: string;
+          activeUrl?: string | null;
+          defaultUrl?: string | null;
         } | null;
 
         if (!res.ok || !body?.success) {
@@ -477,15 +492,21 @@ export function PluginCommunityPanel({
 
         setConfigOpen(false);
         setRegistryInputDirty(false);
-        setRegistryUrlInput(normalized);
+        setRegistryUrlInput(
+          body?.activeUrl || normalized || body?.defaultUrl || data?.defaultUrl || DEFAULT_COMMUNITY_REGISTRY_URL,
+        );
         setConfigNotice(
           normalized
             ? zh
               ? '社区插件源已保存，正在加载注册表…'
               : 'Community registry URL saved, loading…'
-            : zh
-              ? '已清除界面自定义插件源'
-              : 'Cleared custom community registry URL',
+            : data?.hasEnvFallback
+              ? zh
+                ? '已清除界面自定义插件源，正在恢复环境变量配置…'
+                : 'Cleared custom community registry URL'
+              : zh
+                ? '已恢复官方默认插件源，正在加载…'
+                : 'Restored official default registry, loading…',
         );
         await loadRegistry(true);
       } catch (e) {
@@ -494,7 +515,7 @@ export function PluginCommunityPanel({
         setConfigSaving(false);
       }
     },
-    [doFetch, loadRegistry, validateRegistryUrl, zh],
+    [data?.defaultUrl, data?.hasEnvFallback, doFetch, loadRegistry, validateRegistryUrl, zh],
   );
 
   const submitInstallConfig = useCallback(
@@ -676,14 +697,14 @@ export function PluginCommunityPanel({
                   !isUnconfiguredCard && hasDatabaseOverride
                     ? data?.hasEnvFallback
                       ? `留空保存或点击清除可恢复环境变量 ${data?.envVar || 'PLUGIN_COMMUNITY_REGISTRY_URL'} 默认配置。`
-                      : '留空保存或点击清除可移除当前配置。'
+                      : '留空保存或点击恢复可切回官方默认插件源。'
                     : ''
                 }`
               : `Enter a remote JSON registry URL (public HTTP(S) only; loopback and private networks are blocked).${
                   !isUnconfiguredCard && hasDatabaseOverride
                     ? data?.hasEnvFallback
                       ? ` Clear to fall back to ${data?.envVar || 'PLUGIN_COMMUNITY_REGISTRY_URL'}.`
-                      : ' Clear to remove the current URL.'
+                      : ' Clear to restore the official default registry.'
                     : ''
                 }`}
           </p>
@@ -703,7 +724,7 @@ export function PluginCommunityPanel({
                 setConfigError(validateRegistryUrl(registryUrlInput, allowEmpty));
               }
             }}
-            placeholder="https://example.com/community-plugins.json"
+            placeholder={data?.defaultUrl || DEFAULT_COMMUNITY_REGISTRY_URL}
             autoComplete="url"
             autoCorrect="off"
             autoCapitalize="none"
@@ -751,8 +772,8 @@ export function PluginCommunityPanel({
                   ? '恢复环境变量默认'
                   : 'Reset to env default'
                 : zh
-                  ? '清除配置'
-                  : 'Clear configuration'}
+                  ? '恢复官方默认'
+                  : 'Reset to official default'}
             </button>
           )}
 
@@ -763,6 +784,7 @@ export function PluginCommunityPanel({
               onClick={() => {
                 setConfigOpen(false);
                 setConfigError(null);
+                setRegistryInputDirty(false);
               }}
               className="px-3 py-2 text-xs font-medium rounded-lg text-gray-500 hover:text-gray-800 hover:bg-gray-100 transition-colors cursor-pointer"
             >
@@ -930,16 +952,24 @@ export function PluginCommunityPanel({
             </h3>
             <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 font-medium">
               {data?.configSource === 'database'
-                ? zh
-                  ? '当前来源：界面配置（覆盖环境变量）'
-                  : 'Source: UI setting (overrides env)'
+                ? data?.hasEnvFallback
+                  ? zh
+                    ? '当前来源：界面配置（覆盖环境变量）'
+                    : 'Source: UI setting (overrides env)'
+                  : zh
+                    ? '当前来源：界面配置（覆盖官方默认）'
+                    : 'Source: UI setting (overrides default)'
                 : data?.configSource === 'env'
                   ? zh
                     ? `当前来源：环境变量 ${data.envVar || 'PLUGIN_COMMUNITY_REGISTRY_URL'}`
                     : `Source: env ${data.envVar || 'PLUGIN_COMMUNITY_REGISTRY_URL'}`
-                  : zh
-                    ? '当前状态：未配置'
-                    : 'Status: Not configured'}
+                  : data?.configSource === 'default'
+                    ? zh
+                      ? '当前来源：官方默认（Gitee）'
+                      : 'Source: official default (Gitee)'
+                    : zh
+                      ? '当前状态：未配置'
+                      : 'Status: Not configured'}
             </span>
           </div>
           {renderRegistryConfigForm()}

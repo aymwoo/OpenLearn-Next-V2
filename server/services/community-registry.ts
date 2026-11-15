@@ -16,11 +16,15 @@ import { isSafeExternalUrl, fetchWithSafeRedirects, UrlSafetyError } from '../ut
  *     `fallbackToClient`，由浏览器直传至既有的 `/api/plugins/upload-zip-raw`。
  *
  * 注册表地址支持界面持久化配置（`site_settings.community_registry_url`）与环境变量
- * `PLUGIN_COMMUNITY_REGISTRY_URL`（界面配置优先）。默认留空——
- * 平台不应内置指向第三方域名的硬编码地址，未配置时前端展示明确的配置提示。
+ * `PLUGIN_COMMUNITY_REGISTRY_URL`（界面配置 > 环境变量 > 官方 Gitee 默认注册表
+ * `DEFAULT_COMMUNITY_REGISTRY_URL`）。
  */
 
 export const COMMUNITY_REGISTRY_ENV = 'PLUGIN_COMMUNITY_REGISTRY_URL';
+
+/** 官方默认社区插件市场注册表 JSON 地址（Gitee）。 */
+export const DEFAULT_COMMUNITY_REGISTRY_URL =
+  'https://gitee.com/aymwoo/openlearn-next-plugins/raw/master/community-plugins.json';
 
 /** 注册表 JSON 的期望版本号，便于未来做不兼容格式演进。 */
 export const COMMUNITY_REGISTRY_SCHEMA_VERSION = 1;
@@ -246,12 +250,13 @@ export function annotateInstallState(
 
 // ── 注册表地址 ───────────────────────────────────────────────────────────────
 
-export type CommunityRegistryConfigSource = 'database' | 'env' | 'none';
+export type CommunityRegistryConfigSource = 'database' | 'env' | 'default' | 'none';
 
 export interface CommunityRegistryConfigInfo {
   activeUrl: string | null;
   databaseUrl: string | null;
   envUrl: string | null;
+  defaultUrl: string;
   configSource: CommunityRegistryConfigSource;
   hasEnvFallback: boolean;
 }
@@ -294,18 +299,20 @@ export function getStoredCommunityRegistryUrl(db: CommunityRegistryDbLike): stri
 }
 
 /**
- * 解析当前生效的社区注册表配置（数据库持久化配置 > 环境变量）。
+ * 解析当前生效的社区注册表配置（数据库持久化配置 > 环境变量 > 官方默认地址）。
  */
 export function resolveCommunityRegistryConfig(db: CommunityRegistryDbLike): CommunityRegistryConfigInfo {
   const stored = getStoredCommunityRegistryUrl(db);
   const databaseUrl = stored && isSafeExternalUrl(stored).safe ? stored : null;
   const envUrl = resolveEnvCommunityRegistryUrl();
-  const activeUrl = databaseUrl ?? envUrl;
-  const configSource: CommunityRegistryConfigSource = databaseUrl ? 'database' : envUrl ? 'env' : 'none';
+  const defaultUrl = DEFAULT_COMMUNITY_REGISTRY_URL;
+  const activeUrl = databaseUrl ?? envUrl ?? defaultUrl;
+  const configSource: CommunityRegistryConfigSource = databaseUrl ? 'database' : envUrl ? 'env' : 'default';
   return {
     activeUrl,
     databaseUrl,
     envUrl,
+    defaultUrl,
     configSource,
     hasEnvFallback: Boolean(envUrl),
   };
@@ -313,7 +320,7 @@ export function resolveCommunityRegistryConfig(db: CommunityRegistryDbLike): Com
 
 /**
  * 校验并持久化社区注册表地址到 `site_settings.community_registry_url`。
- * 传入 null 或空白字符串会清除界面覆盖（回落到环境变量或未配置态）。
+ * 传入 null 或空白字符串会清除界面覆盖（回落到环境变量或官方默认地址）。
  */
 export function setStoredCommunityRegistryUrl(
   db: CommunityRegistryDbLike,
@@ -346,13 +353,20 @@ export function setStoredCommunityRegistryUrl(
 }
 
 /**
- * 解析注册表地址：显式入参 > 环境变量。返回值已被 SSRF 校验，
- * 非法或未配置一律返回 null（调用方转成「未配置」提示而非抛错）。
+ * 解析注册表地址：显式入参 > 环境变量 > 官方默认地址。返回值已被 SSRF 校验；
+ * 当显式传入 null / 空白字符串，或环境变量配置了不安全地址时返回 null。
  */
 export function resolveCommunityRegistryUrl(explicit?: string | null): string | null {
-  const raw = (explicit ?? process.env[COMMUNITY_REGISTRY_ENV] ?? '').trim();
-  if (!raw) return null;
-  return isSafeExternalUrl(raw).safe ? raw : null;
+  if (explicit !== undefined) {
+    const trimmed = (explicit ?? '').trim();
+    if (!trimmed) return null;
+    return isSafeExternalUrl(trimmed).safe ? trimmed : null;
+  }
+  const envRaw = (process.env[COMMUNITY_REGISTRY_ENV] ?? '').trim();
+  if (envRaw) {
+    return isSafeExternalUrl(envRaw).safe ? envRaw : null;
+  }
+  return DEFAULT_COMMUNITY_REGISTRY_URL;
 }
 
 // ── 拉取与缓存 ───────────────────────────────────────────────────────────────

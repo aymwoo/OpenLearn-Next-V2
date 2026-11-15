@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from 'vitest';
 import express from 'express';
 import { createServer, type Server } from 'http';
 import type { AddressInfo } from 'net';
@@ -7,8 +7,26 @@ import JSZip from 'jszip';
 import { setAuditSinkForTests, type AuditRecord } from '../../packages/core/observability/audit-log.js';
 import { registerPluginsRoutes } from '../routes/plugins.js';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
-import { COMMUNITY_REGISTRY_ENV } from '../services/community-registry.js';
+import { COMMUNITY_REGISTRY_ENV, DEFAULT_COMMUNITY_REGISTRY_URL } from '../services/community-registry.js';
 import { COMMUNITY_INSTALL_DISABLED_MESSAGE, COMMUNITY_INSTALL_ENV } from '../services/community-attest.js';
+
+vi.mock('../services/community-registry.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../services/community-registry.js')>();
+  return {
+    ...actual,
+    fetchCommunityRegistry: (opts: Parameters<typeof actual.fetchCommunityRegistry>[0] = {}) =>
+      actual.fetchCommunityRegistry({
+        ...opts,
+        fetchImpl:
+          opts.fetchImpl ??
+          (async () =>
+            new Response(JSON.stringify({ version: 1, plugins: [] }), {
+              status: 200,
+              headers: { 'Content-Type': 'application/json' },
+            })),
+      }),
+  };
+});
 
 /**
  * 社区市场路由的鉴权与入参门禁契约。
@@ -108,6 +126,8 @@ describe('community plugin registry routes', () => {
       const body = (await res.json()) as {
         success: boolean;
         configured: boolean;
+        source: string | null;
+        defaultUrl: string;
         plugins: unknown[];
         envVar: string;
         canConfigure: boolean;
@@ -116,18 +136,20 @@ describe('community plugin registry routes', () => {
       expect(body.success).toBe(true);
       expect(body.envVar).toBe(COMMUNITY_REGISTRY_ENV);
       expect(body.canConfigure).toBe(false);
-      expect(body.configSource).toBe('none');
-      // 未配置注册表地址：明确返回 configured=false 而不是报错
-      expect(body.configured).toBe(false);
+      expect(body.configSource).toBe('default');
+      expect(body.defaultUrl).toBe(DEFAULT_COMMUNITY_REGISTRY_URL);
+      expect(body.configured).toBe(true);
+      expect(body.source).toBe(DEFAULT_COMMUNITY_REGISTRY_URL);
       expect(body.plugins).toEqual([]);
     });
 
     it('reports canConfigure=true for an administrator', async () => {
       const res = await fetch(`${baseUrl}/api/plugins/community`, { headers: cookie(adminToken) });
       expect(res.status).toBe(200);
-      const body = (await res.json()) as { canConfigure: boolean; configSource: string };
+      const body = (await res.json()) as { canConfigure: boolean; configSource: string; defaultUrl: string };
       expect(body.canConfigure).toBe(true);
-      expect(body.configSource).toBe('none');
+      expect(body.configSource).toBe('default');
+      expect(body.defaultUrl).toBe(DEFAULT_COMMUNITY_REGISTRY_URL);
     });
   });
 
@@ -194,9 +216,10 @@ describe('community plugin registry routes', () => {
       };
       expect(clearBody).toMatchObject({
         success: true,
-        configSource: 'none',
+        configSource: 'default',
         databaseUrl: null,
-        activeUrl: null,
+        activeUrl: DEFAULT_COMMUNITY_REGISTRY_URL,
+        defaultUrl: DEFAULT_COMMUNITY_REGISTRY_URL,
       });
     });
   });
