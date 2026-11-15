@@ -52,6 +52,28 @@
 - **Plugin IDs**: snake_case — `ext-homework-hub`, `prov_openai`
 - **Constants**: UPPER_SNAKE_CASE
 
+## Frontend & Web Standards (`modern-web-guidance`)
+
+所有在本仓库从事前端与客户端 Web 开发的 AI Agent，**统一约定优先以 [GoogleChrome/modern-web-guidance](https://github.com/GoogleChrome/modern-web-guidance)（仓库内置 Skill：[`.agents/skills/modern-web-guidance/SKILL.md`](.agents/skills/modern-web-guidance/SKILL.md)）作为 HTML / CSS / 浏览器原生 API / 客户端交互的唯一标准指南**，避免沿用过时 Hack 或臆测实现。
+
+- **强制触发场景**：凡涉及前端 HTML/CSS/DOM 交互与浏览器能力的新增、重构或修复——包括模态框/Popover/Dialog、表格、暗黑模式、锚点定位、容器查询、View Transitions、滚动驱动动画、表单与校验、无障碍（Accessibility）、加载与进度反馈（`spinner` / `progress`）、HTML 安全消毒、日期/时区、Web Components、Core Web Vitals（LCP/INP/CLS）等——**必须在编写实现代码前先检索并阅读对应指南**。
+- **豁免场景**：纯后端逻辑（SQL、ORM、Express API 路由）、CI/CD 与基础设施脚本（Docker、Git、Actions）、以及构建配置/纯测试文件调整无需触发。
+- **标准工作流（先查后写）**：
+  1. **Search**：使用 2–5 个英文能力动作词检索指南（描述 `<verb> + <UI/platform capability>`，不带 `React`/`Tailwind` 等框架名或业务名词）：
+     ```bash
+     pnpx modern-web-guidance@latest search "<query>"
+     ```
+  2. **Retrieve**：命中后拉取完整指南并按其中的语义标签、ARIA、样式边界条件与回退策略实现（不可凭记忆补写，也不要对单点需求误跑 `legacy-scan`）：
+     ```bash
+     pnpx modern-web-guidance@latest retrieve "<guide-id>"
+     ```
+     （无 Skill 环境可通过 `npx modern-web-guidance@latest install` 安装集成；离线时追加 `--offline`。）
+  3. **React / Tailwind 适配**：指南以原生 HTML/CSS/JS 描述规范；在 React 19 + Tailwind CSS v4 中应通过 ref（如 `showModal()`/`moveBefore()`）、`useId()` 生成独立 ID / `anchor-name`、顶层 CSS 规则及属性扩展保留现代原生特性，不得因类型或旧习惯降级移除。
+- **浏览器支持与回退（Baseline Policy）**：
+  - **Baseline Widely available** 特性可直接使用；
+  - 非 Widely available（Newly available / Limited availability）特性**必须**落实对应指南给出的 Fallback（如 `@supports` 降级、特性检测、`prefers-reduced-motion` 降速或静默适配、`forced-colors` 适配等），除非维护者另有明确声明。
+- **交付说明**：依据 `modern-web-guidance` 完成或调整前端代码时，应在回复末尾补充 `### Modern Web Guidance` 小节，写明所采用的 `<guide-id>`、关键 API/回退处理及规避的陷阱。
+
 ## Testing Guidelines
 
 - **Framework**: Vitest with jsdom environment
