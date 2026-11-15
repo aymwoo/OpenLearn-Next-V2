@@ -51,6 +51,7 @@ import {
   setStoredCommunityInstallEnabled,
   verifyCommunityPackage,
 } from '../services/community-attest.js';
+import { resolveAllowUnsignedPolicy } from '../services/runtime-policies.js';
 import { verifyPluginPackage } from '../../packages/core/security/plugin-signature.js';
 import {
   approvePluginCapabilities,
@@ -316,12 +317,12 @@ async function assertCommunityZipAttestation(
     };
   }
 
-  // 没有签名，且未声明社区安装
-  // 默认放行未签名本地包（审计仍记 unverified_local_acknowledged）；
-  // 部署可用 OPENLEARN_ALLOW_UNSIGNED=0/false 收紧为 B2 基线——
-  // 那时未签名包必须由管理员逐次传 x-allow-unsigned: true。
-  const allowUnsignedEnv = String(process.env.OPENLEARN_ALLOW_UNSIGNED ?? '').toLowerCase();
-  const allowUnsignedEffective = allowUnsigned || !['0', 'false'].includes(allowUnsignedEnv);
+  // 没有签名，且未声明社区安装。
+  // 生效值：界面显式策略 > OPENLEARN_ALLOW_UNSIGNED=0/false 收紧 > 历史默认放行。
+  // 默认放行时审计仍记 unverified_local_acknowledged；收紧后必须逐次传 x-allow-unsigned: true。
+  // 此策略不能绕过上方已签名/社区包的签名错误、公钥、网络或沙箱校验。
+  const allowUnsignedByPolicy = resolveAllowUnsignedPolicy(kernelContainer.db).allowByDefault;
+  const allowUnsignedEffective = allowUnsigned || allowUnsignedByPolicy;
   if (!allowUnsignedEffective) {
     return {
       ok: false,

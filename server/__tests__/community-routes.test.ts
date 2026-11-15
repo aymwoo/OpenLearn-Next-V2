@@ -85,6 +85,11 @@ describe('community plugin registry routes', () => {
       kernelContainer.db
         .prepare('UPDATE site_settings SET community_registry_url = ? WHERE id = ?')
         .run(savedDbRegistryUrl, 'global');
+      try {
+        kernelContainer.db.prepare('UPDATE site_settings SET allow_unsigned_plugins = NULL WHERE id = ?').run('global');
+      } catch {
+        /* ignore */
+      }
     } catch {
       /* ignore */
     }
@@ -421,6 +426,81 @@ describe('community plugin registry routes', () => {
         );
         expect(bypassEvent).toBeDefined();
       } finally {
+        if (saved === undefined) delete process.env.OPENLEARN_ALLOW_UNSIGNED;
+        else process.env.OPENLEARN_ALLOW_UNSIGNED = saved;
+      }
+    });
+
+    it('存储策略收紧后未签名包被拒绝，显式 x-allow-unsigned: true 仍可放行', async () => {
+      auditEvents = [];
+      const saved = process.env.OPENLEARN_ALLOW_UNSIGNED;
+      delete process.env.OPENLEARN_ALLOW_UNSIGNED;
+      try {
+        kernelContainer.db.prepare('UPDATE site_settings SET allow_unsigned_plugins = 0 WHERE id = ?').run('global');
+        const denied = await fetch(`${baseUrl}/api/plugins/upload-zip-raw`, {
+          method: 'POST',
+          headers: {
+            ...cookie(adminToken),
+            'Content-Type': 'application/zip',
+            'x-plugin-filename': 'ext-stored-unsigned-deny.zip',
+          },
+          body: await makePluginZip({ id: 'ext-stored-unsigned-deny', version: '1.0.0' }, false),
+        });
+        expect(denied.status).toBe(400);
+        expect(((await denied.json()) as { code?: string }).code).toBe('COMMUNITY_ATTESTATION_REQUIRED');
+
+        const allowed = await fetch(`${baseUrl}/api/plugins/upload-zip-raw`, {
+          method: 'POST',
+          headers: {
+            ...cookie(adminToken),
+            'Content-Type': 'application/zip',
+            'x-plugin-filename': 'ext-stored-unsigned-ack.zip',
+            'x-allow-unsigned': 'true',
+          },
+          body: await makePluginZip({ id: 'ext-stored-unsigned-ack', version: '1.0.0' }, false),
+        });
+        expect(allowed.status).toBe(200);
+        expect(((await allowed.json()) as { success: boolean }).success).toBe(true);
+      } finally {
+        kernelContainer.db.prepare('UPDATE site_settings SET allow_unsigned_plugins = NULL WHERE id = ?').run('global');
+        if (saved === undefined) delete process.env.OPENLEARN_ALLOW_UNSIGNED;
+        else process.env.OPENLEARN_ALLOW_UNSIGNED = saved;
+      }
+    });
+
+    it('存储策略允许未签名也不能放行签名错误的包', async () => {
+      const saved = process.env.OPENLEARN_ALLOW_UNSIGNED;
+      delete process.env.OPENLEARN_ALLOW_UNSIGNED;
+      try {
+        kernelContainer.db.prepare('UPDATE site_settings SET allow_unsigned_plugins = 1 WHERE id = ?').run('global');
+        const zip = new JSZip();
+        zip.file(
+          'manifest.json',
+          JSON.stringify({ id: 'ext-bad-sig-stored-allow', name: 'ext-bad-sig-stored-allow', version: '1.0.0' }),
+        );
+        zip.file('index.js', 'export default {};');
+        const unsignedBuf = await zip.generateAsync({ type: 'nodebuffer' });
+        const unsignedHash = crypto.createHash('sha256').update(unsignedBuf).digest('hex');
+        const payload = `openlearn-plugin-attestation-v2\next-bad-sig-stored-allow\n9.9.9\n${unsignedHash}`;
+        const badSig = crypto.sign(null, Buffer.from(payload, 'utf8'), privKey).toString('base64');
+        zip.file(
+          'signature.json',
+          JSON.stringify({ version: 2, algorithm: 'ed25519', signature: badSig, publisher: 'Alice Corp' }),
+        );
+        const res = await fetch(`${baseUrl}/api/plugins/upload-zip-raw`, {
+          method: 'POST',
+          headers: {
+            ...cookie(adminToken),
+            'Content-Type': 'application/zip',
+            'x-plugin-filename': 'ext-bad-sig-stored-allow.zip',
+            'x-allow-unsigned': 'true',
+          },
+          body: await zip.generateAsync({ type: 'nodebuffer' }),
+        });
+        expect(res.status).toBe(400);
+        expect(((await res.json()) as { code?: string }).code).toBe('COMMUNITY_SIGNATURE_INVALID');
+      } finally {
+        kernelContainer.db.prepare('UPDATE site_settings SET allow_unsigned_plugins = NULL WHERE id = ?').run('global');
         if (saved === undefined) delete process.env.OPENLEARN_ALLOW_UNSIGNED;
         else process.env.OPENLEARN_ALLOW_UNSIGNED = saved;
       }

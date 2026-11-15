@@ -101,6 +101,7 @@ import { getFileStorageService } from './server/services/file-storage/index.js';
 import { registerResourcesRoutes } from './server/routes/resources.js';
 import { registerCoursewareRoutes } from './server/routes/courseware.js';
 import { registerBridgeRoutes } from './server/routes/bridge.js';
+import { registerRuntimePolicyRoutes } from './server/routes/runtime-policies.js';
 import { registerLessonsRoutes } from './server/routes/lessons.js';
 import { registerCoursePackageRoutes } from './server/routes/course-packages.js';
 import { registerWorkspaceRoutes } from './server/routes/workspace.js';
@@ -397,6 +398,7 @@ async function startServer() {
   // --- AI Courseware APIs ---
   registerCoursewareRoutes(ctx);
   registerBridgeRoutes(ctx);
+  registerRuntimePolicyRoutes(ctx);
   registerLessonsRoutes(ctx);
   registerCoursePackageRoutes(ctx);
   registerWorkspaceRoutes(ctx);

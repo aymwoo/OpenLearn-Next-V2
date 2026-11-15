@@ -3,6 +3,45 @@ import { render, screen, fireEvent, cleanup } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { AdminPanel } from '../AdminPanel';
 
+const runtimePolicyResponse = {
+  success: true,
+  policies: {
+    hookTelemetry: {
+      enabled: true,
+      storedValue: null,
+      configSource: 'default',
+      hasEnvFallback: false,
+      envVar: 'BRIDGE_HOOK_TELEMETRY',
+      effect: 'new sessions',
+    },
+    httpAccessLog: {
+      mode: 'errors',
+      storedMode: null,
+      modeSource: 'default',
+      hasModeEnvFallback: false,
+      ignorePrefixes: [],
+      storedIgnore: null,
+      ignoreSource: 'default',
+      slowMs: 1000,
+      storedSlowMs: null,
+      slowSource: 'default',
+      envVar: 'HTTP_ACCESS_LOG',
+      ignoreEnvVar: 'HTTP_ACCESS_LOG_IGNORE',
+      slowEnvVar: 'HTTP_SLOW_MS',
+      effect: 'next request',
+    },
+    allowUnsigned: {
+      allowByDefault: true,
+      storedValue: null,
+      configSource: 'default',
+      hasEnvFallback: false,
+      envVar: 'OPENLEARN_ALLOW_UNSIGNED',
+      effect: 'not full trust',
+    },
+  },
+  reservedEnvBoundaries: [{ key: 'LOG_REDACT', reason: '关闭脱敏会把口令写入日志。' }],
+};
+
 describe('AdminPanel (管理后台页面样式规范化与标签切换)', () => {
   const defaultProps = {
     currentUserId: 'usr_admin',
@@ -77,6 +116,9 @@ describe('AdminPanel (管理后台页面样式规范化与标签切换)', () => 
             }),
         });
       }
+      if (url === '/api/admin/runtime-policies') {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(runtimePolicyResponse) });
+      }
       return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
     });
   });
@@ -117,6 +159,7 @@ describe('AdminPanel (管理后台页面样式规范化与标签切换)', () => 
     const siteSettingsTab = screen.getByText('站点信息设置');
     fireEvent.click(siteSettingsTab);
     expect(screen.getByText('平台站点信息（名称 / 口号 / Logo）')).toBeTruthy();
+    expect(screen.getByText('运行时策略（管理员）')).toBeTruthy();
   });
 
   it('管理员看到自动生成密钥的警告，警告里没有密钥材料', async () => {
@@ -167,6 +210,9 @@ describe('AdminPanel (管理后台页面样式规范化与标签切换)', () => 
     global.fetch = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
       if (url === '/api/users') {
         return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+      }
+      if (url === '/api/admin/runtime-policies') {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(runtimePolicyResponse) });
       }
       if (url === '/api/site-settings' && init?.method === 'PUT') {
         putCalls.push({ url, body: JSON.parse(String(init.body || '{}')) });
