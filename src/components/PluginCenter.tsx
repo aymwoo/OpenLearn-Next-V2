@@ -179,8 +179,8 @@ export function PluginCenter({
   const handleCommunityInstalled = () => {
     setUpdateToast(
       lang === 'zh'
-        ? '🎉 社区插件已安装，正在刷新插件列表…'
-        : '🎉 Community plugin installed, reloading the plugin list…',
+        ? '🎉 社区插件已安装，刷新页面后前端扩展点生效，正在刷新…'
+        : '🎉 Community plugin installed, refreshing so frontend extension points take effect…',
     );
     setTimeout(() => window.location.reload(), 1200);
   };
