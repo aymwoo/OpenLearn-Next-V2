@@ -70,16 +70,46 @@ export default function AccessibleDialog({
 
     let isCleaningUp = false;
 
-    const handleCancel = (event: Event) => {
-      event.preventDefault();
-      if (closedBy !== 'none') {
+    const handleClose = () => {
+      dialog.returnValue = '';
+      // `dialog.close()` queues an async `close` event per the HTML spec. If the
+      // effect cleanup closed the dialog and a synchronous remount (e.g. React
+      // StrictMode) immediately re-opened it via `showModal()`, `dialog.open` is
+      // already `true` when that stale event fires — ignore it.
+      if (!isCleaningUp && !dialog.open) {
         onCloseRef.current();
       }
     };
 
-    const handleClose = () => {
-      dialog.returnValue = '';
-      if (!isCleaningUp) {
+    dialog.addEventListener('close', handleClose);
+
+    return () => {
+      isCleaningUp = true;
+      dialog.removeEventListener('close', handleClose);
+
+      if (hasNativeModal) {
+        if (dialog.open && typeof dialog.close === 'function') {
+          dialog.close();
+        }
+      } else {
+        dialog.removeAttribute('open');
+        if (previouslyFocused && previouslyFocused.isConnected) {
+          previouslyFocused.focus();
+        }
+      }
+    };
+  }, [open]);
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    const dialog = dialogRef.current as DialogWithOptionalMethods | null;
+    if (!dialog) return;
+
+    const hasNativeModal = typeof dialog.showModal === 'function';
+
+    const handleCancel = (event: Event) => {
+      event.preventDefault();
+      if (closedBy !== 'none') {
         onCloseRef.current();
       }
     };
@@ -118,7 +148,6 @@ export default function AccessibleDialog({
     };
 
     dialog.addEventListener('cancel', handleCancel);
-    dialog.addEventListener('close', handleClose);
     if (!hasNativeModal) {
       dialog.addEventListener('keydown', handleFallbackKeyDown);
     }
@@ -128,26 +157,13 @@ export default function AccessibleDialog({
     }
 
     return () => {
-      isCleaningUp = true;
       dialog.removeEventListener('cancel', handleCancel);
-      dialog.removeEventListener('close', handleClose);
       if (!hasNativeModal) {
         dialog.removeEventListener('keydown', handleFallbackKeyDown);
       }
       if (needsLightDismissFallback) {
         dialog.removeEventListener('pointerdown', handlePointerDown);
         dialog.removeEventListener('click', handleBackdropClick);
-      }
-
-      if (hasNativeModal) {
-        if (dialog.open && typeof dialog.close === 'function') {
-          dialog.close();
-        }
-      } else {
-        dialog.removeAttribute('open');
-        if (previouslyFocused && previouslyFocused.isConnected) {
-          previouslyFocused.focus();
-        }
       }
     };
   }, [open, closedBy]);
