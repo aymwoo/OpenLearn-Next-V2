@@ -7,7 +7,11 @@ import { PluginCommunityPanel, type CommunityPlugin } from '../plugin-center/sub
 // 与缺失的 vitest.config.ts（jsdom + globals + setup 文件）无关：本用例以文件级
 // `@vitest-environment jsdom` 固定 DOM 环境，并显式清理 DOM —— globals 关闭时
 // @testing-library 无法自动注册 afterEach，否则用例之间的 DOM 会互相污染。
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  window.localStorage.clear();
+  vi.restoreAllMocks();
+});
 
 const HOMEWORK_CARD = 'community-card-ext-homework-hub';
 
@@ -827,6 +831,214 @@ describe('PluginCommunityPanel', () => {
       expect(screen.getByTestId('community-install-toggle').textContent || '').not.toMatch(
         /OPENLEARN_COMMUNITY_INSTALL/,
       );
+    });
+  });
+
+  describe('release metadata and Gitee +⭐ starring', () => {
+    it('displays release date and formatted ZIP package size on the card', async () => {
+      const { fetcher } = makeFetcher([
+        (url) =>
+          url.startsWith('/api/plugins/community')
+            ? json(
+                registryBody({
+                  plugins: [
+                    makePlugin({
+                      publishedAt: '2026-11-14T17:41:25+08:00',
+                      packageSize: 25680,
+                    }),
+                    makePlugin({
+                      id: 'ext-large',
+                      name: '大型插件',
+                      publishedAt: '2026-11-10T08:00:00Z',
+                      packageSize: 1759186,
+                    }),
+                  ],
+                }),
+              )
+            : undefined,
+      ]);
+
+      renderPanel({ fetcher });
+      const card1 = within(await screen.findByTestId(HOMEWORK_CARD));
+      expect(card1.getByText('发布于 2026-11-14')).toBeTruthy();
+      expect(card1.getByText('25.1 KB')).toBeTruthy();
+
+      const card2 = within(screen.getByTestId('community-card-ext-large'));
+      expect(card2.getByText('发布于 2026-11-10')).toBeTruthy();
+      expect(card2.getByText('1.68 MB')).toBeTruthy();
+    });
+
+    it('prompts Gitee login, opens Gitee repo in a new tab on 401 requiresGiteeAuth, and auto-refreshes stars on tab focus', async () => {
+      const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
+      const { fetcher } = makeFetcher([
+        (url) =>
+          url === '/api/plugins/community'
+            ? json(
+                registryBody({
+                  plugins: [
+                    makePlugin({
+                      repository: 'https://gitee.com/aymwoo/ext-homework-hub',
+                      stars: 12,
+                      starred: false,
+                    }),
+                  ],
+                }),
+              )
+            : undefined,
+        (url, init) => {
+          if (url === '/api/plugins/community/gitee-star' && init?.method === 'POST') {
+            return new Response(
+              JSON.stringify({
+                success: false,
+                requiresGiteeAuth: true,
+                reason: 'missing_token',
+                pluginId: 'ext-homework-hub',
+                starUrl: 'https://gitee.com/aymwoo/ext-homework-hub',
+                error: '需要登录并授权 Gitee 账号后才能在页面内直接加星',
+              }),
+              { status: 401, headers: { 'content-type': 'application/json' } },
+            );
+          }
+          if (url.startsWith('/api/plugins/community/gitee-stars')) {
+            return json({
+              success: true,
+              pluginId: 'ext-homework-hub',
+              stars: 13,
+              starred: false,
+              starUrl: 'https://gitee.com/aymwoo/ext-homework-hub',
+            });
+          }
+          return undefined;
+        },
+      ]);
+
+      renderPanel({ fetcher });
+      await screen.findByTestId(HOMEWORK_CARD);
+
+      const starBtn = screen.getByTestId('community-star-ext-homework-hub');
+      expect(starBtn.textContent).toContain('12');
+      fireEvent.click(starBtn);
+
+      const authPanel = await screen.findByTestId('community-gitee-auth-panel');
+      expect(authPanel.textContent).toContain('需要登录并授权 Gitee 账号');
+      expect(authPanel.textContent).toContain('https://gitee.com/aymwoo/ext-homework-hub');
+      expect(openSpy).toHaveBeenCalledWith(
+        'https://gitee.com/aymwoo/ext-homework-hub',
+        '_blank',
+        'noopener,noreferrer',
+      );
+
+      // 模拟用户在 Gitee 新标签页点星后切回 OpenLearn 标签页，自动刷新该插件 Star 数
+      fireEvent.focus(window);
+      await waitFor(() => {
+        expect(starBtn.textContent).toContain('13');
+      });
+    });
+
+    it('binds a Gitee token and toggles Gitee +⭐ asynchronously without leaving the page', async () => {
+      const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
+      let starred = false;
+      let starCount = 45;
+
+      const { fetcher, calls } = makeFetcher([
+        (url, init) => {
+          if (url === '/api/plugins/community') {
+            const headers = (init?.headers ?? {}) as Record<string, string>;
+            const hasToken = headers['x-gitee-token'] === 'gitee_pat_token_123';
+            return json(
+              registryBody({
+                plugins: [
+                  makePlugin({
+                    repository: 'https://gitee.com/aymwoo/ext-homework-hub',
+                    stars: starCount,
+                    starred: hasToken ? starred : false,
+                  }),
+                ],
+              }),
+            );
+          }
+          return undefined;
+        },
+        (url, init) => {
+          if (url === '/api/plugins/community/gitee-star' && init?.method === 'POST') {
+            const headers = (init?.headers ?? {}) as Record<string, string>;
+            expect(headers['x-gitee-token']).toBe('gitee_pat_token_123');
+            starred = !starred;
+            starCount += starred ? 1 : -1;
+            return json({
+              success: true,
+              pluginId: 'ext-homework-hub',
+              starred,
+              stars: starCount,
+              starUrl: 'https://gitee.com/aymwoo/ext-homework-hub',
+            });
+          }
+          return undefined;
+        },
+      ]);
+
+      renderPanel({ fetcher });
+      await screen.findByTestId(HOMEWORK_CARD);
+
+      fireEvent.click(screen.getByTestId('community-gitee-auth-btn'));
+      const tokenInput = await screen.findByPlaceholderText('粘贴 Gitee 私人令牌…');
+      fireEvent.change(tokenInput, { target: { value: 'gitee_pat_token_123' } });
+      fireEvent.click(screen.getByRole('button', { name: '保存令牌' }));
+
+      await waitFor(() => {
+        expect(screen.getByTestId('community-gitee-auth-btn').textContent).toContain('已绑定 Gitee');
+      });
+
+      const starBtn = screen.getByTestId('community-star-ext-homework-hub');
+      fireEvent.click(starBtn);
+
+      await waitFor(() => {
+        expect(starBtn.getAttribute('aria-pressed')).toBe('true');
+        expect(starBtn.textContent).toContain('已⭐');
+        expect(starBtn.textContent).toContain('46');
+      });
+      expect(openSpy).not.toHaveBeenCalled();
+
+      const starCall = calls.find((c) => c.url === '/api/plugins/community/gitee-star');
+      expect(JSON.parse(String(starCall?.init?.body))).toEqual({ pluginId: 'ext-homework-hub' });
+
+      fireEvent.click(starBtn);
+      await waitFor(() => {
+        expect(starBtn.getAttribute('aria-pressed')).toBe('false');
+        expect(starBtn.textContent).toContain('45');
+      });
+    });
+
+    it('sorts plugins by latest release and most starred', async () => {
+      const { fetcher } = makeFetcher([
+        (url) =>
+          url.startsWith('/api/plugins/community')
+            ? json(
+                registryBody({
+                  plugins: [
+                    makePlugin({ id: 'old-popular', name: '旧但高星', publishedAt: '2026-01-01T00:00:00Z', stars: 99 }),
+                    makePlugin({ id: 'new-quiet', name: '最新插件', publishedAt: '2026-11-14T12:00:00Z', stars: 2 }),
+                  ],
+                }),
+              )
+            : undefined,
+      ]);
+
+      renderPanel({ fetcher });
+      await screen.findByText('旧但高星');
+
+      const sortSelect = screen.getByLabelText('排序方式');
+      fireEvent.change(sortSelect, { target: { value: 'latest' } });
+      await waitFor(() => {
+        const cards = screen.getAllByRole('article');
+        expect(cards[0].getAttribute('data-testid')).toBe('community-card-new-quiet');
+      });
+
+      fireEvent.change(sortSelect, { target: { value: 'stars' } });
+      await waitFor(() => {
+        const cards = screen.getAllByRole('article');
+        expect(cards[0].getAttribute('data-testid')).toBe('community-card-old-popular');
+      });
     });
   });
 });

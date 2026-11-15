@@ -34,6 +34,7 @@ import { buildOpenAIChatUrl, validateAiProviderUrl } from '../../packages/core/a
 import {
   COMMUNITY_REGISTRY_ENV,
   CommunityRegistryConfigError,
+  enrichCommunityPackageSizes,
   fetchCommunityRegistry,
   downloadPluginPackage,
   isValidPluginId,
@@ -41,6 +42,13 @@ import {
   setStoredCommunityRegistryUrl,
   type DownloadedPackage,
 } from '../services/community-registry.js';
+import {
+  GiteeStarError,
+  enrichCommunityGiteeStars,
+  normalizeGiteeToken,
+  refreshSingleGiteePluginStars,
+  toggleGiteeRepoStar,
+} from '../services/gitee-stars.js';
 import JSZip from 'jszip';
 import {
   COMMUNITY_INSTALL_DISABLED_MESSAGE,
@@ -728,10 +736,17 @@ export function registerPluginsRoutes(ctx: ServerContext) {
     try {
       const config = resolveCommunityRegistryConfig(kernelContainer.db);
       const isAdmin = isAdministrator((req as any).session);
+      const forceRefresh = String(req.query.refresh || '') === '1';
       const result = await fetchCommunityRegistry({
         url: config.activeUrl,
         installed: listInstalledManifestVersions(),
-        forceRefresh: String(req.query.refresh || '') === '1',
+        forceRefresh,
+      });
+      const withSizes = await enrichCommunityPackageSizes(result.plugins);
+      const giteeToken = normalizeGiteeToken(req.header('x-gitee-token'));
+      const enrichedPlugins = await enrichCommunityGiteeStars(withSizes, {
+        token: giteeToken,
+        forceRefresh,
       });
       const install = resolveCommunityInstallConfig(kernelContainer.db);
       res.json({
@@ -747,6 +762,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
         hasInstallEnvFallback: isAdmin ? install.hasEnvFallback : null,
         publicKeysConfigured: isAdmin ? install.publicKeysConfigured : null,
         ...result,
+        plugins: enrichedPlugins,
       });
     } catch (e: any) {
       sendSafeError(res, e);
@@ -817,6 +833,94 @@ export function registerPluginsRoutes(ctx: ServerContext) {
     } catch (e: any) {
       if (e instanceof CommunityRegistryConfigError) {
         return res.status(400).json({ success: false, error: e.message });
+      }
+      sendSafeError(res, e);
+    }
+  });
+
+  // 增量刷新单个社区插件在 Gitee 仓库上的实时 ⭐ 数（用于从 Gitee 仓库新标签页返回后自动同步）
+  app.get('/api/plugins/community/gitee-stars', requireScopedAuth('authenticated'), async (req, res) => {
+    try {
+      const pluginId = typeof req.query.pluginId === 'string' ? req.query.pluginId.trim() : '';
+      if (!pluginId || !isValidPluginId(pluginId)) {
+        return res.status(400).json({ success: false, error: 'pluginId 格式非法' });
+      }
+      const config = resolveCommunityRegistryConfig(kernelContainer.db);
+      const registry = await fetchCommunityRegistry({
+        url: config.activeUrl,
+        installed: listInstalledManifestVersions(),
+      });
+      const target = registry.plugins.find((item) => item.id === pluginId);
+      if (!target) {
+        return res.status(404).json({ success: false, error: '未在社区插件源中找到该插件' });
+      }
+      const giteeToken = normalizeGiteeToken(req.header('x-gitee-token'));
+      const refreshed = await refreshSingleGiteePluginStars(target, { token: giteeToken });
+      res.json({ success: true, ...refreshed });
+    } catch (e: unknown) {
+      sendSafeError(res, e);
+    }
+  });
+
+  // 异步通过 Gitee API 为插件对应的 Gitee 仓库加星 / 取消加星
+  // 若缺少有效的 Gitee 令牌，返回 401 requiresGiteeAuth 并附带仓库页面地址，引导前端提示并打开新 Tab 页
+  app.post('/api/plugins/community/gitee-star', requireScopedAuth('class-staff'), async (req, res) => {
+    try {
+      const {
+        pluginId,
+        desired,
+        giteeToken: bodyToken,
+      } = (req.body || {}) as {
+        pluginId?: unknown;
+        desired?: unknown;
+        giteeToken?: unknown;
+      };
+      if (typeof pluginId !== 'string' || !isValidPluginId(pluginId.trim())) {
+        return res.status(400).json({ success: false, error: 'pluginId 格式非法' });
+      }
+      if (desired !== undefined && typeof desired !== 'boolean') {
+        return res.status(400).json({ success: false, error: 'desired 必须是布尔值' });
+      }
+      const normalizedPluginId = pluginId.trim();
+      const config = resolveCommunityRegistryConfig(kernelContainer.db);
+      const registry = await fetchCommunityRegistry({
+        url: config.activeUrl,
+        installed: listInstalledManifestVersions(),
+      });
+      const target = registry.plugins.find((item) => item.id === normalizedPluginId);
+      if (!target) {
+        return res.status(404).json({ success: false, error: '未在社区插件源中找到该插件' });
+      }
+
+      const token = normalizeGiteeToken(req.header('x-gitee-token') ?? bodyToken);
+      const outcome = await toggleGiteeRepoStar({
+        pluginId: normalizedPluginId,
+        repository: target.repository,
+        token,
+        desired,
+      });
+
+      if (!outcome.ok) {
+        return res.status(401).json({
+          success: false,
+          requiresGiteeAuth: outcome.requiresGiteeAuth,
+          reason: outcome.reason,
+          pluginId: outcome.pluginId,
+          starUrl: outcome.starUrl,
+          error: outcome.error,
+        });
+      }
+
+      res.json({
+        success: true,
+        pluginId: outcome.pluginId,
+        starred: outcome.starred,
+        stars: outcome.stars,
+        starUrl: outcome.starUrl,
+      });
+    } catch (e: unknown) {
+      if (e instanceof GiteeStarError) {
+        return res.status(e.status).json({ success: false, error: e.message });
       }
       sendSafeError(res, e);
     }

@@ -475,7 +475,7 @@ MFE 远端登记。MFE 执行边界已移除，表保留作历史数据兼容。
 
 <!-- AUTO-GENERATED:table-inventory BEGIN -->
 
-共 **90** 张表（迁移 51 个，金样生成于 2026-11-14T08:35:47.121Z）。列清单为列名（类型与约束见迁移 SQL）：
+共 **90** 张表（迁移 54 个，金样生成于 2026-11-15T04:03:22.773Z）。列清单为列名（类型与约束见迁移 SQL）：
 
 - `_academic_year_backfill`: backfilled_at, id
 - `_class_passcode_encryption`: id, note

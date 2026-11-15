@@ -839,4 +839,127 @@ describe('community plugin registry routes', () => {
       expect(res.status).toBe(400);
     });
   });
+
+  describe('Gitee repository live stars and +⭐ routes', () => {
+    const studentId = 'usr-community-student';
+    const studentToken = 'tok-community-student';
+    const scopedPluginId = '@ext/class-manager';
+
+    beforeAll(() => {
+      const now = Date.now();
+      kernelContainer.db
+        .prepare(
+          'INSERT OR REPLACE INTO users (id, username, password_hash, role, name, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+        )
+        .run(studentId, 'community_student', 'placeholder', 'student', '社区学生', now);
+      kernelContainer.db
+        .prepare(
+          'INSERT OR REPLACE INTO client_sessions (id, session_data, updated_at, expires_at) VALUES (?, ?, ?, ?)',
+        )
+        .run(
+          studentToken,
+          JSON.stringify({ userId: studentId, role: 'student', username: 'community_student' }),
+          now,
+          now + 60 * 60 * 1000,
+        );
+    });
+
+    afterAll(() => {
+      kernelContainer.db.prepare('DELETE FROM client_sessions WHERE id = ?').run(studentToken);
+      kernelContainer.db.prepare('DELETE FROM users WHERE id = ?').run(studentId);
+    });
+
+    it('rejects anonymous and student callers for gitee-star mutations and anonymous refreshes', async () => {
+      expect((await fetch(`${baseUrl}/api/plugins/community/gitee-star`, { method: 'POST' })).status).toBe(401);
+      expect(
+        (await fetch(`${baseUrl}/api/plugins/community/gitee-stars?pluginId=${encodeURIComponent(scopedPluginId)}`))
+          .status,
+      ).toBe(401);
+      expect(
+        (
+          await fetch(`${baseUrl}/api/plugins/community/gitee-star`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...cookie(studentToken) },
+            body: JSON.stringify({ pluginId: scopedPluginId }),
+          })
+        ).status,
+      ).toBe(403);
+    });
+
+    it('returns 401 requiresGiteeAuth with Gitee starUrl when teacher clicks +⭐ without a Gitee token', async () => {
+      const registryUrl = 'https://registry.example.com/community-plugins.json';
+      const registryJson = JSON.stringify({
+        version: 1,
+        plugins: [
+          {
+            id: scopedPluginId,
+            name: '班级管理',
+            version: '0.3.15',
+            downloadUrl: 'https://gitee.com/aymwoo/class_manager/releases/download/v0.3.15/class_manager-0.3.15.zip',
+            repository: 'https://gitee.com/aymwoo/class_manager',
+            stars: 3,
+          },
+        ],
+      });
+
+      const { __resetCommunityRegistryCache, fetchCommunityRegistry } =
+        await import('../services/community-registry.js');
+      const { __resetGiteeStarsCache } = await import('../services/gitee-stars.js');
+
+      const installed = new Map<string, string>();
+      const rows = kernelContainer.db.prepare('SELECT manifest FROM plugins').all() as Array<{ manifest: string }>;
+      for (const row of rows) {
+        try {
+          const manifest = JSON.parse(row.manifest) as { id?: unknown; version?: unknown };
+          if (typeof manifest?.id === 'string' && manifest.id) {
+            installed.set(manifest.id, typeof manifest.version === 'string' ? manifest.version : '0.0.0');
+          }
+        } catch {
+          // ignore
+        }
+      }
+
+      process.env[COMMUNITY_REGISTRY_ENV] = registryUrl;
+      __resetCommunityRegistryCache();
+      __resetGiteeStarsCache();
+      await fetchCommunityRegistry({
+        url: registryUrl,
+        installed,
+        fetchImpl: async () => new Response(registryJson, { status: 200 }),
+      });
+
+      try {
+        const res = await fetch(`${baseUrl}/api/plugins/community/gitee-star`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...cookie(teacherToken) },
+          body: JSON.stringify({ pluginId: scopedPluginId }),
+        });
+        expect(res.status).toBe(401);
+        expect(await res.json()).toMatchObject({
+          success: false,
+          requiresGiteeAuth: true,
+          reason: 'missing_token',
+          pluginId: scopedPluginId,
+          starUrl: 'https://gitee.com/aymwoo/class_manager',
+        });
+
+        const unknownRes = await fetch(`${baseUrl}/api/plugins/community/gitee-star`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...cookie(teacherToken) },
+          body: JSON.stringify({ pluginId: 'non-existent-plugin' }),
+        });
+        expect(unknownRes.status).toBe(404);
+
+        const refreshUnknown = await fetch(
+          `${baseUrl}/api/plugins/community/gitee-stars?pluginId=non-existent-plugin`,
+          { headers: cookie(teacherToken) },
+        );
+        expect(refreshUnknown.status).toBe(404);
+      } finally {
+        delete process.env[COMMUNITY_REGISTRY_ENV];
+        __resetCommunityRegistryCache();
+        __resetGiteeStarsCache();
+      }
+    });
+  });
 });

@@ -52,6 +52,7 @@ export interface CommunityPluginEntry {
   capabilities: string[];
   minPlatformVersion: string | null;
   publishedAt: string | null;
+  packageSize: number | null;
   downloads: number | null;
   stars: number | null;
   verified: boolean;
@@ -163,7 +164,13 @@ export function normalizeCommunityEntry(raw: unknown): CommunityPluginEntry | nu
     tags: asStringArray(record.tags, 8, 32),
     capabilities: asStringArray(record.capabilities ?? record.capabilitiesProposed, 24, 64),
     minPlatformVersion: asTrimmedString(record.minPlatformVersion ?? record.min_platform_version, 64),
-    publishedAt: asTrimmedString(record.publishedAt ?? record.published_at, 64),
+    publishedAt: asTrimmedString(
+      record.publishedAt ?? record.published_at ?? record.releasedAt ?? record.released_at,
+      64,
+    ),
+    packageSize: asFiniteNumber(
+      record.packageSize ?? record.package_size ?? record.zipSize ?? record.zip_size ?? record.size,
+    ),
     downloads: asFiniteNumber(record.downloads),
     stars: asFiniteNumber(record.stars),
     verified: true,
@@ -383,6 +390,93 @@ function setCachedResult(signature: string, result: CommunityRegistryResult, now
 /** 测试辅助：清空注册表缓存，避免用例间互相污染。 */
 export function __resetCommunityRegistryCache(): void {
   cache.clear();
+}
+
+const PACKAGE_SIZE_HIT_TTL_MS = 60 * 60 * 1000;
+const PACKAGE_SIZE_MISS_TTL_MS = 5 * 60 * 1000;
+const PACKAGE_SIZE_PROBE_TIMEOUT_MS = 2500;
+const PACKAGE_SIZE_PROBE_CONCURRENCY = 6;
+const packageSizeCache = new Map<string, { size: number | null; expiresAt: number }>();
+
+/** 测试辅助：清空包大小探测缓存。 */
+export function __resetPackageSizeCache(): void {
+  packageSizeCache.clear();
+}
+
+async function probeSinglePackageSize(
+  downloadUrl: string,
+  options: { fetchImpl?: FetchLike; now: number },
+): Promise<number | null> {
+  const cached = packageSizeCache.get(downloadUrl);
+  if (cached && cached.expiresAt > options.now) {
+    return cached.size;
+  }
+
+  let size: number | null = null;
+  try {
+    const response = options.fetchImpl
+      ? await options.fetchImpl(downloadUrl, {
+          method: 'HEAD',
+          signal: AbortSignal.timeout(PACKAGE_SIZE_PROBE_TIMEOUT_MS),
+        })
+      : await fetchWithSafeRedirects(downloadUrl, {
+          method: 'HEAD',
+          timeoutMs: PACKAGE_SIZE_PROBE_TIMEOUT_MS,
+          headers: { 'User-Agent': 'OpenLearnV2-PluginRegistry/1.0' },
+        });
+    if (response.ok) {
+      const len = Number(response.headers?.get?.('content-length') ?? '');
+      if (Number.isFinite(len) && len > 0) {
+        size = Math.floor(len);
+      }
+    }
+  } catch {
+    size = null;
+  }
+
+  if (packageSizeCache.size >= 500) {
+    const firstKey = packageSizeCache.keys().next().value;
+    if (firstKey !== undefined) packageSizeCache.delete(firstKey);
+  }
+  packageSizeCache.set(downloadUrl, {
+    size,
+    expiresAt: options.now + (size !== null ? PACKAGE_SIZE_HIT_TTL_MS : PACKAGE_SIZE_MISS_TTL_MS),
+  });
+  return size;
+}
+
+/**
+ * 当远端注册表未携带 `packageSize` 时，以 SSRF 安全的 `HEAD` 请求探测 ZIP 字节大小并短时缓存。
+ * 已有 `packageSize` 的条目零额外请求；探测失败优雅降级为 null。
+ */
+export async function enrichCommunityPackageSizes(
+  entries: readonly CommunityPluginEntry[],
+  options: { fetchImpl?: FetchLike; now?: number } = {},
+): Promise<CommunityPluginEntry[]> {
+  const missingIndexes: number[] = [];
+  for (let i = 0; i < entries.length; i += 1) {
+    if (entries[i].packageSize === null) missingIndexes.push(i);
+  }
+  if (missingIndexes.length === 0) return [...entries];
+
+  const now = options.now ?? Date.now();
+  const out = [...entries];
+  let cursor = 0;
+  const workerCount = Math.min(PACKAGE_SIZE_PROBE_CONCURRENCY, missingIndexes.length);
+  await Promise.all(
+    Array.from({ length: workerCount }, async () => {
+      while (cursor < missingIndexes.length) {
+        const idx = missingIndexes[cursor];
+        cursor += 1;
+        const target = out[idx];
+        const probed = await probeSinglePackageSize(target.downloadUrl, { fetchImpl: options.fetchImpl, now });
+        if (probed !== null) {
+          out[idx] = { ...target, packageSize: probed };
+        }
+      }
+    }),
+  );
+  return out;
 }
 
 /**
