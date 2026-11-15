@@ -1,8 +1,11 @@
 /**
  * 审计 H-4：未受信任插件不能留在宿主进程里。
  */
+import fs from 'node:fs';
+import path from 'node:path';
 import { describe, it, expect, afterEach } from 'vitest';
 import {
+  COMMUNITY_OFFICIAL_MARKER,
   isInTrustedInlineAllowlist,
   isTrustedInProcessPlugin,
   matchesTrustedInlinePattern,
@@ -213,6 +216,58 @@ describe('第三方插件执行模式策略', () => {
       execution_mode: string;
     };
     expect(row.execution_mode).toBe('process');
+
+    removeTmpDir(pluginsDir);
+    db.close();
+  });
+
+  it('带 .community-official 标记的社区插件即使在强制隔离下也允许 inline/worker 且保留可更新/卸载', async () => {
+    rememberEnv();
+    process.env.VITEST = 'true';
+    process.env.OPENLEARN_ENFORCE_PLUGIN_ISOLATION = '1';
+    delete process.env.OPENLEARN_TRUSTED_INLINE_PLUGINS;
+
+    const db = createDb();
+    const pluginsDir = makeTmpDir('exec-policy-community-');
+    const host = await makeHost(db, pluginsDir);
+    const pluginDir = path.join(pluginsDir, 'p-comm-official');
+    const filePath = path.join(pluginDir, 'index.js');
+    fs.mkdirSync(pluginDir, { recursive: true });
+    fs.writeFileSync(filePath, 'export default { async activate() {} };', 'utf-8');
+    fs.writeFileSync(path.join(pluginDir, COMMUNITY_OFFICIAL_MARKER), '{"official":true}', 'utf-8');
+
+    expect(isTrustedInProcessPlugin('ext-comm-official', process.env, filePath)).toBe(true);
+    expect(resolvePluginExecutionMode('ext-comm-official', 'inline', process.env, filePath)).toEqual({
+      mode: 'inline',
+      coerced: false,
+    });
+    expect(resolvePluginExecutionMode('ext-comm-official', 'worker', process.env, filePath)).toEqual({
+      mode: 'worker',
+      coerced: false,
+    });
+
+    const manifest = { id: 'ext-comm-official', name: 'Community Official', version: '1.0.0', main: 'index.js' };
+    db.prepare(
+      `INSERT INTO plugins (id, name, manifest, source_code, file_path, status, created_at, loader_version, execution_mode)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run(
+      'p-comm-official',
+      manifest.name,
+      JSON.stringify(manifest),
+      '',
+      filePath,
+      'installed',
+      Date.now(),
+      'esm',
+      'inline',
+    );
+
+    expect(host.isOfficialPlugin('p-comm-official', 'ext-comm-official')).toBe(false);
+    const listed = host.listPlugins().find((p) => p.id === 'p-comm-official');
+    expect(listed?.isolation_mode).toBe('inline');
+
+    await host.activatePlugin('p-comm-official', { mode: 'inline' });
+    expect(host.getPluginState('p-comm-official')).toBe(PluginState.ACTIVE);
 
     removeTmpDir(pluginsDir);
     db.close();

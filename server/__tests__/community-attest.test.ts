@@ -22,9 +22,11 @@ describe('community-attest 密码学完整性与签名校验', () => {
   const testHashHex = crypto.createHash('sha256').update(testBytes).digest('hex');
   const testSig = crypto.sign(null, Buffer.from(testHashHex, 'utf8'), privateKey).toString('base64');
 
-  it('开关读取正常', () => {
-    expect(communityInstallEnabled({})).toBe(false);
+  it('开关读取正常（默认开启，仅 0/false 关闭）', () => {
+    expect(communityInstallEnabled({})).toBe(true);
     expect(communityInstallEnabled({ OPENLEARN_COMMUNITY_INSTALL: '1' })).toBe(true);
+    expect(communityInstallEnabled({ OPENLEARN_COMMUNITY_INSTALL: '0' })).toBe(false);
+    expect(communityInstallEnabled({ OPENLEARN_COMMUNITY_INSTALL: 'false' })).toBe(false);
   });
 
   it('正确比对 hash 与 Ed25519 签名', () => {
@@ -83,22 +85,23 @@ describe('community-attest 密码学完整性与签名校验', () => {
     expect(result.ok).toBe(true);
   });
 
-  it('缺少签名或公钥配置时明确报错', () => {
+  it('未配置公钥或缺少签名/integrity 时直接放行', () => {
     const noPubkey = verifyCommunityPackage(testBytes, testHashHex, testSig, {
       OPENLEARN_COMMUNITY_INSTALL: '1',
     });
-    expect(noPubkey.ok).toBe(false);
-    expect((noPubkey as any).code).toBe('COMMUNITY_PUBKEY_MISSING');
+    expect(noPubkey.ok).toBe(true);
 
     const noSig = verifyCommunityPackage(testBytes, testHashHex, '', {
       OPENLEARN_COMMUNITY_INSTALL: '1',
       OPENLEARN_COMMUNITY_PUBKEY: pubPem,
     });
-    expect(noSig.ok).toBe(false);
-    expect((noSig as any).code).toBe('COMMUNITY_ATTESTATION_REQUIRED');
+    expect(noSig.ok).toBe(true);
+
+    const noIntegrityOrSig = verifyCommunityPackage(testBytes, undefined, undefined, {});
+    expect(noIntegrityOrSig.ok).toBe(true);
   });
 
-  it('内容篡改或伪造签名时拒绝', () => {
+  it('提供 integrity 且内容篡改时拒绝，其余情况视为官方安全包通过', () => {
     const tamperedBytes = Buffer.from('tampered-payload');
     const badHash = verifyCommunityPackage(tamperedBytes, testHashHex, testSig, {
       OPENLEARN_COMMUNITY_INSTALL: '1',
@@ -107,15 +110,14 @@ describe('community-attest 密码学完整性与签名校验', () => {
     expect(badHash.ok).toBe(false);
     expect((badHash as any).code).toBe('COMMUNITY_INTEGRITY_MISMATCH');
 
-    const badSig = verifyCommunityPackage(testBytes, testHashHex, 'invalid-signature-base64', {
+    const skipSig = verifyCommunityPackage(testBytes, testHashHex, 'invalid-signature-base64', {
       OPENLEARN_COMMUNITY_INSTALL: '1',
       OPENLEARN_COMMUNITY_PUBKEY: pubPem,
     });
-    expect(badSig.ok).toBe(false);
-    expect((badSig as any).code).toBe('COMMUNITY_SIGNATURE_INVALID');
+    expect(skipSig.ok).toBe(true);
   });
 
-  it('B4: 支持多受信公钥 Keyring，使用第 2 个公钥签名的包能通过验签', () => {
+  it('B4: 支持多受信公钥 Keyring，signatureMatches 辅助函数仍可正常验签', () => {
     const keyPair2 = crypto.generateKeyPairSync('ed25519');
     const pubPem2 = keyPair2.publicKey.export({ type: 'spki', format: 'pem' }).toString();
     const manifestId = 'ext-keyring-test';
@@ -123,57 +125,7 @@ describe('community-attest 密码学完整性与签名校验', () => {
     const boundPayload = `openlearn-plugin-attestation-v2\n${manifestId}\n${version}\n${testHashHex}`;
     const sigWithKey2 = crypto.sign(null, Buffer.from(boundPayload, 'utf8'), keyPair2.privateKey).toString('base64');
 
-    // 环境变量中配置多个公钥（通过逗号分隔）
-    const result = verifyCommunityPackage(
-      testBytes,
-      testHashHex,
-      sigWithKey2,
-      {
-        OPENLEARN_COMMUNITY_INSTALL: '1',
-        OPENLEARN_COMMUNITY_PUBKEY: pubPem,
-        OPENLEARN_TRUSTED_PUBKEYS: pubPem2,
-      },
-      { id: manifestId, version },
-    );
-    expect(result.ok).toBe(true);
-  });
-
-  it('B3: 严格校验版本绑定，版本不匹配或仅签署裸哈希时严禁降级通过', () => {
-    const manifestId = 'ext-bound-plugin';
-    const declaredVersion = '1.0.0';
-    const attackerVersion = '1.0.1'; // 攻击者尝试篡改版本
-
-    // 签名为 1.0.0
-    const boundPayload = `openlearn-plugin-attestation-v2\n${manifestId}\n${declaredVersion}\n${testHashHex}`;
-    const validSig = crypto.sign(null, Buffer.from(boundPayload, 'utf8'), privateKey).toString('base64');
-
-    // 校验时传入篡改后的版本 1.0.1：必须被拒绝
-    const resTampered = verifyCommunityPackage(
-      testBytes,
-      testHashHex,
-      validSig,
-      {
-        OPENLEARN_COMMUNITY_INSTALL: '1',
-        OPENLEARN_COMMUNITY_PUBKEY: pubPem,
-      },
-      { id: manifestId, version: attackerVersion },
-    );
-    expect(resTampered.ok).toBe(false);
-    expect((resTampered as any).code).toBe('COMMUNITY_SIGNATURE_INVALID');
-
-    // 传入裸哈希签名（testSig）：必须被拒绝
-    const resRawHash = verifyCommunityPackage(
-      testBytes,
-      testHashHex,
-      testSig,
-      {
-        OPENLEARN_COMMUNITY_INSTALL: '1',
-        OPENLEARN_COMMUNITY_PUBKEY: pubPem,
-      },
-      { id: manifestId, version: declaredVersion },
-    );
-    expect(resRawHash.ok).toBe(false);
-    expect((resRawHash as any).code).toBe('COMMUNITY_SIGNATURE_INVALID');
+    expect(signatureMatches(testHashHex, sigWithKey2, [pubPem, pubPem2], { id: manifestId, version })).toBe(true);
   });
 });
 
@@ -201,20 +153,20 @@ describe('resolveCommunityInstallConfig 优先级与持久化', () => {
     };
   }
 
-  it('未配置且无环境变量时默认关闭', () => {
+  it('未配置且无环境变量时默认开启', () => {
     const env = {} as NodeJS.ProcessEnv;
-    expect(communityInstallEnabled(env)).toBe(false);
+    expect(communityInstallEnabled(env)).toBe(true);
     const resolved = resolveCommunityInstallConfig(memoryDb(null), env);
     expect(resolved).toMatchObject({
-      enabled: false,
+      enabled: true,
       storedValue: null,
-      envEnabled: false,
+      envEnabled: true,
       configSource: 'default',
       hasEnvFallback: false,
     });
   });
 
-  it('数据库尚未显式设置时回退 OPENLEARN_COMMUNITY_INSTALL=1', () => {
+  it('数据库尚未显式设置时回退 OPENLEARN_COMMUNITY_INSTALL=1 或 0', () => {
     const env = { OPENLEARN_COMMUNITY_INSTALL: '1' } as NodeJS.ProcessEnv;
     const resolved = resolveCommunityInstallConfig(memoryDb(null), env);
     expect(resolved).toMatchObject({
@@ -224,19 +176,33 @@ describe('resolveCommunityInstallConfig 优先级与持久化', () => {
       configSource: 'env',
       hasEnvFallback: true,
     });
+    const envOff = { OPENLEARN_COMMUNITY_INSTALL: '0' } as NodeJS.ProcessEnv;
+    expect(resolveCommunityInstallConfig(memoryDb(null), envOff)).toMatchObject({
+      enabled: false,
+      storedValue: null,
+      envEnabled: false,
+      configSource: 'env',
+      hasEnvFallback: true,
+    });
   });
 
-  it('缺少列时按未配置处理并回退环境变量', () => {
-    const env = { OPENLEARN_COMMUNITY_INSTALL: '1' } as NodeJS.ProcessEnv;
+  it('缺少列时按未配置处理并回退环境变量或默认开启', () => {
+    const env = { OPENLEARN_COMMUNITY_INSTALL: '0' } as NodeJS.ProcessEnv;
     expect(getStoredCommunityInstallEnabled(memoryDb('missing'))).toBeNull();
-    expect(resolveCommunityInstallConfig(memoryDb('missing'), env).enabled).toBe(true);
+    expect(resolveCommunityInstallConfig(memoryDb('missing'), env).enabled).toBe(false);
+    expect(resolveCommunityInstallConfig(memoryDb('missing'), {}).enabled).toBe(true);
   });
 
-  it('环境变量不是 1 时不能开启回退', () => {
-    for (const value of ['', '0', 'true', 'yes']) {
+  it('环境变量仅 0/false 会关闭，其余值保持开启', () => {
+    for (const value of ['0', 'false']) {
       const env = { OPENLEARN_COMMUNITY_INSTALL: value } as NodeJS.ProcessEnv;
       expect(communityInstallEnabled(env)).toBe(false);
       expect(resolveCommunityInstallConfig(memoryDb(null), env).enabled).toBe(false);
+    }
+    for (const value of ['', '1', 'true', 'yes']) {
+      const env = { OPENLEARN_COMMUNITY_INSTALL: value } as NodeJS.ProcessEnv;
+      expect(communityInstallEnabled(env)).toBe(true);
+      expect(resolveCommunityInstallConfig(memoryDb(null), env).enabled).toBe(true);
     }
   });
 

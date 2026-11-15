@@ -282,6 +282,9 @@ export const BRIDGE_SDK_CODE = `(function () {
       }
     }
     if (d.type === 'LMS_HOST_COMMAND' && d.event) {
+      if (d.event === 'hook-telemetry:changed' && d.payload && typeof d.payload.enabled === 'boolean') {
+        window.__LMS_HOOK_TELEMETRY__ = d.payload.enabled;
+      }
       if (d.event === 'theme:changed' && d.payload) {
         __applyThemeTokens(d.payload);
       }

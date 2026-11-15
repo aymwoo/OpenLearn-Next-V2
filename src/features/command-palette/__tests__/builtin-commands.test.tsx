@@ -127,4 +127,22 @@ describe('CommandPaletteHost', () => {
     await new Promise((r) => setTimeout(r, 50));
     expect(screen.queryByTestId('command-palette-modal')).toBeNull();
   });
+
+  it('缺少 event.key 的合成 keydown 事件（如浏览器自动填充）不会抛出异常', () => {
+    const onError = vi.fn();
+    window.addEventListener('error', onError);
+    try {
+      render(<CommandPaletteHost />);
+      expect(() => {
+        window.dispatchEvent(new Event('keydown'));
+        const syntheticWithCtrl = new Event('keydown');
+        Object.defineProperty(syntheticWithCtrl, 'ctrlKey', { value: true });
+        window.dispatchEvent(syntheticWithCtrl);
+      }).not.toThrow();
+      expect(onError).not.toHaveBeenCalled();
+      expect(screen.queryByTestId('command-palette-modal')).toBeNull();
+    } finally {
+      window.removeEventListener('error', onError);
+    }
+  });
 });

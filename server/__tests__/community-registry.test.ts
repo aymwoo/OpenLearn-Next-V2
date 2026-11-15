@@ -8,8 +8,10 @@ import {
   DEFAULT_COMMUNITY_REGISTRY_URL,
   CommunityRegistryConfigError,
   __resetCommunityRegistryCache,
+  __resetPackageSizeCache,
   annotateInstallState,
   downloadPluginPackage,
+  enrichCommunityPackageSizes,
   fetchCommunityRegistry,
   getStoredCommunityRegistryUrl,
   isValidPluginId,
@@ -157,7 +159,7 @@ describe('normalizeCommunityEntry', () => {
       capabilities: ['student:read'],
       downloads: 1234,
       stars: 45,
-      verified: false,
+      verified: true,
       featured: true,
       installedVersion: null,
       hasUpdate: false,
@@ -789,5 +791,60 @@ describe('G-4c: 出站 SSRF 防护', () => {
         expect(innerHits).toEqual([]);
       });
     });
+  });
+});
+
+describe('packageSize and release time normalization & probing', () => {
+  beforeEach(() => {
+    __resetPackageSizeCache();
+  });
+
+  it('normalizes packageSize aliases and releasedAt timestamps', () => {
+    const entryA = normalizeCommunityEntry(
+      validRaw({
+        packageSize: 25680,
+        releasedAt: '2026-11-14T17:41:25+08:00',
+      }),
+    );
+    expect(entryA?.packageSize).toBe(25680);
+    expect(entryA?.publishedAt).toBe('2026-11-14T17:41:25+08:00');
+
+    const entryB = normalizeCommunityEntry(validRaw({ zip_size: '1048576' }));
+    expect(entryB?.packageSize).toBe(1048576);
+  });
+
+  it('probes missing packageSize via HEAD and caches results without probing entries that already have a size', async () => {
+    const withSize = normalizeCommunityEntry(validRaw({ id: 'has-size', packageSize: 12345 }))!;
+    const missingSize = normalizeCommunityEntry(
+      validRaw({ id: 'missing-size', downloadUrl: 'https://plugins.example.com/missing.zip' }),
+    )!;
+    const failedProbe = normalizeCommunityEntry(
+      validRaw({ id: 'fail-size', downloadUrl: 'https://plugins.example.com/fail.zip' }),
+    )!;
+
+    let headCalls = 0;
+    const fetchImpl: FetchLike = async (url, init) => {
+      expect(init?.method).toBe('HEAD');
+      headCalls += 1;
+      if (url.includes('missing.zip')) {
+        return {
+          ok: true,
+          status: 200,
+          headers: new Headers({ 'content-length': '65532' }),
+        } as unknown as Response;
+      }
+      return { ok: false, status: 404, headers: new Headers() } as unknown as Response;
+    };
+
+    const first = await enrichCommunityPackageSizes([withSize, missingSize, failedProbe], { fetchImpl, now: 1000 });
+    expect(first[0].packageSize).toBe(12345);
+    expect(first[1].packageSize).toBe(65532);
+    expect(first[2].packageSize).toBeNull();
+    expect(headCalls).toBe(2);
+
+    // 命中缓存，不再发起新的 HEAD 请求
+    const second = await enrichCommunityPackageSizes([withSize, missingSize, failedProbe], { fetchImpl, now: 2000 });
+    expect(second[1].packageSize).toBe(65532);
+    expect(headCalls).toBe(2);
   });
 });

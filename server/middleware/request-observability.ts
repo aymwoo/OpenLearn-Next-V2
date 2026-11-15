@@ -10,6 +10,8 @@ import { requestLogContext } from '../../packages/core/observability/request-con
 import { recordSecurityAudit } from '../../packages/core/observability/audit-log.js';
 import { recordHttpResponse } from '../../packages/core/observability/metrics.js';
 import { captureError } from '../../packages/core/observability/error-reporter.js';
+import { kernelContainer } from '../../packages/core/kernel/index.js';
+import { resolveHttpAccessLogPolicy } from '../services/runtime-policies.js';
 
 const REQUEST_ID_RE = /^[A-Za-z0-9._:-]{8,64}$/;
 const QUIET_PATHS = new Set(['/health', '/health/ready', '/', '/index.html', '/favicon.ico', '/robots.txt']);
@@ -137,9 +139,15 @@ export function requestObservability() {
       const status = res.statusCode;
       const userId = resolveRequestUserId(req);
       recordHttpResponse(status);
-      const quiet = isQuietRequest(req.path, status);
+      let access;
+      try {
+        access = resolveHttpAccessLogPolicy(kernelContainer.db);
+      } catch {
+        access = resolveHttpAccessLogPolicy(null);
+      }
+      const quiet = isQuietRequest(req.path, status, process.env.NODE_ENV === 'production', access.ignorePrefixes);
       if (!quiet) {
-        const logLevel = resolveHttpAccessLogLevel(status, durationMs);
+        const logLevel = resolveHttpAccessLogLevel(status, durationMs, access.mode, access.slowMs);
         if (logLevel) {
           const effectiveLevel = logLevel === 'debug' && !logger.isLevelEnabled('debug') ? 'info' : logLevel;
           logger[effectiveLevel](
