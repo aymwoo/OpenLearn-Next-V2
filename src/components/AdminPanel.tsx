@@ -56,6 +56,7 @@ export interface SiteInfo {
   currentAcademicYear?: string | null;
   academicStartMonth?: number;
   logoutClearSiteData?: boolean;
+  allowPublicStudentLookup?: boolean;
   defaultThemeId?: string | null;
 }
 
@@ -97,6 +98,9 @@ export function AdminPanel({
   const [currentAcademicYear, setCurrentAcademicYear] = useState<string>(siteInfo?.currentAcademicYear ?? '');
   const [academicStartMonth, setAcademicStartMonth] = useState<number>(9);
   const [logoutClearSiteData, setLogoutClearSiteData] = useState<boolean>(Boolean(siteInfo?.logoutClearSiteData));
+  const [allowPublicStudentLookup, setAllowPublicStudentLookup] = useState<boolean>(
+    siteInfo?.allowPublicStudentLookup ?? true,
+  );
   const [defaultThemeId, setDefaultThemeId] = useState<string>(siteInfo?.defaultThemeId || 'light');
   const [isThemeCenterOpen, setIsThemeCenterOpen] = useState(false);
   const [siteSettingsSaving, setSiteSettingsSaving] = useState(false);
@@ -226,6 +230,7 @@ export function AdminPanel({
           setAcademicStartMonth(data.academicStartMonth);
         }
         setLogoutClearSiteData(Boolean(data.logoutClearSiteData));
+        setAllowPublicStudentLookup(data.allowPublicStudentLookup !== false);
         if (typeof data.defaultThemeId === 'string' && data.defaultThemeId) {
           setDefaultThemeId(data.defaultThemeId);
         }
@@ -263,6 +268,7 @@ export function AdminPanel({
           currentAcademicYear: currentAcademicYear.trim() || undefined,
           academicStartMonth: Math.round(Number(academicStartMonth)),
           logoutClearSiteData,
+          allowPublicStudentLookup,
           defaultThemeId,
         }),
       });
@@ -1548,6 +1554,33 @@ export function AdminPanel({
                           {lang === 'zh'
                             ? '开启后，用户退出登录时服务端会返回 Clear-Site-Data: "cookies", "storage", "cache"，彻底清理同源 Cookie、Web Storage 与缓存（适合机房公用终端；开启后会同步重置本地主题偏好）。'
                             : 'When enabled, logout responses include Clear-Site-Data: "cookies", "storage", "cache" to purge cookies, Web Storage, and HTTP cache on shared lab computers (also resets local theme preferences).'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="pt-2 border-t border-gray-100">
+                    <div className="flex items-start gap-3">
+                      <input
+                        id="site_allow_public_student_lookup"
+                        type="checkbox"
+                        checked={allowPublicStudentLookup}
+                        onChange={(e) => setAllowPublicStudentLookup(e.target.checked)}
+                        className="mt-1 h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                      />
+                      <div className="space-y-0.5">
+                        <label
+                          htmlFor="site_allow_public_student_lookup"
+                          className="text-xs font-bold text-gray-700 cursor-pointer block"
+                        >
+                          {lang === 'zh'
+                            ? '允许学生端登录页公开查询学号'
+                            : 'Allow public student ID lookup on login page'}
+                        </label>
+                        <p className="text-xs text-gray-500 leading-relaxed">
+                          {lang === 'zh'
+                            ? '开启后，学生在未登录状态下可在登录页通过姓名和可选班级自助找回学号（默认开启，适合机房授课）；公网开放部署建议关闭以防学生姓名与学号被枚举。'
+                            : 'When enabled, students can look up their Student ID by name and optional class on the login page (enabled by default for classroom labs; disable on public internet deployments to prevent roster enumeration).'}
                         </p>
                       </div>
                     </div>

@@ -37,6 +37,7 @@ import {
   createAiLimiter,
   createLoginLimiter,
   createSessionWriteLimiter,
+  createStudentLookupLimiter,
   createWriteLimiter,
 } from './server/security/rate-limit.js';
 import { resolveTrustProxy } from './server/security/trust-proxy.js';
@@ -210,6 +211,7 @@ async function startServer() {
   // 不把可伪造的 X-Forwarded-For 放进 key；开发环境同样收紧，仅 PLAYWRIGHT_TEST 放宽。
   const loginLimiter = createLoginLimiter(process.env.PLAYWRIGHT_TEST ? 1000 : 5);
   const isDev = process.env.NODE_ENV !== 'production';
+  const studentLookupLimiter = createStudentLookupLimiter(process.env.PLAYWRIGHT_TEST ? 1000 : isDev ? 60 : 20);
   // 生产环境基础写限流放宽至 180 次/分（3 req/s），开发环境放宽至 600 次/分，避免课堂高频协作（白板/课件提交/互动）误撞 429
   const defaultWriteLimit = process.env.PLAYWRIGHT_TEST ? 10000 : isDev ? 600 : 180;
   const writeLimiter = createWriteLimiter(defaultWriteLimit);
@@ -362,6 +364,7 @@ async function startServer() {
   const ctx: ServerContext = {
     app,
     loginLimiter,
+    studentLookupLimiter,
     aiLimiter,
     lessonActiveSegments,
     buildAgentSystemInstruction,

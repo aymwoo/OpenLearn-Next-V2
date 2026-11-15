@@ -1470,4 +1470,93 @@ export class RosterService {
       timestamp: now,
     };
   }
+
+  /**
+   * 公开班级列表（仅返回 id 与 name，供登录页学号自助查询过滤使用，严禁暴露密码/人数等敏感字段）。
+   */
+  public listPublicClasses(): Array<{ id: string; name: string }> {
+    return this.reader.prepare('SELECT id, name FROM classes ORDER BY name ASC').all() as Array<{
+      id: string;
+      name: string;
+    }>;
+  }
+
+  /**
+   * 公开学号自助查询（Issue #538）。
+   * 按姓名（精确优先 + 模糊子串）与可选班级过滤，单次最多返回 limit 条并标记是否截断；
+   * 仅返回姓名、学号与所属班级名称列表，绝不暴露邮箱、密码或私密备注。
+   */
+  public lookupPublicStudents(params: { name: string; classId?: string; limit?: number }): {
+    items: Array<{ name: string; studentNumber: string; classes: string[] }>;
+    truncated: boolean;
+    limit: number;
+  } {
+    const limit = Math.max(1, Math.min(20, params.limit ?? 10));
+    const trimmedName = params.name.trim();
+    const escaped = trimmedName.replace(/[\\%_]/g, '\\$&');
+    const likePattern = `%${escaped}%`;
+    const classId = typeof params.classId === 'string' ? params.classId.trim() : '';
+
+    const sql = classId
+      ? `SELECT s.id, s.name, s.student_number
+         FROM students s
+         WHERE LOWER(s.name) LIKE LOWER(?) ESCAPE '\\'
+           AND EXISTS (
+             SELECT 1 FROM class_students cs WHERE cs.student_id = s.id AND cs.class_id = ?
+           )
+         ORDER BY
+           CASE WHEN LOWER(TRIM(s.name)) = LOWER(?) THEN 0 ELSE 1 END,
+           s.name ASC,
+           COALESCE(s.student_number, s.id) ASC
+         LIMIT ?`
+      : `SELECT s.id, s.name, s.student_number
+         FROM students s
+         WHERE LOWER(s.name) LIKE LOWER(?) ESCAPE '\\'
+         ORDER BY
+           CASE WHEN LOWER(TRIM(s.name)) = LOWER(?) THEN 0 ELSE 1 END,
+           s.name ASC,
+           COALESCE(s.student_number, s.id) ASC
+         LIMIT ?`;
+
+    const queryArgs = classId ? [likePattern, classId, trimmedName, limit + 1] : [likePattern, trimmedName, limit + 1];
+
+    const rows = this.reader.prepare(sql).all(...queryArgs) as Array<{
+      id: string;
+      name: string;
+      student_number: string | null;
+    }>;
+
+    const truncated = rows.length > limit;
+    const matched = rows.slice(0, limit);
+    const classMap = new Map<string, string[]>();
+
+    if (matched.length > 0) {
+      const placeholders = matched.map(() => '?').join(', ');
+      const classRows = this.reader
+        .prepare(
+          `SELECT cs.student_id, c.name AS class_name
+           FROM class_students cs
+           INNER JOIN classes c ON c.id = cs.class_id
+           WHERE cs.student_id IN (${placeholders})
+           ORDER BY c.name ASC`,
+        )
+        .all(...matched.map((r) => r.id)) as Array<{ student_id: string; class_name: string }>;
+
+      for (const row of classRows) {
+        const list = classMap.get(row.student_id) || [];
+        list.push(row.class_name);
+        classMap.set(row.student_id, list);
+      }
+    }
+
+    return {
+      items: matched.map((r) => ({
+        name: r.name,
+        studentNumber: (r.student_number && r.student_number.trim()) || r.id,
+        classes: classMap.get(r.id) || [],
+      })),
+      truncated,
+      limit,
+    };
+  }
 }

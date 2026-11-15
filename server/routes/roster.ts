@@ -1,3 +1,4 @@
+import express from 'express';
 import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
@@ -12,6 +13,7 @@ import { getUploadsDir } from '../utils/paths.js';
 import { extractFileAssetIdFromUrl, getFileStorageService } from '../services/file-storage/index.js';
 import { resolveContentType } from '../../packages/core/assignment/file-preview-policy.js';
 import { isPasswordChangeGateSkipped } from '../utils/password-gate.js';
+import { isPublicStudentLookupEnabled, validatePublicStudentLookupName } from '../utils/site-settings.js';
 import { randomId } from '../utils/id.js';
 import { parsePagination } from '../utils/pagination.js';
 import { CLASSROOM_EVENTS, publishClassroomEvent } from '../classroom-events.js';
@@ -99,6 +101,7 @@ export function invalidateSeedStatusCache(): void {
 
 export function registerRosterRoutes(ctx: ServerContext) {
   const { app, io, loginLimiter } = ctx;
+  const studentLookupLimiter: express.RequestHandler = ctx.studentLookupLimiter ?? ((_req, _res, next) => next());
   const rosterService = new RosterService(kernelContainer.db, kernelContainer.getReadDb());
 
   app.get('/api/classes', requireScopedAuth('self'), (req, res) => {
@@ -771,6 +774,50 @@ export function registerRosterRoutes(ctx: ServerContext) {
   app.get('/api/auth/seed-status', (_req, res) => {
     try {
       res.json(readSeedDefaultStatus());
+    } catch (e: any) {
+      sendSafeError(res, e);
+    }
+  });
+
+  // ── 登录页学生端：公开班级列表（仅返回 id 与 name，受站点开关控制）──
+  app.get('/api/auth/public-classes', (_req, res) => {
+    try {
+      if (!isPublicStudentLookupEnabled(kernelContainer.db)) {
+        return res.status(403).json({
+          error: '系统管理员已关闭登录页学号自助查询 / Public student lookup is disabled by administrator',
+        });
+      }
+      res.json({ items: rosterService.listPublicClasses() });
+    } catch (e: any) {
+      sendSafeError(res, e);
+    }
+  });
+
+  // ── 登录页学生端：公开学号自助查询（Issue #538）──
+  app.get('/api/auth/student-lookup', studentLookupLimiter, (req, res) => {
+    try {
+      if (!isPublicStudentLookupEnabled(kernelContainer.db)) {
+        return res.status(403).json({
+          error: '系统管理员已关闭登录页学号自助查询 / Public student lookup is disabled by administrator',
+        });
+      }
+      const nameCheck = validatePublicStudentLookupName(req.query.name);
+      if (!nameCheck.ok) {
+        return res.status(400).json({ error: nameCheck.error });
+      }
+      const classId = typeof req.query.classId === 'string' ? req.query.classId.trim() : '';
+      const result = rosterService.lookupPublicStudents({
+        name: nameCheck.name,
+        ...(classId ? { classId } : {}),
+        limit: 10,
+      });
+      recordSecurityAudit('auth.student_lookup', {
+        requestId: (req as { requestId?: string }).requestId,
+        hasClassFilter: Boolean(classId),
+        resultCount: result.items.length,
+        truncated: result.truncated,
+      });
+      res.json(result);
     } catch (e: any) {
       sendSafeError(res, e);
     }

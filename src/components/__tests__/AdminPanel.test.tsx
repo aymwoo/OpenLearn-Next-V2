@@ -248,4 +248,48 @@ describe('AdminPanel (管理后台页面样式规范化与标签切换)', () => 
     });
     expect(putCalls[0].body.logoutClearSiteData).toBe(true);
   });
+
+  it('renders and persists allowPublicStudentLookup setting in Site Settings tab', async () => {
+    const putCalls: Array<{ url: string; body: Record<string, unknown> }> = [];
+    global.fetch = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+      if (url === '/api/users') {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+      }
+      if (url === '/api/admin/runtime-policies') {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(runtimePolicyResponse) });
+      }
+      if (url === '/api/site-settings' && init?.method === 'PUT') {
+        putCalls.push({ url, body: JSON.parse(String(init.body || '{}')) });
+        return Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              ok: true,
+              siteInfo: {
+                siteName: 'OpenLearn Next',
+                slogan: 'Next-Gen Educational OS',
+                logoUrl: null,
+                allowPublicStudentLookup: false,
+              },
+            }),
+        });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+    });
+
+    render(<AdminPanel {...defaultProps} />);
+
+    fireEvent.click(screen.getByText('站点信息设置'));
+    const checkbox = (await screen.findByLabelText(/允许学生端登录页公开查询学号/)) as HTMLInputElement;
+    expect(checkbox.checked).toBe(true);
+
+    fireEvent.click(checkbox);
+    expect(checkbox.checked).toBe(false);
+
+    fireEvent.click(screen.getByRole('button', { name: /保存站点信息/ }));
+    await vi.waitFor(() => {
+      expect(putCalls).toHaveLength(1);
+    });
+    expect(putCalls[0].body.allowPublicStudentLookup).toBe(false);
+  });
 });

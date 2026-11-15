@@ -644,3 +644,15 @@ html[data-theme] {
     animation: none !important;
   }
 }
+
+/* 原生模态 <dialog> 滚动隔离：阻止弹层内或背景遮罩上的滚动穿透至底层页面 */
+dialog:modal {
+  overscroll-behavior: contain;
+}
+
+dialog::backdrop {
+  overflow: hidden;
+  overscroll-behavior: contain;
+  background-color: rgb(15 23 42 / 0.55);
+  backdrop-filter: blur(4px);
+}
