@@ -342,6 +342,8 @@ export function usePluginManagement(options: UsePluginManagementOptions) {
       approveCapabilities?: boolean;
       /** 批准清单申请的出站域名（R-02）；缺省为 false（运行时零白名单）。 */
       approveNetworkHosts?: boolean;
+      /** 策略收紧后，仅在管理员确认未签名本地 ZIP 时传 true；签名包不得设置。 */
+      allowUnsigned?: boolean;
     },
   ) => {
     setInstallingPlugin(true);
@@ -362,6 +364,9 @@ export function usePluginManagement(options: UsePluginManagementOptions) {
       }
       if (opts?.approveNetworkHosts) {
         headers['X-Approve-Network-Hosts'] = 'true';
+      }
+      if (opts?.allowUnsigned) {
+        headers['x-allow-unsigned'] = 'true';
       }
       if (isUpdate) {
         headers['X-Acknowledge-Risk'] = 'true';

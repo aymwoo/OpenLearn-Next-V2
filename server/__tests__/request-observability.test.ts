@@ -21,6 +21,8 @@ import {
 } from '../middleware/request-observability.js';
 import { logger } from '../../packages/core/observability/logger.js';
 import { vi } from 'vitest';
+import { kernelContainer } from '../../packages/core/kernel/index.js';
+import { setRuntimePolicies } from '../services/runtime-policies.js';
 
 describe('请求观测', () => {
   let server: Server;
@@ -32,6 +34,17 @@ describe('请求观测', () => {
     delete process.env.HTTP_SLOW_MS;
     delete process.env.HTTP_ACCESS_LOG_IGNORE;
     delete process.env.LOG_LEVEL;
+    try {
+      kernelContainer.db
+        .prepare(
+          `UPDATE site_settings
+           SET http_access_log_mode = NULL, http_access_log_ignore = NULL, http_slow_ms = NULL
+           WHERE id = ?`,
+        )
+        .run('global');
+    } catch {
+      /* 列尚未建立时忽略 */
+    }
     setAuditSinkForTests(null);
     setErrorCaptureSinkForTests(null);
     audits.length = 0;
@@ -333,6 +346,60 @@ describe('请求观测', () => {
 
       errorSpy.mockRestore();
       warnSpy.mockRestore();
+    });
+  });
+
+  describe('访问日志数据库覆盖', () => {
+    it('存储 mode=off 覆盖环境变量 all，后续请求不再写访问日志', async () => {
+      process.env.HTTP_ACCESS_LOG = 'all';
+      setRuntimePolicies(kernelContainer.db, { httpAccessLogMode: 'off' });
+      const errorSpy = vi.spyOn(logger, 'error');
+      const warnSpy = vi.spyOn(logger, 'warn');
+      const infoSpy = vi.spyOn(logger, 'info');
+      const debugSpy = vi.spyOn(logger, 'debug');
+      const app = express();
+      app.use(requestObservability());
+      app.get('/api/db-off', (_req, res) => {
+        res.status(500).json({ error: 'boom' });
+      });
+      const base = await listen(app);
+      await fetch(`${base}/api/db-off`);
+      const hit = [...errorSpy.mock.calls, ...warnSpy.mock.calls, ...infoSpy.mock.calls, ...debugSpy.mock.calls].find(
+        (call) => call[1] === 'http.request' && (call[0] as any)?.path === '/api/db-off',
+      );
+      expect(hit).toBeUndefined();
+      errorSpy.mockRestore();
+      warnSpy.mockRestore();
+      infoSpy.mockRestore();
+      debugSpy.mockRestore();
+    });
+
+    it('存储忽略前缀对后续请求生效，且日志不含查询串', async () => {
+      process.env.HTTP_ACCESS_LOG = 'all';
+      setRuntimePolicies(kernelContainer.db, { httpAccessLogMode: 'all', httpAccessLogIgnore: '/api/noisy' });
+      const debugSpy = vi.spyOn(logger, 'debug');
+      const infoSpy = vi.spyOn(logger, 'info');
+      const app = express();
+      app.use(requestObservability());
+      app.get('/api/noisy', (_req, res) => res.status(200).json({ ok: true }));
+      app.get('/api/visible', (_req, res) => res.status(200).json({ ok: true }));
+      const base = await listen(app);
+      await fetch(`${base}/api/noisy?token=super-secret`);
+      await fetch(`${base}/api/visible?token=super-secret`);
+      const logs = JSON.stringify([...debugSpy.mock.calls, ...infoSpy.mock.calls]);
+      expect(logs).not.toContain('super-secret');
+      expect(
+        [...debugSpy.mock.calls, ...infoSpy.mock.calls].some(
+          (call) => call[1] === 'http.request' && (call[0] as any)?.path === '/api/noisy',
+        ),
+      ).toBe(false);
+      expect(
+        [...debugSpy.mock.calls, ...infoSpy.mock.calls].some(
+          (call) => call[1] === 'http.request' && (call[0] as any)?.path === '/api/visible',
+        ),
+      ).toBe(true);
+      debugSpy.mockRestore();
+      infoSpy.mockRestore();
     });
   });
 });

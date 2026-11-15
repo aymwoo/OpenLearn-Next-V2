@@ -12,6 +12,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Features
 
+- **管理后台「站点信息设置」新增「运行时策略」入口**，将课件网络遥测、HTTP 访问日志与未签名本地插件策略改为可管理配置：
+  - 新增迁移 `053_runtime_admin_policies.sql`（`site_settings.bridge_hook_telemetry` / `http_access_log_mode` / `http_access_log_ignore` / `http_slow_ms` / `allow_unsigned_plugins` 均默认 `NULL`，禁止写成默认值以免掩盖环境变量回退），同步更新 `migrations/README.md` 与 `schema-golden.json`；
+  - 生效优先级为 **界面显式值（含显式关闭）> 未配置时环境变量回退 > 历史默认**。管理员可将存储值清为 `null` 以恢复 ENV/默认；保存不会改写真实 `.env`；
+  - 管理员通过 `GET/PUT /api/admin/runtime-policies` 读写（`requireAuth('administrator')`）。公开 `GET /api/site-settings` 与非管理员响应不返回存储值、保留环境变量清单或密钥。已登录用户可经 `GET /api/bridge/hook-telemetry` 仅读取 `{ enabled }`，供宿主向已打开课件同步关闭遥测；
+  - 课件网络遥测默认开启；关闭后新打开的课件立即按生效值注入，`/bridge.js` 同样注入，已打开课件在宿主同步 `hook-telemetry:changed` 后停止后续上报，不影响成绩提交；
+  - HTTP 访问日志不是布尔开关（`off` / `errors` / `all`，另含忽略前缀与慢请求阈值）。中间件按每次请求读取生效值，保存后对后续请求立即生效，不写查询串或请求体，也不影响安全审计；
+  - 未签名本地插件历史默认放行（审计仍记旁路）。收紧后必须在安装向导中逐次确认，且一键极速安装不能跳过该确认；此策略不能绕过签名错误、公钥、网络限制、权限或沙箱，也不等于全信任或内联执行；
+  - 受信内联名单、隔离/权限/配额、认证绕过、SQL 守卫、`LOG_REDACT`、HTTPS/proxy 与密钥等仍保留为环境变量，并在该页以中文说明理由。
+
 - **插件中心「社区」页支持管理员开关「允许从社区注册表安装」**：
   - 新增迁移 `052_community_install_enabled.sql`（列默认保持 `NULL`，禁止写成 `0`，以免掩盖环境变量回退），同步更新 `migrations/README.md` 与 `schema-golden.json`；
   - 生效优先级为 **界面显式 1/0（含显式关闭）> 未配置时环境变量 `OPENLEARN_COMMUNITY_INSTALL=1` > 默认关闭**；保存后立即对 `install-from-url`、带下载地址的一键更新，以及 `x-community-install` 直传生效，无需重启；

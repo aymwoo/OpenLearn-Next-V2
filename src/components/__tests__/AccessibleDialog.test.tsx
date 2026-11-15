@@ -1,3 +1,4 @@
+import { StrictMode } from 'react';
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, fireEvent, cleanup } from '@testing-library/react';
 import AccessibleDialog from '../AccessibleDialog';
@@ -156,6 +157,83 @@ describe('AccessibleDialog', () => {
       }),
     );
     fireEvent.click(dialog, { clientX: 10, clientY: 10 });
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('stays open under React StrictMode when native close() queues an async close event', async () => {
+    const showModalSpy = vi.fn(function (this: HTMLDialogElement) {
+      this.setAttribute('open', '');
+    });
+    const closeSpy = vi.fn(function (this: HTMLDialogElement) {
+      this.removeAttribute('open');
+      setTimeout(() => {
+        this.dispatchEvent(new Event('close'));
+      }, 0);
+    });
+    (HTMLDialogElement.prototype as unknown as { showModal: () => void }).showModal = showModalSpy;
+    (HTMLDialogElement.prototype as unknown as { close: () => void }).close = closeSpy;
+
+    const onClose = vi.fn();
+    render(
+      <StrictMode>
+        <AccessibleDialog open onClose={onClose} ariaLabel="StrictMode modal" closedBy="any">
+          <button type="button">OK</button>
+        </AccessibleDialog>
+      </StrictMode>,
+    );
+
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    const dialog = screen.getByRole('dialog');
+    expect(dialog.hasAttribute('open')).toBe(true);
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('does not close or re-open the modal when closedBy changes while open', async () => {
+    const showModalSpy = vi.fn(function (this: HTMLDialogElement) {
+      this.setAttribute('open', '');
+    });
+    const closeSpy = vi.fn(function (this: HTMLDialogElement) {
+      this.removeAttribute('open');
+      setTimeout(() => {
+        this.dispatchEvent(new Event('close'));
+      }, 0);
+    });
+    (HTMLDialogElement.prototype as unknown as { showModal: () => void }).showModal = showModalSpy;
+    (HTMLDialogElement.prototype as unknown as { close: () => void }).close = closeSpy;
+
+    const onClose = vi.fn();
+    const { rerender } = render(
+      <AccessibleDialog open onClose={onClose} ariaLabel="Dynamic closedBy modal" closedBy="any">
+        <button type="button">Import</button>
+      </AccessibleDialog>,
+    );
+
+    expect(showModalSpy).toHaveBeenCalledTimes(1);
+
+    rerender(
+      <AccessibleDialog open onClose={onClose} ariaLabel="Dynamic closedBy modal" closedBy="none">
+        <button type="button">Import</button>
+      </AccessibleDialog>,
+    );
+
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    expect(showModalSpy).toHaveBeenCalledTimes(1);
+    expect(closeSpy).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
+
+    const dialog = screen.getByRole('dialog');
+    fireEvent(dialog, new Event('cancel', { cancelable: true }));
+    expect(onClose).not.toHaveBeenCalled();
+
+    rerender(
+      <AccessibleDialog open onClose={onClose} ariaLabel="Dynamic closedBy modal" closedBy="any">
+        <button type="button">Import</button>
+      </AccessibleDialog>,
+    );
+
+    fireEvent(dialog, new Event('cancel', { cancelable: true }));
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 });

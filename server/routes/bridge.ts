@@ -13,6 +13,7 @@ import { isPathInsideRoot } from '../utils/path-guard.js';
 import { getStorageDir } from '../utils/paths.js';
 import type { ServerContext } from '../context.js';
 import { sendSafeError } from '../utils/error-handler.js';
+import { resolveHookTelemetryPolicy } from '../services/runtime-policies.js';
 
 interface CoursewareRow {
   id: string;
@@ -53,9 +54,11 @@ export function registerBridgeRoutes(ctx: ServerContext) {
     // SDK，需由本路由按请求 Host 前置注入宿主 origin + enforce 标志，使桥接出站消息
     // 定向到宿主而非静默广播到 "*"。origin 计算与 injectLmsSdk 共用同一实现，避免漂移。
     const hostOrigin = resolveRequestHostOrigin(req);
+    const hookTelemetryEnabled = resolveHookTelemetryPolicy(kernelContainer.db).enabled;
     const preamble =
       `window.__LMS_HOST_ORIGIN__ = ${JSON.stringify(hostOrigin)};\n` +
-      `window.__LMS_ENFORCE_ORIGIN__ = ${process.env.NODE_ENV === 'production'};\n`;
+      `window.__LMS_ENFORCE_ORIGIN__ = ${process.env.NODE_ENV === 'production'};\n` +
+      `window.__LMS_HOOK_TELEMETRY__ = ${hookTelemetryEnabled ? 'true' : 'false'};\n`;
     const sdkBody = runtimeScripts ? `${BRIDGE_SDK_CODE}\n${runtimeScripts}` : BRIDGE_SDK_CODE;
     res.send(preamble + sdkBody);
   });

@@ -124,15 +124,15 @@
 
 `packages/core/capability-governance/`（12 文件 / 544 行）+ `plugin-host/plugin-grants.ts`。
 
-| 关注点       | 位置                                         | 说明                                 |
-| ------------ | -------------------------------------------- | ------------------------------------ |
-| 能力授予     | `plugin-grants.ts`                           | 激活时按 `capabilitiesProposed` 授予 |
-| 能力准入评审 | `capability-governance/`                     | 高危能力的额外审查                   |
-| 插件签名     | `packages/core/security/plugin-signature.ts` | 签名/完整性校验                      |
-| 签名错误族   | `plugin-host/errors.ts` L190-241             | `PluginSignatureError` 及 4 个子类   |
-| 未签名放行   | `OPENLEARN_ALLOW_UNSIGNED`                   | 仅开发环境应开启                     |
+| 关注点       | 位置                                                                         | 说明                                 |
+| ------------ | ---------------------------------------------------------------------------- | ------------------------------------ |
+| 能力授予     | `plugin-grants.ts`                                                           | 激活时按 `capabilitiesProposed` 授予 |
+| 能力准入评审 | `capability-governance/`                                                     | 高危能力的额外审查                   |
+| 插件签名     | `packages/core/security/plugin-signature.ts`                                 | 签名/完整性校验                      |
+| 签名错误族   | `plugin-host/errors.ts` L190-241                                             | `PluginSignatureError` 及 4 个子类   |
+| 未签名放行   | `OPENLEARN_ALLOW_UNSIGNED`（未配置时的回退；管理员也可在「运行时策略」覆盖） | 历史默认放行；生产建议收紧           |
 
-**`OPENLEARN_ALLOW_UNSIGNED` 不是「关闭校验」**，而是「允许无签名插件安装」；
+**`OPENLEARN_ALLOW_UNSIGNED`（及后台同类开关）不是「关闭校验」**，而是「允许无签名本地插件安装」；签名失败、公钥、网络限制、权限与沙箱仍不可绕过。
 有签名但签名错误的插件依然被拒（`PluginSignatureInvalidError`）。
 
 ---

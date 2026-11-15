@@ -85,6 +85,11 @@ describe('community plugin registry routes', () => {
       kernelContainer.db
         .prepare('UPDATE site_settings SET community_registry_url = ? WHERE id = ?')
         .run(savedDbRegistryUrl, 'global');
+      try {
+        kernelContainer.db.prepare('UPDATE site_settings SET allow_unsigned_plugins = NULL WHERE id = ?').run('global');
+      } catch {
+        /* ignore */
+      }
     } catch {
       /* ignore */
     }
@@ -236,15 +241,14 @@ describe('community plugin registry routes', () => {
       expect(((await res.json()) as { error: string }).error).toMatch(/expectedId/);
     });
 
-    it('要求管理员显式确认风险后才下载公网插件包', async () => {
+    it('不需要 acknowledgeRisk 或 signature，直接进入下载流程（测试域名不可达时返回 fallbackToClient）', async () => {
       const res = await post(adminToken, {
         downloadUrl: 'https://plugins.example.com/plugin.zip',
         expectedId: 'ext-homework-hub',
       });
-      expect(res.status).toBe(400);
       const body = (await res.json()) as { code?: string; error: string };
-      expect(body.code).toBe('COMMUNITY_RISK_ACK_REQUIRED');
-      expect(body.error).toMatch(/acknowledgeRisk: true/);
+      expect(body.code).not.toBe('COMMUNITY_RISK_ACK_REQUIRED');
+      expect(body.code).not.toBe('COMMUNITY_ATTESTATION_REQUIRED');
     });
 
     it.each([
@@ -427,6 +431,81 @@ describe('community plugin registry routes', () => {
       }
     });
 
+    it('存储策略收紧后未签名包被拒绝，显式 x-allow-unsigned: true 仍可放行', async () => {
+      auditEvents = [];
+      const saved = process.env.OPENLEARN_ALLOW_UNSIGNED;
+      delete process.env.OPENLEARN_ALLOW_UNSIGNED;
+      try {
+        kernelContainer.db.prepare('UPDATE site_settings SET allow_unsigned_plugins = 0 WHERE id = ?').run('global');
+        const denied = await fetch(`${baseUrl}/api/plugins/upload-zip-raw`, {
+          method: 'POST',
+          headers: {
+            ...cookie(adminToken),
+            'Content-Type': 'application/zip',
+            'x-plugin-filename': 'ext-stored-unsigned-deny.zip',
+          },
+          body: await makePluginZip({ id: 'ext-stored-unsigned-deny', version: '1.0.0' }, false),
+        });
+        expect(denied.status).toBe(400);
+        expect(((await denied.json()) as { code?: string }).code).toBe('COMMUNITY_ATTESTATION_REQUIRED');
+
+        const allowed = await fetch(`${baseUrl}/api/plugins/upload-zip-raw`, {
+          method: 'POST',
+          headers: {
+            ...cookie(adminToken),
+            'Content-Type': 'application/zip',
+            'x-plugin-filename': 'ext-stored-unsigned-ack.zip',
+            'x-allow-unsigned': 'true',
+          },
+          body: await makePluginZip({ id: 'ext-stored-unsigned-ack', version: '1.0.0' }, false),
+        });
+        expect(allowed.status).toBe(200);
+        expect(((await allowed.json()) as { success: boolean }).success).toBe(true);
+      } finally {
+        kernelContainer.db.prepare('UPDATE site_settings SET allow_unsigned_plugins = NULL WHERE id = ?').run('global');
+        if (saved === undefined) delete process.env.OPENLEARN_ALLOW_UNSIGNED;
+        else process.env.OPENLEARN_ALLOW_UNSIGNED = saved;
+      }
+    });
+
+    it('存储策略允许未签名也不能放行签名错误的包', async () => {
+      const saved = process.env.OPENLEARN_ALLOW_UNSIGNED;
+      delete process.env.OPENLEARN_ALLOW_UNSIGNED;
+      try {
+        kernelContainer.db.prepare('UPDATE site_settings SET allow_unsigned_plugins = 1 WHERE id = ?').run('global');
+        const zip = new JSZip();
+        zip.file(
+          'manifest.json',
+          JSON.stringify({ id: 'ext-bad-sig-stored-allow', name: 'ext-bad-sig-stored-allow', version: '1.0.0' }),
+        );
+        zip.file('index.js', 'export default {};');
+        const unsignedBuf = await zip.generateAsync({ type: 'nodebuffer' });
+        const unsignedHash = crypto.createHash('sha256').update(unsignedBuf).digest('hex');
+        const payload = `openlearn-plugin-attestation-v2\next-bad-sig-stored-allow\n9.9.9\n${unsignedHash}`;
+        const badSig = crypto.sign(null, Buffer.from(payload, 'utf8'), privKey).toString('base64');
+        zip.file(
+          'signature.json',
+          JSON.stringify({ version: 2, algorithm: 'ed25519', signature: badSig, publisher: 'Alice Corp' }),
+        );
+        const res = await fetch(`${baseUrl}/api/plugins/upload-zip-raw`, {
+          method: 'POST',
+          headers: {
+            ...cookie(adminToken),
+            'Content-Type': 'application/zip',
+            'x-plugin-filename': 'ext-bad-sig-stored-allow.zip',
+            'x-allow-unsigned': 'true',
+          },
+          body: await zip.generateAsync({ type: 'nodebuffer' }),
+        });
+        expect(res.status).toBe(400);
+        expect(((await res.json()) as { code?: string }).code).toBe('COMMUNITY_SIGNATURE_INVALID');
+      } finally {
+        kernelContainer.db.prepare('UPDATE site_settings SET allow_unsigned_plugins = NULL WHERE id = ?').run('global');
+        if (saved === undefined) delete process.env.OPENLEARN_ALLOW_UNSIGNED;
+        else process.env.OPENLEARN_ALLOW_UNSIGNED = saved;
+      }
+    });
+
     it('B3: 签名版本与包内 manifest 不匹配时拒绝', async () => {
       const zip = new JSZip();
       const manifest = { id: 'ext-mismatch-test', name: 'ext-mismatch-test', version: '2.0.0' };
@@ -580,11 +659,11 @@ describe('community plugin registry routes', () => {
         body: await communityZipBuf(pluginId),
       });
 
-    it('GET 未配置时默认关闭；管理员可见来源，教师看不到敏感配置', async () => {
+    it('GET 未配置时默认开启；管理员可见来源，教师看不到敏感配置', async () => {
       const adminRes = await fetch(`${baseUrl}/api/plugins/community`, { headers: cookie(adminToken) });
       expect(adminRes.status).toBe(200);
       const adminBody = (await adminRes.json()) as Record<string, unknown>;
-      expect(adminBody.installEnabled).toBe(false);
+      expect(adminBody.installEnabled).toBe(true);
       expect(adminBody.installConfigSource).toBe('default');
       expect(adminBody.storedInstallEnabled).toBeNull();
       expect(adminBody.hasInstallEnvFallback).toBe(false);
@@ -592,7 +671,7 @@ describe('community plugin registry routes', () => {
 
       const teacherRes = await fetch(`${baseUrl}/api/plugins/community`, { headers: cookie(teacherToken) });
       const teacherBody = (await teacherRes.json()) as Record<string, unknown>;
-      expect(teacherBody.installEnabled).toBe(false);
+      expect(teacherBody.installEnabled).toBe(true);
       expect(teacherBody.canConfigure).toBe(false);
       expect(teacherBody.installConfigSource).toBeNull();
       expect(teacherBody.storedInstallEnabled).toBeNull();
@@ -670,6 +749,8 @@ describe('community plugin registry routes', () => {
     });
 
     it('install-from-url、URL 更新与 x-community-install 直传均使用同一有效值', async () => {
+      await putConfig(adminToken, { installEnabled: false });
+
       const disabledInstall = await postInstall(adminToken);
       expect(disabledInstall.status).toBe(403);
       const disabledBody = (await disabledInstall.json()) as { code?: string; error: string };
@@ -686,48 +767,71 @@ describe('community plugin registry routes', () => {
 
       await putConfig(adminToken, { installEnabled: true });
 
-      const attested = {
+      const payload = {
         downloadUrl: 'https://plugins.example.com/plugin.zip',
         expectedId: 'ext-homework-hub',
-        acknowledgeRisk: true,
       };
-      const enabledInstall = await postInstall(adminToken, attested);
-      const enabledInstallBody = (await enabledInstall.json()) as { code?: string };
+      const enabledInstall = await postInstall(adminToken, payload);
+      const enabledInstallBody = (await enabledInstall.json()) as { code?: string; fallbackToClient?: boolean };
       expect(enabledInstall.status).not.toBe(403);
       expect(enabledInstallBody.code).not.toBe('COMMUNITY_INSTALL_DISABLED');
-      expect(enabledInstall.status).toBe(400);
-      expect(enabledInstallBody.code).toBe('COMMUNITY_ATTESTATION_REQUIRED');
+      expect(enabledInstallBody.code).not.toBe('COMMUNITY_ATTESTATION_REQUIRED');
 
       const enabledUpdate = await fetch(`${baseUrl}/api/plugins/ext-homework-hub/one-click-update`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...cookie(adminToken) },
-        body: JSON.stringify(attested),
+        body: JSON.stringify(payload),
       });
       const enabledUpdateBody = (await enabledUpdate.json()) as { code?: string };
       expect(enabledUpdate.status).not.toBe(403);
       expect(enabledUpdateBody.code).not.toBe('COMMUNITY_INSTALL_DISABLED');
+      expect(enabledUpdateBody.code).not.toBe('COMMUNITY_ATTESTATION_REQUIRED');
 
       const enabledZip = await postCommunityZip(adminToken, 'ext-community-toggle-enabled');
-      const enabledZipBody = (await enabledZip.json()) as { code?: string; error?: string };
-      expect(enabledZip.status).not.toBe(403);
-      expect(enabledZipBody.code).not.toBe('COMMUNITY_INSTALL_DISABLED');
+      const enabledZipBody = (await enabledZip.json()) as { success?: boolean; code?: string };
+      expect(enabledZip.status).toBe(200);
+      expect(enabledZipBody.success).toBe(true);
     });
 
-    it('开启开关但未配置公钥时社区直传仍被拒绝，且中文说明不能安装', async () => {
+    it('未配置公钥时社区直传（x-community-install）直接放行，视为官方安全插件', async () => {
       delete process.env.OPENLEARN_COMMUNITY_PUBKEY;
       delete process.env.OPENLEARN_TRUSTED_PUBKEYS;
       const saveRes = await putConfig(adminToken, { installEnabled: true });
       const saveBody = (await saveRes.json()) as { publicKeysConfigured: boolean };
       expect(saveBody.publicKeysConfigured).toBe(false);
 
-      const zipRes = await postCommunityZip(adminToken, 'ext-community-toggle-nopubkey', {
-        'x-integrity': 'a'.repeat(64),
-        'x-signature': 'dGVzdC1zaWduYXR1cmU=',
-      });
-      expect(zipRes.status).toBe(400);
-      const zipBody = (await zipRes.json()) as { code?: string; error: string };
-      expect(zipBody.code).toBe('COMMUNITY_PUBKEY_MISSING');
-      expect(zipBody.error).toMatch(/公钥|OPENLEARN_COMMUNITY_PUBKEY|TRUSTED_PUBKEYS/);
+      const zipBuf = await communityZipBuf('ext-community-toggle-nopubkey');
+      const shaHex = crypto.createHash('sha256').update(zipBuf).digest('hex');
+
+      // 提供正确 integrity（或完全不提供 integrity/signature）且无公钥时均放行，并标记为官方安全（inline 不被强制降级）
+      const savedIsolation = process.env.OPENLEARN_ENFORCE_PLUGIN_ISOLATION;
+      process.env.OPENLEARN_ENFORCE_PLUGIN_ISOLATION = '1';
+      try {
+        const zipRes = await fetch(`${baseUrl}/api/plugins/upload-zip-raw`, {
+          method: 'POST',
+          headers: {
+            ...cookie(adminToken),
+            'Content-Type': 'application/zip',
+            'x-plugin-filename': 'ext-community-toggle-nopubkey.zip',
+            'x-community-install': 'true',
+            'x-integrity': shaHex,
+            'x-signature': 'dGVzdC1zaWduYXR1cmU=',
+          },
+          body: zipBuf,
+        });
+        expect(zipRes.status).toBe(200);
+        const zipBody = (await zipRes.json()) as {
+          success?: boolean;
+          executionMode?: string;
+          executionModeCoerced?: boolean;
+        };
+        expect(zipBody.success).toBe(true);
+        expect(zipBody.executionMode).toBe('inline');
+        expect(zipBody.executionModeCoerced).toBe(false);
+      } finally {
+        if (savedIsolation === undefined) delete process.env.OPENLEARN_ENFORCE_PLUGIN_ISOLATION;
+        else process.env.OPENLEARN_ENFORCE_PLUGIN_ISOLATION = savedIsolation;
+      }
     });
 
     it('拒绝非法 installEnabled 类型', async () => {

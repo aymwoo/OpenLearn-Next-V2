@@ -13,9 +13,12 @@
  * `OPENLEARN_ENFORCE_PLUGIN_ISOLATION=1`。生产进程没有 `VITEST`，这条例外不生效。
  */
 
+import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { normalizeExecutionMode, type PluginExecutionMode } from './types.js';
+
+export const COMMUNITY_OFFICIAL_MARKER = '.community-official';
 
 export function trustedInlineAllowlist(env: NodeJS.ProcessEnv = process.env): Set<string> {
   return new Set(
@@ -88,12 +91,24 @@ export function isInsideBuiltinPluginsDir(
   return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
 }
 
+export function isCommunityOfficialPluginDir(sourcePath: string | null | undefined): boolean {
+  if (!sourcePath) return false;
+  try {
+    const resolved = path.resolve(sourcePath);
+    const dir = path.basename(resolved).endsWith('.js') ? path.dirname(resolved) : resolved;
+    return fs.existsSync(path.join(dir, COMMUNITY_OFFICIAL_MARKER));
+  } catch {
+    return false;
+  }
+}
+
 export function isTrustedInProcessPlugin(
   manifestId: string | null | undefined,
   env: NodeJS.ProcessEnv = process.env,
   sourcePath?: string | null,
 ): boolean {
   if (isInsideBuiltinPluginsDir(sourcePath)) return true;
+  if (isCommunityOfficialPluginDir(sourcePath)) return true;
   // 名单支持通配（`*` / `前缀*`），见 matchesTrustedInlinePattern 的注释。
   if (isInTrustedInlineAllowlist(manifestId, env)) return true;
   if (env.VITEST && env.OPENLEARN_ENFORCE_PLUGIN_ISOLATION !== '1') return true;

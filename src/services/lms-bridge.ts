@@ -513,7 +513,33 @@ export function useLmsBridge(session: SessionType | null): void {
     };
 
     window.addEventListener('message', handleLmsMessage);
+
+    let cancelled = false;
+    const syncHookTelemetry = async () => {
+      try {
+        const res = await fetch('/api/bridge/hook-telemetry');
+        if (!res.ok || cancelled) return;
+        const body = (await res.json()) as { enabled?: boolean };
+        if (typeof body.enabled === 'boolean' && !cancelled) {
+          broadcastHookTelemetryToIframes(body.enabled);
+        }
+      } catch {
+        // 未登录或网络失败时保留课件注入时的开关，不误开。
+      }
+    };
+    void syncHookTelemetry();
+    const timer = window.setInterval(() => {
+      void syncHookTelemetry();
+    }, 30_000);
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void syncHookTelemetry();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+
     return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisible);
       window.removeEventListener('message', handleLmsMessage);
     };
   }, [session]);
@@ -566,6 +592,18 @@ function postToManagedIframe(iframe: HTMLIFrameElement, message: unknown): void 
     iframe.contentWindow?.postMessage(message, origin || '*');
   } catch {
     // 跨域/沙箱安全限制时静默失败
+  }
+}
+
+/** 向已打开的受管辖课件同步网络遥测总闸，使关闭后无需刷新即可停止后续 HOOK 上报。 */
+export function broadcastHookTelemetryToIframes(enabled: boolean): void {
+  if (typeof document === 'undefined') return;
+  for (const iframe of getManagedTargetIframes()) {
+    postToManagedIframe(iframe, {
+      type: 'LMS_HOST_COMMAND',
+      event: 'hook-telemetry:changed',
+      payload: { enabled },
+    });
   }
 }
 
