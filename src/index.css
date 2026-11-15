@@ -644,3 +644,24 @@ html[data-theme] {
     animation: none !important;
   }
 }
+
+@keyframes indeterminate-progress {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(350%);
+  }
+}
+
+.animate-indeterminate-progress {
+  animation: indeterminate-progress 1.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-indeterminate-progress {
+    animation: none;
+    width: 100%;
+    opacity: 0.7;
+  }
+}

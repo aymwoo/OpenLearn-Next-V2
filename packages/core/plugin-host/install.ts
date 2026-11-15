@@ -278,7 +278,7 @@ export abstract class PluginHostInstall extends PluginHostReload {
   async installPluginFromZip(
     zipPath: string,
     overrideExecutionMode?: PluginExecutionMode,
-    options?: { communityOfficial?: boolean },
+    options?: { communityOfficial?: boolean; onProgress?: (step: string, detail?: string) => void },
   ): Promise<Manifest> {
     // 审计 R-4：安装入队串行（见 base.enqueueInstall）
     return this.enqueueInstall(() => this.installPluginFromZipExclusive(zipPath, overrideExecutionMode, options));
@@ -287,7 +287,7 @@ export abstract class PluginHostInstall extends PluginHostReload {
   private async installPluginFromZipExclusive(
     zipPath: string,
     overrideExecutionMode?: PluginExecutionMode,
-    options?: { communityOfficial?: boolean },
+    options?: { communityOfficial?: boolean; onProgress?: (step: string, detail?: string) => void },
   ): Promise<Manifest> {
     if (!this.esmLoader) {
       throw new Error('Cannot install ZIP plugin: no esmLoader injected');
@@ -298,6 +298,7 @@ export abstract class PluginHostInstall extends PluginHostReload {
     //    那对大包是又一份 ≈压缩态大小的解析结构）。
     const { manifest, package: zip, bundledPath } = await validateAndBundleZip(zipPath);
     this.emitProgress(manifest.id, 'validating', 'Plugin validated, writing files...');
+    options?.onProgress?.('validating', 'Plugin validated, writing files...');
 
     // 2. 唯一性检查
     this.ensureUniqueManifestId(manifest.id);
@@ -375,6 +376,7 @@ export abstract class PluginHostInstall extends PluginHostReload {
       }
 
       this.emitProgress(manifest.id, 'extracting', 'Extracting assets...');
+      options?.onProgress?.('extracting', 'Extracting assets...');
       // Extract storage/ directory if present in ZIP (for static assets bundled with plugin)
       const storageEntries = Object.keys(zip.files).filter(
         (name) => name.startsWith('storage/') && !zip.files[name].dir,
@@ -521,6 +523,7 @@ export abstract class PluginHostInstall extends PluginHostReload {
         }
       }
       this.emitProgress(manifest.id, 'registering', 'Registering routes and saving...');
+      options?.onProgress?.('registering', 'Registering routes and saving...');
       // 5. INSERT 到 DB（源码和 ZIP 已迁移到文件系统，DB 仅存元数据）
       // Read executionMode from manifest (default: 'inline'), override if administrator specifies
       //
@@ -562,6 +565,7 @@ export abstract class PluginHostInstall extends PluginHostReload {
 
       console.log(`[PluginHost] Plugin "${manifest.id}" installed from ZIP to ${filePath} (${pluginId})`);
       this.emitProgress(manifest.id, 'complete', 'Installation complete');
+      options?.onProgress?.('complete', 'Installation complete');
       return {
         ...manifest,
         pluginId,
@@ -607,6 +611,7 @@ export abstract class PluginHostInstall extends PluginHostReload {
       executionMode?: PluginExecutionMode;
       allowDowngrade?: boolean;
       communityOfficial?: boolean;
+      onProgress?: (step: string, detail?: string) => void;
     } = {},
   ): Promise<{
     pluginId: string;
@@ -631,6 +636,7 @@ export abstract class PluginHostInstall extends PluginHostReload {
       executionMode?: PluginExecutionMode;
       allowDowngrade?: boolean;
       communityOfficial?: boolean;
+      onProgress?: (step: string, detail?: string) => void;
     } = {},
   ): Promise<{
     pluginId: string;
@@ -651,6 +657,7 @@ export abstract class PluginHostInstall extends PluginHostReload {
     // JSZip.loadAsync —— 对大包那是又一份 ≈压缩态大小的解析结构。
     const { manifest, package: zip, bundledPath } = await validateAndBundleZip(zipPath);
     this.emitProgress(manifest.id, 'validating', 'Plugin validated, preparing update...');
+    options.onProgress?.('validating', 'Plugin validated, preparing update...');
 
     // Resolve existing install
     let pluginId: string;
@@ -738,6 +745,7 @@ export abstract class PluginHostInstall extends PluginHostReload {
 
     // 升级前强制生成完整快照（文件 + SQLite 私有表/storage/config/migrations/grants），失败则阻断升级
     this.emitProgress(manifest.id, 'validating', 'Creating pre-update snapshot...');
+    options.onProgress?.('validating', 'Creating pre-update snapshot...');
     const snapshotHandle = createPluginUpdateSnapshot(this.db, this.pluginsDir, pluginId, {
       wasActive,
       executionMode: oldMode,
@@ -773,6 +781,7 @@ export abstract class PluginHostInstall extends PluginHostReload {
       }
 
       this.emitProgress(manifest.id, 'extracting', 'Extracting assets...');
+      options?.onProgress?.('extracting', 'Extracting assets...');
       const storageDir = path.join(pluginDir, 'storage');
       const storageEntries = Object.keys(zip.files).filter(
         (name) => name.startsWith('storage/') && !zip.files[name].dir,
@@ -839,8 +848,11 @@ export abstract class PluginHostInstall extends PluginHostReload {
         );
 
       this.emitProgress(manifest.id, 'registering', 'Applying runtime update...');
+      options.onProgress?.('registering', 'Applying runtime update...');
 
       if (wasActive) {
+        this.emitProgress(manifest.id, 'activating', 'Activating plugin runtime...');
+        options.onProgress?.('activating', 'Activating plugin runtime...');
         if (oldMode !== executionMode) {
           // Mode switch: full deactivate + activate under new mode
           try {
@@ -899,6 +911,7 @@ export abstract class PluginHostInstall extends PluginHostReload {
         `[PluginHost] Plugin "${manifest.id}" updated ${oldVersion} → ${newVersion} (${pluginId}), wasActive=${wasActive}, snapshot=${finalizedSnapshot.snapshotId}`,
       );
       this.emitProgress(manifest.id, 'complete', 'Update complete');
+      options.onProgress?.('complete', 'Update complete');
       return {
         pluginId,
         manifest,

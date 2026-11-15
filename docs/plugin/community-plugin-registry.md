@@ -203,7 +203,8 @@ npx @openlearn/plugin-sdk sign --key publisher-private.pem --publisher "Alice De
 3. 要求社区安装生效值已开启（界面显式开启，或未配置时 `OPENLEARN_COMMUNITY_INSTALL=1`），否则 403，`code` 为 `COMMUNITY_INSTALL_DISABLED`；
 4. 要求请求体同时带 `integrity` 与 `signature`，否则 400，`code` 为 `COMMUNITY_ATTESTATION_REQUIRED`，此时不下载；
 5. 服务端下载 ZIP。下载失败返回 HTTP 400 + `fallbackToClient: true`。下载成功后按 `OPENLEARN_COMMUNITY_PUBKEY` 验签，失败则删除临时包；
-6. 若 `expectedId` 对应的插件已在本机安装 ⇒ 走 `updateFromZip`（`allowDowngrade` 默认 `false`）；否则走 `installFromZip`，并按受信策略落执行模式。
+6. 若 `expectedId` 对应的插件已在本机安装 ⇒ 走 `updateFromZip`（`allowDowngrade` 默认 `false`）；否则走 `installFromZip`，按受信策略落执行模式并在默认开启 `autoActivate` 时激活插件；
+7. **流式进度反馈（SSE）**：请求头包含 `Accept: text/event-stream` 或请求体传 `stream: true` 且通过前置参数/权限/安全校验后，响应以 `text/event-stream` 依次推送 `progress` 事件（`downloading` → `verifying` → `installing` → `activating` → `complete`，携带 `percent` 及字节数 `loaded`/`total`；下载响应缺少 `Content-Length` 时 `percent` 为 `null`）、最终 `result` 或 `error` 事件；普通请求保持标准 JSON 响应不变。
 
 **错误码说明**：
 
@@ -224,7 +225,7 @@ npx @openlearn/plugin-sdk sign --key publisher-private.pem --publisher "Alice De
 - **插件源与安装开关（管理员）**：未配置时在引导卡片内直接提供地址输入表单；已配置或加载失败时可通过工具栏「插件源设置」按钮展开内嵌表单，支持修改注册表 JSON 地址或清除界面覆盖（恢复环境变量默认）。管理员还可开关「允许从社区注册表安装」，保存后立即生效；非管理员只能看到有效状态，不能改开关，也看不到环境回退或公钥配置细节。未配置公钥时，开启开关也会显示无法安装的中文说明；
 - **预览卡片**：图标、名称、作者、版本、认证/精选角标、描述、标签、权限数量、下载量与收藏数、源码与主页外链；
 - **筛选与排序**：关键词搜索（名称/作者/标签/id）、高频标签芯片、推荐 / 下载最多 / 按名称排序、一键隐藏已安装；
-- **安装反馈**：点击安装先打开风险说明（`data-testid="community-install-risk-dialog"`）。确认后请求体带 `acknowledgeRisk: true`；「同时批准公开路由」默认不勾。成功后卡片进入已安装态，并触发插件列表刷新（插件的前端贡献点在启动时注册，故安装完成后需要重新加载页面才会生效）；
+- **安装反馈**：点击安装后按钮立即进入 loading 动画并禁用重复点击；通过 SSE 流实时展示阶段文案（`下载中` → `校验签名` → `安装中` → `激活中`）与百分比进度条（若服务端或浏览器回退下载响应缺少 `Content-Length`，退化为不确定进度条并保留阶段文案）。安装/更新完成后卡片进入已安装态，提示「刷新页面后前端扩展点生效」，并触发插件中心重载以激活前端贡献点；
 - **状态覆盖**：骨架屏加载、可重试错误态、空注册表、筛选无结果、未配置注册表指引。
 
 ---

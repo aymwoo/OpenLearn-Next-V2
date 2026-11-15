@@ -586,6 +586,12 @@ export interface DownloadedPackage {
   bytes: number;
 }
 
+export interface DownloadProgress {
+  loaded: number;
+  total: number | null;
+  percent: number | null;
+}
+
 /**
  * 服务端下载插件包。地址必须已通过 `isSafeExternalUrl`；响应体超过
  * `MAX_PACKAGE_BYTES` 直接拒绝，避免把非法大文件写进内存与磁盘。
@@ -599,7 +605,7 @@ export interface DownloadedPackage {
  */
 export async function downloadPluginPackage(
   downloadUrl: string,
-  options: { fetchImpl?: FetchLike } = {},
+  options: { fetchImpl?: FetchLike; onProgress?: (progress: DownloadProgress) => void } = {},
 ): Promise<DownloadedPackage> {
   const safety = isSafeExternalUrl(downloadUrl);
   if (!safety.safe) {
@@ -622,8 +628,11 @@ export async function downloadPluginPackage(
     throw new Error(`下载插件包失败: HTTP ${response.status}`);
   }
 
-  const declaredLength = Number(response.headers?.get?.('content-length') ?? '');
-  if (Number.isFinite(declaredLength) && declaredLength > MAX_PACKAGE_BYTES) {
+  const rawContentLength = response.headers?.get?.('content-length');
+  const parsedLength =
+    typeof rawContentLength === 'string' && rawContentLength.trim() !== '' ? Number(rawContentLength) : NaN;
+  const total = Number.isFinite(parsedLength) && parsedLength > 0 ? parsedLength : null;
+  if (total !== null && total > MAX_PACKAGE_BYTES) {
     throw new Error(`插件包超过 ${Math.floor(MAX_PACKAGE_BYTES / 1024 / 1024)}MB 上限`);
   }
 
@@ -635,6 +644,10 @@ export async function downloadPluginPackage(
   const zipPath = path.join(os.tmpdir(), `plugin-download-${randomUUID()}.zip`);
   const out = fs.createWriteStream(zipPath);
   let received = 0;
+  let lastReportedPercent: number | null = total !== null ? 0 : null;
+  let lastReportedBytes = 0;
+
+  options.onProgress?.({ loaded: 0, total, percent: total !== null ? 0 : null });
 
   try {
     for await (const chunk of response.body as unknown as AsyncIterable<Buffer>) {
@@ -648,6 +661,19 @@ export async function downloadPluginPackage(
           out.once('drain', resolve);
           out.once('error', reject);
         });
+      }
+      if (options.onProgress) {
+        const percent = total !== null ? Math.min(100, Math.round((received / total) * 100)) : null;
+        if (percent !== null) {
+          if (percent !== lastReportedPercent) {
+            lastReportedPercent = percent;
+            lastReportedBytes = received;
+            options.onProgress({ loaded: received, total, percent });
+          }
+        } else if (lastReportedBytes === 0 || received - lastReportedBytes >= 32 * 1024) {
+          lastReportedBytes = received;
+          options.onProgress({ loaded: received, total: null, percent: null });
+        }
       }
     }
     await new Promise<void>((resolve, reject) => {
@@ -667,6 +693,10 @@ export async function downloadPluginPackage(
   if (received === 0) {
     fs.rmSync(zipPath, { force: true });
     throw new Error('插件包为空');
+  }
+
+  if (options.onProgress && (lastReportedBytes !== received || (total !== null && lastReportedPercent !== 100))) {
+    options.onProgress({ loaded: received, total, percent: total !== null ? 100 : null });
   }
 
   return { zipPath, filename: resolveFilename(response, downloadUrl), bytes: received };
