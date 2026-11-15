@@ -736,7 +736,7 @@ describe('community plugin registry routes', () => {
     });
   });
 
-  describe('community plugin stars (+⭐) & reviews', () => {
+  describe('Gitee repository live stars and +⭐ routes', () => {
     const studentId = 'usr-community-student';
     const studentToken = 'tok-community-student';
     const scopedPluginId = '@ext/class-manager';
@@ -760,133 +760,102 @@ describe('community plugin registry routes', () => {
         );
     });
 
-    afterEach(() => {
-      kernelContainer.db.prepare('DELETE FROM community_plugin_stars WHERE plugin_id = ?').run(scopedPluginId);
-      kernelContainer.db.prepare('DELETE FROM community_plugin_reviews WHERE plugin_id = ?').run(scopedPluginId);
-    });
-
     afterAll(() => {
       kernelContainer.db.prepare('DELETE FROM client_sessions WHERE id = ?').run(studentToken);
       kernelContainer.db.prepare('DELETE FROM users WHERE id = ?').run(studentId);
     });
 
-    it('rejects anonymous and student callers for star & review mutations', async () => {
-      expect((await fetch(`${baseUrl}/api/plugins/community/star`, { method: 'POST' })).status).toBe(401);
+    it('rejects anonymous and student callers for gitee-star mutations and anonymous refreshes', async () => {
+      expect((await fetch(`${baseUrl}/api/plugins/community/gitee-star`, { method: 'POST' })).status).toBe(401);
+      expect(
+        (await fetch(`${baseUrl}/api/plugins/community/gitee-stars?pluginId=${encodeURIComponent(scopedPluginId)}`))
+          .status,
+      ).toBe(401);
       expect(
         (
-          await fetch(`${baseUrl}/api/plugins/community/star`, {
+          await fetch(`${baseUrl}/api/plugins/community/gitee-star`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', ...cookie(studentToken) },
             body: JSON.stringify({ pluginId: scopedPluginId }),
           })
         ).status,
       ).toBe(403);
-      expect(
-        (
-          await fetch(`${baseUrl}/api/plugins/community/reviews`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', ...cookie(studentToken) },
-            body: JSON.stringify({ pluginId: scopedPluginId, rating: 5, comment: 'nice' }),
-          })
-        ).status,
-      ).toBe(403);
     });
 
-    it('toggles GitHub-style +⭐ per user and counts across users (including scoped @scope/name IDs)', async () => {
-      const postStar = (token: string, body: unknown) =>
-        fetch(`${baseUrl}/api/plugins/community/star`, {
+    it('returns 401 requiresGiteeAuth with Gitee starUrl when teacher clicks +⭐ without a Gitee token', async () => {
+      const registryUrl = 'https://registry.example.com/community-plugins.json';
+      const registryJson = JSON.stringify({
+        version: 1,
+        plugins: [
+          {
+            id: scopedPluginId,
+            name: '班级管理',
+            version: '0.3.15',
+            downloadUrl: 'https://gitee.com/aymwoo/class_manager/releases/download/v0.3.15/class_manager-0.3.15.zip',
+            repository: 'https://gitee.com/aymwoo/class_manager',
+            stars: 3,
+          },
+        ],
+      });
+
+      const { __resetCommunityRegistryCache, fetchCommunityRegistry } =
+        await import('../services/community-registry.js');
+      const { __resetGiteeStarsCache } = await import('../services/gitee-stars.js');
+
+      const installed = new Map<string, string>();
+      const rows = kernelContainer.db.prepare('SELECT manifest FROM plugins').all() as Array<{ manifest: string }>;
+      for (const row of rows) {
+        try {
+          const manifest = JSON.parse(row.manifest) as { id?: unknown; version?: unknown };
+          if (typeof manifest?.id === 'string' && manifest.id) {
+            installed.set(manifest.id, typeof manifest.version === 'string' ? manifest.version : '0.0.0');
+          }
+        } catch {
+          // ignore
+        }
+      }
+
+      process.env[COMMUNITY_REGISTRY_ENV] = registryUrl;
+      __resetCommunityRegistryCache();
+      __resetGiteeStarsCache();
+      await fetchCommunityRegistry({
+        url: registryUrl,
+        installed,
+        fetchImpl: async () => new Response(registryJson, { status: 200 }),
+      });
+
+      try {
+        const res = await fetch(`${baseUrl}/api/plugins/community/gitee-star`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...cookie(token) },
-          body: JSON.stringify(body),
+          headers: { 'Content-Type': 'application/json', ...cookie(teacherToken) },
+          body: JSON.stringify({ pluginId: scopedPluginId }),
+        });
+        expect(res.status).toBe(401);
+        expect(await res.json()).toMatchObject({
+          success: false,
+          requiresGiteeAuth: true,
+          reason: 'missing_token',
+          pluginId: scopedPluginId,
+          starUrl: 'https://gitee.com/aymwoo/class_manager',
         });
 
-      const t1 = await postStar(teacherToken, { pluginId: scopedPluginId });
-      expect(t1.status).toBe(200);
-      expect(await t1.json()).toMatchObject({ success: true, pluginId: scopedPluginId, starred: true, starCount: 1 });
-
-      const a1 = await postStar(adminToken, { pluginId: scopedPluginId });
-      expect(a1.status).toBe(200);
-      expect(await a1.json()).toMatchObject({ success: true, pluginId: scopedPluginId, starred: true, starCount: 2 });
-
-      // 教师再次点击取消标星
-      const t2 = await postStar(teacherToken, { pluginId: scopedPluginId });
-      expect(t2.status).toBe(200);
-      expect(await t2.json()).toMatchObject({ success: true, pluginId: scopedPluginId, starred: false, starCount: 1 });
-    });
-
-    it('validates, creates, updates, lists, and deletes plugin reviews', async () => {
-      const postReview = (token: string, body: unknown) =>
-        fetch(`${baseUrl}/api/plugins/community/reviews`, {
+        const unknownRes = await fetch(`${baseUrl}/api/plugins/community/gitee-star`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...cookie(token) },
-          body: JSON.stringify(body),
+          headers: { 'Content-Type': 'application/json', ...cookie(teacherToken) },
+          body: JSON.stringify({ pluginId: 'non-existent-plugin' }),
         });
+        expect(unknownRes.status).toBe(404);
 
-      // 非法评分应被拒绝
-      const badRating = await postReview(teacherToken, { pluginId: scopedPluginId, rating: 6, comment: 'bad' });
-      expect(badRating.status).toBe(400);
-
-      // 教师提交 4 星评价
-      const r1 = await postReview(teacherToken, {
-        pluginId: scopedPluginId,
-        rating: 4,
-        comment: '分组很顺手',
-        pluginVersion: '0.3.15',
-      });
-      expect(r1.status).toBe(200);
-      expect(await r1.json()).toMatchObject({
-        success: true,
-        summary: { reviewCount: 1, averageRating: 4, myRating: 4 },
-        review: { authorName: '社区教师', rating: 4, comment: '分组很顺手', pluginVersion: '0.3.15', isOwn: true },
-      });
-
-      // 管理员提交 5 星评价，均分变为 4.5
-      const r2 = await postReview(adminToken, { pluginId: scopedPluginId, rating: 5, comment: '课堂很稳' });
-      expect(r2.status).toBe(200);
-      expect(await r2.json()).toMatchObject({
-        success: true,
-        summary: { reviewCount: 2, averageRating: 4.5, myRating: 5 },
-      });
-
-      // 教师修改自己的评价为 5 星（幂等更新，不产生重复记录）
-      const r1Update = await postReview(teacherToken, {
-        pluginId: scopedPluginId,
-        rating: 5,
-        comment: '更新：满分推荐',
-      });
-      expect(r1Update.status).toBe(200);
-      expect(await r1Update.json()).toMatchObject({
-        success: true,
-        summary: { reviewCount: 2, averageRating: 5, myRating: 5 },
-      });
-
-      // 列表查询
-      const listRes = await fetch(
-        `${baseUrl}/api/plugins/community/reviews?pluginId=${encodeURIComponent(scopedPluginId)}`,
-        { headers: cookie(teacherToken) },
-      );
-      expect(listRes.status).toBe(200);
-      const listBody = (await listRes.json()) as {
-        success: boolean;
-        summary: { reviewCount: number; averageRating: number };
-        reviews: Array<{ isOwn: boolean; comment: string }>;
-      };
-      expect(listBody.summary).toMatchObject({ reviewCount: 2, averageRating: 5 });
-      expect(listBody.reviews).toHaveLength(2);
-      expect(listBody.reviews[0].isOwn).toBe(true);
-      expect(listBody.reviews[0].comment).toBe('更新：满分推荐');
-
-      // 教师删除自己的评价
-      const delRes = await fetch(
-        `${baseUrl}/api/plugins/community/reviews?pluginId=${encodeURIComponent(scopedPluginId)}`,
-        { method: 'DELETE', headers: cookie(teacherToken) },
-      );
-      expect(delRes.status).toBe(200);
-      expect(await delRes.json()).toMatchObject({
-        success: true,
-        deleted: true,
-        summary: { reviewCount: 1, averageRating: 5, myRating: null },
-      });
+        const refreshUnknown = await fetch(
+          `${baseUrl}/api/plugins/community/gitee-stars?pluginId=non-existent-plugin`,
+          { headers: cookie(teacherToken) },
+        );
+        expect(refreshUnknown.status).toBe(404);
+      } finally {
+        delete process.env[COMMUNITY_REGISTRY_ENV];
+        __resetCommunityRegistryCache();
+        __resetGiteeStarsCache();
+      }
     });
   });
 });

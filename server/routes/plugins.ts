@@ -43,13 +43,12 @@ import {
   type DownloadedPackage,
 } from '../services/community-registry.js';
 import {
-  CommunityFeedbackError,
-  deletePluginReview,
-  getFeedbackSummaries,
-  listPluginReviews,
-  togglePluginStar,
-  upsertPluginReview,
-} from '../services/community-feedback.js';
+  GiteeStarError,
+  enrichCommunityGiteeStars,
+  normalizeGiteeToken,
+  refreshSingleGiteePluginStars,
+  toggleGiteeRepoStar,
+} from '../services/gitee-stars.js';
 import JSZip from 'jszip';
 import {
   COMMUNITY_INSTALL_DISABLED_MESSAGE,
@@ -683,31 +682,17 @@ export function registerPluginsRoutes(ctx: ServerContext) {
     try {
       const config = resolveCommunityRegistryConfig(kernelContainer.db);
       const isAdmin = isAdministrator((req as any).session);
+      const forceRefresh = String(req.query.refresh || '') === '1';
       const result = await fetchCommunityRegistry({
         url: config.activeUrl,
         installed: listInstalledManifestVersions(),
-        forceRefresh: String(req.query.refresh || '') === '1',
+        forceRefresh,
       });
       const withSizes = await enrichCommunityPackageSizes(result.plugins);
-      const userId = String((req as any).session?.userId ?? '').trim() || null;
-      const summaries = getFeedbackSummaries(
-        kernelContainer.db,
-        withSizes.map((p) => p.id),
-        userId,
-      );
-      const enrichedPlugins = withSizes.map((entry) => {
-        const fb = summaries.get(entry.id);
-        const localStars = fb?.starCount ?? 0;
-        return {
-          ...entry,
-          upstreamStars: entry.stars,
-          localStars,
-          stars: (entry.stars ?? 0) + localStars,
-          starred: fb?.starred ?? false,
-          reviewCount: fb?.reviewCount ?? 0,
-          averageRating: fb?.averageRating ?? null,
-          myRating: fb?.myRating ?? null,
-        };
+      const giteeToken = normalizeGiteeToken(req.header('x-gitee-token'));
+      const enrichedPlugins = await enrichCommunityGiteeStars(withSizes, {
+        token: giteeToken,
+        forceRefresh,
       });
       const install = resolveCommunityInstallConfig(kernelContainer.db);
       res.json({
@@ -799,95 +784,89 @@ export function registerPluginsRoutes(ctx: ServerContext) {
     }
   });
 
-  // GitHub 风格一键 +Star / 取消 Star（教师与管理员可用，按 user_id 幂等记录）
-  app.post('/api/plugins/community/star', requireScopedAuth('class-staff'), (req, res) => {
+  // 增量刷新单个社区插件在 Gitee 仓库上的实时 ⭐ 数（用于从 Gitee 仓库新标签页返回后自动同步）
+  app.get('/api/plugins/community/gitee-stars', requireScopedAuth('authenticated'), async (req, res) => {
     try {
-      const userId = String((req as { session?: { userId?: string } }).session?.userId ?? '').trim();
-      if (!userId) return res.status(401).json({ success: false, error: '未登录' });
-      const { pluginId, desired } = (req.body || {}) as { pluginId?: unknown; desired?: unknown };
+      const pluginId = typeof req.query.pluginId === 'string' ? req.query.pluginId.trim() : '';
+      if (!pluginId || !isValidPluginId(pluginId)) {
+        return res.status(400).json({ success: false, error: 'pluginId 格式非法' });
+      }
+      const config = resolveCommunityRegistryConfig(kernelContainer.db);
+      const registry = await fetchCommunityRegistry({
+        url: config.activeUrl,
+        installed: listInstalledManifestVersions(),
+      });
+      const target = registry.plugins.find((item) => item.id === pluginId);
+      if (!target) {
+        return res.status(404).json({ success: false, error: '未在社区插件源中找到该插件' });
+      }
+      const giteeToken = normalizeGiteeToken(req.header('x-gitee-token'));
+      const refreshed = await refreshSingleGiteePluginStars(target, { token: giteeToken });
+      res.json({ success: true, ...refreshed });
+    } catch (e: unknown) {
+      sendSafeError(res, e);
+    }
+  });
+
+  // 异步通过 Gitee API 为插件对应的 Gitee 仓库加星 / 取消加星
+  // 若缺少有效的 Gitee 令牌，返回 401 requiresGiteeAuth 并附带仓库页面地址，引导前端提示并打开新 Tab 页
+  app.post('/api/plugins/community/gitee-star', requireScopedAuth('class-staff'), async (req, res) => {
+    try {
+      const {
+        pluginId,
+        desired,
+        giteeToken: bodyToken,
+      } = (req.body || {}) as {
+        pluginId?: unknown;
+        desired?: unknown;
+        giteeToken?: unknown;
+      };
       if (typeof pluginId !== 'string' || !isValidPluginId(pluginId.trim())) {
         return res.status(400).json({ success: false, error: 'pluginId 格式非法' });
       }
       if (desired !== undefined && typeof desired !== 'boolean') {
         return res.status(400).json({ success: false, error: 'desired 必须是布尔值' });
       }
-      const outcome = togglePluginStar(kernelContainer.db, pluginId, userId, desired);
-      res.json({ success: true, ...outcome });
-    } catch (e: unknown) {
-      if (e instanceof CommunityFeedbackError) {
-        return res.status(400).json({ success: false, error: e.message });
-      }
-      sendSafeError(res, e);
-    }
-  });
-
-  // 读取社区插件评价列表与统计摘要
-  app.get('/api/plugins/community/reviews', requireScopedAuth('authenticated'), (req, res) => {
-    try {
-      const pluginId = typeof req.query.pluginId === 'string' ? req.query.pluginId.trim() : '';
-      if (!pluginId || !isValidPluginId(pluginId)) {
-        return res.status(400).json({ success: false, error: 'pluginId 格式非法' });
-      }
-      const userId = String((req as { session?: { userId?: string } }).session?.userId ?? '').trim() || null;
-      const listing = listPluginReviews(kernelContainer.db, pluginId, userId);
-      res.json({ success: true, ...listing });
-    } catch (e: unknown) {
-      if (e instanceof CommunityFeedbackError) {
-        return res.status(400).json({ success: false, error: e.message });
-      }
-      sendSafeError(res, e);
-    }
-  });
-
-  // 提交或更新当前用户对社区插件的评分与评价（1-5 星 + 评语）
-  app.post('/api/plugins/community/reviews', requireScopedAuth('class-staff'), (req, res) => {
-    try {
-      const userId = String((req as { session?: { userId?: string } }).session?.userId ?? '').trim();
-      if (!userId) return res.status(401).json({ success: false, error: '未登录' });
-      const { pluginId, rating, comment, pluginVersion } = (req.body || {}) as {
-        pluginId?: unknown;
-        rating?: unknown;
-        comment?: unknown;
-        pluginVersion?: unknown;
-      };
-      if (typeof pluginId !== 'string' || !isValidPluginId(pluginId.trim())) {
-        return res.status(400).json({ success: false, error: 'pluginId 格式非法' });
-      }
-      const saved = upsertPluginReview(kernelContainer.db, {
-        pluginId,
-        userId,
-        rating: rating as number,
-        comment: comment as string | undefined,
-        pluginVersion: pluginVersion as string | null | undefined,
+      const normalizedPluginId = pluginId.trim();
+      const config = resolveCommunityRegistryConfig(kernelContainer.db);
+      const registry = await fetchCommunityRegistry({
+        url: config.activeUrl,
+        installed: listInstalledManifestVersions(),
       });
-      res.json({ success: true, ...saved });
-    } catch (e: unknown) {
-      if (e instanceof CommunityFeedbackError) {
-        return res.status(400).json({ success: false, error: e.message });
+      const target = registry.plugins.find((item) => item.id === normalizedPluginId);
+      if (!target) {
+        return res.status(404).json({ success: false, error: '未在社区插件源中找到该插件' });
       }
-      sendSafeError(res, e);
-    }
-  });
 
-  // 删除当前用户对社区插件的评价
-  app.delete('/api/plugins/community/reviews', requireScopedAuth('class-staff'), (req, res) => {
-    try {
-      const userId = String((req as { session?: { userId?: string } }).session?.userId ?? '').trim();
-      if (!userId) return res.status(401).json({ success: false, error: '未登录' });
-      const rawId =
-        typeof req.query.pluginId === 'string'
-          ? req.query.pluginId
-          : typeof req.body?.pluginId === 'string'
-            ? req.body.pluginId
-            : '';
-      if (!rawId.trim() || !isValidPluginId(rawId.trim())) {
-        return res.status(400).json({ success: false, error: 'pluginId 格式非法' });
+      const token = normalizeGiteeToken(req.header('x-gitee-token') ?? bodyToken);
+      const outcome = await toggleGiteeRepoStar({
+        pluginId: normalizedPluginId,
+        repository: target.repository,
+        token,
+        desired,
+      });
+
+      if (!outcome.ok) {
+        return res.status(401).json({
+          success: false,
+          requiresGiteeAuth: outcome.requiresGiteeAuth,
+          reason: outcome.reason,
+          pluginId: outcome.pluginId,
+          starUrl: outcome.starUrl,
+          error: outcome.error,
+        });
       }
-      const outcome = deletePluginReview(kernelContainer.db, rawId, userId);
-      res.json({ success: true, ...outcome });
+
+      res.json({
+        success: true,
+        pluginId: outcome.pluginId,
+        starred: outcome.starred,
+        stars: outcome.stars,
+        starUrl: outcome.starUrl,
+      });
     } catch (e: unknown) {
-      if (e instanceof CommunityFeedbackError) {
-        return res.status(400).json({ success: false, error: e.message });
+      if (e instanceof GiteeStarError) {
+        return res.status(e.status).json({ success: false, error: e.message });
       }
       sendSafeError(res, e);
     }

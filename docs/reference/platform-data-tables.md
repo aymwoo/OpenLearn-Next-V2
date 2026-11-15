@@ -475,7 +475,7 @@ MFE 远端登记。MFE 执行边界已移除，表保留作历史数据兼容。
 
 <!-- AUTO-GENERATED:table-inventory BEGIN -->
 
-共 **92** 张表（迁移 54 个，金样生成于 2026-11-15T00:50:40.698Z）。列清单为列名（类型与约束见迁移 SQL）：
+共 **90** 张表（迁移 53 个，金样生成于 2026-11-15T03:22:29.897Z）。列清单为列名（类型与约束见迁移 SQL）：
 
 - `_academic_year_backfill`: backfilled_at, id
 - `_class_passcode_encryption`: id, note
@@ -512,8 +512,6 @@ MFE 远端登记。MFE 执行边界已移除，表保留作历史数据兼容。
 - `classroom_quick_polls`: correct_option, created_at, id, lesson_id, options_json, question_type, session_id, status, title
 - `classroom_sessions`: academic_year, checkin_code, class_id, created_at, current_segment_id, ended_at, focus_mode, id, lesson_id, settings_json, stage, started_at, teacher_id, teaching_mode_id
 - `client_sessions`: expires_at, id, session_data, updated_at
-- `community_plugin_reviews`: comment, created_at, id, plugin_id, plugin_version, rating, updated_at, user_id
-- `community_plugin_stars`: created_at, plugin_id, user_id
 - `computer_labs`: cols, created_at, id, room_number, rows
 - `courseware`: created_at, entry, id, name, type, uuid
 - `courseware_attempt`: courseware_id, finished_at, id, started_at, status, student_id

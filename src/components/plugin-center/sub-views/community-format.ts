@@ -8,6 +8,7 @@ export interface CommunityPlugin {
   icon: string | null;
   homepage: string | null;
   repository: string | null;
+  giteeRepoUrl?: string | null;
   license: string | null;
   tags: string[];
   capabilities: string[];
@@ -16,40 +17,13 @@ export interface CommunityPlugin {
   packageSize?: number | null;
   downloads: number | null;
   stars: number | null;
-  upstreamStars?: number | null;
-  localStars?: number;
   starred?: boolean;
-  reviewCount?: number;
-  averageRating?: number | null;
-  myRating?: number | null;
   verified: boolean;
   integrity?: string | null;
   signature?: string | null;
   featured: boolean;
   installedVersion: string | null;
   hasUpdate: boolean;
-}
-
-export interface CommunityPluginFeedbackSummary {
-  starCount: number;
-  starred: boolean;
-  reviewCount: number;
-  averageRating: number | null;
-  myRating: number | null;
-}
-
-export interface CommunityPluginReview {
-  id: string;
-  pluginId: string;
-  userId: string;
-  authorName: string;
-  authorRole: string;
-  rating: number;
-  comment: string;
-  pluginVersion: string | null;
-  createdAt: number;
-  updatedAt: number;
-  isOwn: boolean;
 }
 
 export function formatCount(value: number | null | undefined, lang: string): string | null {
@@ -91,10 +65,23 @@ export function formatReleaseDate(
   return { short, full };
 }
 
-export function computeUpdatedStarTotal(plugin: CommunityPlugin, nextLocalStarCount: number): number {
-  const upstreamBase =
-    plugin.upstreamStars !== undefined
-      ? (plugin.upstreamStars ?? 0)
-      : Math.max(0, (plugin.stars ?? 0) - (plugin.localStars ?? 0));
-  return upstreamBase + nextLocalStarCount;
+export function resolveGiteeStarUrl(plugin: Pick<CommunityPlugin, 'repository' | 'giteeRepoUrl'>): string | null {
+  const raw = plugin.giteeRepoUrl ?? plugin.repository;
+  if (!raw || typeof raw !== 'string') return null;
+  try {
+    const parsed = new URL(raw.trim());
+    if (
+      (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') ||
+      parsed.hostname.toLowerCase() !== 'gitee.com'
+    ) {
+      return null;
+    }
+    const segs = parsed.pathname.split('/').filter(Boolean);
+    if (segs.length < 2) return null;
+    const owner = segs[0];
+    const repo = segs[1].replace(/\.git$/i, '');
+    return `https://gitee.com/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`;
+  } catch {
+    return null;
+  }
 }

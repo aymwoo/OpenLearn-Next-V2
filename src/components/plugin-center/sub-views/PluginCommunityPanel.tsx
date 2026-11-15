@@ -9,8 +9,8 @@ import {
   ExternalLink,
   Github,
   HardDrive,
+  KeyRound,
   Loader2,
-  MessageSquare,
   Package,
   RefreshCw,
   Search,
@@ -22,14 +22,12 @@ import {
   X,
 } from 'lucide-react';
 import {
-  computeUpdatedStarTotal,
   formatCount,
   formatPackageSize,
   formatReleaseDate,
+  resolveGiteeStarUrl,
   type CommunityPlugin,
-  type CommunityPluginFeedbackSummary,
 } from './community-format';
-import { PluginReviewDialog } from './PluginReviewDialog';
 
 export type { CommunityPlugin };
 
@@ -85,13 +83,33 @@ interface InstallState {
   message: string;
 }
 
-type SortKey = 'recommended' | 'latest' | 'stars' | 'rating' | 'downloads' | 'name';
+type SortKey = 'recommended' | 'latest' | 'stars' | 'downloads' | 'name';
 
 const REGISTRY_ENDPOINT = '/api/plugins/community';
 const CONFIG_ENDPOINT = '/api/plugins/community/config';
-const STAR_ENDPOINT = '/api/plugins/community/star';
+const GITEE_STAR_ENDPOINT = '/api/plugins/community/gitee-star';
+const GITEE_STARS_REFRESH_ENDPOINT = '/api/plugins/community/gitee-stars';
 const INSTALL_ENDPOINT = '/api/plugins/install-from-url';
 const ZIP_UPLOAD_ENDPOINT = '/api/plugins/upload-zip-raw';
+const GITEE_TOKEN_STORAGE_KEY = 'openlearn.community.giteeToken';
+const GITEE_NEW_TOKEN_URL = 'https://gitee.com/profile/personal_access_tokens/new?scopes=projects';
+
+function readStoredGiteeToken(): string {
+  try {
+    return window.localStorage.getItem(GITEE_TOKEN_STORAGE_KEY)?.trim() ?? '';
+  } catch {
+    return '';
+  }
+}
+
+function writeStoredGiteeToken(token: string): void {
+  try {
+    if (token) window.localStorage.setItem(GITEE_TOKEN_STORAGE_KEY, token);
+    else window.localStorage.removeItem(GITEE_TOKEN_STORAGE_KEY);
+  } catch {
+    // 隐私模式或无 storage 环境忽略
+  }
+}
 
 /** 从 downloadUrl 推断 ZIP 文件名，供浏览器直传时带上 x-filename。 */
 function zipFilenameFromUrl(downloadUrl: string): string {
@@ -198,16 +216,30 @@ export function PluginCommunityPanel({
   const [installNotice, setInstallNotice] = useState<string | null>(null);
   const [starPendingIds, setStarPendingIds] = useState<Record<string, boolean>>({});
   const [starError, setStarError] = useState<string | null>(null);
-  const [reviewTargetId, setReviewTargetId] = useState<string | null>(null);
+  const [giteeToken, setGiteeToken] = useState<string>(() => readStoredGiteeToken());
+  const [giteeTokenInput, setGiteeTokenInput] = useState('');
+  const [giteeAuthOpen, setGiteeAuthOpen] = useState(false);
+  const [giteeAuthPrompt, setGiteeAuthPrompt] = useState<{
+    pluginId: string;
+    pluginName: string;
+    starUrl: string;
+    message: string;
+  } | null>(null);
+  const [pendingExternalStarPluginId, setPendingExternalStarPluginId] = useState<string | null>(null);
+  const giteeTokenInputId = useId();
 
   const canConfigure = canConfigureProp ?? data?.canConfigure ?? true;
 
   const loadRegistry = useCallback(
-    async (forceRefresh: boolean) => {
+    async (forceRefresh: boolean, tokenOverride?: string) => {
       setStatus('loading');
       setError(null);
+      const effectiveToken = tokenOverride !== undefined ? tokenOverride : giteeToken;
       try {
-        const res = await doFetch(`${REGISTRY_ENDPOINT}${forceRefresh ? '?refresh=1' : ''}`);
+        const res = await doFetch(
+          `${REGISTRY_ENDPOINT}${forceRefresh ? '?refresh=1' : ''}`,
+          effectiveToken ? { headers: { 'x-gitee-token': effectiveToken } } : undefined,
+        );
         const body = (await res.json()) as CommunityRegistryResponse;
         if (!res.ok || !body?.success) {
           throw new Error(body?.error || (zh ? '服务端拒绝请求' : 'Request rejected by the server'));
@@ -226,12 +258,65 @@ export function PluginCommunityPanel({
         setStatus('error');
       }
     },
-    [doFetch, zh],
+    [doFetch, giteeToken, zh],
   );
 
   useEffect(() => {
     void loadRegistry(false);
   }, [loadRegistry]);
+
+  const refreshSinglePluginStars = useCallback(
+    async (pluginId: string) => {
+      try {
+        const res = await doFetch(
+          `${GITEE_STARS_REFRESH_ENDPOINT}?pluginId=${encodeURIComponent(pluginId)}`,
+          giteeToken ? { headers: { 'x-gitee-token': giteeToken } } : undefined,
+        );
+        const body = (await res.json().catch(() => null)) as {
+          success?: boolean;
+          pluginId?: string;
+          stars?: number | null;
+          starred?: boolean;
+          starUrl?: string | null;
+        } | null;
+        if (!res.ok || !body?.success) return;
+        setData((prev) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            plugins: prev.plugins.map((item) => {
+              if (item.id !== pluginId) return item;
+              return {
+                ...item,
+                stars: typeof body.stars === 'number' ? body.stars : item.stars,
+                starred: typeof body.starred === 'boolean' ? body.starred : item.starred,
+                giteeRepoUrl: body.starUrl ?? item.giteeRepoUrl,
+              };
+            }),
+          };
+        });
+      } catch {
+        // 返回页面静默刷新失败不打断用户
+      }
+    },
+    [doFetch, giteeToken],
+  );
+
+  useEffect(() => {
+    if (!pendingExternalStarPluginId) return;
+    const handleReturn = () => {
+      if (document.visibilityState && document.visibilityState !== 'visible') return;
+      const targetId = pendingExternalStarPluginId;
+      setPendingExternalStarPluginId(null);
+      void refreshSinglePluginStars(targetId);
+    };
+    window.addEventListener('focus', handleReturn);
+    document.addEventListener('visibilitychange', handleReturn);
+    return () => {
+      window.removeEventListener('focus', handleReturn);
+      document.removeEventListener('visibilitychange', handleReturn);
+    };
+  }, [pendingExternalStarPluginId, refreshSinglePluginStars]);
 
   /** 本地已安装的 manifest.id；与注册表 id 对齐用于展示「已安装 / 可更新」。 */
   const installedManifestIds = useMemo(() => {
@@ -285,10 +370,6 @@ export function PluginCommunityPanel({
       });
     } else if (sort === 'stars') {
       list = [...list].sort((a, b) => (b.stars ?? -1) - (a.stars ?? -1));
-    } else if (sort === 'rating') {
-      list = [...list].sort(
-        (a, b) => (b.averageRating ?? -1) - (a.averageRating ?? -1) || (b.reviewCount ?? 0) - (a.reviewCount ?? 0),
-      );
     } else if (sort === 'downloads') {
       list = [...list].sort((a, b) => (b.downloads ?? -1) - (a.downloads ?? -1));
     } else if (sort === 'name') {
@@ -297,33 +378,63 @@ export function PluginCommunityPanel({
     return list;
   }, [activeTag, data, hideInstalled, isInstalled, query, sort]);
 
-  const reviewTarget = useMemo(
-    () => (reviewTargetId ? (data?.plugins.find((p) => p.id === reviewTargetId) ?? null) : null),
-    [data, reviewTargetId],
-  );
-
   const handleToggleStar = useCallback(
     async (plugin: CommunityPlugin) => {
       if (starPendingIds[plugin.id]) return;
       setStarError(null);
       setStarPendingIds((prev) => ({ ...prev, [plugin.id]: true }));
       try {
-        const res = await doFetch(STAR_ENDPOINT, {
+        const res = await doFetch(GITEE_STAR_ENDPOINT, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            ...(giteeToken ? { 'x-gitee-token': giteeToken } : {}),
+          },
           body: JSON.stringify({ pluginId: plugin.id }),
         });
         const body = (await res.json().catch(() => null)) as {
           success?: boolean;
+          requiresGiteeAuth?: boolean;
+          reason?: 'missing_token' | 'invalid_token';
+          starUrl?: string;
           error?: string;
           starred?: boolean;
-          starCount?: number;
+          stars?: number | null;
         } | null;
-        if (!res.ok || !body?.success || typeof body.starred !== 'boolean' || typeof body.starCount !== 'number') {
-          throw new Error(body?.error || (zh ? '标星操作失败' : 'Failed to update star'));
+
+        if (res.status === 401 && body?.requiresGiteeAuth) {
+          if (body.reason === 'invalid_token' && giteeToken) {
+            setGiteeToken('');
+            writeStoredGiteeToken('');
+          }
+          const starUrl = body.starUrl || resolveGiteeStarUrl(plugin) || 'https://gitee.com';
+          setGiteeAuthPrompt({
+            pluginId: plugin.id,
+            pluginName: plugin.name,
+            starUrl,
+            message:
+              body.error ||
+              (zh
+                ? '需要登录并授权 Gitee 账号才可直接异步加星，已在新标签页打开该插件仓库'
+                : 'Gitee login/authorization is required to star directly. Opened the repository in a new tab.'),
+          });
+          setGiteeAuthOpen(true);
+          setPendingExternalStarPluginId(plugin.id);
+          try {
+            window.open(starUrl, '_blank', 'noopener,noreferrer');
+          } catch {
+            // 测试或弹窗受限环境保留横幅链接供手动点击
+          }
+          return;
         }
+
+        if (!res.ok || !body?.success || typeof body.starred !== 'boolean') {
+          throw new Error(body?.error || (zh ? 'Gitee 标星操作失败' : 'Failed to update Gitee star'));
+        }
+
+        setGiteeAuthPrompt((prev) => (prev?.pluginId === plugin.id ? null : prev));
         const nextStarred = body.starred;
-        const nextLocalCount = body.starCount;
+        const nextStars = body.stars;
         setData((prev) => {
           if (!prev) return prev;
           return {
@@ -333,8 +444,8 @@ export function PluginCommunityPanel({
               return {
                 ...item,
                 starred: nextStarred,
-                localStars: nextLocalCount,
-                stars: computeUpdatedStarTotal(item, nextLocalCount),
+                stars: typeof nextStars === 'number' ? nextStars : item.stars,
+                giteeRepoUrl: body.starUrl ?? item.giteeRepoUrl,
               };
             }),
           };
@@ -349,29 +460,33 @@ export function PluginCommunityPanel({
         });
       }
     },
-    [doFetch, starPendingIds, zh],
+    [doFetch, giteeToken, starPendingIds, zh],
   );
 
-  const handleReviewsChanged = useCallback((pluginId: string, nextSummary: CommunityPluginFeedbackSummary) => {
-    setData((prev) => {
-      if (!prev) return prev;
-      return {
-        ...prev,
-        plugins: prev.plugins.map((item) => {
-          if (item.id !== pluginId) return item;
-          return {
-            ...item,
-            starred: nextSummary.starred,
-            localStars: nextSummary.starCount,
-            stars: computeUpdatedStarTotal(item, nextSummary.starCount),
-            reviewCount: nextSummary.reviewCount,
-            averageRating: nextSummary.averageRating,
-            myRating: nextSummary.myRating,
-          };
-        }),
-      };
-    });
-  }, []);
+  const saveGiteeToken = useCallback(
+    async (e: React.FormEvent) => {
+      e.preventDefault();
+      const trimmed = giteeTokenInput.trim();
+      if (trimmed.length < 8) {
+        setStarError(zh ? '请输入有效的 Gitee 私人令牌（至少 8 位）' : 'Please enter a valid Gitee token');
+        return;
+      }
+      setStarError(null);
+      setGiteeToken(trimmed);
+      writeStoredGiteeToken(trimmed);
+      setGiteeTokenInput('');
+      setGiteeAuthOpen(false);
+      await loadRegistry(false, trimmed);
+    },
+    [giteeTokenInput, loadRegistry, zh],
+  );
+
+  const clearGiteeToken = useCallback(async () => {
+    setGiteeToken('');
+    writeStoredGiteeToken('');
+    setGiteeAuthPrompt(null);
+    await loadRegistry(false, '');
+  }, [loadRegistry]);
 
   const setInstallState = useCallback((id: string, next: InstallState | null) => {
     setInstallStates((prev) => {
@@ -923,7 +1038,6 @@ export function PluginCommunityPanel({
           <option value="recommended">{zh ? '推荐排序' : 'Recommended'}</option>
           <option value="latest">{zh ? '最新发布' : 'Latest release'}</option>
           <option value="stars">{zh ? '最多标星' : 'Most starred'}</option>
-          <option value="rating">{zh ? '评分最高' : 'Top rated'}</option>
           <option value="downloads">{zh ? '下载最多' : 'Most downloaded'}</option>
           <option value="name">{zh ? '按名称' : 'By name'}</option>
         </select>
@@ -946,6 +1060,21 @@ export function PluginCommunityPanel({
         >
           {status === 'loading' ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
           <span>{zh ? '刷新' : 'Refresh'}</span>
+        </button>
+
+        <button
+          type="button"
+          data-testid="community-gitee-auth-btn"
+          onClick={() => setGiteeAuthOpen((prev) => !prev)}
+          aria-expanded={giteeAuthOpen}
+          className={`flex items-center gap-1.5 text-xs font-semibold border rounded-lg px-3 py-2 shadow-sm transition-colors cursor-pointer ${
+            giteeToken
+              ? 'border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100'
+              : 'border-gray-200 bg-white text-gray-600 hover:text-gray-900 hover:border-gray-300'
+          }`}
+        >
+          <KeyRound size={14} />
+          <span>{giteeToken ? (zh ? '已绑定 Gitee' : 'Gitee Linked') : zh ? 'Gitee 授权' : 'Gitee Auth'}</span>
         </button>
 
         {canConfigure && (
@@ -1038,6 +1167,97 @@ export function PluginCommunityPanel({
             <X size={13} />
           </button>
         </div>
+      )}
+
+      {(giteeAuthPrompt || giteeAuthOpen) && (
+        <section
+          data-testid="community-gitee-auth-panel"
+          className="mb-4 px-4 py-3.5 rounded-xl bg-amber-50/90 border border-amber-200 text-xs text-amber-900 space-y-2.5"
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div className="space-y-1 flex-1 min-w-0">
+              <p className="font-semibold flex items-center gap-1.5">
+                <KeyRound size={13} className="text-amber-700 shrink-0" />
+                <span>
+                  {giteeAuthPrompt
+                    ? giteeAuthPrompt.message
+                    : zh
+                      ? 'Gitee 账号令牌授权（用于页面内一键异步加⭐）'
+                      : 'Gitee Personal Access Token (for 1-click async starring)'}
+                </span>
+              </p>
+              {giteeAuthPrompt && (
+                <p className="text-amber-800 leading-relaxed">
+                  {zh ? (
+                    <>已打开新标签页前往「{giteeAuthPrompt.pluginName}」Gitee 仓库。若浏览器拦截了弹窗，请直接点击：</>
+                  ) : (
+                    <>Opened a new tab for “{giteeAuthPrompt.pluginName}”. If popups were blocked, open directly:</>
+                  )}{' '}
+                  <a
+                    href={giteeAuthPrompt.starUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-semibold underline text-amber-900 hover:text-amber-950"
+                  >
+                    {giteeAuthPrompt.starUrl}
+                  </a>
+                </p>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setGiteeAuthPrompt(null);
+                setGiteeAuthOpen(false);
+              }}
+              aria-label={zh ? '关闭 Gitee 授权提示' : 'Dismiss Gitee auth prompt'}
+              className="text-amber-700 hover:text-amber-950 cursor-pointer shrink-0"
+            >
+              <X size={14} />
+            </button>
+          </div>
+
+          <form onSubmit={(e) => void saveGiteeToken(e)} className="flex flex-wrap items-end gap-2">
+            <div className="flex-1 min-w-[220px]">
+              <label htmlFor={giteeTokenInputId} className="block text-[11px] font-medium text-amber-800 mb-1">
+                {zh
+                  ? '可选：绑定你的 Gitee 私人令牌（仅存当前浏览器，勾选 projects 权限），绑定后点击 +⭐ 无需跳出页面'
+                  : 'Optional: bind a Gitee personal access token (stored in your browser only, projects scope)'}
+              </label>
+              <input
+                id={giteeTokenInputId}
+                type="password"
+                value={giteeTokenInput}
+                onChange={(e) => setGiteeTokenInput(e.target.value)}
+                placeholder={zh ? '粘贴 Gitee 私人令牌…' : 'Paste your Gitee personal access token…'}
+                className="w-full px-2.5 py-1.5 text-xs bg-white border border-amber-300 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-amber-400/50"
+              />
+            </div>
+            <button
+              type="submit"
+              className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-amber-600 text-white hover:bg-amber-700 transition-colors cursor-pointer"
+            >
+              {zh ? '保存令牌' : 'Save token'}
+            </button>
+            <a
+              href={GITEE_NEW_TOKEN_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-2.5 py-1.5 text-xs font-medium rounded-lg border border-amber-300 bg-white text-amber-800 hover:bg-amber-100 transition-colors"
+            >
+              {zh ? '去 Gitee 创建令牌' : 'Create Gitee token'}
+            </a>
+            {giteeToken && (
+              <button
+                type="button"
+                onClick={() => void clearGiteeToken()}
+                className="px-2.5 py-1.5 text-xs font-medium rounded-lg border border-rose-200 bg-white text-rose-700 hover:bg-rose-50 transition-colors cursor-pointer"
+              >
+                {zh ? '解除绑定' : 'Clear token'}
+              </button>
+            )}
+          </form>
+        </section>
       )}
 
       {!configOpen && renderInstallToggle({ compact: true })}
@@ -1184,7 +1404,7 @@ export function PluginCommunityPanel({
             const releaseDate = formatReleaseDate(plugin.publishedAt, lang);
             const sizeLabel = formatPackageSize(plugin.packageSize);
             const starPending = Boolean(starPendingIds[plugin.id]);
-            const reviewCount = plugin.reviewCount ?? 0;
+            const giteeStarUrl = resolveGiteeStarUrl(plugin);
             const installLabel = installed
               ? plugin.hasUpdate
                 ? zh
@@ -1344,7 +1564,7 @@ export function PluginCommunityPanel({
                     </div>
                   </div>
 
-                  {/* 操作区：安装 + GitHub 风格 +⭐ + 评价 */}
+                  {/* 操作区：安装 + Gitee 仓库 +⭐ */}
                   <div className="flex flex-wrap items-center gap-2">
                     <button
                       type="button"
@@ -1369,63 +1589,58 @@ export function PluginCommunityPanel({
                       <span>{installLabel}</span>
                     </button>
 
-                    <button
-                      type="button"
-                      data-testid={`community-star-${plugin.id}`}
-                      aria-pressed={Boolean(plugin.starred)}
-                      disabled={starPending}
-                      onClick={() => void handleToggleStar(plugin)}
-                      title={
-                        plugin.starred
-                          ? zh
-                            ? '取消标星'
-                            : 'Unstar plugin'
-                          : zh
-                            ? '点赞标星 (+⭐)'
-                            : 'Star plugin (+⭐)'
-                      }
-                      className={`inline-flex items-center rounded-lg border text-xs font-semibold transition-colors shrink-0 cursor-pointer disabled:opacity-60 ${
-                        plugin.starred
-                          ? 'bg-amber-50 border-amber-300 text-amber-800 hover:bg-amber-100'
-                          : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50 hover:border-gray-300'
-                      }`}
-                    >
-                      <span className="inline-flex items-center gap-1 px-2 py-1.5">
-                        <Star
-                          size={12}
-                          className={plugin.starred ? 'fill-amber-400 text-amber-500' : 'text-gray-400'}
-                        />
-                        <span>{plugin.starred ? (zh ? '已⭐' : 'Starred') : '+⭐'}</span>
-                      </span>
-                      <span
-                        className={`px-2 py-1.5 border-l font-mono ${
-                          plugin.starred ? 'border-amber-200 bg-amber-100/60' : 'border-gray-200 bg-gray-50'
+                    {giteeStarUrl ? (
+                      <button
+                        type="button"
+                        data-testid={`community-star-${plugin.id}`}
+                        aria-pressed={Boolean(plugin.starred)}
+                        disabled={starPending}
+                        onClick={() => void handleToggleStar(plugin)}
+                        title={
+                          plugin.starred
+                            ? zh
+                              ? '取消 Gitee 仓库标星'
+                              : 'Unstar Gitee repo'
+                            : zh
+                              ? '为 Gitee 仓库加⭐'
+                              : 'Star Gitee repo (+⭐)'
+                        }
+                        className={`inline-flex items-center rounded-lg border text-xs font-semibold transition-colors shrink-0 cursor-pointer disabled:opacity-60 ${
+                          plugin.starred
+                            ? 'bg-amber-50 border-amber-300 text-amber-800 hover:bg-amber-100'
+                            : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50 hover:border-gray-300'
                         }`}
                       >
-                        {formatCount(plugin.stars ?? 0, lang)}
-                      </span>
-                    </button>
-
-                    <button
-                      type="button"
-                      data-testid={`community-review-btn-${plugin.id}`}
-                      onClick={() => setReviewTargetId(plugin.id)}
-                      title={zh ? '查看与发表插件评价' : 'View and write plugin reviews'}
-                      className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-colors shrink-0 cursor-pointer ${
-                        plugin.myRating
-                          ? 'bg-indigo-50/70 border-indigo-200 text-indigo-700 hover:bg-indigo-100/70'
-                          : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                      }`}
-                    >
-                      <MessageSquare size={12} />
-                      <span>
-                        {reviewCount > 0 && plugin.averageRating !== null && plugin.averageRating !== undefined
-                          ? `${plugin.averageRating.toFixed(1)}★ (${reviewCount})`
-                          : zh
-                            ? '写评价'
-                            : 'Review'}
-                      </span>
-                    </button>
+                        <span className="inline-flex items-center gap-1 px-2 py-1.5">
+                          {starPending ? (
+                            <Loader2 size={12} className="animate-spin text-amber-500" />
+                          ) : (
+                            <Star
+                              size={12}
+                              className={plugin.starred ? 'fill-amber-400 text-amber-500' : 'text-gray-400'}
+                            />
+                          )}
+                          <span>{plugin.starred ? (zh ? '已⭐' : 'Starred') : '+⭐'}</span>
+                        </span>
+                        <span
+                          className={`px-2 py-1.5 border-l font-mono ${
+                            plugin.starred ? 'border-amber-200 bg-amber-100/60' : 'border-gray-200 bg-gray-50'
+                          }`}
+                        >
+                          {formatCount(plugin.stars ?? 0, lang)}
+                        </span>
+                      </button>
+                    ) : (
+                      plugin.stars !== null && (
+                        <span
+                          className="inline-flex items-center gap-1 px-2 py-1.5 rounded-lg border border-gray-200 bg-gray-50 text-xs font-mono text-gray-600 shrink-0"
+                          title={zh ? '仓库 ⭐ 数' : 'Repository stars'}
+                        >
+                          <Star size={12} className="text-amber-400 fill-amber-400" />
+                          <span>{formatCount(plugin.stars, lang)}</span>
+                        </span>
+                      )
+                    )}
 
                     {state && (
                       <span
@@ -1515,15 +1730,6 @@ export function PluginCommunityPanel({
           </div>
         </div>
       )}
-      <PluginReviewDialog
-        plugin={reviewTarget}
-        lang={lang}
-        starPending={reviewTarget ? Boolean(starPendingIds[reviewTarget.id]) : false}
-        onClose={() => setReviewTargetId(null)}
-        onToggleStar={(target) => void handleToggleStar(target)}
-        onReviewsChanged={handleReviewsChanged}
-        fetcher={doFetch}
-      />
     </div>
   );
 }

@@ -7,7 +7,11 @@ import { PluginCommunityPanel, type CommunityPlugin } from '../plugin-center/sub
 // 与缺失的 vitest.config.ts（jsdom + globals + setup 文件）无关：本用例以文件级
 // `@vitest-environment jsdom` 固定 DOM 环境，并显式清理 DOM —— globals 关闭时
 // @testing-library 无法自动注册 afterEach，否则用例之间的 DOM 会互相污染。
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  window.localStorage.clear();
+  vi.restoreAllMocks();
+});
 
 const HOMEWORK_CARD = 'community-card-ext-homework-hub';
 
@@ -846,7 +850,7 @@ describe('PluginCommunityPanel', () => {
     });
   });
 
-  describe('release metadata, +⭐ starring, and reviews', () => {
+  describe('release metadata and Gitee +⭐ starring', () => {
     it('displays release date and formatted ZIP package size on the card', async () => {
       const { fetcher } = makeFetcher([
         (url) =>
@@ -880,25 +884,44 @@ describe('PluginCommunityPanel', () => {
       expect(card2.getByText('1.68 MB')).toBeTruthy();
     });
 
-    it('toggles GitHub-style +⭐ star count on click', async () => {
-      let starred = false;
-      const { fetcher, calls } = makeFetcher([
+    it('prompts Gitee login, opens Gitee repo in a new tab on 401 requiresGiteeAuth, and auto-refreshes stars on tab focus', async () => {
+      const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
+      const { fetcher } = makeFetcher([
         (url) =>
           url === '/api/plugins/community'
             ? json(
                 registryBody({
-                  plugins: [makePlugin({ stars: 45, upstreamStars: 45, localStars: 0, starred: false })],
+                  plugins: [
+                    makePlugin({
+                      repository: 'https://gitee.com/aymwoo/ext-homework-hub',
+                      stars: 12,
+                      starred: false,
+                    }),
+                  ],
                 }),
               )
             : undefined,
         (url, init) => {
-          if (url === '/api/plugins/community/star' && init?.method === 'POST') {
-            starred = !starred;
+          if (url === '/api/plugins/community/gitee-star' && init?.method === 'POST') {
+            return new Response(
+              JSON.stringify({
+                success: false,
+                requiresGiteeAuth: true,
+                reason: 'missing_token',
+                pluginId: 'ext-homework-hub',
+                starUrl: 'https://gitee.com/aymwoo/ext-homework-hub',
+                error: '需要登录并授权 Gitee 账号后才能在页面内直接加星',
+              }),
+              { status: 401, headers: { 'content-type': 'application/json' } },
+            );
+          }
+          if (url.startsWith('/api/plugins/community/gitee-stars')) {
             return json({
               success: true,
               pluginId: 'ext-homework-hub',
-              starred,
-              starCount: starred ? 1 : 0,
+              stars: 13,
+              starred: false,
+              starUrl: 'https://gitee.com/aymwoo/ext-homework-hub',
             });
           }
           return undefined;
@@ -909,127 +932,96 @@ describe('PluginCommunityPanel', () => {
       await screen.findByTestId(HOMEWORK_CARD);
 
       const starBtn = screen.getByTestId('community-star-ext-homework-hub');
-      expect(starBtn.getAttribute('aria-pressed')).toBe('false');
-      expect(starBtn.textContent).toContain('+⭐');
-      expect(starBtn.textContent).toContain('45');
-
+      expect(starBtn.textContent).toContain('12');
       fireEvent.click(starBtn);
-      await waitFor(() => {
-        expect(starBtn.getAttribute('aria-pressed')).toBe('true');
-        expect(starBtn.textContent).toContain('已⭐');
-        expect(starBtn.textContent).toContain('46');
-      });
 
-      const starCall = calls.find((c) => c.url === '/api/plugins/community/star');
-      expect(JSON.parse(String(starCall?.init?.body))).toEqual({ pluginId: 'ext-homework-hub' });
+      const authPanel = await screen.findByTestId('community-gitee-auth-panel');
+      expect(authPanel.textContent).toContain('需要登录并授权 Gitee 账号');
+      expect(authPanel.textContent).toContain('https://gitee.com/aymwoo/ext-homework-hub');
+      expect(openSpy).toHaveBeenCalledWith(
+        'https://gitee.com/aymwoo/ext-homework-hub',
+        '_blank',
+        'noopener,noreferrer',
+      );
 
-      fireEvent.click(starBtn);
+      // 模拟用户在 Gitee 新标签页点星后切回 OpenLearn 标签页，自动刷新该插件 Star 数
+      fireEvent.focus(window);
       await waitFor(() => {
-        expect(starBtn.getAttribute('aria-pressed')).toBe('false');
-        expect(starBtn.textContent).toContain('45');
+        expect(starBtn.textContent).toContain('13');
       });
     });
 
-    it('opens the review dialog, submits a review, updates the card rating badge, and deletes own review', async () => {
-      let reviews = [
-        {
-          id: 'rev-1',
-          pluginId: 'ext-homework-hub',
-          userId: 'other-teacher',
-          authorName: '李老师',
-          authorRole: 'teacher',
-          rating: 4,
-          comment: '课堂收作业很方便',
-          pluginVersion: '1.2.0' as string | null,
-          createdAt: Date.UTC(2026, 10, 10),
-          updatedAt: Date.UTC(2026, 10, 10),
-          isOwn: false,
-        },
-      ];
+    it('binds a Gitee token and toggles Gitee +⭐ asynchronously without leaving the page', async () => {
+      const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
+      let starred = false;
+      let starCount = 45;
 
-      const currentSummary = () => {
-        const own = reviews.find((r) => r.isOwn);
-        const avg =
-          reviews.length > 0
-            ? Math.round((reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length) * 10) / 10
-            : null;
-        return {
-          starCount: 0,
-          starred: false,
-          reviewCount: reviews.length,
-          averageRating: avg,
-          myRating: own ? own.rating : null,
-        };
-      };
-
-      const { fetcher } = makeFetcher([
-        (url) =>
-          url === '/api/plugins/community'
-            ? json(
-                registryBody({
-                  plugins: [
-                    makePlugin({
-                      packageSize: 25680,
-                      reviewCount: 1,
-                      averageRating: 4,
-                      myRating: null,
-                    }),
-                  ],
-                }),
-              )
-            : undefined,
+      const { fetcher, calls } = makeFetcher([
         (url, init) => {
-          if (url.startsWith('/api/plugins/community/reviews')) {
-            if (!init?.method || init.method === 'GET') {
-              return json({ success: true, pluginId: 'ext-homework-hub', summary: currentSummary(), reviews });
-            }
-            if (init.method === 'POST') {
-              const body = JSON.parse(String(init.body)) as { rating: number; comment: string; pluginVersion?: string };
-              const own = {
-                id: 'rev-own',
-                pluginId: 'ext-homework-hub',
-                userId: 'me',
-                authorName: '张老师',
-                authorRole: 'teacher',
-                rating: body.rating,
-                comment: body.comment,
-                pluginVersion: body.pluginVersion ?? null,
-                createdAt: Date.UTC(2026, 10, 15),
-                updatedAt: Date.UTC(2026, 10, 15),
-                isOwn: true,
-              };
-              reviews = [own, ...reviews.filter((r) => !r.isOwn)];
-              return json({ success: true, pluginId: 'ext-homework-hub', summary: currentSummary(), review: own });
-            }
-            if (init.method === 'DELETE') {
-              reviews = reviews.filter((r) => !r.isOwn);
-              return json({ success: true, pluginId: 'ext-homework-hub', deleted: true, summary: currentSummary() });
-            }
+          if (url === '/api/plugins/community') {
+            const headers = (init?.headers ?? {}) as Record<string, string>;
+            const hasToken = headers['x-gitee-token'] === 'gitee_pat_token_123';
+            return json(
+              registryBody({
+                plugins: [
+                  makePlugin({
+                    repository: 'https://gitee.com/aymwoo/ext-homework-hub',
+                    stars: starCount,
+                    starred: hasToken ? starred : false,
+                  }),
+                ],
+              }),
+            );
+          }
+          return undefined;
+        },
+        (url, init) => {
+          if (url === '/api/plugins/community/gitee-star' && init?.method === 'POST') {
+            const headers = (init?.headers ?? {}) as Record<string, string>;
+            expect(headers['x-gitee-token']).toBe('gitee_pat_token_123');
+            starred = !starred;
+            starCount += starred ? 1 : -1;
+            return json({
+              success: true,
+              pluginId: 'ext-homework-hub',
+              starred,
+              stars: starCount,
+              starUrl: 'https://gitee.com/aymwoo/ext-homework-hub',
+            });
           }
           return undefined;
         },
       ]);
 
       renderPanel({ fetcher });
-      const reviewBtn = await screen.findByTestId('community-review-btn-ext-homework-hub');
-      expect(reviewBtn.textContent).toContain('4.0★ (1)');
+      await screen.findByTestId(HOMEWORK_CARD);
 
-      fireEvent.click(reviewBtn);
-      const dialog = within(await screen.findByTestId('community-review-dialog'));
-      expect(dialog.getByText('课堂收作业很方便')).toBeTruthy();
-
-      fireEvent.change(dialog.getByLabelText('使用评价（可选）'), { target: { value: '非常好用，强烈推荐！' } });
-      fireEvent.click(dialog.getByRole('button', { name: '提交评价' }));
+      fireEvent.click(screen.getByTestId('community-gitee-auth-btn'));
+      const tokenInput = await screen.findByPlaceholderText('粘贴 Gitee 私人令牌…');
+      fireEvent.change(tokenInput, { target: { value: 'gitee_pat_token_123' } });
+      fireEvent.click(screen.getByRole('button', { name: '保存令牌' }));
 
       await waitFor(() => {
-        expect(dialog.getByText('非常好用，强烈推荐！', { selector: 'p' })).toBeTruthy();
-        expect(reviewBtn.textContent).toContain('4.5★ (2)');
+        expect(screen.getByTestId('community-gitee-auth-btn').textContent).toContain('已绑定 Gitee');
       });
 
-      fireEvent.click(dialog.getByRole('button', { name: '删除我的评价' }));
+      const starBtn = screen.getByTestId('community-star-ext-homework-hub');
+      fireEvent.click(starBtn);
+
       await waitFor(() => {
-        expect(dialog.queryByText('非常好用，强烈推荐！', { selector: 'p' })).toBeNull();
-        expect(reviewBtn.textContent).toContain('4.0★ (1)');
+        expect(starBtn.getAttribute('aria-pressed')).toBe('true');
+        expect(starBtn.textContent).toContain('已⭐');
+        expect(starBtn.textContent).toContain('46');
+      });
+      expect(openSpy).not.toHaveBeenCalled();
+
+      const starCall = calls.find((c) => c.url === '/api/plugins/community/gitee-star');
+      expect(JSON.parse(String(starCall?.init?.body))).toEqual({ pluginId: 'ext-homework-hub' });
+
+      fireEvent.click(starBtn);
+      await waitFor(() => {
+        expect(starBtn.getAttribute('aria-pressed')).toBe('false');
+        expect(starBtn.textContent).toContain('45');
       });
     });
 
