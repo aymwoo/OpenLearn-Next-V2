@@ -32,6 +32,9 @@ const HelpView = lazy(() => import('./HelpView').then((m) => ({ default: m.HelpV
 const AssessmentCenter = lazy(() =>
   import('../assessment/AssessmentCenter').then((m) => ({ default: m.AssessmentCenter })),
 );
+const XueanActivitiesPanel = lazy(() =>
+  import('./xuean/XueanActivitiesPanel').then((m) => ({ default: m.XueanActivitiesPanel })),
+);
 
 import { useOptionalAppData } from '../../context/AppDataContext';
 import { useThemeStore } from '../../store/themeStore';
@@ -134,6 +137,8 @@ export function TeacherView(_props: TeacherViewProps = {}) {
             <Dashboard />
           ) : teacherTab === 'lesson_editor' ? (
             <LessonEditorView />
+          ) : teacherTab === 'xuean_editor' ? (
+            <XueanActivitiesPanel />
           ) : teacherTab === 'live_class' ? null : teacherTab === 'plugins' ? (
             <PluginView />
           ) : teacherTab === 'courses' ? (
