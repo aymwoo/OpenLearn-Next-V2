@@ -141,7 +141,7 @@ function BlockCard({
   onDelete: () => void;
 }) {
   const typeLabel = BLOCK_TYPES.find((t) => t.value === block.block_type)?.label ?? block.block_type;
-  let preview: any = null;
+  let preview: unknown;
   try {
     preview = JSON.parse(block.content_json);
   } catch {
@@ -155,7 +155,7 @@ function BlockCard({
     previewText = preview.map((x) => (typeof x === 'string' ? x : JSON.stringify(x))).join('、');
     if (previewText.length > 80) previewText = previewText.slice(0, 80) + '…';
   } else {
-    previewText = JSON.stringify(preview).slice(0, 80);
+    previewText = (JSON.stringify(preview) ?? '').slice(0, 80);
   }
 
   return (
@@ -207,7 +207,7 @@ function BlockEditor({
   const existingType = existing?.block_type ?? 'learning_goals';
   const existingContent = (() => {
     if (!existing) return '[""]';
-    let parsed: any;
+    let parsed: unknown;
     try {
       parsed = JSON.parse(existing.content_json);
     } catch {

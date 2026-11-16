@@ -22,7 +22,7 @@ type SubTab = 'activities' | 'blocks' | 'progress';
 export function XueanEditor() {
   const appData = useOptionalAppData();
   const selectedLesson = appData?.selectedLesson ?? '';
-  const lessons: any[] = (appData?.lessons as any[]) ?? [];
+  const lessons = appData?.lessons ?? [];
   const lessonTitle = lessons.find((l) => l.id === selectedLesson)?.title ?? '未选择课时';
 
   const [subTab, setSubTab] = useState<SubTab>('activities');
@@ -57,7 +57,9 @@ export function XueanEditor() {
         alert('学案包格式无效：缺少 activities 或 blocks 数组');
         return;
       }
-      if (!confirm(`将覆盖当前学案的全部 ${data.activities.length} 个活动和 ${data.blocks.length} 个首页块，确定导入？`)) {
+      if (
+        !confirm(`将覆盖当前学案的全部 ${data.activities.length} 个活动和 ${data.blocks.length} 个首页块，确定导入？`)
+      ) {
         return;
       }
       setIoBusy(true);

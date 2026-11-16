@@ -4,7 +4,7 @@
  * - 活动序列卡片（状态指示 + 自报进度）
  */
 import { useCallback, useEffect, useState } from 'react';
-import { getXuean, postActivityProgress } from '../../../services/lessonActivitiesService.js';
+import { getXuean, postActivityProgress, type ActivitySubmission } from '../../../services/lessonActivitiesService.js';
 import { sanitizeRichTextHtml } from '../../../../packages/core/security/html-sanitize';
 
 type Block = {
@@ -165,7 +165,7 @@ export function StudentXueanView({ lessonId, lessonTitle }: Props) {
 }
 
 function BlockCard({ block }: { block: Block }) {
-  let content: any = null;
+  let content: unknown;
   try {
     content = JSON.parse(block.content_json);
   } catch {
@@ -195,15 +195,16 @@ function BlockCard({ block }: { block: Block }) {
       );
     }
     if (content && typeof content === 'object') {
-      const keys = Object.keys(content);
-      if (keys.length <= 4 && keys.every((k) => Array.isArray(content[k]))) {
+      const record = content as Record<string, unknown>;
+      const keys = Object.keys(record);
+      if (keys.length <= 4 && keys.every((k) => Array.isArray(record[k]))) {
         return (
           <div className="grid gap-3">
             {keys.map((k) => (
               <div key={k}>
                 <div className="text-[10px] font-bold uppercase text-muted mb-1">{k}</div>
                 <ul className="space-y-1 text-sm text-main">
-                  {(content[k] as any[]).map((item, i) => (
+                  {(record[k] as unknown[]).map((item, i) => (
                     <li key={i} className="flex gap-2">
                       <span className="text-muted shrink-0">•</span>
                       <span>{typeof item === 'string' ? item : JSON.stringify(item)}</span>
@@ -259,10 +260,10 @@ function ActivityItem({
   const activityTypeLabel = ACTIVITY_TYPE_LABELS[activity.type] ?? activity.type;
 
   // 解析已有提交内容
-  let existingSubmission: any = null;
+  let existingSubmission: ActivitySubmission | null = null;
   if (progress?.submission_json) {
     try {
-      existingSubmission = JSON.parse(progress.submission_json);
+      existingSubmission = JSON.parse(progress.submission_json) as ActivitySubmission;
     } catch {
       existingSubmission = progress.submission_json;
     }
@@ -294,7 +295,10 @@ function ActivityItem({
                 </span>
               )}
               {progress?.nudged_at && status !== 'graded' && (
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-700 border border-amber-500/30 animate-pulse" title={`教师于 ${new Date(progress.nudged_at).toLocaleString()} 催办${progress.nudge_count ? `（共 ${progress.nudge_count} 次）` : ''}`}>
+                <span
+                  className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-700 border border-amber-500/30 animate-pulse"
+                  title={`教师于 ${new Date(progress.nudged_at).toLocaleString()} 催办${progress.nudge_count ? `（共 ${progress.nudge_count} 次）` : ''}`}
+                >
                   ⚠ 教师催办{progress.nudge_count && progress.nudge_count > 1 ? ` ×${progress.nudge_count}` : ''}
                 </span>
               )}
@@ -398,14 +402,16 @@ function SubmissionModal({
   submitFn,
 }: {
   activityTitle: string;
-  existing: any;
+  existing: ActivitySubmission | null;
   onClose: () => void;
   onSaved: () => void;
-  submitFn: (submission: any, selfEval?: { score: number; comment: string }) => Promise<boolean>;
+  submitFn: (submission: ActivitySubmission, selfEval?: { score: number; comment: string }) => Promise<boolean>;
 }) {
   const initialText = existing ? (typeof existing === 'string' ? existing : (existing.content ?? '')) : '';
   const [content, setContent] = useState(initialText);
-  const [submissionType, setSubmissionType] = useState<'text' | 'link'>(existing?.type === 'link' ? 'link' : 'text');
+  const [submissionType, setSubmissionType] = useState<'text' | 'link'>(
+    typeof existing === 'object' && existing?.type === 'link' ? 'link' : 'text',
+  );
   const [selfScore, setSelfScore] = useState<number | ''>('');
   const [selfComment, setSelfComment] = useState('');
   const [saving, setSaving] = useState(false);
@@ -419,11 +425,12 @@ function SubmissionModal({
     }
     setSaving(true);
     setError(null);
-    const submission =
+    const submission: ActivitySubmission =
       submissionType === 'link' ? { type: 'link', content: content.trim(), url: content.trim() } : content.trim();
-    const selfEval = selfScore !== '' || selfComment.trim()
-      ? { score: typeof selfScore === 'number' ? selfScore : 0, comment: selfComment.trim() }
-      : undefined;
+    const selfEval =
+      selfScore !== '' || selfComment.trim()
+        ? { score: typeof selfScore === 'number' ? selfScore : 0, comment: selfComment.trim() }
+        : undefined;
     const ok = await submitFn(submission, selfEval);
     setSaving(false);
     if (!ok) {

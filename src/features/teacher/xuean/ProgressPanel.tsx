@@ -3,7 +3,11 @@
  * 聚合：活动 × 学生 的完成状态概览 + 点击展开看明细 + 批阅入口。
  */
 import { useCallback, useEffect, useState } from 'react';
-import { getActivityProgressPanel, verifyActivityProgress, nudgeActivity } from '../../../services/lessonActivitiesService.js';
+import {
+  getActivityProgressPanel,
+  verifyActivityProgress,
+  nudgeActivity,
+} from '../../../services/lessonActivitiesService.js';
 import { useOptionalAppData } from '../../../context/AppDataContext.js';
 import { Loader2, ChevronDown, ChevronRight } from 'lucide-react';
 
@@ -266,7 +270,7 @@ function StudentTable({
   onNudge,
 }: {
   activity: PanelActivity;
-  studentMap: Record<string, any>;
+  studentMap: Record<string, { name?: string | null; username?: string | null }>;
   onVerify: (studentId: string) => void;
   onNudge: (studentId: string) => void;
 }) {

@@ -28,11 +28,13 @@
  *   - 教师：lesson owner 或管理员可 CRUD 活动/blocks + 看进度面板 + 批阅
  *   - 活动完成不自动推进课堂门禁（issue 明确要求，与 timeline 并列）
  */
+import type { Request } from 'express';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
 import { requireScopedAuth } from '../middleware/data-scope.js';
 import { sendSafeError } from '../utils/error-handler.js';
 import { randomId } from '../utils/id.js';
 import {
+  type AccessSession,
   authorizeLessonStaff,
   canSeeLesson,
   isAdministrator,
@@ -67,23 +69,59 @@ const VALID_BLOCK_TYPES = new Set([
 const VALID_PROGRESS_STATUS = new Set(['not_started', 'in_progress', 'submitted', 'graded']);
 
 // ── 辅助函数 ─────────────────────────────────────────────────────────────
+interface ActivityRow extends Record<string, unknown> {
+  id: string;
+  lesson_id: string;
+  order_index: number;
+  peer_review: number;
+  title: string;
+}
+
+interface BlockRow extends Record<string, unknown> {
+  id: string;
+  lesson_id: string;
+  order_index: number;
+}
+
+interface ActivityProgressRow extends Record<string, unknown> {
+  activity_id: string;
+  student_id: string;
+  status: string;
+  verified: number;
+}
+
+interface ActivityValue {
+  type: string;
+  title: string;
+  configJson: string | null;
+  required: number;
+  visible: number;
+  peerReview: number;
+  groupMode: string;
+  submissionType: string | null;
+  rubricJson: string | null;
+  releaseAt: number | null;
+  dueAt: number | null;
+}
+
+interface BlockValue {
+  blockType: string;
+  contentJson: string;
+}
+
+type ParseResult<T> = { ok: true; value: T } | { ok: false; error: string; status: number };
+
+function requestSession(req: Request): AccessSession {
+  return (req as Request & { session?: AccessSession }).session!;
+}
+
 function now() {
   return Date.now();
 }
 
-function jsonOrNull<T>(v: unknown): T | null {
-  if (v == null) return null;
-  if (typeof v !== 'string') return null;
-  try {
-    return JSON.parse(v) as T;
-  } catch {
-    return null;
-  }
-}
-
-function parseActivity(body: any): { ok: true; value: any } | { ok: false; error: string; status: number } {
+function parseActivity(body: unknown): ParseResult<ActivityValue> {
   const { type, title, config, required, visible, peerReview, groupMode, submissionType, rubric, releaseAt, dueAt } =
-    body || {};
+    (body || {}) as Record<string, unknown>;
 
   if (typeof type !== 'string' || !VALID_ACTIVITY_TYPES.has(type)) {
     return { ok: false, error: 'Invalid activity type', status: 400 };
@@ -94,7 +132,7 @@ function parseActivity(body: any): { ok: true; value: any } | { ok: false; error
   let configJson: string | null = null;
   if (config != null) {
     try {
-      configJson = typeof config === 'string' ? config : JSON.stringify(config);
+      configJson = typeof config === 'string' ? config : (JSON.stringify(config) as string);
     } catch {
       return { ok: false, error: 'Invalid config JSON', status: 400 };
     }
@@ -102,7 +140,7 @@ function parseActivity(body: any): { ok: true; value: any } | { ok: false; error
   let rubricJson: string | null = null;
   if (rubric != null) {
     try {
-      rubricJson = typeof rubric === 'string' ? rubric : JSON.stringify(rubric);
+      rubricJson = typeof rubric === 'string' ? rubric : (JSON.stringify(rubric) as string);
     } catch {
       return { ok: false, error: 'Invalid rubric JSON', status: 400 };
     }
@@ -119,14 +157,14 @@ function parseActivity(body: any): { ok: true; value: any } | { ok: false; error
       groupMode: groupMode && typeof groupMode === 'string' ? groupMode : 'none',
       submissionType: submissionType && typeof submissionType === 'string' ? submissionType : null,
       rubricJson,
-      releaseAt: Number.isFinite(releaseAt) ? Number(releaseAt) : null,
-      dueAt: Number.isFinite(dueAt) ? Number(dueAt) : null,
+      releaseAt: Number.isFinite(releaseAt as number) ? Number(releaseAt) : null,
+      dueAt: Number.isFinite(dueAt as number) ? Number(dueAt) : null,
     },
   };
 }
 
-function parseBlock(body: any): { ok: true; value: any } | { ok: false; error: string; status: number } {
-  const { blockType, content } = body || {};
+function parseBlock(body: unknown): ParseResult<BlockValue> {
+  const { blockType, content } = (body || {}) as Record<string, unknown>;
   if (typeof blockType !== 'string' || !VALID_BLOCK_TYPES.has(blockType)) {
     return { ok: false, error: 'Invalid block_type', status: 400 };
   }
@@ -135,7 +173,7 @@ function parseBlock(body: any): { ok: true; value: any } | { ok: false; error: s
   }
   let contentJson: string;
   try {
-    contentJson = typeof content === 'string' ? content : JSON.stringify(content);
+    contentJson = typeof content === 'string' ? content : (JSON.stringify(content) as string);
   } catch {
     return { ok: false, error: 'Invalid content JSON', status: 400 };
   }
@@ -156,7 +194,7 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
   app.get('/api/lessons/:lessonId/activities', requireScopedAuth('authenticated'), (req, res) => {
     try {
       const lessonId = req.params.lessonId;
-      const session = (req as any).session;
+      const session = requestSession(req);
       if (!canSeeLesson(readDb, session, lessonId)) {
         return res.status(403).json({ success: false, error: 'Forbidden' });
       }
@@ -166,7 +204,7 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
         )
         .all(lessonId);
       res.json(rows);
-    } catch (err: any) {
+    } catch (err: unknown) {
       sendSafeError(res, err);
     }
   });
@@ -175,7 +213,7 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
   app.post('/api/lessons/:lessonId/activities', requireScopedAuth('class-staff'), (req, res) => {
     try {
       const lessonId = req.params.lessonId;
-      const session = (req as any).session;
+      const session = requestSession(req);
       if (rejectUnless(res, authorizeLessonStaff(readDb, session, lessonId))) return;
 
       const parsed = parseActivity(req.body);
@@ -216,7 +254,7 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
       );
 
       res.status(201).json(db.prepare('SELECT * FROM lesson_activities WHERE id = ?').get(id));
-    } catch (err: any) {
+    } catch (err: unknown) {
       sendSafeError(res, err);
     }
   });
@@ -225,8 +263,9 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
   app.put('/api/activities/:id', requireScopedAuth('class-staff'), (req, res) => {
     try {
       const id = req.params.id;
-      const session = (req as any).session;
-      const existing = readDb.prepare('SELECT * FROM lesson_activities WHERE id = ?').get(id) as any | undefined;
+      const session = requestSession(req);
+      const existing = readDb.prepare('SELECT * FROM lesson_activities WHERE id = ?').get(id) as
+        ActivityRow | undefined;
       if (!existing) return res.status(404).json({ success: false, error: 'Activity not found' });
       if (rejectUnless(res, authorizeLessonStaff(readDb, session, existing.lesson_id))) return;
 
@@ -262,7 +301,7 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
       );
 
       res.json(db.prepare('SELECT * FROM lesson_activities WHERE id = ?').get(id));
-    } catch (err: any) {
+    } catch (err: unknown) {
       sendSafeError(res, err);
     }
   });
@@ -271,8 +310,9 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
   app.delete('/api/activities/:id', requireScopedAuth('class-staff'), (req, res) => {
     try {
       const id = req.params.id;
-      const session = (req as any).session;
-      const existing = readDb.prepare('SELECT * FROM lesson_activities WHERE id = ?').get(id) as any | undefined;
+      const session = requestSession(req);
+      const existing = readDb.prepare('SELECT * FROM lesson_activities WHERE id = ?').get(id) as
+        ActivityRow | undefined;
       if (!existing) return res.status(404).json({ success: false, error: 'Activity not found' });
       if (rejectUnless(res, authorizeLessonStaff(readDb, session, existing.lesson_id))) return;
 
@@ -281,7 +321,7 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
       db.prepare('DELETE FROM lesson_activities WHERE id = ?').run(id);
 
       res.json({ success: true });
-    } catch (err: any) {
+    } catch (err: unknown) {
       sendSafeError(res, err);
     }
   });
@@ -290,7 +330,7 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
   app.post('/api/lessons/:lessonId/activities/reorder', requireScopedAuth('class-staff'), (req, res) => {
     try {
       const lessonId = req.params.lessonId;
-      const session = (req as any).session;
+      const session = requestSession(req);
       if (rejectUnless(res, authorizeLessonStaff(readDb, session, lessonId))) return;
 
       const { ids } = req.body || {};
@@ -317,7 +357,7 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
         .prepare('SELECT id, order_index FROM lesson_activities WHERE lesson_id = ? ORDER BY order_index ASC')
         .all(lessonId);
       res.json(rows);
-    } catch (err: any) {
+    } catch (err: unknown) {
       sendSafeError(res, err);
     }
   });
@@ -329,7 +369,7 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
   app.get('/api/lessons/:lessonId/blocks', requireScopedAuth('authenticated'), (req, res) => {
     try {
       const lessonId = req.params.lessonId;
-      const session = (req as any).session;
+      const session = requestSession(req);
       if (!canSeeLesson(readDb, session, lessonId)) {
         return res.status(403).json({ success: false, error: 'Forbidden' });
       }
@@ -337,7 +377,7 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
         .prepare('SELECT * FROM lesson_activity_blocks WHERE lesson_id = ? ORDER BY order_index ASC')
         .all(lessonId);
       res.json(rows);
-    } catch (err: any) {
+    } catch (err: unknown) {
       sendSafeError(res, err);
     }
   });
@@ -345,7 +385,7 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
   app.post('/api/lessons/:lessonId/blocks', requireScopedAuth('class-staff'), (req, res) => {
     try {
       const lessonId = req.params.lessonId;
-      const session = (req as any).session;
+      const session = requestSession(req);
       if (rejectUnless(res, authorizeLessonStaff(readDb, session, lessonId))) return;
 
       const parsed = parseBlock(req.body);
@@ -366,7 +406,7 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
       ).run(id, lessonId, parsed.value.blockType, maxOrder + 1, parsed.value.contentJson, nowTs, nowTs);
 
       res.status(201).json(db.prepare('SELECT * FROM lesson_activity_blocks WHERE id = ?').get(id));
-    } catch (err: any) {
+    } catch (err: unknown) {
       sendSafeError(res, err);
     }
   });
@@ -374,8 +414,9 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
   app.put('/api/blocks/:id', requireScopedAuth('class-staff'), (req, res) => {
     try {
       const id = req.params.id;
-      const session = (req as any).session;
-      const existing = readDb.prepare('SELECT * FROM lesson_activity_blocks WHERE id = ?').get(id) as any | undefined;
+      const session = requestSession(req);
+      const existing = readDb.prepare('SELECT * FROM lesson_activity_blocks WHERE id = ?').get(id) as
+        BlockRow | undefined;
       if (!existing) return res.status(404).json({ success: false, error: 'Block not found' });
       if (rejectUnless(res, authorizeLessonStaff(readDb, session, existing.lesson_id))) return;
 
@@ -394,7 +435,7 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
       ).run(parsed.value.blockType, parsed.value.contentJson, orderIndex, now(), id);
 
       res.json(db.prepare('SELECT * FROM lesson_activity_blocks WHERE id = ?').get(id));
-    } catch (err: any) {
+    } catch (err: unknown) {
       sendSafeError(res, err);
     }
   });
@@ -402,14 +443,15 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
   app.delete('/api/blocks/:id', requireScopedAuth('class-staff'), (req, res) => {
     try {
       const id = req.params.id;
-      const session = (req as any).session;
-      const existing = readDb.prepare('SELECT * FROM lesson_activity_blocks WHERE id = ?').get(id) as any | undefined;
+      const session = requestSession(req);
+      const existing = readDb.prepare('SELECT * FROM lesson_activity_blocks WHERE id = ?').get(id) as
+        BlockRow | undefined;
       if (!existing) return res.status(404).json({ success: false, error: 'Block not found' });
       if (rejectUnless(res, authorizeLessonStaff(readDb, session, existing.lesson_id))) return;
 
       db.prepare('DELETE FROM lesson_activity_blocks WHERE id = ?').run(id);
       res.json({ success: true });
-    } catch (err: any) {
+    } catch (err: unknown) {
       sendSafeError(res, err);
     }
   });
@@ -419,7 +461,7 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
   app.get('/api/lessons/:lessonId/xuean/export', requireScopedAuth('class-staff'), (req, res) => {
     try {
       const lessonId = req.params.lessonId;
-      const session = (req as any).session;
+      const session = requestSession(req);
       if (rejectUnless(res, authorizeLessonStaff(readDb, session, lessonId))) return;
 
       const activities = readDb
@@ -444,7 +486,7 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
         activities,
         blocks,
       });
-    } catch (err: any) {
+    } catch (err: unknown) {
       sendSafeError(res, err);
     }
   });
@@ -453,7 +495,7 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
   app.post('/api/lessons/:lessonId/xuean/import', requireScopedAuth('class-staff'), (req, res) => {
     try {
       const lessonId = req.params.lessonId;
-      const session = (req as any).session;
+      const session = requestSession(req);
       if (rejectUnless(res, authorizeLessonStaff(readDb, session, lessonId))) return;
 
       const { activities, blocks } = req.body || {};
@@ -463,7 +505,9 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
 
       const tx = db.transaction(() => {
         // 清空现有活动 + 首页块（级联清理 activity_progress）
-        db.prepare('DELETE FROM activity_progress WHERE activity_id IN (SELECT id FROM lesson_activities WHERE lesson_id = ?)').run(lessonId);
+        db.prepare(
+          'DELETE FROM activity_progress WHERE activity_id IN (SELECT id FROM lesson_activities WHERE lesson_id = ?)',
+        ).run(lessonId);
         db.prepare('DELETE FROM lesson_activities WHERE lesson_id = ?').run(lessonId);
         db.prepare('DELETE FROM lesson_activity_blocks WHERE lesson_id = ?').run(lessonId);
 
@@ -497,21 +541,13 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
           db.prepare(
             `INSERT INTO lesson_activity_blocks (id, lesson_id, block_type, content_json, order_index, created_at, updated_at)
              VALUES (?, ?, ?, ?, ?, ?, ?)`,
-          ).run(
-            randomId(),
-            lessonId,
-            b.block_type ?? 'free',
-            b.content_json ?? '{}',
-            b.order_index ?? 0,
-            now(),
-            now(),
-          );
+          ).run(randomId(), lessonId, b.block_type ?? 'free', b.content_json ?? '{}', b.order_index ?? 0, now(), now());
         }
       });
 
       tx();
       res.json({ success: true, activityCount: activities.length, blockCount: blocks.length });
-    } catch (err: any) {
+    } catch (err: unknown) {
       sendSafeError(res, err);
     }
   });
@@ -524,7 +560,7 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
   app.get('/api/lessons/:lessonId/xuean', requireScopedAuth('authenticated'), (req, res) => {
     try {
       const lessonId = req.params.lessonId;
-      const session = (req as any).session;
+      const session = requestSession(req);
       if (!canSeeLesson(readDb, session, lessonId)) {
         return res.status(403).json({ success: false, error: 'Forbidden' });
       }
@@ -550,7 +586,7 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
             .all(lessonId, ts);
 
       // 学生 → 只取自己 progress；教师/管理员 → 可选学生视角 (query.studentId)
-      let progressRows: any[] = [];
+      let progressRows: ActivityProgressRow[] = [];
       const requestedStudentId = req.query.studentId as string | undefined;
 
       if (isStaff && requestedStudentId) {
@@ -562,7 +598,7 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
           .prepare(
             'SELECT * FROM activity_progress WHERE student_id = ? AND activity_id IN (SELECT id FROM lesson_activities WHERE lesson_id = ?)',
           )
-          .all(requestedStudentId, lessonId);
+          .all(requestedStudentId, lessonId) as ActivityProgressRow[];
       } else {
         const studentId = studentActorId(session);
         if (studentId) {
@@ -570,15 +606,15 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
             .prepare(
               'SELECT * FROM activity_progress WHERE student_id = ? AND activity_id IN (SELECT id FROM lesson_activities WHERE lesson_id = ?)',
             )
-            .all(studentId, lessonId);
+            .all(studentId, lessonId) as ActivityProgressRow[];
         }
       }
 
-      const progressByActivity: Record<string, any> = {};
+      const progressByActivity: Record<string, ActivityProgressRow> = {};
       for (const p of progressRows) progressByActivity[p.activity_id] = p;
 
       res.json({ lessonId, blocks, activities, progressByActivity });
-    } catch (err: any) {
+    } catch (err: unknown) {
       sendSafeError(res, err);
     }
   });
@@ -587,13 +623,13 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
   app.post('/api/activities/:id/progress', requireScopedAuth('authenticated'), (req, res) => {
     try {
       const activityId = req.params.id;
-      const session = (req as any).session;
+      const session = requestSession(req);
 
       const activity = readDb
         .prepare(
           'SELECT la.*, l.creator_id FROM lesson_activities la JOIN lessons l ON l.id = la.lesson_id WHERE la.id = ?',
         )
-        .get(activityId) as any | undefined;
+        .get(activityId) as ActivityRow | undefined;
       if (!activity) return res.status(404).json({ success: false, error: 'Activity not found' });
 
       if (!canSeeLesson(readDb, session, activity.lesson_id)) {
@@ -699,7 +735,7 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
         .prepare('SELECT * FROM activity_progress WHERE activity_id = ? AND student_id = ?')
         .get(activityId, finalStudentId);
       res.json(row);
-    } catch (err: any) {
+    } catch (err: unknown) {
       sendSafeError(res, err);
     }
   });
@@ -712,9 +748,9 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
   app.post('/api/activities/:id/progress/verify', requireScopedAuth('class-staff'), (req, res) => {
     try {
       const activityId = req.params.id;
-      const session = (req as any).session;
+      const session = requestSession(req);
       const activity = readDb.prepare('SELECT * FROM lesson_activities WHERE id = ?').get(activityId) as
-        any | undefined;
+        ActivityRow | undefined;
       if (!activity) return res.status(404).json({ success: false, error: 'Activity not found' });
       if (rejectUnless(res, authorizeLessonStaff(readDb, session, activity.lesson_id))) return;
 
@@ -759,14 +795,7 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
           db.prepare(
             `INSERT INTO student_point_logs (id, student_id, class_id, dimension_id, delta_points, reason, created_at)
              VALUES (?, ?, ?, 'xuean_activity', ?, ?, ?)`,
-          ).run(
-            pointId,
-            studentId,
-            classRow.class_id,
-            scoreVal,
-            `学案活动批阅加分：${activity.title}`,
-            ts,
-          );
+          ).run(pointId, studentId, classRow.class_id, scoreVal, `学案活动批阅加分：${activity.title}`, ts);
         }
       }
 
@@ -774,7 +803,7 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
         .prepare('SELECT * FROM activity_progress WHERE activity_id = ? AND student_id = ?')
         .get(activityId, studentId);
       res.json(row);
-    } catch (err: any) {
+    } catch (err: unknown) {
       sendSafeError(res, err);
     }
   });
@@ -783,9 +812,9 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
   app.post('/api/activities/:id/nudge', requireScopedAuth('class-staff'), (req, res) => {
     try {
       const activityId = req.params.id;
-      const session = (req as any).session;
+      const session = requestSession(req);
       const activity = readDb.prepare('SELECT * FROM lesson_activities WHERE id = ?').get(activityId) as
-        any | undefined;
+        ActivityRow | undefined;
       if (!activity) return res.status(404).json({ success: false, error: 'Activity not found' });
       if (rejectUnless(res, authorizeLessonStaff(readDb, session, activity.lesson_id))) return;
 
@@ -814,7 +843,7 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
         .prepare('SELECT * FROM activity_progress WHERE activity_id = ? AND student_id = ?')
         .get(activityId, studentId);
       res.json(row);
-    } catch (err: any) {
+    } catch (err: unknown) {
       sendSafeError(res, err);
     }
   });
@@ -823,10 +852,10 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
   app.post('/api/activities/:id/peer-review', requireScopedAuth('class-member'), (req, res) => {
     try {
       const activityId = req.params.id;
-      const session = (req as any).session;
+      const session = requestSession(req);
       const reviewerId = session.userId as string;
       const activity = readDb.prepare('SELECT * FROM lesson_activities WHERE id = ?').get(activityId) as
-        any | undefined;
+        ActivityRow | undefined;
       if (!activity) return res.status(404).json({ success: false, error: 'Activity not found' });
       if (!activity.peer_review) {
         return res.status(400).json({ success: false, error: 'This activity does not enable peer review' });
@@ -851,7 +880,7 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
       ).run(id, activityId, reviewerId, revieweeId, scoreNum, comment ?? '', ts);
 
       res.json({ success: true, score: scoreNum });
-    } catch (err: any) {
+    } catch (err: unknown) {
       sendSafeError(res, err);
     }
   });
@@ -868,7 +897,7 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
         )
         .all(activityId, revieweeId);
       res.json(rows);
-    } catch (err: any) {
+    } catch (err: unknown) {
       sendSafeError(res, err);
     }
   });
@@ -882,7 +911,7 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
         .prepare('SELECT * FROM lesson_discussions WHERE activity_id = ? ORDER BY created_at ASC')
         .all(activityId);
       res.json(rows);
-    } catch (err: any) {
+    } catch (err: unknown) {
       sendSafeError(res, err);
     }
   });
@@ -891,7 +920,7 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
   app.post('/api/activities/:id/discussions', requireScopedAuth('class-member'), (req, res) => {
     try {
       const activityId = req.params.id;
-      const session = (req as any).session;
+      const session = requestSession(req);
       const { content, parentId } = req.body || {};
       if (!content || !content.trim()) {
         return res.status(400).json({ success: false, error: 'content required' });
@@ -904,7 +933,7 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
       ).run(id, activityId, session.userId, content.trim(), parentId ?? null, ts);
       const row = readDb.prepare('SELECT * FROM lesson_discussions WHERE id = ?').get(id);
       res.json(row);
-    } catch (err: any) {
+    } catch (err: unknown) {
       sendSafeError(res, err);
     }
   });
@@ -912,15 +941,16 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
   // 删除帖子（仅作者本人）
   app.delete('/api/discussions/:id', requireScopedAuth('class-member'), (req, res) => {
     try {
-      const session = (req as any).session;
-      const row = readDb.prepare('SELECT * FROM lesson_discussions WHERE id = ?').get(req.params.id) as any | undefined;
+      const session = requestSession(req);
+      const row = readDb.prepare('SELECT * FROM lesson_discussions WHERE id = ?').get(req.params.id) as
+        { author_id: string } | undefined;
       if (!row) return res.status(404).json({ success: false, error: 'Not found' });
       if (row.author_id !== session.userId && !isAdministrator(session)) {
         return res.status(403).json({ success: false, error: 'Only author or admin can delete' });
       }
       db.prepare('DELETE FROM lesson_discussions WHERE id = ? OR parent_id = ?').run(req.params.id, req.params.id);
       res.json({ success: true });
-    } catch (err: any) {
+    } catch (err: unknown) {
       sendSafeError(res, err);
     }
   });
@@ -929,12 +959,12 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
   app.get('/api/lessons/:lessonId/activity-progress', requireScopedAuth('class-staff'), (req, res) => {
     try {
       const lessonId = req.params.lessonId;
-      const session = (req as any).session;
+      const session = requestSession(req);
       if (rejectUnless(res, authorizeLessonStaff(readDb, session, lessonId))) return;
 
       const activities = readDb
         .prepare('SELECT * FROM lesson_activities WHERE lesson_id = ? ORDER BY order_index ASC')
-        .all(lessonId) as any[];
+        .all(lessonId) as ActivityRow[];
 
       if (activities.length === 0) {
         return res.json({ lessonId, activities: [], summary: { totalStudents: 0, totalActivities: 0 } });
@@ -970,9 +1000,9 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
             .map(() => '?')
             .join(',')})`,
         )
-        .all(...activityIds, ...Array.from(allStudentIds)) as any[];
+        .all(...activityIds, ...Array.from(allStudentIds)) as ActivityProgressRow[];
 
-      const progressMap: Record<string, Record<string, any>> = {};
+      const progressMap: Record<string, Record<string, ActivityProgressRow>> = {};
       for (const p of progressRows) {
         if (!progressMap[p.activity_id]) progressMap[p.activity_id] = {};
         progressMap[p.activity_id][p.student_id] = p;
@@ -989,9 +1019,7 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
               verified: 0,
             },
         );
-        const doneCount = rows.filter(
-          (r: any) => r.status === 'graded' || (r.verified && r.status === 'submitted'),
-        ).length;
+        const doneCount = rows.filter((r) => r.status === 'graded' || (r.verified && r.status === 'submitted')).length;
         return {
           ...a,
           students: rows,
@@ -1008,7 +1036,7 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
         totalStudents: allStudentIds.size,
         activities: enrichedActivities,
       });
-    } catch (err: any) {
+    } catch (err: unknown) {
       sendSafeError(res, err);
     }
   });
@@ -1019,7 +1047,7 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
     try {
       const courses = readDb.prepare('SELECT * FROM courses ORDER BY created_at DESC').all();
       res.json(courses);
-    } catch (err: any) {
+    } catch (err: unknown) {
       sendSafeError(res, err);
     }
   });
@@ -1027,7 +1055,7 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
   // 创建课程
   app.post('/api/courses', requireScopedAuth('class-staff'), (req, res) => {
     try {
-      const session = (req as any).session;
+      const session = requestSession(req);
       const { title, description, term, visibility } = req.body || {};
       if (!title || !title.trim()) return res.status(400).json({ success: false, error: 'title required' });
       const id = `course_${randomId()}`;
@@ -1038,7 +1066,7 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
       ).run(id, title.trim(), description ?? '', session.userId ?? '', term ?? '', visibility ?? 'private', '', ts, ts);
       const row = readDb.prepare('SELECT * FROM courses WHERE id = ?').get(id);
       res.json(row);
-    } catch (err: any) {
+    } catch (err: unknown) {
       sendSafeError(res, err);
     }
   });
@@ -1046,16 +1074,15 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
   // 课程详情（含下属 lesson 列表）
   app.get('/api/courses/:id', requireScopedAuth('class-staff'), (req, res) => {
     try {
-      const course = readDb.prepare('SELECT * FROM courses WHERE id = ?').get(req.params.id) as any | undefined;
+      const course = readDb.prepare('SELECT * FROM courses WHERE id = ?').get(req.params.id) as
+        Record<string, unknown> | undefined;
       if (!course) return res.status(404).json({ success: false, error: 'Course not found' });
       const lessons = readDb
         .prepare('SELECT * FROM lessons WHERE course_id = ? ORDER BY created_at ASC')
         .all(req.params.id);
-      const enrollments = readDb
-        .prepare('SELECT * FROM course_enrollments WHERE course_id = ?')
-        .all(req.params.id);
+      const enrollments = readDb.prepare('SELECT * FROM course_enrollments WHERE course_id = ?').all(req.params.id);
       res.json({ ...course, lessons, enrollments });
-    } catch (err: any) {
+    } catch (err: unknown) {
       sendSafeError(res, err);
     }
   });
@@ -1071,7 +1098,7 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
       ).run(title ?? null, description ?? null, term ?? null, visibility ?? null, ts, req.params.id);
       const row = readDb.prepare('SELECT * FROM courses WHERE id = ?').get(req.params.id);
       res.json(row);
-    } catch (err: any) {
+    } catch (err: unknown) {
       sendSafeError(res, err);
     }
   });
@@ -1084,7 +1111,7 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
       db.prepare('DELETE FROM course_enrollments WHERE course_id = ?').run(id);
       db.prepare('DELETE FROM courses WHERE id = ?').run(id);
       res.json({ success: true });
-    } catch (err: any) {
+    } catch (err: unknown) {
       sendSafeError(res, err);
     }
   });
@@ -1098,7 +1125,7 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
       if (!course) return res.status(404).json({ success: false, error: 'Course not found' });
       db.prepare('UPDATE lessons SET course_id = ? WHERE id = ?').run(courseId, lessonId);
       res.json({ success: true, courseId, lessonId });
-    } catch (err: any) {
+    } catch (err: unknown) {
       sendSafeError(res, err);
     }
   });
@@ -1108,11 +1135,13 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
     try {
       const { studentId, classId } = req.body || {};
       if (!studentId) return res.status(400).json({ success: false, error: 'studentId required' });
-      db.prepare(
-        `INSERT OR IGNORE INTO course_enrollments (course_id, student_id, class_id) VALUES (?, ?, ?)`,
-      ).run(req.params.id, studentId, classId ?? null);
+      db.prepare(`INSERT OR IGNORE INTO course_enrollments (course_id, student_id, class_id) VALUES (?, ?, ?)`).run(
+        req.params.id,
+        studentId,
+        classId ?? null,
+      );
       res.json({ success: true });
-    } catch (err: any) {
+    } catch (err: unknown) {
       sendSafeError(res, err);
     }
   });

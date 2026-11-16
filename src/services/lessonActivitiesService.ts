@@ -11,7 +11,7 @@ export async function getLessonActivities(lessonId: string) {
   return { ok: true, data: await res.json() };
 }
 
-export async function createLessonActivity(lessonId: string, payload: any) {
+export async function createLessonActivity(lessonId: string, payload: Record<string, unknown>) {
   const res = await fetch(`/api/lessons/${lessonId}/activities`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -21,7 +21,7 @@ export async function createLessonActivity(lessonId: string, payload: any) {
   return { ok: true, data: await res.json() };
 }
 
-export async function updateLessonActivity(id: string, payload: any) {
+export async function updateLessonActivity(id: string, payload: Record<string, unknown>) {
   const res = await fetch(`/api/activities/${id}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
@@ -54,7 +54,7 @@ export async function getLessonBlocks(lessonId: string) {
   return { ok: true, data: await res.json() };
 }
 
-export async function createLessonBlock(lessonId: string, payload: any) {
+export async function createLessonBlock(lessonId: string, payload: Record<string, unknown>) {
   const res = await fetch(`/api/lessons/${lessonId}/blocks`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -64,7 +64,7 @@ export async function createLessonBlock(lessonId: string, payload: any) {
   return { ok: true, data: await res.json() };
 }
 
-export async function updateLessonBlock(id: string, payload: any) {
+export async function updateLessonBlock(id: string, payload: Record<string, unknown>) {
   const res = await fetch(`/api/blocks/${id}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
@@ -151,7 +151,7 @@ export async function exportXueanPackage(lessonId: string) {
 
 export async function importXueanPackage(
   lessonId: string,
-  payload: { activities: any[]; blocks: any[] },
+  payload: { activities: Record<string, unknown>[]; blocks: Record<string, unknown>[] },
 ) {
   const res = await fetch(`/api/lessons/${lessonId}/xuean/import`, {
     method: 'POST',

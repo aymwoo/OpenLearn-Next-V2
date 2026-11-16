@@ -10,20 +10,32 @@ import { randomUUID } from 'crypto';
 import { registerLessonActivitiesRoutes } from '../../server/routes/lesson-activities.js';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
 
+type TestRow = { id: string; [key: string]: unknown };
+type XueanResponse = {
+  lessonId: string;
+  blocks: TestRow[];
+  activities: TestRow[];
+  progressByActivity: Record<string, TestRow>;
+};
+type ProgressPanelResponse = {
+  totalStudents: number;
+  activities: { students: TestRow[]; summary: { total: number } }[];
+};
+
 function rid(prefix: string) {
   return `${prefix}_${randomUUID().replace(/-/g, '').slice(0, 12)}`;
 }
 
-async function fetchJson(url: string, options?: RequestInit) {
+async function fetchJson<T = TestRow>(url: string, options?: RequestInit) {
   const r = await fetch(url, options);
   const text = await r.text();
-  let body: any = null;
+  let body: unknown;
   try {
     body = text ? JSON.parse(text) : null;
   } catch {
     body = text;
   }
-  return { status: r.status, body };
+  return { status: r.status, body: body as T };
 }
 
 describe('学案式课时包路由 (IKVO15 · P0)', () => {
@@ -94,7 +106,7 @@ describe('学案式课时包路由 (IKVO15 · P0)', () => {
 
     app = express();
     app.use(express.json());
-    registerLessonActivitiesRoutes({ app } as any);
+    registerLessonActivitiesRoutes({ app } as Parameters<typeof registerLessonActivitiesRoutes>[0]);
     app.all('/api/*', (_req, res) => res.status(404).json({ error: 'not found' }));
 
     await new Promise<void>((resolve) => {
@@ -160,17 +172,19 @@ describe('学案式课时包路由 (IKVO15 · P0)', () => {
     });
 
     it('批量重排', async () => {
-      const list = await fetchJson(`${baseUrl}/api/lessons/${lessonId}/activities`, { headers: teacherCookie });
+      const list = await fetchJson<TestRow[]>(`${baseUrl}/api/lessons/${lessonId}/activities`, {
+        headers: teacherCookie,
+      });
       expect(list.status).toBe(200);
-      const ids = list.body.map((a: any) => a.id);
+      const ids = list.body.map((a) => a.id);
       const reversed = [...ids].reverse();
-      const res = await fetchJson(`${baseUrl}/api/lessons/${lessonId}/activities/reorder`, {
+      const res = await fetchJson<TestRow[]>(`${baseUrl}/api/lessons/${lessonId}/activities/reorder`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...teacherCookie },
         body: JSON.stringify({ ids: reversed }),
       });
       expect(res.status).toBe(200);
-      expect(res.body.map((r: any) => r.id)).toEqual(reversed);
+      expect(res.body.map((r) => r.id)).toEqual(reversed);
     });
 
     it('非法 type 被拒', async () => {
@@ -206,7 +220,7 @@ describe('学案式课时包路由 (IKVO15 · P0)', () => {
     });
 
     it('学生可读', async () => {
-      const res = await fetchJson(`${baseUrl}/api/lessons/${lessonId}/blocks`, { headers: studentCookie });
+      const res = await fetchJson<TestRow[]>(`${baseUrl}/api/lessons/${lessonId}/blocks`, { headers: studentCookie });
       expect(res.status).toBe(200);
       expect(res.body.length).toBe(2);
     });
@@ -215,7 +229,9 @@ describe('学案式课时包路由 (IKVO15 · P0)', () => {
   // ── 学生学案聚合 ───────────────────────────────────────────────────
   describe('学生学案聚合 + 进度上报', () => {
     it('学生能读到学案聚合', async () => {
-      const res = await fetchJson(`${baseUrl}/api/lessons/${lessonId}/xuean`, { headers: studentCookie });
+      const res = await fetchJson<XueanResponse>(`${baseUrl}/api/lessons/${lessonId}/xuean`, {
+        headers: studentCookie,
+      });
       expect(res.status).toBe(200);
       expect(res.body.lessonId).toBe(lessonId);
       expect(res.body.blocks.length).toBeGreaterThan(0);
@@ -224,7 +240,9 @@ describe('学案式课时包路由 (IKVO15 · P0)', () => {
     });
 
     it('学生自报进度', async () => {
-      const list = await fetchJson(`${baseUrl}/api/lessons/${lessonId}/activities`, { headers: teacherCookie });
+      const list = await fetchJson<TestRow[]>(`${baseUrl}/api/lessons/${lessonId}/activities`, {
+        headers: teacherCookie,
+      });
       const first = list.body[0];
       const res = await fetchJson(`${baseUrl}/api/activities/${first.id}/progress`, {
         method: 'POST',
@@ -238,7 +256,9 @@ describe('学案式课时包路由 (IKVO15 · P0)', () => {
     });
 
     it('学生提交作业内容写入 submission_json', async () => {
-      const list = await fetchJson(`${baseUrl}/api/lessons/${lessonId}/activities`, { headers: teacherCookie });
+      const list = await fetchJson<TestRow[]>(`${baseUrl}/api/lessons/${lessonId}/activities`, {
+        headers: teacherCookie,
+      });
       const first = list.body[0];
       const res = await fetchJson(`${baseUrl}/api/activities/${first.id}/progress`, {
         method: 'POST',
@@ -248,13 +268,15 @@ describe('学案式课时包路由 (IKVO15 · P0)', () => {
       expect(res.status).toBe(200);
       expect(res.body.status).toBe('submitted');
       expect(res.body.submission_json).toBeTruthy();
-      const parsed = JSON.parse(res.body.submission_json);
+      const parsed = JSON.parse(res.body.submission_json as string);
       expect(parsed.content).toBe('我完成了第一章阅读');
       expect(parsed.type).toBe('text');
     });
 
     it('学生提交 string 类型也能写入 submission_json', async () => {
-      const list = await fetchJson(`${baseUrl}/api/lessons/${lessonId}/activities`, { headers: teacherCookie });
+      const list = await fetchJson<TestRow[]>(`${baseUrl}/api/lessons/${lessonId}/activities`, {
+        headers: teacherCookie,
+      });
       const second = list.body[1] ?? list.body[0];
       const res = await fetchJson(`${baseUrl}/api/activities/${second.id}/progress`, {
         method: 'POST',
@@ -263,12 +285,14 @@ describe('学案式课时包路由 (IKVO15 · P0)', () => {
       });
       expect(res.status).toBe(200);
       expect(res.body.submission_json).toBeTruthy();
-      const parsed = JSON.parse(res.body.submission_json);
+      const parsed = JSON.parse(res.body.submission_json as string);
       expect(parsed).toBe('纯文本提交内容');
     });
 
     it('学生不能写别人的进度', async () => {
-      const list = await fetchJson(`${baseUrl}/api/lessons/${lessonId}/activities`, { headers: teacherCookie });
+      const list = await fetchJson<TestRow[]>(`${baseUrl}/api/lessons/${lessonId}/activities`, {
+        headers: teacherCookie,
+      });
       const first = list.body[0];
       const res = await fetchJson(`${baseUrl}/api/activities/${first.id}/progress`, {
         method: 'POST',
@@ -282,7 +306,9 @@ describe('学案式课时包路由 (IKVO15 · P0)', () => {
   // ── 教师批阅 + 进度面板 ────────────────────────────────────────────
   describe('教师批阅 + 进度面板', () => {
     it('教师批阅置 verified=1', async () => {
-      const list = await fetchJson(`${baseUrl}/api/lessons/${lessonId}/activities`, { headers: teacherCookie });
+      const list = await fetchJson<TestRow[]>(`${baseUrl}/api/lessons/${lessonId}/activities`, {
+        headers: teacherCookie,
+      });
       const first = list.body[0];
       const res = await fetchJson(`${baseUrl}/api/activities/${first.id}/progress/verify`, {
         method: 'POST',
@@ -296,7 +322,9 @@ describe('学案式课时包路由 (IKVO15 · P0)', () => {
     });
 
     it('进度面板聚合到活动 × 学生', async () => {
-      const res = await fetchJson(`${baseUrl}/api/lessons/${lessonId}/activity-progress`, { headers: teacherCookie });
+      const res = await fetchJson<ProgressPanelResponse>(`${baseUrl}/api/lessons/${lessonId}/activity-progress`, {
+        headers: teacherCookie,
+      });
       expect(res.status).toBe(200);
       expect(res.body.activities.length).toBeGreaterThan(0);
       const first = res.body.activities[0];

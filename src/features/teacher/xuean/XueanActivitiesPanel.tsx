@@ -254,7 +254,7 @@ function ActivityEditor({
     }
     setSaving(true);
     setError(null);
-    const payload: any = {
+    const payload: Record<string, unknown> = {
       type: form.type,
       title: form.title.trim(),
       required: form.required,

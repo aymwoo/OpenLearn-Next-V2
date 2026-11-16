@@ -171,7 +171,11 @@ export function StudentLessonInteractionPanel(props: StudentLessonInteractionPan
           <button onClick={() => handleTabChange('assignment')} className={tabButtonClass('assignment')}>
             {lang === 'zh' ? '作业提交与互评' : 'Assignments & Peer Reviews'}
           </button>
-          <button onClick={() => handleTabChange('xuean')} className={tabButtonClass('xuean')} title={lang === 'zh' ? '学案式课时包' : 'Xuean Lesson Package'}>
+          <button
+            onClick={() => handleTabChange('xuean')}
+            className={tabButtonClass('xuean')}
+            title={lang === 'zh' ? '学案式课时包' : 'Xuean Lesson Package'}
+          >
             <BookOpenCheck size={12} className="inline -mt-0.5 mr-1" />
             {lang === 'zh' ? '学案' : 'Xuean'}
           </button>
