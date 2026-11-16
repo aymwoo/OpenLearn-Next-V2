@@ -93,7 +93,13 @@ export type ActivitySubmission = string | { type: 'text' | 'file' | 'link'; cont
 
 export async function postActivityProgress(
   activityId: string,
-  payload: { status?: string; progressPercent?: number; studentId?: string; submission?: ActivitySubmission },
+  payload: {
+    status?: string;
+    progressPercent?: number;
+    studentId?: string;
+    submission?: ActivitySubmission;
+    selfEval?: { score: number; comment: string };
+  },
 ) {
   const res = await fetch(`/api/activities/${activityId}/progress`, {
     method: 'POST',

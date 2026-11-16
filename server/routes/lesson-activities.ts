@@ -603,7 +603,7 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
       // 只有本人能写自己的进度：学生强制用 session.studentId，教师/管理员才允许 body 覆盖
       const actorStudentId: string | null = studentActorId(session);
       const privileged = isAdministrator(session) || isTeacher(session);
-      const { status, progressPercent, studentId, submission } = req.body || {};
+      const { status, progressPercent, studentId, submission, selfEval } = req.body || {};
 
       let finalStudentId: string;
       if (actorStudentId && !privileged) {
@@ -648,8 +648,23 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
         submission != null && submission !== '' && (typeof submission === 'string' || typeof submission === 'object');
       const submissionJson = hasSubmission ? JSON.stringify(submission) : undefined;
 
+      // selfEval: { score: number, comment: string }
+      const hasSelfEval = selfEval != null && typeof selfEval === 'object';
+      const selfEvalJson = hasSelfEval ? JSON.stringify(selfEval) : undefined;
+
       // verified 只能由 verify 端点写入
-      if (submissionJson) {
+      if (submissionJson && selfEvalJson) {
+        db.prepare(
+          `INSERT INTO activity_progress (activity_id, student_id, status, progress_percent, verified, last_activity_at, submission_json, self_eval_json)
+           VALUES (?, ?, ?, ?, 0, ?, ?, ?)
+           ON CONFLICT(activity_id, student_id) DO UPDATE SET
+             status = excluded.status,
+             progress_percent = excluded.progress_percent,
+             last_activity_at = excluded.last_activity_at,
+             submission_json = excluded.submission_json,
+             self_eval_json = excluded.self_eval_json`,
+        ).run(activityId, finalStudentId, finalStatus, percent ?? 0, ts, submissionJson, selfEvalJson);
+      } else if (submissionJson) {
         db.prepare(
           `INSERT INTO activity_progress (activity_id, student_id, status, progress_percent, verified, last_activity_at, submission_json)
            VALUES (?, ?, ?, ?, 0, ?, ?)
@@ -659,6 +674,16 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
              last_activity_at = excluded.last_activity_at,
              submission_json = excluded.submission_json`,
         ).run(activityId, finalStudentId, finalStatus, percent ?? 0, ts, submissionJson);
+      } else if (selfEvalJson) {
+        db.prepare(
+          `INSERT INTO activity_progress (activity_id, student_id, status, progress_percent, verified, last_activity_at, self_eval_json)
+           VALUES (?, ?, ?, ?, 0, ?, ?)
+           ON CONFLICT(activity_id, student_id) DO UPDATE SET
+             status = excluded.status,
+             progress_percent = excluded.progress_percent,
+             last_activity_at = excluded.last_activity_at,
+             self_eval_json = excluded.self_eval_json`,
+        ).run(activityId, finalStudentId, finalStatus, percent ?? 0, ts, selfEvalJson);
       } else {
         db.prepare(
           `INSERT INTO activity_progress (activity_id, student_id, status, progress_percent, verified, last_activity_at)

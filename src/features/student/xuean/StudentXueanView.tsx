@@ -377,9 +377,9 @@ function ActivityItem({
             setShowSubmitModal(false);
             await onProgressUpdated();
           }}
-          submitFn={async (submission) => {
+          submitFn={async (submission, selfEval) => {
             setSaving(true);
-            const res = await postActivityProgress(activity.id, { status: 'submitted', submission });
+            const res = await postActivityProgress(activity.id, { status: 'submitted', submission, selfEval });
             setSaving(false);
             return res.ok;
           }}
@@ -400,11 +400,13 @@ function SubmissionModal({
   existing: any;
   onClose: () => void;
   onSaved: () => void;
-  submitFn: (submission: any) => Promise<boolean>;
+  submitFn: (submission: any, selfEval?: { score: number; comment: string }) => Promise<boolean>;
 }) {
   const initialText = existing ? (typeof existing === 'string' ? existing : (existing.content ?? '')) : '';
   const [content, setContent] = useState(initialText);
   const [submissionType, setSubmissionType] = useState<'text' | 'link'>(existing?.type === 'link' ? 'link' : 'text');
+  const [selfScore, setSelfScore] = useState<number | ''>('');
+  const [selfComment, setSelfComment] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -418,7 +420,10 @@ function SubmissionModal({
     setError(null);
     const submission =
       submissionType === 'link' ? { type: 'link', content: content.trim(), url: content.trim() } : content.trim();
-    const ok = await submitFn(submission);
+    const selfEval = selfScore !== '' || selfComment.trim()
+      ? { score: typeof selfScore === 'number' ? selfScore : 0, comment: selfComment.trim() }
+      : undefined;
+    const ok = await submitFn(submission, selfEval);
     setSaving(false);
     if (!ok) {
       setError('提交失败，请重试');
@@ -496,6 +501,35 @@ function SubmissionModal({
             placeholder={submissionType === 'link' ? 'https://...' : '输入你的作业内容…'}
             autoFocus
           />
+        </div>
+
+        {/* 自评（可选） */}
+        <div className="space-y-2 border-t border-theme pt-3">
+          <p className="text-xs font-bold text-muted">自评（可选）</p>
+          <div className="flex gap-3">
+            <div className="flex-1 space-y-1">
+              <label className="block text-[10px] text-muted">自评分</label>
+              <input
+                type="number"
+                min={0}
+                max={100}
+                value={selfScore}
+                onChange={(e) => setSelfScore(e.target.value === '' ? '' : Number(e.target.value))}
+                placeholder="0-100"
+                className="w-full px-3 py-2 text-sm rounded-lg border border-theme bg-surface text-main focus:outline-none focus:ring-2 focus:ring-primary-theme/40"
+              />
+            </div>
+          </div>
+          <div className="space-y-1">
+            <label className="block text-[10px] text-muted">自评评语</label>
+            <textarea
+              value={selfComment}
+              onChange={(e) => setSelfComment(e.target.value)}
+              rows={2}
+              placeholder="简要评价自己的完成情况…"
+              className="w-full px-3 py-2 text-sm rounded-lg border border-theme bg-surface text-main focus:outline-none focus:ring-2 focus:ring-primary-theme/40"
+            />
+          </div>
         </div>
 
         {error && <p className="text-xs text-rose-600">{error}</p>}
