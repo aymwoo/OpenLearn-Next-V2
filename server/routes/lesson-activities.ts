@@ -819,6 +819,60 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
     }
   });
 
+  // 互评：学生给同学的活动提交打分（仅 peer_review=1 的活动）
+  app.post('/api/activities/:id/peer-review', requireScopedAuth('class-member'), (req, res) => {
+    try {
+      const activityId = req.params.id;
+      const session = (req as any).session;
+      const reviewerId = session.userId as string;
+      const activity = readDb.prepare('SELECT * FROM lesson_activities WHERE id = ?').get(activityId) as
+        any | undefined;
+      if (!activity) return res.status(404).json({ success: false, error: 'Activity not found' });
+      if (!activity.peer_review) {
+        return res.status(400).json({ success: false, error: 'This activity does not enable peer review' });
+      }
+
+      const { revieweeId, score, comment } = req.body || {};
+      if (!revieweeId || revieweeId === reviewerId) {
+        return res.status(400).json({ success: false, error: 'Cannot review yourself' });
+      }
+      const scoreNum = Number(score);
+      if (!Number.isFinite(scoreNum) || scoreNum < 0 || scoreNum > 100) {
+        return res.status(400).json({ success: false, error: 'score must be 0-100' });
+      }
+
+      const id = `pr_${randomId()}`;
+      const ts = now();
+      db.prepare(
+        `INSERT INTO activity_peer_reviews (id, activity_id, reviewer_id, reviewee_id, score, comment, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(activity_id, reviewer_id, reviewee_id) DO UPDATE SET
+           score = excluded.score, comment = excluded.comment, created_at = excluded.created_at`,
+      ).run(id, activityId, reviewerId, revieweeId, scoreNum, comment ?? '', ts);
+
+      res.json({ success: true, score: scoreNum });
+    } catch (err: any) {
+      sendSafeError(res, err);
+    }
+  });
+
+  // 查看某学生在某活动收到的互评列表
+  app.get('/api/activities/:id/peer-reviews', requireScopedAuth('class-member'), (req, res) => {
+    try {
+      const activityId = req.params.id;
+      const revieweeId = req.query.revieweeId as string;
+      if (!revieweeId) return res.status(400).json({ success: false, error: 'revieweeId required' });
+      const rows = readDb
+        .prepare(
+          'SELECT * FROM activity_peer_reviews WHERE activity_id = ? AND reviewee_id = ? ORDER BY created_at DESC',
+        )
+        .all(activityId, revieweeId);
+      res.json(rows);
+    } catch (err: any) {
+      sendSafeError(res, err);
+    }
+  });
+
   // 活动级进度面板：返回每个活动 × 所有关联班级学生的进度聚合
   app.get('/api/lessons/:lessonId/activity-progress', requireScopedAuth('class-staff'), (req, res) => {
     try {

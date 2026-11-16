@@ -5,6 +5,7 @@
  */
 import { useCallback, useEffect, useState } from 'react';
 import { getXuean, postActivityProgress } from '../../../services/lessonActivitiesService.js';
+import { sanitizeRichTextHtml } from '../../../../packages/core/security/html-sanitize';
 
 type Block = {
   id: string;
@@ -176,7 +177,7 @@ function BlockCard({ block }: { block: Block }) {
   const renderContent = () => {
     if (typeof content === 'string') {
       return block.block_type === 'free_html' ? (
-        <div dangerouslySetInnerHTML={{ __html: content }} />
+        <div dangerouslySetInnerHTML={{ __html: sanitizeRichTextHtml(content) }} />
       ) : (
         <p className="text-sm text-main whitespace-pre-wrap">{content}</p>
       );
