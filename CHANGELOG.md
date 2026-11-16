@@ -10,6 +10,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Features
+
+- **学生登录后首屏按学习路径重排（Gitee Issue IKVKVF）**：
+  - 新增固定区「现在该做什么」学习路径焦点条（`src/features/student/StudentLearningFocus.tsx`）：待办作业 → 最近课节 → 继续学习，不受自定义布局影响；最近课节按「今天未结束 → 本周后续 → 下周三」规则取数；
+  - `DEFAULT_WIDGET_LAYOUT` 默认顺序改为待办作业优先，本地布局键提升为 `student_dashboard_layout_v3_*`，使老用户也能拿到新首屏；
+  - 首屏窄屏适配：页面内外边距与栅格间距收紧、自定义工具条在 <640px 折叠为「自定义布局」按钮、组件头部隐藏移动按钮、组件正文改为容器查询（`@container`），学情概览四宫格窄屏 2 列；
+  - 移除作业 / 课表 / 课程进度组件内部重复的卡片外壳与标题，避免与组件卡头部形成双层卡片；
+  - 新增布局约定文档 `docs/workspace/student-home-layout.md` 并接入文档目录。
+  - follow-up：`assessments` ↔ `progress-trends` 默认尺寸改为 `half + half`，左右对称对齐；`WeeklyProgressTrendChart` 新增 `compact` prop 让嵌入 DashboardWidgetCard 时去掉内层重复卡片外壳与独立 header，消除双层卡片和高度断层。
+
 ## [0.7.17] - 2026-11-15
 
 ### Features

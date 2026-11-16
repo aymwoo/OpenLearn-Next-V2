@@ -115,8 +115,8 @@ describe('StudentDashboardPanel Modular CSS Grid Layout', () => {
     const progressWidget = container.querySelector('#widget-progress-trends');
     expect(progressWidget).toBeTruthy();
 
-    // Default size is two-thirds (8 cols)
-    expect(progressWidget?.getAttribute('data-widget-size')).toBe('two-thirds');
+    // Default size is half (6 cols) — 与 assessments 各占半行，左右对齐（Issue IKVKVF follow-up）
+    expect(progressWidget?.getAttribute('data-widget-size')).toBe('half');
 
     // Click "Full" width button within progress trends widget
     const fullButtons = progressWidget?.querySelectorAll('button');
@@ -132,7 +132,7 @@ describe('StudentDashboardPanel Modular CSS Grid Layout', () => {
     expect(progressWidget?.className).toContain('lg:col-span-12');
 
     // Verify localStorage persistence
-    const saved = localStorage.getItem('student_dashboard_layout_v2_s1');
+    const saved = localStorage.getItem('student_dashboard_layout_v4_s1');
     expect(saved).toBeTruthy();
     const parsed = JSON.parse(saved || '[]');
     const progressItem = parsed.find((item: any) => item.id === 'progress-trends');
@@ -150,11 +150,11 @@ describe('StudentDashboardPanel Modular CSS Grid Layout', () => {
       el.getAttribute('data-widget-id'),
     );
 
-    // Initial first widget should be 'quick-stats'
-    expect(initialWidgets[0]).toBe('quick-stats');
+    // Issue IKVKVF: 默认顺序按学习路径排列，待办作业排第一
+    expect(initialWidgets[0]).toBe('upcoming-assignments');
 
     // Move first widget right
-    const firstWidget = container.querySelector('#widget-quick-stats');
+    const firstWidget = container.querySelector('#widget-upcoming-assignments');
     const moveRightBtn = firstWidget?.querySelector('button[title="向后移动卡片"]');
     expect(moveRightBtn).toBeTruthy();
 
@@ -166,8 +166,8 @@ describe('StudentDashboardPanel Modular CSS Grid Layout', () => {
       el.getAttribute('data-widget-id'),
     );
 
-    // After move right, quick-stats should now be at index 1
-    expect(updatedWidgets[1]).toBe('quick-stats');
+    // After move right, upcoming-assignments should now be at index 1
+    expect(updatedWidgets[1]).toBe('upcoming-assignments');
   });
 
   it('switches between presets (e.g. 作业攻坚模式)', () => {

@@ -79,9 +79,9 @@ export function StudentView() {
       data-student-header-position={studentLayout.headerPosition}
       data-student-card-columns={studentLayout.cardColumns}
       style={{ '--ol-student-cols': String(studentLayout.cardColumns) } as React.CSSProperties}
-      className={`flex-1 p-6 overflow-y-auto w-full max-w-full bg-app text-main flex ${
+      className={`flex-1 p-3 sm:p-4 lg:p-6 overflow-y-auto w-full max-w-full bg-app text-main flex ${
         studentLayout.headerPosition === 'bottom' ? 'flex-col-reverse' : 'flex-col'
-      } gap-6 transition-colors duration-150`}
+      } gap-4 lg:gap-6 transition-colors duration-150`}
     >
       {!activeStudentId ? (
         <div className="bg-surface border border-theme rounded-xl p-12 text-center text-muted flex flex-col items-center justify-center">

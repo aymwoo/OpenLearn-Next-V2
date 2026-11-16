@@ -44,6 +44,11 @@ export interface GradedAssignment {
 export interface WeeklyProgressTrendChartProps {
   assignments?: GradedAssignment[];
   lang?: 'en' | 'zh';
+  /**
+   * 嵌入 DashboardWidgetCard 时启用：去掉内层重复的卡片外壳和独立 header，
+   * 让标题由外层 WidgetCard 提供，内部仅输出 toolbar + KPI + chart。
+   */
+  compact?: boolean;
 }
 
 interface WeekDataPoint {
@@ -159,7 +164,11 @@ const DEMO_WEEKLY_PROGRESS: WeekDataPoint[] = [
   },
 ];
 
-export function WeeklyProgressTrendChart({ assignments = [], lang = 'en' }: WeeklyProgressTrendChartProps) {
+export function WeeklyProgressTrendChart({
+  assignments = [],
+  lang = 'en',
+  compact = false,
+}: WeeklyProgressTrendChartProps) {
   const [selectedClass, setSelectedClass] = useState<string>('all');
   const [timeHorizon, setTimeHorizon] = useState<'4weeks' | '8weeks' | 'all'>('all');
   const [showBenchmark, setShowBenchmark] = useState<boolean>(true);
@@ -365,6 +374,318 @@ export function WeeklyProgressTrendChart({ assignments = [], lang = 'en' }: Week
     tooltipRange: lang === 'zh' ? '最高/最低' : 'High / Low',
   };
 
+  // 过滤工具栏（紧凑模式下精简，只留时间窗口 + 目标基准开关）
+  const Toolbar = (
+    <div className={`flex flex-wrap items-center gap-2.5 ${compact ? '' : 'self-start md:self-center'}`}>
+      {!compact && uniqueClasses.length > 0 && (
+        <div className="flex items-center gap-1">
+          <span className="text-xs font-medium text-gray-500 hidden sm:inline">{texts.classFilter}</span>
+          <select
+            value={selectedClass}
+            onChange={(e) => setSelectedClass(e.target.value)}
+            className="bg-white border border-gray-200 text-xs text-gray-700 font-semibold rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-500 shadow-2xs"
+          >
+            <option value="all">{texts.allClasses}</option>
+            {uniqueClasses.map((cls, idx) => (
+              <option key={idx} value={cls}>
+                {cls}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      <div className="inline-flex p-0.5 bg-gray-100/80 rounded-lg border border-gray-200 text-xs font-medium">
+        <button
+          onClick={() => setTimeHorizon('4weeks')}
+          className={`px-2.5 py-1 rounded-md transition-all ${
+            timeHorizon === '4weeks'
+              ? 'bg-white text-indigo-700 font-bold shadow-2xs'
+              : 'text-gray-600 hover:text-gray-900'
+          }`}
+        >
+          {texts.scope4}
+        </button>
+        <button
+          onClick={() => setTimeHorizon('8weeks')}
+          className={`px-2.5 py-1 rounded-md transition-all ${
+            timeHorizon === '8weeks'
+              ? 'bg-white text-indigo-700 font-bold shadow-2xs'
+              : 'text-gray-600 hover:text-gray-900'
+          }`}
+        >
+          {texts.scope8}
+        </button>
+        <button
+          onClick={() => setTimeHorizon('all')}
+          className={`px-2.5 py-1 rounded-md transition-all ${
+            timeHorizon === 'all'
+              ? 'bg-white text-indigo-700 font-bold shadow-2xs'
+              : 'text-gray-600 hover:text-gray-900'
+          }`}
+        >
+          {texts.scopeAll}
+        </button>
+      </div>
+
+      {!compact && (
+        <button
+          onClick={() => setShowBenchmark(!showBenchmark)}
+          className={`px-2.5 py-1 text-xs font-semibold rounded-lg border flex items-center gap-1.5 transition-all cursor-pointer ${
+            showBenchmark
+              ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+              : 'bg-white border-gray-200 text-gray-500 hover:text-gray-800'
+          }`}
+          title="Toggle 80% Benchmark Line"
+        >
+          <span className={`w-1.5 h-1.5 rounded-full ${showBenchmark ? 'bg-emerald-500' : 'bg-gray-300'}`} />
+          {texts.targetLineToggle}
+        </button>
+      )}
+    </div>
+  );
+
+  // 4 宫格 KPI（紧凑模式：间距更小，无阴影边框）
+  const KPI = (
+    <div
+      className={`grid grid-cols-2 ${compact ? 'gap-1.5' : 'sm:grid-cols-4 gap-3.5 select-none border-b border-gray-100 bg-slate-50/40'}`}
+    >
+      {useSampleDataIfEmpty && (
+        <div
+          className={`col-span-2 ${compact ? '' : 'sm:col-span-4'} flex items-center gap-1.5 text-2xs font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5`}
+        >
+          ⚠️ {texts.demoBadge || '演示样本数据 —— 以下 KPI 为示例，非真实统计'}
+        </div>
+      )}
+      {[
+        { label: texts.statCurrent, value: stats.currentAvg, suffix: '%', tone: 'indigo', trend: stats.growthTrend },
+        { label: texts.statPeak, value: stats.highestWeeklyAvg, suffix: '%', tone: 'emerald' },
+        {
+          label: texts.statTargetRate,
+          value: weeklyData.length > 0 ? stats.targetMetRate : 0,
+          suffix: '%',
+          tone: 'teal',
+        },
+        { label: texts.statSubmissions, value: stats.totalSubmissions, suffix: '', tone: 'slate' },
+      ].map((kpi, i) => {
+        const toneMap: Record<string, string> = {
+          indigo: 'text-indigo-950',
+          emerald: 'text-emerald-950',
+          teal: 'text-teal-950',
+          slate: 'text-slate-900',
+        };
+        return (
+          <div
+            key={i}
+            className={`flex flex-col justify-center ${
+              compact
+                ? 'px-2 py-1.5 rounded-lg bg-slate-50/80'
+                : 'p-3 bg-white border border-gray-100 rounded-xl shadow-2xs'
+            }`}
+          >
+            <div className="flex items-center justify-between text-xs font-semibold text-gray-500">
+              <span>{kpi.label}</span>
+              {'trend' in kpi && typeof kpi.trend === 'number' && (
+                <span
+                  className={`inline-flex items-center text-xs font-bold ${
+                    kpi.trend > 0 ? 'text-emerald-600' : kpi.trend < 0 ? 'text-rose-600' : 'text-gray-500'
+                  }`}
+                >
+                  {kpi.trend > 0 ? (
+                    <ArrowUpRight size={13} />
+                  ) : kpi.trend < 0 ? (
+                    <ArrowDownRight size={13} />
+                  ) : (
+                    <Minus size={13} />
+                  )}
+                  {kpi.trend > 0 ? `+${kpi.trend}%` : `${kpi.trend}%`}
+                </span>
+              )}
+            </div>
+            <span className={`mt-0.5 font-black font-mono ${toneMap[kpi.tone]} ${compact ? 'text-base' : 'text-xl'}`}>
+              {kpi.value > 0 ? `${kpi.value}${kpi.suffix}` : '—'}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+
+  // Chart 主体（紧凑模式下高度从 280px 降到 220px 以对齐 assessments）
+  const ChartArea = (
+    <>
+      {weeklyData.length === 0 ? (
+        <div
+          className={`text-center ${compact ? 'py-6' : 'py-12'} bg-slate-50/50 rounded-xl border border-dashed border-slate-200`}
+        >
+          <AlertCircle size={compact ? 24 : 32} className="mx-auto text-slate-300 mb-2" />
+          <h4 className="text-gray-800 text-sm font-bold">{texts.emptyTitle}</h4>
+          <p className="text-gray-400 text-xs mt-1 px-4 max-w-md mx-auto">{texts.emptyDesc}</p>
+          <button
+            onClick={() => setUseSampleDataIfEmpty(true)}
+            className="mt-4 px-3.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-bold transition-colors inline-flex items-center gap-1.5 cursor-pointer"
+          >
+            <Sparkles size={13} />
+            {texts.enableSampleBtn}
+          </button>
+        </div>
+      ) : (
+        <div className={`w-full ${compact ? 'h-[200px]' : 'h-[280px]'}`}>
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={weeklyData} margin={{ top: 15, right: 20, left: -20, bottom: 5 }}>
+              <defs>
+                <linearGradient id="indigoScoreGrad" x1="0" y1="0" x2="1" y2="0">
+                  <stop offset="0%" stopColor="#6366f1" />
+                  <stop offset="50%" stopColor="#818cf8" />
+                  <stop offset="100%" stopColor="#a855f7" />
+                </linearGradient>
+              </defs>
+
+              {showGrid && <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />}
+
+              <XAxis
+                dataKey="weekLabel"
+                tick={{ fontSize: 12, fill: '#64748b', fontWeight: 'bold' }}
+                axisLine={{ stroke: '#e2e8f0' }}
+                tickLine={false}
+              />
+              <YAxis
+                domain={[0, 100]}
+                ticks={[0, 20, 40, 60, 80, 100]}
+                tick={{ fontSize: 12, fill: '#64748b', fontWeight: 'bold' }}
+                axisLine={{ stroke: '#e2e8f0' }}
+                tickLine={false}
+                tickFormatter={(val) => `${val}%`}
+              />
+
+              {showBenchmark && (
+                <ReferenceLine
+                  y={80}
+                  stroke="#10b981"
+                  strokeDasharray="4 4"
+                  strokeWidth={1.5}
+                  label={{
+                    value: lang === 'zh' ? '目标 80%' : 'Target 80%',
+                    fill: '#059669',
+                    fontSize: 12,
+                    fontWeight: 700,
+                    position: 'insideTopRight',
+                  }}
+                />
+              )}
+
+              <Tooltip
+                content={({ active, payload }) => {
+                  if (!active || !payload || !payload.length) return null;
+                  const data = payload[0].payload as WeekDataPoint;
+                  return (
+                    <div className="bg-slate-900 text-white rounded-xl p-3 shadow-xl border border-slate-700/80 text-xs min-w-[200px] z-50">
+                      <div className="flex items-center justify-between pb-1.5 border-b border-slate-800">
+                        <span className="font-extrabold text-indigo-300">{data.weekLabel}</span>
+                        <span className="text-[11px] text-slate-400 font-mono">{data.dateRange}</span>
+                      </div>
+                      <div className="py-2 space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <span className="text-slate-300">{texts.tooltipScore}:</span>
+                          <span className="font-extrabold text-emerald-400 font-mono text-sm">
+                            {data.averageScore}%
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-slate-300">{texts.tooltipWorks}:</span>
+                          <span className="font-semibold text-slate-200">{data.assignmentsCount}</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-slate-300">{texts.tooltipRange}:</span>
+                          <span className="text-slate-400 font-mono text-[11px]">
+                            {data.highestScore}% / {data.lowestScore}%
+                          </span>
+                        </div>
+                        {data.trendDiff !== null && (
+                          <div className="flex items-center justify-between pt-1 border-t border-slate-800">
+                            <span className="text-slate-400">
+                              {lang === 'zh' ? '较上周变化' : 'Vs. Previous Week'}:
+                            </span>
+                            <span
+                              className={`font-bold flex items-center gap-0.5 ${
+                                data.trendDiff > 0
+                                  ? 'text-emerald-400'
+                                  : data.trendDiff < 0
+                                    ? 'text-rose-400'
+                                    : 'text-slate-400'
+                              }`}
+                            >
+                              {data.trendDiff > 0 ? `+${data.trendDiff}%` : `${data.trendDiff}%`}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                }}
+              />
+
+              <Line
+                type="monotone"
+                dataKey="averageScore"
+                name={lang === 'zh' ? '周平均得分' : 'Weekly Average Score'}
+                stroke="url(#indigoScoreGrad)"
+                strokeWidth={3}
+                dot={{ r: 4.5, fill: '#6366f1', stroke: '#ffffff', strokeWidth: 2 }}
+                activeDot={{ r: 7, stroke: '#a855f7', strokeWidth: 2.5, fill: '#ffffff' }}
+                animationDuration={800}
+              />
+
+              {showBenchmark && (
+                <Line
+                  type="monotone"
+                  dataKey="targetScore"
+                  name={lang === 'zh' ? '学术目标线 (80%)' : 'Target Benchmark (80%)'}
+                  stroke="#10b981"
+                  strokeDasharray="4 4"
+                  strokeWidth={1.5}
+                  dot={false}
+                />
+              )}
+
+              <Legend
+                wrapperStyle={{ paddingTop: 10, fontSize: 12 }}
+                formatter={(value) => <span className="text-gray-600 font-medium">{value}</span>}
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+    </>
+  );
+
+  // ── 最终返回：紧凑模式去掉外层卡片壳与独立 header ──
+  if (compact) {
+    return (
+      <div className="flex flex-col gap-2.5">
+        {/* 紧凑模式 toolbar 置顶，独立 header 不再渲染 */}
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          {uniqueClasses.length > 0 && (
+            <select
+              value={selectedClass}
+              onChange={(e) => setSelectedClass(e.target.value)}
+              className="bg-slate-50 border border-slate-200 text-xs text-slate-700 font-semibold rounded-md px-2 py-1 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            >
+              {uniqueClasses.map((cls, idx) => (
+                <option key={idx} value={cls}>
+                  {cls}
+                </option>
+              ))}
+            </select>
+          )}
+          {Toolbar}
+        </div>
+        {KPI}
+        {ChartArea}
+      </div>
+    );
+  }
+
   return (
     <div
       className="bg-white border border-gray-200 rounded-2xl shadow-sm hover:shadow-md transition-all overflow-hidden flex flex-col font-sans mb-6"
@@ -395,273 +716,12 @@ export function WeeklyProgressTrendChart({ assignments = [], lang = 'en' }: Week
         </div>
 
         {/* Toolbar Controls */}
-        <div className="flex flex-wrap items-center gap-2.5 self-start md:self-center">
-          {/* Class Filter */}
-          {uniqueClasses.length > 0 && (
-            <div className="flex items-center gap-1">
-              <span className="text-xs font-medium text-gray-500 hidden sm:inline">{texts.classFilter}</span>
-              <select
-                value={selectedClass}
-                onChange={(e) => setSelectedClass(e.target.value)}
-                className="bg-white border border-gray-200 text-xs text-gray-700 font-semibold rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-500 shadow-2xs"
-              >
-                <option value="all">{texts.allClasses}</option>
-                {uniqueClasses.map((cls, idx) => (
-                  <option key={idx} value={cls}>
-                    {cls}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          {/* Time Horizon Filter */}
-          <div className="inline-flex p-0.5 bg-gray-100/80 rounded-lg border border-gray-200 text-xs font-medium">
-            <button
-              onClick={() => setTimeHorizon('4weeks')}
-              className={`px-2.5 py-1 rounded-md transition-all ${
-                timeHorizon === '4weeks'
-                  ? 'bg-white text-indigo-700 font-bold shadow-2xs'
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              {texts.scope4}
-            </button>
-            <button
-              onClick={() => setTimeHorizon('8weeks')}
-              className={`px-2.5 py-1 rounded-md transition-all ${
-                timeHorizon === '8weeks'
-                  ? 'bg-white text-indigo-700 font-bold shadow-2xs'
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              {texts.scope8}
-            </button>
-            <button
-              onClick={() => setTimeHorizon('all')}
-              className={`px-2.5 py-1 rounded-md transition-all ${
-                timeHorizon === 'all'
-                  ? 'bg-white text-indigo-700 font-bold shadow-2xs'
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              {texts.scopeAll}
-            </button>
-          </div>
-
-          {/* Target Reference Line Toggle */}
-          <button
-            onClick={() => setShowBenchmark(!showBenchmark)}
-            className={`px-2.5 py-1 text-xs font-semibold rounded-lg border flex items-center gap-1.5 transition-all cursor-pointer ${
-              showBenchmark
-                ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
-                : 'bg-white border-gray-200 text-gray-500 hover:text-gray-800'
-            }`}
-            title="Toggle 80% Benchmark Line"
-          >
-            <span className={`w-1.5 h-1.5 rounded-full ${showBenchmark ? 'bg-emerald-500' : 'bg-gray-300'}`} />
-            {texts.targetLineToggle}
-          </button>
-        </div>
+        {Toolbar}
       </div>
 
-      {/* Summary KPI Cards */}
-      <div className="px-5 py-3 border-b border-gray-100 bg-slate-50/40 grid grid-cols-2 sm:grid-cols-4 gap-3.5 select-none">
-        {useSampleDataIfEmpty && (
-          <div className="col-span-2 sm:col-span-4 flex items-center gap-1.5 text-2xs font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5">
-            ⚠️ {texts.demoBadge || '演示样本数据 —— 以下 KPI 为示例，非真实统计'}
-          </div>
-        )}
-        <div className="p-3 bg-white border border-gray-100 rounded-xl shadow-2xs flex flex-col justify-center">
-          <div className="flex items-center justify-between text-xs font-semibold text-gray-500">
-            <span>{texts.statCurrent}</span>
-            <span
-              className={`inline-flex items-center text-xs font-bold ${
-                stats.growthTrend > 0 ? 'text-emerald-600' : stats.growthTrend < 0 ? 'text-rose-600' : 'text-gray-500'
-              }`}
-            >
-              {stats.growthTrend > 0 ? (
-                <ArrowUpRight size={13} />
-              ) : stats.growthTrend < 0 ? (
-                <ArrowDownRight size={13} />
-              ) : (
-                <Minus size={13} />
-              )}
-              {stats.growthTrend > 0 ? `+${stats.growthTrend}%` : `${stats.growthTrend}%`}
-            </span>
-          </div>
-          <span className="text-xl font-black text-indigo-950 font-mono mt-0.5">
-            {stats.currentAvg > 0 ? `${stats.currentAvg}%` : '—'}
-          </span>
-        </div>
-
-        <div className="p-3 bg-white border border-gray-100 rounded-xl shadow-2xs flex flex-col justify-center">
-          <span className="text-xs font-semibold text-gray-500">{texts.statPeak}</span>
-          <span className="text-xl font-black text-emerald-950 font-mono mt-0.5">
-            {stats.highestWeeklyAvg > 0 ? `${stats.highestWeeklyAvg}%` : '—'}
-          </span>
-        </div>
-
-        <div className="p-3 bg-white border border-gray-100 rounded-xl shadow-2xs flex flex-col justify-center">
-          <span className="text-xs font-semibold text-gray-500">{texts.statTargetRate}</span>
-          <span className="text-xl font-black text-teal-950 font-mono mt-0.5">
-            {weeklyData.length > 0 ? `${stats.targetMetRate}%` : '—'}
-          </span>
-        </div>
-
-        <div className="p-3 bg-white border border-gray-100 rounded-xl shadow-2xs flex flex-col justify-center">
-          <span className="text-xs font-semibold text-gray-500">{texts.statSubmissions}</span>
-          <span className="text-xl font-black text-slate-900 font-mono mt-0.5">{stats.totalSubmissions}</span>
-        </div>
-      </div>
-
-      {/* Main Chart Area */}
-      <div className="p-5">
-        {weeklyData.length === 0 ? (
-          <div className="text-center py-12 bg-slate-50/50 rounded-xl border border-dashed border-slate-200">
-            <AlertCircle size={32} className="mx-auto text-slate-300 mb-2" />
-            <h4 className="text-gray-800 text-sm font-bold">{texts.emptyTitle}</h4>
-            <p className="text-gray-400 text-xs mt-1 px-4 max-w-md mx-auto">{texts.emptyDesc}</p>
-            <button
-              onClick={() => setUseSampleDataIfEmpty(true)}
-              className="mt-4 px-3.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-bold transition-colors inline-flex items-center gap-1.5 cursor-pointer"
-            >
-              <Sparkles size={13} />
-              {texts.enableSampleBtn}
-            </button>
-          </div>
-        ) : (
-          <div className="w-full h-[280px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={weeklyData} margin={{ top: 15, right: 20, left: -20, bottom: 5 }}>
-                <defs>
-                  <linearGradient id="indigoScoreGrad" x1="0" y1="0" x2="1" y2="0">
-                    <stop offset="0%" stopColor="#6366f1" />
-                    <stop offset="50%" stopColor="#818cf8" />
-                    <stop offset="100%" stopColor="#a855f7" />
-                  </linearGradient>
-                </defs>
-
-                {showGrid && <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />}
-
-                <XAxis
-                  dataKey="weekLabel"
-                  tick={{ fontSize: 12, fill: '#64748b', fontWeight: 'bold' }}
-                  axisLine={{ stroke: '#e2e8f0' }}
-                  tickLine={false}
-                />
-                <YAxis
-                  domain={[0, 100]}
-                  ticks={[0, 20, 40, 60, 80, 100]}
-                  tick={{ fontSize: 12, fill: '#64748b', fontWeight: 'bold' }}
-                  axisLine={{ stroke: '#e2e8f0' }}
-                  tickLine={false}
-                  tickFormatter={(val) => `${val}%`}
-                />
-
-                {/* 80% Benchmark Reference Line */}
-                {showBenchmark && (
-                  <ReferenceLine
-                    y={80}
-                    stroke="#10b981"
-                    strokeDasharray="4 4"
-                    strokeWidth={1.5}
-                    label={{
-                      value: lang === 'zh' ? '目标 80%' : 'Target 80%',
-                      fill: '#059669',
-                      fontSize: 12,
-                      fontWeight: 700,
-                      position: 'insideTopRight',
-                    }}
-                  />
-                )}
-
-                {/* Custom Tooltip */}
-                <Tooltip
-                  content={({ active, payload }) => {
-                    if (!active || !payload || !payload.length) return null;
-                    const data = payload[0].payload as WeekDataPoint;
-                    return (
-                      <div className="bg-slate-900 text-white rounded-xl p-3 shadow-xl border border-slate-700/80 text-xs min-w-[200px] z-50">
-                        <div className="flex items-center justify-between pb-1.5 border-b border-slate-800">
-                          <span className="font-extrabold text-indigo-300">{data.weekLabel}</span>
-                          <span className="text-[11px] text-slate-400 font-mono">{data.dateRange}</span>
-                        </div>
-                        <div className="py-2 space-y-1.5">
-                          <div className="flex items-center justify-between">
-                            <span className="text-slate-300">{texts.tooltipScore}:</span>
-                            <span className="font-extrabold text-emerald-400 font-mono text-sm">
-                              {data.averageScore}%
-                            </span>
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <span className="text-slate-300">{texts.tooltipWorks}:</span>
-                            <span className="font-semibold text-slate-200">{data.assignmentsCount}</span>
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <span className="text-slate-300">{texts.tooltipRange}:</span>
-                            <span className="text-slate-400 font-mono text-[11px]">
-                              {data.highestScore}% / {data.lowestScore}%
-                            </span>
-                          </div>
-                          {data.trendDiff !== null && (
-                            <div className="flex items-center justify-between pt-1 border-t border-slate-800">
-                              <span className="text-slate-400">
-                                {lang === 'zh' ? '较上周变化' : 'Vs. Previous Week'}:
-                              </span>
-                              <span
-                                className={`font-bold flex items-center gap-0.5 ${
-                                  data.trendDiff > 0
-                                    ? 'text-emerald-400'
-                                    : data.trendDiff < 0
-                                      ? 'text-rose-400'
-                                      : 'text-slate-400'
-                                }`}
-                              >
-                                {data.trendDiff > 0 ? `+${data.trendDiff}%` : `${data.trendDiff}%`}
-                              </span>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  }}
-                />
-
-                {/* Primary Trend Line: Weekly Average Score */}
-                <Line
-                  type="monotone"
-                  dataKey="averageScore"
-                  name={lang === 'zh' ? '周平均得分' : 'Weekly Average Score'}
-                  stroke="url(#indigoScoreGrad)"
-                  strokeWidth={3}
-                  dot={{ r: 4.5, fill: '#6366f1', stroke: '#ffffff', strokeWidth: 2 }}
-                  activeDot={{ r: 7, stroke: '#a855f7', strokeWidth: 2.5, fill: '#ffffff' }}
-                  animationDuration={800}
-                />
-
-                {/* Secondary Target Reference Line in Legend */}
-                {showBenchmark && (
-                  <Line
-                    type="monotone"
-                    dataKey="targetScore"
-                    name={lang === 'zh' ? '学术目标线 (80%)' : 'Target Benchmark (80%)'}
-                    stroke="#10b981"
-                    strokeDasharray="4 4"
-                    strokeWidth={1.5}
-                    dot={false}
-                  />
-                )}
-
-                <Legend
-                  wrapperStyle={{ paddingTop: 10, fontSize: 12 }}
-                  formatter={(value) => <span className="text-gray-600 font-medium">{value}</span>}
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        )}
-      </div>
+      {/* Summary KPI Cards + Main Chart Area */}
+      {KPI}
+      <div className="p-5">{ChartArea}</div>
     </div>
   );
 }

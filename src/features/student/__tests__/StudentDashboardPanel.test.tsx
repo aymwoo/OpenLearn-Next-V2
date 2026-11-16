@@ -49,7 +49,8 @@ describe('StudentDashboardPanel', () => {
         <StudentDashboardPanel {...allProps} />
       </PluginHostProvider>,
     );
-    expect(screen.getByText('My Assignments')).toBeTruthy();
+    // 作业标题同时出现在「现在该做什么」焦点区与作业组件中
+    expect(screen.getAllByText('HW').length).toBeGreaterThan(0);
   });
 
   it('Issue #109: shows the active-class banner and returns to the live lesson', () => {

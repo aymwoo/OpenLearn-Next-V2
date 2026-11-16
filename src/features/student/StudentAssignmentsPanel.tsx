@@ -1,4 +1,4 @@
-import { ClipboardList, Clock, CheckCircle2, PenTool, FileBadge } from 'lucide-react';
+import { Clock, CheckCircle2, PenTool, FileBadge } from 'lucide-react';
 
 export interface StudentAssignmentsPanelProps {
   assignments: any[];
@@ -13,12 +13,8 @@ export function StudentAssignmentsPanel(props: StudentAssignmentsPanelProps) {
   const { assignments, setSelectedAssignment, setStudentViewStatus, setQuizStudentAnswers, setSubAssignmentTab, lang } =
     props;
   return (
-    <div className="bg-white rounded-xl border border-gray-200 shadow-sm flex flex-col">
-      <div className="p-4 border-b border-gray-100 flex items-center gap-2">
-        <ClipboardList size={18} className="text-indigo-500" />
-        <h3 className="font-semibold text-gray-800">My Assignments</h3>
-      </div>
-      <div className="p-4 flex-1">
+    <div className="flex flex-col">
+      <div className="flex-1">
         {assignments.length === 0 ? (
           <div className="text-center p-8 text-gray-400 italic text-sm">No assignments given.</div>
         ) : (

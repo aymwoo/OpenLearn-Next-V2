@@ -1,4 +1,4 @@
-import { BookOpen, PlayCircle } from 'lucide-react';
+import { PlayCircle } from 'lucide-react';
 
 export interface StudentCourseProgressListProps {
   progress: any[];
@@ -9,16 +9,12 @@ export interface StudentCourseProgressListProps {
 export function StudentCourseProgressList(props: StudentCourseProgressListProps) {
   const { progress, setSelectedLesson, setStudentViewStatus } = props;
   return (
-    <div className="bg-white rounded-xl border border-gray-200 shadow-sm flex flex-col">
-      <div className="p-4 border-b border-gray-100 flex items-center gap-2">
-        <BookOpen size={18} className="text-teal-500" />
-        <h3 className="font-semibold text-gray-800">My Independent Courses</h3>
-      </div>
-      <div className="p-4">
+    <div className="flex flex-col">
+      <div>
         {progress && progress.length === 0 ? (
           <div className="text-center p-8 text-gray-400 italic text-sm">No courses assigned yet.</div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 @md:grid-cols-2">
             {progress?.map((p: any) => (
               <div
                 key={p.lesson_id}

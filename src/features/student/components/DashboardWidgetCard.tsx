@@ -98,7 +98,7 @@ export function DashboardWidgetCard({
       }`}
     >
       {/* Widget Control Bar / Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 bg-slate-50/70 rounded-t-2xl select-none">
+      <div className="flex items-center justify-between gap-2 border-b border-slate-100 bg-slate-50/70 px-3 py-2.5 select-none rounded-t-2xl sm:px-4 sm:py-3">
         {/* Left: Drag Handle & Title */}
         <div className="flex items-center gap-2.5 min-w-0">
           <div
@@ -179,8 +179,8 @@ export function DashboardWidgetCard({
             <Columns size={14} />
           </button>
 
-          {/* Reorder Buttons (Move Backward / Forward) */}
-          <div className="flex items-center">
+          {/* Reorder Buttons (Move Backward / Forward)：窄屏隐藏，避免卡片头部控件挤压标题 */}
+          <div className="hidden items-center sm:flex">
             <button
               type="button"
               onClick={onMoveLeft}
@@ -215,8 +215,8 @@ export function DashboardWidgetCard({
         </div>
       </div>
 
-      {/* Widget Body Content */}
-      {!collapsed && <div className="p-4 flex-1 flex flex-col">{children}</div>}
+      {/* Widget Body Content：@container 让内部布局按卡片自身宽度（而非视口）自适应 */}
+      {!collapsed && <div className="@container flex flex-1 flex-col p-3.5 sm:p-4">{children}</div>}
 
       {/* Collapsed State Bar */}
       {collapsed && (

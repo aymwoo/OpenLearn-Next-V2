@@ -15,18 +15,18 @@ export function StudentDashboardHeader(props: StudentDashboardHeaderProps) {
   const { students, activeStudentId, activeSession, onReturnToClass, lang = 'zh' } = props;
   const zh = lang === 'zh';
   return (
-    <div className="flex flex-wrap items-center gap-4 border-b border-gray-200 pb-4">
-      <div className="h-16 w-16 bg-indigo-600 rounded-full flex items-center justify-center text-white text-2xl font-bold shadow-lg">
+    <div className="flex flex-wrap items-center gap-3 border-b border-gray-200 pb-3 sm:gap-4 sm:pb-4">
+      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-indigo-600 text-xl font-bold text-white shadow-lg sm:h-16 sm:w-16 sm:text-2xl">
         {students
           .find((s) => s.id === activeStudentId)
           ?.name.charAt(0)
           .toUpperCase()}
       </div>
       <div className="min-w-0 flex-1">
-        <h2 className="text-2xl font-bold text-gray-800">
+        <h2 className="text-lg font-bold text-gray-800 sm:text-2xl">
           Welcome, {students.find((s) => s.id === activeStudentId)?.name}
         </h2>
-        <p className="text-gray-500">Here is your learning summary.</p>
+        <p className="text-xs text-gray-500 sm:text-base">Here is your learning summary.</p>
       </div>
 
       {/* Issue #109: 顶部导航常驻返回入口，不依赖看板卡片布局 */}
