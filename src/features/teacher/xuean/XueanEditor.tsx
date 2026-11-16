@@ -11,11 +11,12 @@ const XueanActivitiesPanel = lazy(() =>
   import('./XueanActivitiesPanel').then((m) => ({ default: m.XueanActivitiesPanel })),
 );
 const XueanBlocksEditor = lazy(() => import('./XueanBlocksEditor').then((m) => ({ default: m.XueanBlocksEditor })));
+const ProgressPanel = lazy(() => import('./ProgressPanel').then((m) => ({ default: m.ProgressPanel })));
 const StudentXueanView = lazy(() =>
   import('../../student/xuean/StudentXueanView').then((m) => ({ default: m.StudentXueanView })),
 );
 
-type SubTab = 'activities' | 'blocks';
+type SubTab = 'activities' | 'blocks' | 'progress';
 
 export function XueanEditor() {
   const appData = useOptionalAppData();
@@ -49,6 +50,9 @@ export function XueanEditor() {
                 </TabButton>
                 <TabButton role="tab" selected={subTab === 'blocks'} onClick={() => setSubTab('blocks')}>
                   学案首页
+                </TabButton>
+                <TabButton role="tab" selected={subTab === 'progress'} onClick={() => setSubTab('progress')}>
+                  进度面板
                 </TabButton>
               </div>
 
@@ -85,6 +89,11 @@ export function XueanEditor() {
             {subTab === 'blocks' && (
               <div role="tabpanel" aria-label="学案首页" className="absolute inset-0">
                 <XueanBlocksEditor />
+              </div>
+            )}
+            {subTab === 'progress' && (
+              <div role="tabpanel" aria-label="进度面板" className="absolute inset-0">
+                <ProgressPanel />
               </div>
             )}
           </Suspense>
