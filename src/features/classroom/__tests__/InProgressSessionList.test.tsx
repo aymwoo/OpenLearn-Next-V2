@@ -114,7 +114,7 @@ describe('InProgressSessionList（Issue #91 进入互动课堂的第一屏）', 
     expect(onResume.mock.calls[0][0].id).toBe('sess-1');
   });
 
-  it('结束并归档需要二次确认，确认后调用 archive 接口并把会话移出列表', async () => {
+  it('结束本次课次需要二次确认，确认后调用 archive 接口并把会话移出列表', async () => {
     const fetchMock = stubSessions([makeSession()]);
     const onResume = vi.fn();
     render(
@@ -128,7 +128,7 @@ describe('InProgressSessionList（Issue #91 进入互动课堂的第一屏）', 
     );
 
     await screen.findByTestId('in-progress-session-sess-1');
-    fireEvent.click(screen.getByRole('button', { name: /结束并归档/ }));
+    fireEvent.click(screen.getByRole('button', { name: /结束本次课次/ }));
 
     // 第一次点击只是进入确认态，不能已经发请求
     expect(screen.getByRole('button', { name: /确认归档/ })).toBeTruthy();
@@ -159,7 +159,7 @@ describe('InProgressSessionList（Issue #91 进入互动课堂的第一屏）', 
     );
 
     await screen.findByTestId('in-progress-session-sess-1');
-    fireEvent.click(screen.getByRole('button', { name: /结束并归档/ }));
+    fireEvent.click(screen.getByRole('button', { name: /结束本次课次/ }));
     fireEvent.click(screen.getByRole('button', { name: /取消/ }));
 
     expect(screen.queryByRole('button', { name: /确认归档/ })).toBeNull();

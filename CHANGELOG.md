@@ -12,6 +12,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Features
 
+- **长周期课次生命周期（Gitee Issue IKVNIX）**：
+  - 学生端「未结束」提示改为可关闭/可延后（本次忽略、延后到明天），偏好写入 `user_preferences`，不阻塞浏览；顶部仍保留一键返回课堂；
+  - 新增 `POST /api/classroom/sessions/:lessonId/resume`，学生跳回时 `classId` 取自会话行，并复用恢复协议中的 `viewState` / `feedReplay`；
+  - 教师可在门户显式「结束本次课次 / 稍后继续」，课次归档后课程整体仍可再开新课次，历史动态按课次保留；
+  - 长期无教师活动的僵尸课次可自动归档（默认 24 小时，阈值可配且不得低于 3 小时，教师可豁免），归档后学生端不再提示；实时录成绩仍只认 `IN_CLASS_TEACHING`。
+
 - **学生登录后首屏按学习路径重排（Gitee Issue IKVKVF）**：
   - 新增固定区「现在该做什么」学习路径焦点条（`src/features/student/StudentLearningFocus.tsx`）：待办作业 → 最近课节 → 继续学习，不受自定义布局影响；最近课节按「今天未结束 → 本周后续 → 下周三」规则取数；
   - `DEFAULT_WIDGET_LAYOUT` 默认顺序改为待办作业优先，本地布局键提升为 `student_dashboard_layout_v3_*`，使老用户也能拿到新首屏；

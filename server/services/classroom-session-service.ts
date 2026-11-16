@@ -19,6 +19,7 @@ import { getPresentStudentIds } from '../presence.js';
 import { normalizeAcademicYear } from '../utils/academic-year.js';
 import { randomId } from '../utils/id.js';
 import { ARCHIVED_REPORT_STAGE } from './classroom-runtime-service.js';
+import { touchSessionActivity } from './classroom-session-lifecycle.js';
 import { BUILTIN_TEACHING_MODE_MAP } from './teaching-modes.js';
 
 /** 会话归属判定所需的调用方身份。管理员不做裁剪，tokens 为空。 */
@@ -437,6 +438,8 @@ export class ClassroomSessionService {
       const segmentId = patch.activeSegmentId === null ? null : String(patch.activeSegmentId).slice(0, 128);
       this.db.prepare('UPDATE classroom_sessions SET current_segment_id = ? WHERE id = ?').run(segmentId, sessionId);
     }
+
+    touchSessionActivity(this.db, sessionId);
 
     const fresh = this.db.prepare('SELECT settings_json FROM classroom_sessions WHERE id = ?').get(sessionId) as
       { settings_json: string | null } | undefined;

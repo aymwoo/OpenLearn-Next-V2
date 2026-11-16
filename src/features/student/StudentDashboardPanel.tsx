@@ -68,12 +68,23 @@ export function StudentDashboardPanel(props: StudentDashboardPanelProps) {
     onOpenAssessments,
   } = props;
 
-  // Issue #109: 真实进行中的课堂会话（轮询由 StudentView 顶层统一驱动）
+  // Issue #109 / IKVNIX: 真实进行中的课次（轮询由 StudentView 顶层统一驱动）
   const activeSession = useStudentActiveSession((s) => s.activeSession);
+  const prompt = useStudentActiveSession((s) => s.prompt);
+  const dismissPrompt = useStudentActiveSession((s) => s.dismissPrompt);
   const returnToActiveClass = () => {
     if (!activeSession) return;
+    // 先进入课节页，避免恢复请求阻塞跳转；classId 取自会话行，课节页会再拉恢复快照。
     setSelectedLesson(activeSession.lessonId);
     setStudentViewStatus('lesson');
+    void fetch(`/api/classroom/sessions/${encodeURIComponent(activeSession.lessonId)}/resume`, {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    }).catch(() => {
+      /* 由课节页既有 GET 会话轮询对齐白板页码与最近动态 */
+    });
   };
 
   const studentCardColumns = useThemeStore((s) => s.resolvedLayouts.student.cardColumns);
@@ -481,8 +492,14 @@ export function StudentDashboardPanel(props: StudentDashboardPanelProps) {
   return (
     <div className="space-y-4 sm:space-y-6">
       {/* 0. Issue #109: 正在进行的课堂 → 醒目返回入口（不受组件布局影响） */}
-      {activeSession && (
-        <StudentActiveClassBanner activeSession={activeSession} lang={lang} onReturn={returnToActiveClass} />
+      {activeSession && prompt?.showBanner !== false && (
+        <StudentActiveClassBanner
+          activeSession={activeSession}
+          lang={lang}
+          onReturn={returnToActiveClass}
+          onIgnore={() => void dismissPrompt('ignore', activeStudentId)}
+          onSnooze={() => void dismissPrompt('snooze', activeStudentId)}
+        />
       )}
 
       {/* 1. Fixed Top Student Profile Header */}

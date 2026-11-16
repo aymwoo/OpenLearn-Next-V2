@@ -177,21 +177,19 @@ export class ClassroomFeedService {
   }
 
   /**
-   * 回放：当前活动会话最近 N 条动态（按时间升序返回，前端直接按序渲染）。
-   * 按活动会话过滤（而非 lesson）—— 同一课程重开的新会话绝不回放上一次课的动态。
-   * 无活动会话（未开课/已归档）返回空数组。
+   * 按课次回放最近 N 条动态（升序）。不看 stage —— 进行中判定与历史查询拆开，
+   * 归档后仍可按 session_id 取回本课次历史，新课次则因新 id 不会串到上一堂。
    */
-  public getFeedReplay(lessonId: string, limit = 20): Array<Record<string, unknown>> {
+  public getFeedReplayForSession(sessionId: string, limit = 20): Array<Record<string, unknown>> {
+    if (!sessionId) return [];
     try {
-      const { session_id } = this.resolveSessionId(lessonId);
-      if (!session_id) return [];
       const rows = this.db
         .prepare(
           `SELECT id, type, message, actor_id, actor_name, created_at
              FROM classroom_feed WHERE session_id = ?
             ORDER BY created_at DESC LIMIT ?`,
         )
-        .all(session_id, Math.min(Math.max(1, limit), FEED_REPLAY_LIMIT)) as Array<
+        .all(sessionId, Math.min(Math.max(1, limit), FEED_REPLAY_LIMIT)) as Array<
         Omit<FeedRow, 'session_id' | 'class_id' | 'source'>
       >;
       return rows
@@ -203,7 +201,29 @@ export class ClassroomFeedService {
           actorName: r.actor_name,
           time: new Date(r.created_at).toTimeString().slice(0, 5),
         }))
-        .reverse(); // 存储取 DESC，回放转 ASC
+        .reverse();
+    } catch (e) {
+      console.error('[classroom-feed] getFeedReplayForSession failed:', e);
+      return [];
+    }
+  }
+
+  /**
+   * 回放指定课节「当前应展示」的课次动态。
+   * 传入 sessionId 时按该课次查询（含已归档）；否则取最新课次（含已归档的最近一次）。
+   * 进行中判定仍由调用方看 stage；这里只负责历史查询。
+   */
+  public getFeedReplay(lessonId: string, limit = 20, sessionId?: string | null): Array<Record<string, unknown>> {
+    try {
+      let sid = sessionId || null;
+      if (!sid) {
+        const latest = this.db
+          .prepare('SELECT id FROM classroom_sessions WHERE lesson_id = ? ORDER BY created_at DESC LIMIT 1')
+          .get(lessonId) as { id: string } | undefined;
+        sid = latest?.id ?? null;
+      }
+      if (!sid) return [];
+      return this.getFeedReplayForSession(sid, limit);
     } catch (e) {
       console.error('[classroom-feed] getFeedReplay failed:', e);
       return [];

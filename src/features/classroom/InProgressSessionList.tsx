@@ -380,7 +380,7 @@ export function InProgressSessionList({
                       className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-theme bg-surface hover:bg-surface-secondary text-xs font-semibold text-main cursor-pointer"
                     >
                       <Archive size={13} />
-                      {zh ? '结束并归档' : 'End & archive'}
+                      {zh ? '结束本次课次' : 'End this session'}
                     </button>
                   )}
                 </div>

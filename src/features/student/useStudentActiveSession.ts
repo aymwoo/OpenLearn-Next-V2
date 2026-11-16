@@ -22,29 +22,42 @@ export interface StudentActiveSession {
   className: string;
   stage: string;
   startedAt: number | null;
+  resumable?: boolean;
+  stageLabel?: string;
+}
+
+export interface StudentUnfinishedPrompt {
+  showBanner: boolean;
+  ignored: boolean;
+  snoozedUntil: number | null;
 }
 
 export interface StudentActiveSessionState {
   activeSession: StudentActiveSession | null;
+  prompt: StudentUnfinishedPrompt;
   loading: boolean;
   /** 最近一次成功拉取的时间戳，便于调试与节流 */
   lastFetchAt: number;
   /** 当前查询对应的学生（切换模拟学生时用于丢弃过期响应） */
   studentKey: string | null;
   refresh: (studentId?: string | null) => Promise<void>;
+  dismissPrompt: (action: 'ignore' | 'snooze', studentId?: string | null) => Promise<void>;
 }
+
+const EMPTY_PROMPT: StudentUnfinishedPrompt = { showBanner: true, ignored: false, snoozedUntil: null };
 
 let inflightKey: string | null = null;
 
 export const studentActiveSessionStore = createStore<StudentActiveSessionState>((set, get) => ({
   activeSession: null,
+  prompt: EMPTY_PROMPT,
   loading: false,
   lastFetchAt: 0,
   studentKey: null,
 
   refresh: async (studentId) => {
     if (!studentId) {
-      set({ activeSession: null, loading: false, studentKey: null });
+      set({ activeSession: null, prompt: EMPTY_PROMPT, loading: false, studentKey: null });
       return;
     }
     set({ loading: true, studentKey: studentId });
@@ -53,7 +66,7 @@ export const studentActiveSessionStore = createStore<StudentActiveSessionState>(
       const res = await fetch(`/api/student/active-session?studentId=${encodeURIComponent(studentId)}`);
       if (!res.ok) {
         // 无权限/未登录时静默隐藏入口，不制造误导性横幅
-        if (get().studentKey === studentId) set({ activeSession: null });
+        if (get().studentKey === studentId) set({ activeSession: null, prompt: EMPTY_PROMPT });
         return;
       }
       const data = await res.json();
@@ -61,12 +74,39 @@ export const studentActiveSessionStore = createStore<StudentActiveSessionState>(
       if (inflightKey !== studentId || get().studentKey !== studentId) return;
       set({
         activeSession: data?.activeSession ?? null,
+        prompt: data?.prompt ?? EMPTY_PROMPT,
         lastFetchAt: Date.now(),
       });
     } catch {
       // 网络异常时保留上一次结果（横幅不闪断），下次轮询自愈
     } finally {
       if (get().studentKey === studentId) set({ loading: false });
+    }
+  },
+
+  dismissPrompt: async (action, studentId) => {
+    const session = get().activeSession;
+    const sid = studentId || get().studentKey;
+    if (!session?.sessionId || !sid) return;
+    const optimistic: StudentUnfinishedPrompt =
+      action === 'ignore'
+        ? { showBanner: false, ignored: true, snoozedUntil: null }
+        : { showBanner: false, ignored: false, snoozedUntil: Date.now() + 24 * 60 * 60 * 1000 };
+    set({ prompt: optimistic });
+    try {
+      const res = await fetch('/api/student/active-session/prompt', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId: session.sessionId, action, studentId: sid }),
+      });
+      if (!res.ok) {
+        await get().refresh(sid);
+        return;
+      }
+      const data = await res.json();
+      if (data?.prompt) set({ prompt: data.prompt });
+    } catch {
+      await get().refresh(sid);
     }
   },
 }));
@@ -82,7 +122,12 @@ export const useStudentActiveSession = <T>(selector: (state: StudentActiveSessio
 export function useStudentActiveSessionPolling(studentId: string | null, intervalMs = 20_000): void {
   useEffect(() => {
     if (!studentId) {
-      studentActiveSessionStore.setState({ activeSession: null, loading: false, studentKey: null });
+      studentActiveSessionStore.setState({
+        activeSession: null,
+        prompt: EMPTY_PROMPT,
+        loading: false,
+        studentKey: null,
+      });
       return;
     }
     const refresh = () => void studentActiveSessionStore.getState().refresh(studentId);

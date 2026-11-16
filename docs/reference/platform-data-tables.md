@@ -476,7 +476,7 @@ MFE 远端登记。MFE 执行边界已移除，表保留作历史数据兼容。
 
 <!-- AUTO-GENERATED:table-inventory BEGIN -->
 
-共 **91** 张表（迁移 56 个，金样生成于 2026-11-15T07:17:47.233Z）。列清单为列名（类型与约束见迁移 SQL）：
+共 **92** 张表（迁移 58 个，金样生成于 2026-11-16T09:49:47.747Z）。列清单为列名（类型与约束见迁移 SQL）：
 
 - `_academic_year_backfill`: backfilled_at, id
 - `_class_passcode_encryption`: id, note
@@ -512,7 +512,7 @@ MFE 远端登记。MFE 执行边界已移除，表保留作历史数据兼容。
 - `classroom_peer_rubric_dimensions`: bar_color_class, color_class, created_at, id, label, lesson_id, max_score, session_id, sort_order, weight
 - `classroom_poll_votes`: id, poll_id, selected_option, student_id, student_name, voted_at
 - `classroom_quick_polls`: correct_option, created_at, id, lesson_id, options_json, question_type, session_id, status, title
-- `classroom_sessions`: academic_year, checkin_code, class_id, created_at, current_segment_id, ended_at, focus_mode, id, lesson_id, settings_json, stage, started_at, teacher_id, teaching_mode_id
+- `classroom_sessions`: academic_year, auto_archive_exempt, auto_archived_at, checkin_code, class_id, created_at, current_segment_id, ended_at, focus_mode, id, last_activity_at, lesson_id, settings_json, stage, started_at, teacher_id, teaching_mode_id
 - `client_sessions`: expires_at, id, session_data, updated_at
 - `computer_labs`: cols, created_at, id, room_number, rows
 - `courseware`: created_at, entry, id, name, type, uuid
@@ -551,7 +551,7 @@ MFE 远端登记。MFE 执行边界已移除，表保留作历史数据兼容。
 - `schedules`: academic_year, class_id, created_at, id, lesson_id, notes, scheduled_date, status, time_slot
 - `segment_gate_overrides`: actor_id, created_at, lesson_id, reason, segment_id, student_id
 - `segment_visits`: entered_at, id, left_at, lesson_id, segment_id, student_id
-- `site_settings`: academic_start_month, allow_unsigned_plugins, bridge_hook_telemetry, community_install_enabled, community_registry_url, current_academic_year, default_theme_id, file_storage_config, http_access_log_ignore, http_access_log_mode, http_slow_ms, id, logo_url, logout_clear_site_data, site_name, slogan, upload_max_file_mb
+- `site_settings`: academic_start_month, allow_public_student_lookup, allow_unsigned_plugins, bridge_hook_telemetry, classroom_session_auto_archive_after_ms, community_install_enabled, community_registry_url, current_academic_year, default_theme_id, file_storage_config, http_access_log_ignore, http_access_log_mode, http_slow_ms, id, logo_url, logout_clear_site_data, site_name, slogan, upload_max_file_mb
 - `student_lesson_progress`: academic_year, assigned_at, completed, completed_segments, lesson_id, progress_percent, student_id, verified, verified_progress_percent
 - `student_point_logs`: class_id, created_at, delta_points, dimension_id, id, plugin_id, reason, student_id
 - `student_read_notifications`: created_at, notification_id, student_id
@@ -565,6 +565,7 @@ MFE 远端登记。MFE 执行边界已移除，表保留作历史数据兼容。
 - `teaching_modes`: color, created_at, description, description_en, icon, id, is_builtin, name, name_en, sort_order, updated_at
 - `theme_versions`: asset_manifest_json, created_at, manifest_json, styles_css, theme_id, uploader_id, version
 - `themes`: author, created_at, description, id, latest_version, manifest_json, name, platform_max_version, platform_min_version, status, styles_css, supports_modes, updated_at, uploader_id, uploader_name
+- `user_preferences`: pref_key, pref_value, principal_key, updated_at
 - `user_theme_preferences`: appearance_json, installed_version, mode, principal_key, theme_id, updated_at
 - `users`: avatar, created_at, id, must_change_password, name, password_hash, role, status, tour_status, username
 - `vfs_nodes`: content, created_at, id, name, parent_id, type, updated_at

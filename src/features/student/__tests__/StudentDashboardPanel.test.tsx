@@ -8,7 +8,12 @@ import { studentActiveSessionStore } from '../useStudentActiveSession';
 
 afterEach(() => {
   cleanup();
-  studentActiveSessionStore.setState({ activeSession: null, loading: false, studentKey: null });
+  studentActiveSessionStore.setState({
+    activeSession: null,
+    prompt: { showBanner: true, ignored: false, snoozedUntil: null },
+    loading: false,
+    studentKey: null,
+  });
   vi.restoreAllMocks();
 });
 

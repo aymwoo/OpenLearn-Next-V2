@@ -8,6 +8,7 @@ import {
 } from './classroom-class-lock.js';
 import type { Server } from 'socket.io';
 import { emitClassroomEvent } from '../presence.js';
+import { touchSessionActivity } from './classroom-session-lifecycle.js';
 import type {
   ClassroomLifecycleStage,
   ClassroomStageGuard,
@@ -158,17 +159,19 @@ export class ClassroomRuntimeService implements IClassroomLifecycleService, IInt
       this.db
         .prepare(
           `
-          INSERT INTO classroom_sessions (id, lesson_id, class_id, teacher_id, stage, checkin_code, created_at, academic_year)
-          VALUES (?, ?, ?, ?, 'PRE_CLASS_READY', ?, ?, ?)
+          INSERT INTO classroom_sessions (id, lesson_id, class_id, teacher_id, stage, checkin_code, created_at, academic_year, last_activity_at)
+          VALUES (?, ?, ?, ?, 'PRE_CLASS_READY', ?, ?, ?, ?)
         `,
         )
-        .run(id, lessonId, classId || null, teacherId, checkinCode, now, deriveAcademicYear(now));
+        .run(id, lessonId, classId || null, teacherId, checkinCode, now, deriveAcademicYear(now), now);
 
       session = this.db.prepare('SELECT * FROM classroom_sessions WHERE id = ?').get(id);
     } else if (classId && session.class_id !== classId) {
       // 授课中 / 结课通票阶段班级已锁定。课前准备仍允许起始门户重选。
       assertSessionClassChangeAllowed(session, classId);
-      this.db.prepare('UPDATE classroom_sessions SET class_id = ? WHERE id = ?').run(classId, session.id);
+      this.db
+        .prepare('UPDATE classroom_sessions SET class_id = ?, last_activity_at = ? WHERE id = ?')
+        .run(classId, Date.now(), session.id);
       session = this.db.prepare('SELECT * FROM classroom_sessions WHERE id = ?').get(session.id);
     }
     return session;
@@ -249,11 +252,11 @@ export class ClassroomRuntimeService implements IClassroomLifecycleService, IInt
       .prepare(
         `
         UPDATE classroom_sessions
-        SET stage = ?, class_id = coalesce(?, class_id), started_at = ?, ended_at = ?
+        SET stage = ?, class_id = coalesce(?, class_id), started_at = ?, ended_at = ?, last_activity_at = ?
         WHERE id = ?
       `,
       )
-      .run(toStage, classId || null, startedAt, endedAt, session.id);
+      .run(toStage, classId || null, startedAt, endedAt, now, session.id);
 
     // Broadcast stage transition to the lesson and class socket rooms (union delivery)
     if (this.io) {

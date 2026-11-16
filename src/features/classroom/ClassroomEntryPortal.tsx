@@ -1241,6 +1241,7 @@ export function ClassroomEntryPortal({
   } | null>(null);
   const classLockRef = useRef<{ lessonId: string; classId: string } | null>(null);
   const [resuming, setResuming] = useState(false);
+  const [closing, setClosing] = useState(false);
   const isSelectedLessonAccessible = Boolean(
     selectedLesson && (lessons.length === 0 || lessons.some((l) => l.id === selectedLesson)),
   );
@@ -1312,6 +1313,57 @@ export function ClassroomEntryPortal({
       if (mountedRef.current) setResuming(false);
     }
   }, [activeSession, addToast, currentClass, currentLesson, onEnterClassroom, selectedModeId, zh]);
+
+  /** IKVNIX：结束本次课次。课程本身保持可再开新课次，学生端未结束提示随课次归档消失。 */
+  const handleCloseSession = useCallback(async () => {
+    if (!currentLesson) return;
+    const confirmed =
+      typeof window === 'undefined'
+        ? true
+        : window.confirm(
+            zh
+              ? '结束本次课次？讲完的课次将被归档，课程仍可保持进行中，之后可再开新课次并保留历史动态。'
+              : 'End this class session? The session will be archived; the course stays open and you can start a new session later.',
+          );
+    if (!confirmed) return;
+    setClosing(true);
+    try {
+      const doFetch = fetcher ?? ((...args: Parameters<typeof fetch>) => fetch(...args));
+      const res = await doFetch(`/api/classroom/sessions/${encodeURIComponent(currentLesson.id)}/close`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body?.error || `HTTP ${res.status}`);
+      }
+      setActiveSession(null);
+      classLockRef.current = null;
+      addToast?.(
+        zh ? '已结束本次课次' : 'Session ended',
+        zh
+          ? '学生端将不再提示课程未结束。需要时可以再开一堂新课次。'
+          : 'Students will no longer see the unfinished prompt. You can start a new session later.',
+        'success',
+      );
+    } catch (e) {
+      addToast?.(zh ? '结束课次失败' : 'Failed to end session', e instanceof Error ? e.message : String(e), 'error');
+    } finally {
+      if (mountedRef.current) setClosing(false);
+    }
+  }, [addToast, currentLesson, fetcher, zh]);
+
+  /** 「稍后继续」：不归档，课次保持进行中，教师可随时回到课堂。 */
+  const handleContinueLater = useCallback(() => {
+    addToast?.(
+      zh ? '课次将稍后继续' : 'Session kept open',
+      zh
+        ? '本次课次尚未结束，学生仍可一键跳回现场。你也可以随时点「回到课堂」。'
+        : 'This session stays in progress. Students can jump back, and you can resume anytime.',
+      'info',
+    );
+  }, [addToast, zh]);
 
   const applyNextSchedule = useCallback(() => {
     if (!nextSchedule) return;
@@ -1506,13 +1558,34 @@ export function ClassroomEntryPortal({
                 </p>
               </div>
             </div>
-            <button
-              onClick={() => void handleResume()}
-              disabled={resuming || !(currentClass || activeSession?.classId)}
-              className="shrink-0 inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 text-white text-sm font-bold hover:bg-emerald-700 disabled:opacity-50 transition-colors cursor-pointer disabled:cursor-not-allowed"
-            >
-              {resuming ? (zh ? '恢复中…' : 'Resuming…') : zh ? '回到课堂' : 'Resume'}
-            </button>
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
+              <button
+                type="button"
+                data-testid="active-session-continue-later"
+                onClick={handleContinueLater}
+                disabled={closing || resuming}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-emerald-300 bg-white text-emerald-800 text-sm font-bold hover:bg-emerald-50 disabled:opacity-50 transition-colors cursor-pointer disabled:cursor-not-allowed"
+              >
+                {zh ? '稍后继续' : 'Continue later'}
+              </button>
+              <button
+                type="button"
+                data-testid="active-session-close"
+                onClick={() => void handleCloseSession()}
+                disabled={closing || resuming}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-amber-300 bg-amber-50 text-amber-900 text-sm font-bold hover:bg-amber-100 disabled:opacity-50 transition-colors cursor-pointer disabled:cursor-not-allowed"
+              >
+                {closing ? (zh ? '结束中…' : 'Ending…') : zh ? '结束本次课次' : 'End this session'}
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleResume()}
+                disabled={resuming || closing || !(currentClass || activeSession?.classId)}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 text-white text-sm font-bold hover:bg-emerald-700 disabled:opacity-50 transition-colors cursor-pointer disabled:cursor-not-allowed"
+              >
+                {resuming ? (zh ? '恢复中…' : 'Resuming…') : zh ? '回到课堂' : 'Resume'}
+              </button>
+            </div>
           </section>
         )}
 
