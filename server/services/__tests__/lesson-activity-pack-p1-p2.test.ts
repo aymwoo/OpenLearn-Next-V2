@@ -473,14 +473,19 @@ describe('长周期课程类型与开课选班', () => {
     expect(again.id).toBe(promoted.id);
   });
 
-  it('一键开课次必须使用教师明确选择的班级，未选或误用其他班都要拒绝', async () => {
-    const course = courses.promoteLessonToLongCycle(lessonId, teacherId, { classIds: [classId] });
+  it('一键开课次必须明确选择班级，选中后在开课时绑定，无须预先选课', async () => {
+    const course = courses.promoteLessonToLongCycle(lessonId, teacherId);
+    for (const enrollment of courses.listEnrollments(course.id)) {
+      courses.unenroll(enrollment.id);
+    }
+    expect(courses.enrolledClassIds(course.id)).toEqual([]);
     await expect(courses.startLessonSession(course.id, lessonId, teacherId)).rejects.toThrow(/请指定要开课的班级/);
-    await expect(courses.startLessonSession(course.id, lessonId, teacherId, extraClassId)).rejects.toThrow(
-      /只能为已选课班级开启课次/,
-    );
-    const started = await courses.startLessonSession(course.id, lessonId, teacherId, classId);
+    const started = await courses.startLessonSession(course.id, lessonId, teacherId, extraClassId);
     expect(started.session).toBeTruthy();
+    expect(courses.enrolledClassIds(course.id)).toEqual([extraClassId]);
+    const again = await courses.startLessonSession(course.id, lessonId, teacherId, classId);
+    expect(again.session).toBeTruthy();
+    expect(courses.enrolledClassIds(course.id).sort()).toEqual([classId, extraClassId].sort());
   });
 
   it('课程级自动归档阈值会钳制在 3 小时至 30 天', () => {

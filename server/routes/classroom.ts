@@ -38,6 +38,8 @@ import { assessmentService } from '../services/assessment-service.js';
 import { BUILTIN_TEACHING_MODES, TEACHING_MODE_ID_PATTERN } from '../services/teaching-modes.js';
 import type { TeachingMode } from '../services/teaching-modes.js';
 import { classroomSessionService, type ClassroomActorScope } from '../services/classroom-session-service.js';
+import { CourseLayerService } from '../services/course-layer-service.js';
+import { LessonActivityError } from '../services/lesson-activity-service.js';
 import {
   archiveZombieSessions,
   buildSessionResumeFields,
@@ -930,6 +932,17 @@ export function registerClassroomRoutes(
         const modeValidation = validateTeachingModeId(teachingModeId);
         if (modeValidation.ok === false) {
           return res.status(modeValidation.status).json({ error: modeValidation.error });
+        }
+
+        if (normalizedClassId) {
+          try {
+            new CourseLayerService(db).bindLongCycleClassForLesson(lessonId, normalizedClassId);
+          } catch (err) {
+            if (err instanceof LessonActivityError) {
+              return res.status(err.statusCode).json({ error: err.message });
+            }
+            throw err;
+          }
         }
 
         const session = await classroomService.getOrCreateSession(lessonId, teacherId, normalizedClassId ?? undefined);

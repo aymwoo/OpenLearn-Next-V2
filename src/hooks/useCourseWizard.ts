@@ -71,7 +71,6 @@ export function useCourseWizard(options: UseCourseWizardOptions) {
   const [wizardIsSubmitting, setWizardIsSubmitting] = useState(false);
   const [wizardIsGeneratingOutline, setWizardIsGeneratingOutline] = useState(false);
   const [wizardCourseType, setWizardCourseType] = useState<'regular' | 'long_cycle'>('regular');
-  const [wizardClassIds, setWizardClassIds] = useState<string[]>([]);
   const [wizardAutoArchiveAfterMs, setWizardAutoArchiveAfterMs] = useState<number | null>(null);
 
   /**
@@ -173,7 +172,6 @@ export function useCourseWizard(options: UseCourseWizardOptions) {
               description: wizardCourseDescription,
               isLongCycle: true,
               lessonId: newLessonId,
-              classIds: wizardClassIds,
               autoArchiveAfterMs: wizardAutoArchiveAfterMs,
             }),
           });
@@ -193,8 +191,8 @@ export function useCourseWizard(options: UseCourseWizardOptions) {
           lang === 'zh' ? '⭐ 课程发布成功' : '⭐ Course Deployed Successfully',
           wizardCourseType === 'long_cycle'
             ? lang === 'zh'
-              ? `已创建长周期课程《${wizardCourseTitle}》，当前教案已作为第一章。讲完请结束本次课次，课程本身保持进行中。`
-              : `Long-cycle course "${wizardCourseTitle}" is ready, with this lesson as chapter 1.`
+              ? `已创建长周期课程《${wizardCourseTitle}》，当前教案已作为第一章。请到「互动课堂」选择班级后再开课，系统会在开课时绑定该班级。`
+              : `Long-cycle course "${wizardCourseTitle}" is ready, with this lesson as chapter 1. Choose a class on the Live Class page when you start; the class is bound then.`
             : lang === 'zh'
               ? `课程《${wizardCourseTitle}》已成功保存到核心SQLite并已自动激活！`
               : `Course "${wizardCourseTitle}" is now live in SQLite and auto-activated.`,
@@ -207,7 +205,6 @@ export function useCourseWizard(options: UseCourseWizardOptions) {
         setWizardCourseContent('');
         setWizardCourseTimeline(getDefaultWizardTimeline(lang));
         setWizardCourseType('regular');
-        setWizardClassIds([]);
         setWizardAutoArchiveAfterMs(null);
         setWizardStep(1);
       } else {
@@ -245,8 +242,6 @@ export function useCourseWizard(options: UseCourseWizardOptions) {
     wizardIsGeneratingOutline,
     wizardCourseType,
     setWizardCourseType,
-    wizardClassIds,
-    setWizardClassIds,
     wizardAutoArchiveAfterMs,
     setWizardAutoArchiveAfterMs,
     handleGenerateOutline,

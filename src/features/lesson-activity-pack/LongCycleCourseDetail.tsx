@@ -1,12 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   attachCourseLessons,
-  enrollCourseClass,
   fetchCourse,
-  fetchCourseEnrollments,
   startCourseLessonSession,
   updateCourse,
-  type CourseEnrollment,
   type CourseLessonRef,
   type CourseRecord,
 } from './p1-api';
@@ -32,19 +29,16 @@ export function LongCycleCourseDetail({
 }) {
   const [course, setCourse] = useState<CourseRecord | null>(null);
   const [detailLessons, setDetailLessons] = useState<CourseLessonRef[]>([]);
-  const [enrollments, setEnrollments] = useState<CourseEnrollment[]>([]);
   const [sessionClassId, setSessionClassId] = useState('');
   const [archiveHours, setArchiveHours] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [savingArchive, setSavingArchive] = useState(false);
 
   const load = () =>
-    Promise.all([fetchCourse(courseId), fetchCourseEnrollments(courseId)])
-      .then(([courseResult, enrollmentResult]) => {
+    fetchCourse(courseId)
+      .then((courseResult) => {
         setCourse(courseResult.course);
         setDetailLessons(courseResult.lessons);
-        const list = enrollmentResult.enrollments || courseResult.enrollments || [];
-        setEnrollments(list);
         setArchiveHours(
           courseResult.course.autoArchiveAfterMs == null
             ? ''
@@ -59,12 +53,6 @@ export function LongCycleCourseDetail({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [courseId]);
 
-  const enrolledClassIds = useMemo(
-    () => enrollments.map((item) => item.classId).filter((id): id is string => Boolean(id)),
-    [enrollments],
-  );
-  const enrolledClasses = classes.filter((item) => enrolledClassIds.includes(item.id));
-  const availableClasses = classes.filter((item) => !enrolledClassIds.includes(item.id));
   const attachedIds = new Set(detailLessons.map((item) => item.id));
   const attachableLessons = lessons.filter((item) => !attachedIds.has(item.id));
 
@@ -117,8 +105,8 @@ export function LongCycleCourseDetail({
             </h3>
             <p className="text-xs text-amber-800/80 mt-0.5">
               {lang === 'zh'
-                ? '讲完只结束本次课次，课程保持进行中。可继续添加章节、选课并开课次。'
-                : 'Ending a session keeps the course in progress. Manage chapters, classes, and new sessions here.'}
+                ? '讲完只结束本次课次，课程保持进行中。可继续添加章节；开课次时再选择并绑定班级。'
+                : 'Ending a session keeps the course in progress. Manage chapters here, and bind a class when you start a session.'}
             </p>
           </div>
           <button
@@ -147,7 +135,7 @@ export function LongCycleCourseDetail({
                 }}
               >
                 <option value="">{lang === 'zh' ? '请选择班级…' : 'Select a class…'}</option>
-                {enrolledClasses.map((item) => (
+                {classes.map((item) => (
                   <option key={item.id} value={item.id}>
                     {item.name}
                   </option>
@@ -176,34 +164,12 @@ export function LongCycleCourseDetail({
                 </option>
               ))}
             </select>
-            <select
-              className="border border-gray-200 rounded px-2 py-1 text-xs"
-              defaultValue=""
-              onChange={(event) => {
-                const classId = event.target.value;
-                event.target.value = '';
-                if (!classId) return;
-                void enrollCourseClass(courseId, classId)
-                  .then(() => load())
-                  .then(() => onChanged?.())
-                  .catch((err) => setError(err instanceof Error ? err.message : String(err)));
-              }}
-            >
-              <option value="">{lang === 'zh' ? '选课班级…' : 'Enroll class…'}</option>
-              {availableClasses.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.name}
-                </option>
-              ))}
-            </select>
           </div>
-          {enrolledClasses.length === 0 && (
-            <p className="text-xs text-gray-500">
-              {lang === 'zh'
-                ? '还没有选课班级，请先选择上课班级后再开课次。'
-                : 'Enroll a class before starting a session.'}
-            </p>
-          )}
+          <p className="text-xs text-gray-500">
+            {lang === 'zh'
+              ? '请先选择要开课的班级，再点「一键开课次」。系统会在开课时绑定该班级。'
+              : 'Select a class first, then start the session. The class is bound when the session starts.'}
+          </p>
           <div className="flex flex-wrap items-end gap-2 text-xs text-gray-600">
             <label className="flex flex-col gap-1">
               <span className="font-bold uppercase tracking-wider">

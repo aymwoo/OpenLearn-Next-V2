@@ -44,11 +44,8 @@ export interface CourseWizardModalProps {
   handleDeployWizardCourse: () => void;
   wizardCourseType?: 'regular' | 'long_cycle';
   setWizardCourseType?: (v: 'regular' | 'long_cycle') => void;
-  wizardClassIds?: string[];
-  setWizardClassIds?: (v: string[]) => void;
   wizardAutoArchiveAfterMs?: number | null;
   setWizardAutoArchiveAfterMs?: (v: number | null) => void;
-  classes?: Array<{ id: string; name: string }>;
 }
 
 export function CourseWizardModal(props: CourseWizardModalProps) {
@@ -75,11 +72,8 @@ export function CourseWizardModal(props: CourseWizardModalProps) {
     handleDeployWizardCourse,
     wizardCourseType = 'regular',
     setWizardCourseType,
-    wizardClassIds = [],
-    setWizardClassIds,
     wizardAutoArchiveAfterMs = null,
     setWizardAutoArchiveAfterMs,
-    classes = [],
   } = props;
 
   return (
@@ -235,54 +229,19 @@ export function CourseWizardModal(props: CourseWizardModalProps) {
                     </span>
                     <span className="block text-xs text-gray-600 leading-relaxed mt-1">
                       {lang === 'zh'
-                        ? '这门课可以跨多次上课。当前教案将作为第一章，以后可在课程卡片中加章节、开课次。讲完只结束本次课次，课程保持进行中。'
-                        : 'This course can span multiple class meetings. The current lesson becomes chapter 1; you can add chapters and start sessions later. Ending a session keeps the course in progress.'}
+                        ? '这门课可以跨多次上课。当前教案将作为第一章，以后可在课程卡片中加章节。创建时不绑定班级，发布后到「互动课堂」选择班级，开课时再绑定。讲完只结束本次课次，课程保持进行中。'
+                        : 'This course can span multiple class meetings. The current lesson becomes chapter 1; you can add chapters later. Classes are not bound at creation: choose a class on the Live Class page, and it is bound when you start. Ending a session keeps the course in progress.'}
                     </span>
                   </span>
                 </label>
               </div>
               {wizardCourseType === 'long_cycle' && (
                 <div className="rounded-xl border border-indigo-100 bg-slate-50 p-3.5 space-y-3">
-                  <div>
-                    <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">
-                      {lang === 'zh' ? '上课班级（可选，可多选）' : 'Classes (optional, multi-select)'}
-                    </p>
-                    {classes.length === 0 ? (
-                      <p className="text-xs text-gray-500">
-                        {lang === 'zh'
-                          ? '暂时没有可选择的班级。可以先不选，以后在课程详情里补充。'
-                          : 'No classes available yet. You can skip this and add classes later in the course details.'}
-                      </p>
-                    ) : (
-                      <div className="flex flex-col gap-1.5 max-h-36 overflow-y-auto">
-                        {classes.map((item) => {
-                          const checked = wizardClassIds.includes(item.id);
-                          return (
-                            <label key={item.id} className="flex items-center gap-2 text-sm text-gray-700">
-                              <input
-                                type="checkbox"
-                                checked={checked}
-                                onChange={() => {
-                                  if (!setWizardClassIds) return;
-                                  setWizardClassIds(
-                                    checked
-                                      ? wizardClassIds.filter((id) => id !== item.id)
-                                      : [...wizardClassIds, item.id],
-                                  );
-                                }}
-                              />
-                              <span>{item.name}</span>
-                            </label>
-                          );
-                        })}
-                      </div>
-                    )}
-                    <p className="text-xs text-gray-500 mt-1.5">
-                      {lang === 'zh'
-                        ? '不必现在排完全部分章节。班级可先不选，以后在课程详情里补充。'
-                        : 'You do not need to plan every chapter now. Classes can be added later in the course details.'}
-                    </p>
-                  </div>
+                  <p className="text-xs text-gray-600 leading-relaxed">
+                    {lang === 'zh'
+                      ? '创建时不绑定班级。发布后请到「互动课堂」选择班级，开课时再绑定。'
+                      : 'Classes are not bound at creation. After publishing, choose a class on the Live Class page; it is bound when you start.'}
+                  </p>
                   <div>
                     <label
                       htmlFor="wizard-auto-archive-hours"
@@ -869,8 +828,8 @@ export function CourseWizardModal(props: CourseWizardModalProps) {
               {wizardCourseType === 'long_cycle' && (
                 <p className="text-xs text-gray-600 leading-relaxed">
                   {lang === 'zh'
-                    ? `部署时会创建一门长周期课程，并把这份教案作为第一章。已选班级 ${wizardClassIds.length} 个，可在课程详情中继续补充。`
-                    : `Deploying will create a long-cycle course with this lesson as chapter 1. ${wizardClassIds.length} class(es) selected; more can be added later.`}
+                    ? '部署时会创建一门长周期课程，并把这份教案作为第一章。班级不必现在绑定，发布后到「互动课堂」选择班级，开课时再绑定。'
+                    : 'Deploying will create a long-cycle course with this lesson as chapter 1. Classes are not bound now; choose a class on the Live Class page when you start.'}
                 </p>
               )}
 

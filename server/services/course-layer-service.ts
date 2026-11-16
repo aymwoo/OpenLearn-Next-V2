@@ -383,6 +383,19 @@ export class CourseLayerService {
     return Array.from(new Set(rows.map((row) => row.class_id)));
   }
 
+  /** 若该课节属于长周期课程，把选定班级绑定到课程（幂等）。创建时不预绑，上课时再绑。 */
+  bindLongCycleClassForLesson(lessonId: string, classId: string): void {
+    const lesson = this.db.prepare('SELECT id, course_id FROM lessons WHERE id = ?').get(lessonId) as
+      { id: string; course_id: string | null } | undefined;
+    if (!lesson?.course_id) return;
+    const course = this.db.prepare('SELECT id, is_long_cycle FROM courses WHERE id = ?').get(lesson.course_id) as
+      { id: string; is_long_cycle: number | null } | undefined;
+    if (!course) return;
+    const isLongCycle = course.is_long_cycle == null ? true : Number(course.is_long_cycle) === 1;
+    if (!isLongCycle) return;
+    this.enrollClass(course.id, classId);
+  }
+
   async startLessonSession(
     courseId: string,
     lessonId: string,
@@ -398,13 +411,8 @@ export class CourseLayerService {
     if (!resolvedClassId) {
       throw new LessonActivityError(400, '请指定要开课的班级');
     }
-    const enrolled = this.enrolledClassIds(courseId);
-    if (enrolled.length === 0) {
-      throw new LessonActivityError(400, '请先为课程选择上课班级');
-    }
-    if (!enrolled.includes(resolvedClassId)) {
-      throw new LessonActivityError(400, '只能为已选课班级开启课次');
-    }
+    // 创建课程时不预绑班级：上课时选定班级后再绑定并开课。
+    this.enrollClass(courseId, resolvedClassId);
     const runtime = new ClassroomRuntimeService(this.db);
     const before = this.db
       .prepare(

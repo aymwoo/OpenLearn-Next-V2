@@ -250,7 +250,7 @@ describe('useCourseWizard —— 长周期课程部署', () => {
     expect(addToast).toHaveBeenCalledWith('⭐ 课程发布成功', expect.stringContaining('常规课'), 'success');
   });
 
-  it('长周期部署会创建课程实体，并把教案作为第一章且带上所选班级', async () => {
+  it('长周期部署会创建课程实体并把教案作为第一章，但不绑定班级', async () => {
     (globalThis.fetch as any).mockImplementation(async (url: string, init?: RequestInit) => {
       if (url === '/api/lessons') {
         return { ok: true, json: async () => ({ result: { lessonId: 'les_ch1' } }) };
@@ -264,8 +264,8 @@ describe('useCourseWizard —— 长周期课程部署', () => {
           title: '学期信息技术',
           isLongCycle: true,
           lessonId: 'les_ch1',
-          classIds: ['cls_a'],
         });
+        expect(payload.classIds).toBeUndefined();
         return { ok: true, json: async () => ({ success: true, course: { id: 'crs_1' } }) };
       }
       return { ok: false, json: async () => ({ error: 'unexpected' }) };
@@ -276,7 +276,6 @@ describe('useCourseWizard —— 长周期课程部署', () => {
       result.current.setWizardCourseTitle('学期信息技术');
       result.current.setWizardCourseDescription('跨周授课');
       result.current.setWizardCourseType('long_cycle');
-      result.current.setWizardClassIds(['cls_a']);
     });
 
     await act(async () => {
@@ -285,7 +284,6 @@ describe('useCourseWizard —— 长周期课程部署', () => {
 
     expect((globalThis.fetch as any).mock.calls.some((call: [string]) => call[0] === '/api/courses')).toBe(true);
     expect(result.current.wizardCourseType).toBe('regular');
-    expect(result.current.wizardClassIds).toEqual([]);
-    expect(addToast).toHaveBeenCalledWith('⭐ 课程发布成功', expect.stringContaining('长周期课程'), 'success');
+    expect(addToast).toHaveBeenCalledWith('⭐ 课程发布成功', expect.stringContaining('互动课堂'), 'success');
   });
 });

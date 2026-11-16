@@ -389,7 +389,7 @@ export function CourseManagement() {
                     ) : (
                       <span className="italic text-gray-400">
                         {lang === 'zh'
-                          ? '暂无课程简介。打开后可管理章节、选课班级与开课次。'
+                          ? '暂无课程简介。打开后可管理章节与开课次，上课时再选择并绑定班级。'
                           : 'No description yet. Open to manage chapters, classes, and sessions.'}
                       </span>
                     )}
