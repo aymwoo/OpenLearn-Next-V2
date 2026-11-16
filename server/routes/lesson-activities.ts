@@ -906,4 +906,108 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
       sendSafeError(res, err);
     }
   });
+
+  // ── 课程层 CRUD（IKVO15 P2）──────────────────────────────────────────────
+  // 课程列表
+  app.get('/api/courses', requireScopedAuth('class-staff'), (_req, res) => {
+    try {
+      const courses = readDb.prepare('SELECT * FROM courses ORDER BY created_at DESC').all();
+      res.json(courses);
+    } catch (err: any) {
+      sendSafeError(res, err);
+    }
+  });
+
+  // 创建课程
+  app.post('/api/courses', requireScopedAuth('class-staff'), (req, res) => {
+    try {
+      const session = (req as any).session;
+      const { title, description, term, visibility } = req.body || {};
+      if (!title || !title.trim()) return res.status(400).json({ success: false, error: 'title required' });
+      const id = `course_${randomId()}`;
+      const ts = now();
+      db.prepare(
+        `INSERT INTO courses (id, title, description, owner_user_id, term, visibility, thumbnail, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ).run(id, title.trim(), description ?? '', session.userId ?? '', term ?? '', visibility ?? 'private', '', ts, ts);
+      const row = readDb.prepare('SELECT * FROM courses WHERE id = ?').get(id);
+      res.json(row);
+    } catch (err: any) {
+      sendSafeError(res, err);
+    }
+  });
+
+  // 课程详情（含下属 lesson 列表）
+  app.get('/api/courses/:id', requireScopedAuth('class-staff'), (req, res) => {
+    try {
+      const course = readDb.prepare('SELECT * FROM courses WHERE id = ?').get(req.params.id) as any | undefined;
+      if (!course) return res.status(404).json({ success: false, error: 'Course not found' });
+      const lessons = readDb
+        .prepare('SELECT * FROM lessons WHERE course_id = ? ORDER BY created_at ASC')
+        .all(req.params.id);
+      const enrollments = readDb
+        .prepare('SELECT * FROM course_enrollments WHERE course_id = ?')
+        .all(req.params.id);
+      res.json({ ...course, lessons, enrollments });
+    } catch (err: any) {
+      sendSafeError(res, err);
+    }
+  });
+
+  // 更新课程
+  app.put('/api/courses/:id', requireScopedAuth('class-staff'), (req, res) => {
+    try {
+      const { title, description, term, visibility } = req.body || {};
+      const ts = now();
+      db.prepare(
+        `UPDATE courses SET title = COALESCE(?, title), description = COALESCE(?, description),
+           term = COALESCE(?, term), visibility = COALESCE(?, visibility), updated_at = ? WHERE id = ?`,
+      ).run(title ?? null, description ?? null, term ?? null, visibility ?? null, ts, req.params.id);
+      const row = readDb.prepare('SELECT * FROM courses WHERE id = ?').get(req.params.id);
+      res.json(row);
+    } catch (err: any) {
+      sendSafeError(res, err);
+    }
+  });
+
+  // 删除课程（下属 lesson 的 course_id 置 NULL）
+  app.delete('/api/courses/:id', requireScopedAuth('class-staff'), (req, res) => {
+    try {
+      const id = req.params.id;
+      db.prepare('UPDATE lessons SET course_id = NULL WHERE course_id = ?').run(id);
+      db.prepare('DELETE FROM course_enrollments WHERE course_id = ?').run(id);
+      db.prepare('DELETE FROM courses WHERE id = ?').run(id);
+      res.json({ success: true });
+    } catch (err: any) {
+      sendSafeError(res, err);
+    }
+  });
+
+  // 把 lesson 挂到课程（或从课程移除：course_id 传 null）
+  app.put('/api/courses/:courseId/lessons/:lessonId', requireScopedAuth('class-staff'), (req, res) => {
+    try {
+      const { courseId, lessonId } = req.params;
+      // 校验课程存在
+      const course = readDb.prepare('SELECT id FROM courses WHERE id = ?').get(courseId);
+      if (!course) return res.status(404).json({ success: false, error: 'Course not found' });
+      db.prepare('UPDATE lessons SET course_id = ? WHERE id = ?').run(courseId, lessonId);
+      res.json({ success: true, courseId, lessonId });
+    } catch (err: any) {
+      sendSafeError(res, err);
+    }
+  });
+
+  // 课程选课
+  app.post('/api/courses/:id/enroll', requireScopedAuth('class-staff'), (req, res) => {
+    try {
+      const { studentId, classId } = req.body || {};
+      if (!studentId) return res.status(400).json({ success: false, error: 'studentId required' });
+      db.prepare(
+        `INSERT OR IGNORE INTO course_enrollments (course_id, student_id, class_id) VALUES (?, ?, ?)`,
+      ).run(req.params.id, studentId, classId ?? null);
+      res.json({ success: true });
+    } catch (err: any) {
+      sendSafeError(res, err);
+    }
+  });
 }
