@@ -25,6 +25,7 @@ import { useAppStore } from '../../store/appStore';
 import { useAppData } from '../../context/AppDataContext';
 import { ExtensionPointRenderer } from '../../plugin-host/extension-point-renderer';
 import { extractCourseSummary } from '../../utils/courseSummary';
+import { CourseLayerBoard, ImportActivityPackToolbarButton } from '../lesson-activity-pack';
 
 interface CourseStats {
   whiteboardCount: number;
@@ -44,6 +45,7 @@ export function CourseManagement() {
     lessonsSortOrder,
     setLessonsSortOrder,
     filteredAndSortedLessons: filteredLessons,
+    classes,
     isImportLessonsOpen,
     setIsImportLessonsOpen,
     isCourseWizardOpen,
@@ -165,6 +167,7 @@ export function CourseManagement() {
               <Plus size={14} />
               {lang === 'zh' ? '手动添加课程 (向导)' : 'Add Course Wizard'}
             </button>
+            <ImportActivityPackToolbarButton lang={lang} lessons={lessons} onImported={() => void fetchLessons()} />
             <ExtensionPointRenderer slot="course.list.toolbar.action" slotProps={{ lang, onRefresh: fetchLessons }} />
           </div>
         </div>
@@ -459,6 +462,7 @@ export function CourseManagement() {
       </div>
 
       {/* ── 删除确认弹窗 ── */}
+      <CourseLayerBoard lang={lang} lessons={lessons} classes={classes || []} />
       {deleteTarget && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-[2px] flex items-center justify-center z-[9999] p-4">
           <div className="bg-white rounded-xl shadow-2xl max-w-md w-full border border-gray-100 overflow-hidden">

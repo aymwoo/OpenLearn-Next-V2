@@ -19,6 +19,7 @@ import { CommandPaletteHost } from './features/command-palette/CommandPaletteHos
 import { SystemErrorCenterModal } from './features/modals/SystemErrorCenterModal';
 import ThemeFailsafeRecoveryButton from './components/ThemeFailsafeRecoveryButton';
 import { useAppComposer } from './hooks/useAppComposer';
+import { ActivityPackTeacherPreview, isActivityPackPreviewMode } from './features/lesson-activity-pack';
 
 export default function App() {
   const {
@@ -39,6 +40,7 @@ export default function App() {
     setProfileOpen,
     lang,
   } = useAppComposer();
+  const isActivityPackPreview = isActivityPackPreviewMode();
 
   React.useEffect(() => {
     if (typeof document === 'undefined') return;
@@ -123,7 +125,9 @@ export default function App() {
             />
           )}
 
-          {!isStageDisplayMode && (
+          {!isStageDisplayMode && isActivityPackPreview && session && <ActivityPackTeacherPreview lang={lang} />}
+
+          {!isStageDisplayMode && !isActivityPackPreview && (
             <div className="flex h-screen bg-app text-main font-sans transition-colors duration-150">
               <a
                 href="#main-content"

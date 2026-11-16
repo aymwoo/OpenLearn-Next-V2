@@ -18,6 +18,11 @@ import {
   COURSE_PACKAGE_IMPORT_PATH,
   COURSE_PACKAGE_MAX_FILE_BYTES,
 } from '../services/course-package.js';
+import {
+  ACTIVITY_PACK_IMPORT_BODY_LIMIT_BYTES,
+  ACTIVITY_PACK_IMPORT_PATH,
+  ACTIVITY_PACK_MAX_FILE_BYTES,
+} from '../services/lesson-activity-pack-transfer.js';
 
 /**
  * 允许接收超大请求体的端点（解析上限 110MB）。
@@ -86,6 +91,12 @@ export function mountLargeBodyParsers(app: express.Express): void {
     express.urlencoded({ limit: COURSE_PACKAGE_IMPORT_BODY_LIMIT_BYTES, extended: true }),
   );
 
+  app.use(
+    ACTIVITY_PACK_IMPORT_PATH,
+    express.json({ limit: ACTIVITY_PACK_IMPORT_BODY_LIMIT_BYTES }),
+    express.urlencoded({ limit: ACTIVITY_PACK_IMPORT_BODY_LIMIT_BYTES, extended: true }),
+  );
+
   // 4) 课程包导入超限：给出能指到真实原因的错误，而不是裸的 "request entity too large"
   app.use(
     COURSE_PACKAGE_IMPORT_PATH,
@@ -99,6 +110,23 @@ export function mountLargeBodyParsers(app: express.Express): void {
             `课程包体积超过上限（文件 ≤ ${COURSE_PACKAGE_MAX_FILE_BYTES / (1024 * 1024)}MB，` +
             `请求体 ≤ ${COURSE_PACKAGE_IMPORT_BODY_LIMIT_BYTES / (1024 * 1024)}MB）。` +
             '请精简附件（课程包内附件以 base64 内联，体积约放大 1.37 倍）后重试。',
+        });
+      }
+      next(err);
+    },
+  );
+
+  app.use(
+    ACTIVITY_PACK_IMPORT_PATH,
+    (err: unknown, _req: express.Request, res: express.Response, next: express.NextFunction) => {
+      const type = err && typeof err === 'object' ? (err as { type?: unknown }).type : undefined;
+      if (type === 'entity.too.large') {
+        return res.status(413).json({
+          success: false,
+          code: 'ACTIVITY_PACK_TOO_LARGE',
+          error:
+            `学案包体积超过上限（文件 ≤ ${ACTIVITY_PACK_MAX_FILE_BYTES / (1024 * 1024)}MB，` +
+            `请求体 ≤ ${ACTIVITY_PACK_IMPORT_BODY_LIMIT_BYTES / (1024 * 1024)}MB）。`,
         });
       }
       next(err);

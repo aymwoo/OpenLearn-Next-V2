@@ -21,6 +21,7 @@ import {
   type ActivityType,
   type StudentActivityPack,
 } from './api';
+import { StudentPeerReviewSection } from './StudentPeerReviewSection';
 
 const TYPE_ICONS: Record<ActivityType, typeof BookOpen> = {
   reading: BookOpen,
@@ -36,6 +37,9 @@ export interface StudentActivityPackPageProps {
   onBack: () => void;
   onOpenAssignment?: (assignmentId: string) => void;
   onOpenAssessments?: () => void;
+  /** 教师预览：使用传入的学案数据，不调用会写进度的接口。 */
+  preview?: boolean;
+  previewPack?: StudentActivityPack;
 }
 
 export function StudentActivityPackPage({
@@ -45,6 +49,8 @@ export function StudentActivityPackPage({
   onBack,
   onOpenAssignment,
   onOpenAssessments,
+  preview = false,
+  previewPack,
 }: StudentActivityPackPageProps) {
   const [pack, setPack] = useState<StudentActivityPack | null>(null);
   const [loading, setLoading] = useState(true);
@@ -53,6 +59,12 @@ export function StudentActivityPackPage({
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
+    if (preview && previewPack) {
+      setPack(previewPack);
+      setSelectedId((current) => current ?? previewPack.activities[0]?.id ?? null);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
@@ -65,7 +77,7 @@ export function StudentActivityPackPage({
     } finally {
       setLoading(false);
     }
-  }, [lessonId]);
+  }, [lessonId, preview, previewPack]);
 
   useEffect(() => {
     void load();
@@ -78,8 +90,10 @@ export function StudentActivityPackPage({
     setBusy(true);
     setError(null);
     try {
-      await startActivity(lessonId, activityId);
-      await load();
+      if (!preview) {
+        await startActivity(lessonId, activityId);
+        await load();
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -222,8 +236,26 @@ export function StudentActivityPackPage({
                       void (async () => {
                         setBusy(true);
                         try {
-                          await selfReportActivity(lessonId, selected.id);
-                          await load();
+                          if (preview) {
+                            setPack((current) =>
+                              current
+                                ? {
+                                    ...current,
+                                    activities: current.activities.map((item) =>
+                                      item.id === selected.id
+                                        ? {
+                                            ...item,
+                                            progress: { ...item.progress, status: 'submitted', progressPercent: 100 },
+                                          }
+                                        : item,
+                                    ),
+                                  }
+                                : current,
+                            );
+                          } else {
+                            await selfReportActivity(lessonId, selected.id);
+                            await load();
+                          }
                         } catch (err) {
                           setError(err instanceof Error ? err.message : String(err));
                         } finally {
@@ -298,6 +330,7 @@ export function StudentActivityPackPage({
           )}
         </section>
       </div>
+      {!preview && <StudentPeerReviewSection lessonId={lessonId} lang={lang} />}
     </div>
   );
 }

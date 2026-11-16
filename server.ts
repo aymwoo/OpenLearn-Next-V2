@@ -105,6 +105,9 @@ import { registerBridgeRoutes } from './server/routes/bridge.js';
 import { registerRuntimePolicyRoutes } from './server/routes/runtime-policies.js';
 import { registerLessonsRoutes } from './server/routes/lessons.js';
 import { registerLessonActivityRoutes } from './server/routes/lesson-activities.js';
+import { registerLessonActivityPackP1Routes } from './server/routes/lesson-activity-pack-p1.js';
+import { registerCourseLayerRoutes } from './server/routes/courses-layer.js';
+import { registerDiscussionRoutes } from './server/routes/discussions.js';
 import { registerCoursePackageRoutes } from './server/routes/course-packages.js';
 import { registerWorkspaceRoutes } from './server/routes/workspace.js';
 import { registerProcessesRoutes } from './server/routes/processes.js';
@@ -405,6 +408,9 @@ async function startServer() {
   registerRuntimePolicyRoutes(ctx);
   registerLessonsRoutes(ctx);
   registerLessonActivityRoutes(ctx);
+  registerLessonActivityPackP1Routes(ctx);
+  registerCourseLayerRoutes(ctx);
+  registerDiscussionRoutes(ctx);
   registerCoursePackageRoutes(ctx);
   registerWorkspaceRoutes(ctx);
 

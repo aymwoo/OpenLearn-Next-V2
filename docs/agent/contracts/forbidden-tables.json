@@ -49,7 +49,18 @@
     "ai_persona_governance",
     "lesson_activities",
     "lesson_activity_blocks",
-    "activity_progress"
+    "activity_progress",
+    "user_preferences",
+    "activity_peer_review_cycles",
+    "activity_peer_review_assignments",
+    "activity_peer_reviews",
+    "activity_peer_review_reports",
+    "activity_nudges",
+    "courses",
+    "course_enrollments",
+    "discussion_threads",
+    "discussion_posts",
+    "discussion_reports"
   ],
-  "total": 48
+  "total": 59
 }

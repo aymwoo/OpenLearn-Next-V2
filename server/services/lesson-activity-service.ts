@@ -536,6 +536,58 @@ export class LessonActivityService {
     };
   }
 
+  getPreviewPack(
+    lessonId: string,
+    now = Date.now(),
+  ): {
+    preview: true;
+    previewKind: 'activity-pack-student';
+    unpublishedCount: number;
+    lessonId: string;
+    courseId: string | null;
+    blocks: LessonActivityBlockRecord[];
+    activities: Array<LessonActivityRecord & { progress: ActivityProgressRecord }>;
+    summary: LessonProgressAggregate;
+  } {
+    this.assertLesson(lessonId);
+    const lesson = this.db.prepare('SELECT course_id FROM lessons WHERE id = ?').get(lessonId) as {
+      course_id: string | null;
+    };
+    const visible = this.listActivities(lessonId, { includeHidden: false, now });
+    const all = this.listActivities(lessonId, { includeHidden: true, now });
+    const withProgress = visible.map((activity) => ({
+      ...activity,
+      progress: {
+        studentId: 'preview',
+        activityId: activity.id,
+        status: 'not_started' as ActivityStatus,
+        progressPercent: 0,
+        verified: false,
+        score: null,
+        feedback: null,
+        gradedAt: null,
+        lastActivityAt: null,
+      },
+    }));
+    return {
+      preview: true,
+      previewKind: 'activity-pack-student',
+      unpublishedCount: all.length - visible.length,
+      lessonId,
+      courseId: lesson.course_id ?? null,
+      blocks: this.listBlocks(lessonId),
+      activities: withProgress,
+      summary: aggregateLessonActivityProgress(
+        visible.map((activity) => ({
+          required: activity.required,
+          released: true,
+          status: 'not_started' as ActivityStatus,
+          verified: false,
+        })),
+      ),
+    };
+  }
+
   listStudentPackSummaries(
     studentId: string,
     lessonIds: string[],

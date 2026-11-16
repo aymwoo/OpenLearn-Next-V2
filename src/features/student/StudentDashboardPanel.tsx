@@ -1,3 +1,4 @@
+import { StudentCourseLayer } from '../lesson-activity-pack/StudentCourseLayer';
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   LayoutGrid,
@@ -632,6 +633,8 @@ export function StudentDashboardPanel(props: StudentDashboardPanelProps) {
       </div>
 
       {/* 6. Student Dashboard Quick Actions Floating Menu */}
+      <StudentCourseLayer lang={lang} onOpenActivityPack={onOpenActivityPack} />
+
       <StudentQuickActionsFloatingMenu
         studentDashboardData={studentDashboardData}
         activeStudentId={activeStudentId}

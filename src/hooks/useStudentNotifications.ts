@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
+import { fetchMyNudges, type ActivityNudge } from '../features/lesson-activity-pack/p1-api';
 
 export function useStudentNotifications(
   activeRole: 'teacher' | 'student',
@@ -8,6 +9,14 @@ export function useStudentNotifications(
   const [readNotifications, setReadNotifications] = useState<Set<string>>(new Set());
   const [selectedNotificationForModal, setSelectedNotificationForModal] = useState<any | null>(null);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const [nudges, setNudges] = useState<ActivityNudge[]>([]);
+
+  useEffect(() => {
+    if (activeRole !== 'student') return;
+    void fetchMyNudges()
+      .then((result) => setNudges(result.nudges))
+      .catch(() => setNudges([]));
+  }, [activeRole]);
 
   const studentNotifications = useMemo(() => {
     if (activeRole !== 'student' || !studentDashboardData) return [];
@@ -48,11 +57,22 @@ export function useStudentNotifications(
       }
     }
 
+    for (const nudge of nudges) {
+      notifs.push({
+        id: `nudge-${nudge.id}`,
+        type: 'activity_nudge',
+        title: lang === 'zh' ? '学案催办' : 'Lesson pack reminder',
+        message: nudge.message,
+        date: nudge.createdAt,
+        relatedId: nudge.lessonId,
+      });
+    }
+
     // 点名（rollcall）刻意不进入通知消息列表：它属于「即时课堂互动」而非「待办消息」。
     // 抽中提醒走屏幕级强提示（全屏抽中弹窗 + 音效 + 顶部班级横幅），
     // 以及仪表盘的点名警报区；塞进通知铃铛只会变成一条无人注意的静默记录。
     return notifs.sort((a: any, b: any) => b.date - a.date);
-  }, [activeRole, studentDashboardData, lang]);
+  }, [activeRole, studentDashboardData, lang, nudges]);
 
   const unreadNotifications = useMemo(() => {
     return studentNotifications.filter((n) => !readNotifications.has(n.id));

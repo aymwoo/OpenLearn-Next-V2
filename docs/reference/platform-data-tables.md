@@ -505,12 +505,17 @@ MFE 远端登记。MFE 执行边界已移除，表保留作历史数据兼容。
 
 <!-- AUTO-GENERATED:table-inventory BEGIN -->
 
-共 **95** 张表（迁移 59 个，金样将在合并后重新生成）。列清单为列名（类型与约束见迁移 SQL）：
+共 **105** 张表（迁移 61 个，金样生成于 2026-11-16T10:56:36.829Z）。列清单为列名（类型与约束见迁移 SQL）：
 
 - `_academic_year_backfill`: backfilled_at, id
 - `_class_passcode_encryption`: id, note
 - `_lesson_think_cleanup`: id, note
 - `_migrations`: applied_at, checksum, name
+- `activity_nudges`: activity_id, created_at, id, lesson_id, message, student_id, teacher_id
+- `activity_peer_review_assignments`: activity_id, anonymous, created_at, cycle_id, due_at, id, reviewee_student_id, reviewer_student_id, status
+- `activity_peer_review_cycles`: anonymous, closed_at, course_id, created_at, created_by, id, lesson_id, reviews_per_student, rubric_json, status, title
+- `activity_peer_review_reports`: created_at, id, reason, reporter_student_id, review_id, status
+- `activity_peer_reviews`: activity_id, anonymous, assignment_id, comment, created_at, cycle_id, id, reviewed_at, reviewee_student_id, reviewer_student_id, scores_json, status, teacher_feedback, teacher_id, updated_at
 - `activity_progress`: activity_id, feedback, graded_at, last_activity_at, progress_percent, score, status, student_id, verified
 - `agent_conversations`: content, conv_key, created_at, id, role
 - `ai_persona_governance`: description_en, description_zh, enabled, persona_id, preferred_provider_id
@@ -545,10 +550,15 @@ MFE 远端登记。MFE 执行边界已移除，表保留作历史数据兼容。
 - `classroom_sessions`: academic_year, auto_archive_exempt, auto_archived_at, checkin_code, class_id, created_at, current_segment_id, ended_at, focus_mode, id, last_activity_at, lesson_id, settings_json, stage, started_at, teacher_id, teaching_mode_id
 - `client_sessions`: expires_at, id, session_data, updated_at
 - `computer_labs`: cols, created_at, id, room_number, rows
+- `course_enrollments`: class_id, course_id, created_at, id, student_id
+- `courses`: created_at, description, id, owner_user_id, term, thumbnail, title, updated_at, visibility
 - `courseware`: created_at, entry, id, name, type, uuid
 - `courseware_attempt`: courseware_id, finished_at, id, started_at, status, student_id
 - `courseware_score_config`: auto_record_enabled, auto_record_min_completion, auto_record_strategy, courseware_id, courseware_name, lesson_id, raw_full_score, score_fields, score_policy, target_full_score, updated_at, weight_percentage
 - `demo_data_registry`: created_at, entity_id, entity_type
+- `discussion_posts`: author_student_id, author_user_id, body, created_at, deleted_at, id, parent_id, thread_id, updated_at
+- `discussion_reports`: created_at, id, post_id, reason, reporter_student_id, reporter_user_id, status, thread_id
+- `discussion_threads`: author_student_id, author_user_id, body, course_id, created_at, id, lesson_id, locked, pinned, title, updated_at
 - `events`: correlationId, id, lesson_id, payload, source, timestamp, type
 - `exam_scores`: academic_year, exam_id, notes, recorded_at, score, student_id
 - `exams`: academic_year, class_id, created_at, description, id, max_score, title
@@ -561,7 +571,7 @@ MFE 远端登记。MFE 执行边界已移除，表保留作历史数据兼容。
 - `lesson_checkins`: checked_in_at, lesson_id, student_id
 - `lesson_preset_polls`: correct_option, created_at, id, lesson_id, options_json, question_type, sort_order, title, updated_at
 - `lesson_quiz_submissions`: answer, element_id, id, is_correct, lesson_id, score, student_id, student_name, submitted_at, time_spent_ms
-- `lessons`: content, course_id, created_at, creator_id, id, progress_conditions, progress_mode, source_package_hash, source_package_id, source_package_key, timeline, title, updated_at
+- `lessons`: content, course_id, course_order, created_at, creator_id, id, progress_conditions, progress_mode, source_package_hash, source_package_id, source_package_key, timeline, title, updated_at
 - `mfe_remotes`: created_at, entry, meta, name, updated_at
 - `pending_commands`: actor_id, command_type, created_at, id, payload
 - `plugin_assignment_files`: asset_id, assignment_id, deleted_at, id, mime, original_name, sha256, size, stored_path, student_id, submission_id, uploaded_at, version_id

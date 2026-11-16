@@ -26,6 +26,8 @@ import {
   type LessonActivityBlock,
   type TeacherActivityPack,
 } from './api';
+import { TeacherActivityProgressPanel } from './TeacherActivityProgressPanel';
+import { openActivityPackPreview } from './ActivityPackTeacherPreview';
 
 const TYPE_ICONS: Record<ActivityType, typeof BookOpen> = {
   reading: BookOpen,
@@ -179,7 +181,23 @@ export function ActivityPackEditor({ lessonId, lang, readOnly = false }: Activit
     <div className="flex-1 min-w-0 overflow-y-auto p-4 bg-surface" data-testid="activity-pack-editor">
       <div className="max-w-5xl mx-auto flex flex-col gap-4">
         <div>
-          <h2 className="text-lg font-bold text-main">{lang === 'zh' ? '学案活动编排' : 'Lesson activity pack'}</h2>
+          <div className="flex items-start justify-between gap-3">
+            <h2 className="text-lg font-bold text-main">{lang === 'zh' ? '学案活动编排' : 'Lesson activity pack'}</h2>
+            <button
+              type="button"
+              data-testid="open-activity-pack-preview"
+              className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-amber-100 text-amber-900 border border-amber-200"
+              onClick={() => {
+                try {
+                  openActivityPackPreview(lessonId);
+                } catch (err) {
+                  setError(err instanceof Error ? err.message : String(err));
+                }
+              }}
+            >
+              {lang === 'zh' ? '预览学案（模拟学生）' : 'Preview pack (simulate student)'}
+            </button>
+          </div>
           <p className="text-xs text-muted mt-1">
             {lang === 'zh'
               ? '活动与课堂环节并列，完成活动不会自动推进课堂门禁。发布前请先关联已有课件、测验或作业，不另建提交系统。'

@@ -22,6 +22,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - 教师可在备课编辑器「学案活动」页签编排阅读任务、网页课件、测验与作品提交，学案首页使用可选区块 + 自由图文；
   - 学生可从看板或课节页打开学案，按活动序列自学；自报不得直接判定完成，课节进度由已验证活动聚合；
   - 课件 / 测验 / 作品复用既有播放器、测评中心与作业中心，学案进度只同步展示，避免成绩双算。活动完成不推进课堂门禁。
+- **学案包 P1 / P2 与课程层（Gitee Issue IKVO15）**：
+  - 跨课节互评（实名或匿名、循环分配、防刷票、量表、教师复核与举报），评语隐藏外链；互评分数不写入原成绩口径；
+  - 教师进度报告与一键催办（6 小时冷却），催办进入学生通知；
+  - 学案包 zip 导入导出（manifest + activities + blocks + assets），入口在课程库工具栏；导入默认未发布；
+  - 教师预览态「模拟学生」与课堂学生视角、C 组 `StudentWorkspacePreview` 区分开，不写真实进度；
+  - 新增 `courses` 一级实体与选课，章节可一键开课次（配合 IKVNIX 课次解耦）；讨论区为最小可用实现。
 - **学生登录后首屏按学习路径重排（Gitee Issue IKVKVF）**：
   - 新增固定区「现在该做什么」学习路径焦点条（`src/features/student/StudentLearningFocus.tsx`）：待办作业 → 最近课节 → 继续学习，不受自定义布局影响；最近课节按「今天未结束 → 本周后续 → 下周三」规则取数；
   - `DEFAULT_WIDGET_LAYOUT` 默认顺序改为待办作业优先，本地布局键提升为 `student_dashboard_layout_v3_*`，使老用户也能拿到新首屏；

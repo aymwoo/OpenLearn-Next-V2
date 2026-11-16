@@ -1,6 +1,6 @@
 # 课时级学案包（Gitee IKVO15 P0）
 
-在互动白板课堂之外，为同一课节提供可异步自学的学案活动序列。本轮只做 P0，不实现课程层、互评、学案包导入导出、教师预览、讨论区、编程活动，以及进度面板与一键催办。
+在互动白板课堂之外，为同一课节提供可异步自学的学案活动序列。本文件覆盖 IKVO15 的 P0 / P1 / P2。编程活动仍未实现。
 
 ## 与课堂环节的关系
 
@@ -37,3 +37,25 @@
 - `GET /api/me/lesson-activity-packs?lessonIds=`：学生看板入口
 
 教师编排入口在备课编辑器顶部的「学案活动」页签；学生入口在看板课程卡片与课节页「打开学案」。
+
+## P1
+
+- **跨课节互评**：一次轮次可覆盖同一课程下多个课节的已提交活动。循环分配评审任务，同一轮次同一活动中一对评审人只能提交一份评价（防刷票）。支持实名或匿名；学生端匿名时不返回对方姓名。评语用 UGC 规则去 HTML、隐藏外链，并支持举报与教师复核（确认 / 覆盖 / 驳回）。互评分数不写入 `activity_progress.score`。
+- **进度报告与催办**：教师可查看每个活动的完成率、已验证率与未完成名单，并对未完成学生一键催办。催办 6 小时内不对同一学生重复发送；催办消息进入学生通知列表。
+- **学案包导入导出**：zip 内含 `manifest.json` + `activities.json` + `blocks.json` + `assets/`。入口在备课中心课程库工具栏（与 `course.list.toolbar.action` 同排）。导入默认不自动发布，关联测验/作业/课件若在目标实例不存在会给出警告。
+- **教师预览**：`?mode=activity_pack_preview` 打开独立页「教师预览（模拟学生）」，只读预览接口，不写真实进度。与课堂 `student_preview` 以及 `StudentWorkspacePreview`（C 组迁移预览）分开。
+
+## P2
+
+- **课程层**：`courses` 为一级实体，`lessons.course_id` / `course_order` 挂接章节，`course_enrollments` 支持按班级或学生选课。课程跨周保持进行中；教师可对某个章节「一键开课次」，复用 IKVNIX 的 `getOrCreateSession`（已归档课次会开新会话）。
+- **讨论区**：最小可用实现，支持发帖、回复、锁定、删除与举报。正文同样去 HTML、隐藏外链。不做投票、分组或富文本编辑器。
+
+## 新增接口（P1 / P2）
+
+- `GET /api/lessons/:lessonId/activity-pack/preview`
+- `GET /api/lessons/:lessonId/activity-pack/progress-report`
+- `POST /api/lessons/:lessonId/activity-pack/nudge`、`GET /api/me/activity-nudges`
+- `GET /api/lessons/:lessonId/activity-pack/export`、`POST /api/lesson-activity-packs/import`
+- `POST /api/lessons/:lessonId/peer-reviews/cycles` 及提交 / 复核 / 举报接口
+- `GET|POST /api/courses`、挂接课节、选课、`POST /api/courses/:courseId/lessons/:lessonId/start-session`
+- `GET|POST /api/discussions`

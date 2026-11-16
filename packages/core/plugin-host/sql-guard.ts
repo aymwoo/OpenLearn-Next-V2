@@ -59,6 +59,17 @@ export const FORBIDDEN_CORE_TABLES = Object.freeze([
   'file_aliases',
   'ai_personas',
   'ai_persona_governance',
+  'user_preferences',
+  'activity_peer_review_cycles',
+  'activity_peer_review_assignments',
+  'activity_peer_reviews',
+  'activity_peer_review_reports',
+  'activity_nudges',
+  'courses',
+  'course_enrollments',
+  'discussion_threads',
+  'discussion_posts',
+  'discussion_reports',
 ]);
 
 const FORBIDDEN_CORE_TABLES_SET = new Set(FORBIDDEN_CORE_TABLES.map((t) => t.toLowerCase()));
