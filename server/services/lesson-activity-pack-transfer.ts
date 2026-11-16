@@ -25,6 +25,7 @@ import {
   type CreateActivityInput,
   type LessonActivityBlockRecord,
   type LessonActivityRecord,
+  type UnresolvedActivityBinding,
   isActivityType,
   isBlockType,
 } from './lesson-activity-service.js';
@@ -134,6 +135,7 @@ export class LessonActivityPackTransferService {
     activities: LessonActivityRecord[];
     blocks: LessonActivityBlockRecord[];
     warnings: string[];
+    unresolvedBindings: UnresolvedActivityBinding[];
   }> {
     if (zipBuffer.length > ACTIVITY_PACK_MAX_FILE_BYTES) {
       throw new LessonActivityError(413, '学案包超过 20MB 上限');
@@ -189,7 +191,8 @@ export class LessonActivityPackTransferService {
         content: resolveAssetPlaceholders(block.content, materialized) as Record<string, unknown>,
       }));
     const blocks = service.replaceBlocks(lessonId, blockInputs);
-    return { activities: created, blocks, warnings };
+    const unresolvedBindings = service.listUnresolvedBindings(lessonId, created);
+    return { activities: created, blocks, warnings, unresolvedBindings };
   }
 
   private collectMissingRefs(type: ActivityType, config: Record<string, unknown>, warnings: string[]): void {

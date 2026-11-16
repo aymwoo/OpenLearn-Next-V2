@@ -47,8 +47,15 @@ export function ActivityPackTransferButtons({
           setBusy(true);
           void importActivityPack(id, file)
             .then((result) => {
+              const unresolved = result.unresolvedBindings?.length
+                ? lang === 'zh'
+                  ? `\n有 ${result.unresolvedBindings.length} 项资源需在学案编排器中重新关联。`
+                  : `\n${result.unresolvedBindings.length} resource(s) must be relinked in the pack editor.`
+                : '';
               const warning = result.warnings.length ? `\n${result.warnings.join('\n')}` : '';
-              window.alert((lang === 'zh' ? '学案包已导入，默认未发布。' : 'Pack imported as unpublished.') + warning);
+              window.alert(
+                (lang === 'zh' ? '学案包已导入，默认未发布。' : 'Pack imported as unpublished.') + unresolved + warning,
+              );
               onImported?.();
             })
             .catch((err) => window.alert(err instanceof Error ? err.message : String(err)))
@@ -134,9 +141,16 @@ export function ImportActivityPackToolbarButton({
               setBusy(true);
               void importActivityPack(lessonId, file)
                 .then((result) => {
+                  const unresolved = result.unresolvedBindings?.length
+                    ? lang === 'zh'
+                      ? `\n有 ${result.unresolvedBindings.length} 项资源需在学案编排器中重新关联。`
+                      : `\n${result.unresolvedBindings.length} resource(s) must be relinked in the pack editor.`
+                    : '';
                   const warning = result.warnings.length ? `\n${result.warnings.join('\n')}` : '';
                   window.alert(
-                    (lang === 'zh' ? '学案包已导入，默认未发布。' : 'Pack imported as unpublished.') + warning,
+                    (lang === 'zh' ? '学案包已导入，默认未发布。' : 'Pack imported as unpublished.') +
+                      unresolved +
+                      warning,
                   );
                   setOpen(false);
                   onImported?.();

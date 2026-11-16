@@ -352,4 +352,63 @@ describe('学案包 P1 / P2 服务（IKVO15）', () => {
       .get(lessonA, 'IN_CLASS_TEACHING') as { n: number };
     expect(sessionCount.n).toBe(0);
   });
+
+  it('导入后缺失课件可以重新关联', async () => {
+    const pack = new JSZip();
+    pack.file(
+      'manifest.json',
+      JSON.stringify({
+        format: 'openlearn.lesson-activity-pack',
+        version: 1,
+        name: 'missing-cw',
+        sourceLessonTitle: '源',
+        exportedAt: Date.now(),
+        activityCount: 1,
+        blockCount: 0,
+        assetCount: 0,
+      }),
+    );
+    pack.file(
+      'activities.json',
+      JSON.stringify([
+        {
+          type: 'courseware',
+          title: '导入课件',
+          config: { coursewareId: 'cw-imported-missing' },
+          required: true,
+          visible: true,
+          peerReview: false,
+          groupMode: false,
+          submissionType: null,
+          rubric: null,
+          releaseAt: null,
+          dueAt: null,
+        },
+      ]),
+    );
+    pack.file('blocks.json', '[]');
+    const result = await transfer.importPack(
+      otherLesson,
+      Buffer.from(await pack.generateAsync({ type: 'nodebuffer' })),
+      {
+        replace: true,
+      },
+    );
+    expect(result.activities[0]?.visible).toBe(false);
+    expect(result.unresolvedBindings.some((item) => item.originalId === 'cw-imported-missing')).toBe(true);
+
+    const now = Date.now();
+    const localId = `cw_local_${suffix}`;
+    db.prepare('INSERT INTO courseware (id, uuid, name, type, entry, created_at) VALUES (?, ?, ?, ?, ?, ?)').run(
+      localId,
+      `uuid-${localId}`,
+      '本地课件',
+      'html',
+      '/cw/local/index.html',
+      now,
+    );
+    const relinked = activities.relinkActivity(result.activities[0]!.id, { coursewareId: localId });
+    expect(relinked.unresolvedBindings).toEqual([]);
+    db.prepare('DELETE FROM courseware WHERE id = ?').run(localId);
+  });
 });

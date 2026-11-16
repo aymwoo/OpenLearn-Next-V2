@@ -1,10 +1,23 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { BookOpen, ChevronDown, ChevronUp, ClipboardCheck, FileUp, Globe, Loader2, Plus, Trash2 } from 'lucide-react';
+import {
+  BookOpen,
+  ChevronDown,
+  ChevronUp,
+  ClipboardCheck,
+  Code2,
+  FileUp,
+  Globe,
+  Loader2,
+  Plus,
+  Trash2,
+} from 'lucide-react';
 import {
   ACTIVITY_TYPE_LABELS,
   ACTIVITY_TYPES,
   BLOCK_TYPE_LABELS,
   BLOCK_TYPES,
+  PROGRAMMING_KIND_LABELS,
+  PROGRAMMING_KINDS,
   createActivity,
   deleteActivity,
   extractNamedList,
@@ -14,6 +27,7 @@ import {
   fetchAssignmentList,
   fetchCoursewareList,
   gradeActivityProgress,
+  relinkActivity,
   reorderActivities,
   saveActivityBlocks,
   updateActivity,
@@ -34,6 +48,7 @@ const TYPE_ICONS: Record<ActivityType, typeof BookOpen> = {
   courseware: Globe,
   quiz: ClipboardCheck,
   submission: FileUp,
+  programming: Code2,
 };
 
 function labelOf(lang: 'zh' | 'en', pair: { zh: string; en: string }) {
@@ -125,7 +140,7 @@ export function ActivityPackEditor({ lessonId, lang, readOnly = false }: Activit
     let cancelled = false;
     fetchActivityProgress(lessonId, selectedId)
       .then((result) => {
-        if (!cancelled) setProgressRows(result.progress);
+        if (!cancelled) setProgressRows(result.progress ?? []);
       })
       .catch(() => {
         if (!cancelled) setProgressRows([]);
@@ -204,6 +219,27 @@ export function ActivityPackEditor({ lessonId, lang, readOnly = false }: Activit
               : 'Activities sit beside the classroom timeline and never advance segment gates. Link existing courseware, quizzes, or assignments before publishing.'}
           </p>
         </div>
+        {(pack?.unresolvedBindings?.length ?? 0) > 0 && (
+          <div
+            className="border border-amber-300 bg-amber-50 text-amber-950 rounded-lg p-3 text-sm"
+            data-testid="unresolved-bindings-banner"
+          >
+            <p className="font-semibold">
+              {lang === 'zh'
+                ? '导入后有资源在本实例找不到，请重新关联后再发布。'
+                : 'Some imported resources are missing on this instance. Relink them before publishing.'}
+            </p>
+            <ul className="mt-2 flex flex-col gap-1">
+              {(pack?.unresolvedBindings ?? []).map((item) => (
+                <li key={`${item.activityId}-${item.field}`}>
+                  <button type="button" className="underline" onClick={() => setSelectedId(item.activityId)}>
+                    {item.title} · {item.field} · {item.originalId}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         {error && (
           <div className="text-sm text-rose-700 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2" role="alert">
@@ -349,6 +385,7 @@ export function ActivityPackEditor({ lessonId, lang, readOnly = false }: Activit
                             title: labelOf(lang, ACTIVITY_TYPE_LABELS[type]),
                             visible: false,
                             required: type !== 'reading' ? true : false,
+                            config: type === 'programming' ? { kind: 'python' } : undefined,
                           });
                           setSelectedId(created.activity.id);
                         })
@@ -367,8 +404,8 @@ export function ActivityPackEditor({ lessonId, lang, readOnly = false }: Activit
           {activities.length === 0 ? (
             <p className="text-xs text-muted">
               {lang === 'zh'
-                ? '还没有活动。先添加阅读、课件、测验或作品提交。'
-                : 'No activities yet. Add a reading, courseware, quiz, or submission task.'}
+                ? '还没有活动。先添加阅读、课件、测验、作品提交或编程活动。'
+                : 'No activities yet. Add a reading, courseware, quiz, submission, or programming task.'}
             </p>
           ) : (
             <ul className="flex flex-col gap-2">
@@ -390,6 +427,11 @@ export function ActivityPackEditor({ lessonId, lang, readOnly = false }: Activit
                       </span>
                       <span className="text-[11px] text-muted">
                         {labelOf(lang, ACTIVITY_TYPE_LABELS[activity.type])}
+                        {(pack?.unresolvedBindings ?? []).some((item) => item.activityId === activity.id)
+                          ? lang === 'zh'
+                            ? ' · 需重新关联'
+                            : ' · Relink needed'
+                          : ''}
                         {activity.visible
                           ? lang === 'zh'
                             ? ' · 已发布'
@@ -512,6 +554,9 @@ export function ActivityPackEditor({ lessonId, lang, readOnly = false }: Activit
                   label={lang === 'zh' ? '关联网页课件' : 'Linked courseware'}
                   value={asText(selected.config.coursewareId)}
                   options={options.courseware}
+                  unresolved={(pack?.unresolvedBindings ?? []).some(
+                    (item) => item.activityId === selected.id && item.field === 'coursewareId',
+                  )}
                   disabled={readOnly}
                   onChange={(value) => patchDraft(selected.id, { config: { coursewareId: value } })}
                 />
@@ -522,6 +567,9 @@ export function ActivityPackEditor({ lessonId, lang, readOnly = false }: Activit
                   label={lang === 'zh' ? '关联测验（测评中心）' : 'Linked assessment'}
                   value={asText(selected.config.assessmentId)}
                   options={options.assessments}
+                  unresolved={(pack?.unresolvedBindings ?? []).some(
+                    (item) => item.activityId === selected.id && item.field === 'assessmentId',
+                  )}
                   disabled={readOnly}
                   onChange={(value) => patchDraft(selected.id, { config: { assessmentId: value } })}
                 />
@@ -532,9 +580,86 @@ export function ActivityPackEditor({ lessonId, lang, readOnly = false }: Activit
                   label={lang === 'zh' ? '关联作业（作业中心）' : 'Linked assignment'}
                   value={asText(selected.config.assignmentId)}
                   options={options.assignments}
+                  unresolved={(pack?.unresolvedBindings ?? []).some(
+                    (item) => item.activityId === selected.id && item.field === 'assignmentId',
+                  )}
                   disabled={readOnly}
                   onChange={(value) => patchDraft(selected.id, { config: { assignmentId: value } })}
                 />
+              )}
+              {selected.type === 'programming' && (
+                <div className="flex flex-col gap-3">
+                  <label className="text-xs font-semibold text-muted">
+                    {lang === 'zh' ? '编程类型' : 'Programming kind'}
+                    <select
+                      className="mt-1 w-full border border-theme rounded-lg px-2 py-1.5 text-sm bg-surface font-normal"
+                      disabled={readOnly}
+                      value={asText(selected.config.kind)}
+                      onChange={(event) => patchDraft(selected.id, { config: { kind: event.target.value } })}
+                    >
+                      <option value="">{lang === 'zh' ? '请选择…' : 'Select…'}</option>
+                      {PROGRAMMING_KINDS.map((kind) => (
+                        <option key={kind} value={kind}>
+                          {labelOf(lang, PROGRAMMING_KIND_LABELS[kind])}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="text-xs font-semibold text-muted">
+                    {lang === 'zh' ? '任务说明' : 'Prompt'}
+                    <textarea
+                      className="mt-1 w-full border border-theme rounded-lg px-2 py-1.5 text-sm bg-surface min-h-[100px] font-normal"
+                      disabled={readOnly}
+                      value={asText(selected.config.prompt)}
+                      onChange={(event) => patchDraft(selected.id, { config: { prompt: event.target.value } })}
+                    />
+                  </label>
+                  {selected.config.kind === 'python' && (
+                    <label className="text-xs font-semibold text-muted">
+                      {lang === 'zh' ? '起始代码（可选）' : 'Starter code (optional)'}
+                      <textarea
+                        className="mt-1 w-full border border-theme rounded-lg px-2 py-1.5 font-mono text-sm bg-surface min-h-[120px] font-normal"
+                        disabled={readOnly}
+                        value={asText(selected.config.starterCode)}
+                        onChange={(event) => patchDraft(selected.id, { config: { starterCode: event.target.value } })}
+                      />
+                    </label>
+                  )}
+                  <p className="text-xs text-muted">
+                    {lang === 'zh'
+                      ? 'Scratch 不内嵌 scratch.mit.edu。若实例安装了离线插件，学生页会尝试打开插件视图；否则只收集作品说明。Python 源码在学案内编辑提交，平台不内置运行时。流程图和思维导图使用内置最小编辑器。'
+                      : 'Scratch does not embed scratch.mit.edu. If an offline plugin is installed, the student page may open its view; otherwise only notes are collected. Python is edited and submitted here without a bundled runtime. Flowcharts and mind maps use the built-in editors.'}
+                  </p>
+                </div>
+              )}
+              {!readOnly && (pack?.unresolvedBindings ?? []).some((item) => item.activityId === selected.id) && (
+                <button
+                  type="button"
+                  data-testid="relink-activity"
+                  className="self-start px-3 py-1.5 text-xs font-semibold rounded-lg bg-amber-600 text-white disabled:opacity-60"
+                  disabled={saving}
+                  onClick={() =>
+                    void run(async () => {
+                      const payload: {
+                        coursewareId?: string;
+                        assessmentId?: string;
+                        assessmentAssignmentId?: string;
+                        assignmentId?: string;
+                      } = {};
+                      if (selected.type === 'courseware') payload.coursewareId = asText(selected.config.coursewareId);
+                      if (selected.type === 'quiz') {
+                        payload.assessmentId = asText(selected.config.assessmentId);
+                        if (asText(selected.config.assessmentAssignmentId)) {
+                          payload.assessmentAssignmentId = asText(selected.config.assessmentAssignmentId);
+                        }
+                      }
+                      if (selected.type === 'submission') payload.assignmentId = asText(selected.config.assignmentId);
+                      await relinkActivity(lessonId, selected.id, payload);
+                    })
+                  }
+                >
+                  {lang === 'zh' ? '重新关联本实例资源' : 'Relink local resources'}
+                </button>
               )}
               {!readOnly && (
                 <button
@@ -715,6 +840,7 @@ function AssetSelect({
   value,
   options,
   disabled,
+  unresolved,
   onChange,
 }: {
   lang: 'zh' | 'en';
@@ -722,11 +848,18 @@ function AssetSelect({
   value: string;
   options: Array<{ id: string; name?: string; title?: string }>;
   disabled?: boolean;
+  unresolved?: boolean;
   onChange: (value: string) => void;
 }) {
+  const missing = Boolean(value && !options.some((item) => item.id === value));
   return (
     <label className="text-xs font-semibold text-muted">
       {label}
+      {(unresolved || missing) && (
+        <span className="ml-2 text-amber-700 font-normal">
+          {lang === 'zh' ? '（本实例缺失，请重新选择）' : '(missing here, choose a local item)'}
+        </span>
+      )}
       <select
         className="mt-1 w-full border border-theme rounded-lg px-2 py-1.5 text-sm bg-surface font-normal"
         disabled={disabled}
@@ -734,6 +867,9 @@ function AssetSelect({
         onChange={(event) => onChange(event.target.value)}
       >
         <option value="">{lang === 'zh' ? '请选择…' : 'Select…'}</option>
+        {missing && value ? (
+          <option value={value}>{lang === 'zh' ? `缺失：${value}` : `Missing: ${value}`}</option>
+        ) : null}
         {options.map((item) => (
           <option key={item.id} value={item.id}>
             {item.title || item.name || item.id}

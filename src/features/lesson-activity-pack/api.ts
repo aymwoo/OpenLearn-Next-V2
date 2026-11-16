@@ -3,8 +3,11 @@
  * 只做 HTTP 与类型，业务规则在服务端。
  */
 
-export const ACTIVITY_TYPES = ['reading', 'courseware', 'quiz', 'submission'] as const;
+export const ACTIVITY_TYPES = ['reading', 'courseware', 'quiz', 'submission', 'programming'] as const;
 export type ActivityType = (typeof ACTIVITY_TYPES)[number];
+
+export const PROGRAMMING_KINDS = ['scratch', 'python', 'flowchart', 'mindmap'] as const;
+export type ProgrammingKind = (typeof PROGRAMMING_KINDS)[number];
 
 export const ACTIVITY_STATUSES = ['not_started', 'in_progress', 'submitted', 'graded'] as const;
 export type ActivityStatus = (typeof ACTIVITY_STATUSES)[number];
@@ -59,6 +62,24 @@ export interface ActivityProgress {
   feedback: string | null;
   gradedAt: number | null;
   lastActivityAt: number | null;
+  artifact?: ProgrammingArtifact | null;
+}
+
+export interface ProgrammingArtifact {
+  kind: ProgrammingKind;
+  code?: string;
+  graph?: unknown;
+  scratch?: { fileName?: string; note?: string; pluginProjectId?: string };
+  updatedAt: number;
+  submittedAt?: number | null;
+}
+
+export interface UnresolvedActivityBinding {
+  activityId: string;
+  title: string;
+  type: ActivityType;
+  field: 'coursewareId' | 'assessmentId' | 'assessmentAssignmentId' | 'assignmentId';
+  originalId: string;
 }
 
 export interface LessonProgressSummary {
@@ -75,6 +96,7 @@ export interface TeacherActivityPack {
   courseId: string | null;
   blocks: LessonActivityBlock[];
   activities: LessonActivity[];
+  unresolvedBindings?: UnresolvedActivityBinding[];
 }
 
 export interface StudentActivityPack extends TeacherActivityPack {
@@ -203,6 +225,38 @@ export function gradeActivityProgress(
   );
 }
 
+export function relinkActivity(
+  lessonId: string,
+  activityId: string,
+  input: {
+    coursewareId?: string;
+    assessmentId?: string;
+    assessmentAssignmentId?: string;
+    assignmentId?: string;
+  },
+) {
+  return requestJson<{
+    success: boolean;
+    activity: LessonActivity;
+    unresolvedBindings: UnresolvedActivityBinding[];
+  }>(`/api/lessons/${encodeURIComponent(lessonId)}/activities/${encodeURIComponent(activityId)}/relink`, {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
+export function saveProgrammingArtifact(
+  lessonId: string,
+  activityId: string,
+  artifact: ProgrammingArtifact,
+  submit = false,
+) {
+  return requestJson<{ success: boolean; progress: ActivityProgress }>(
+    `/api/lessons/${encodeURIComponent(lessonId)}/activities/${encodeURIComponent(activityId)}/programming-artifact`,
+    { method: 'POST', body: JSON.stringify({ artifact, submit }) },
+  );
+}
+
 export function awardStudentPoints(
   studentId: string,
   input: { classId: string; dimensionId: string; deltaPoints: number; reason: string },
@@ -254,6 +308,14 @@ export const ACTIVITY_TYPE_LABELS: Record<ActivityType, { zh: string; en: string
   courseware: { zh: '网页课件', en: 'Courseware' },
   quiz: { zh: '测验', en: 'Quiz' },
   submission: { zh: '作品提交', en: 'Submission' },
+  programming: { zh: '编程活动', en: 'Programming' },
+};
+
+export const PROGRAMMING_KIND_LABELS: Record<ProgrammingKind, { zh: string; en: string }> = {
+  scratch: { zh: 'Scratch 图形化编程', en: 'Scratch' },
+  python: { zh: 'Python', en: 'Python' },
+  flowchart: { zh: '流程图', en: 'Flowchart' },
+  mindmap: { zh: '思维导图', en: 'Mind map' },
 };
 
 export const BLOCK_TYPE_LABELS: Record<ActivityBlockType, { zh: string; en: string }> = {

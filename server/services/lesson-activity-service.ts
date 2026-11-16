@@ -7,8 +7,16 @@
  */
 import type Database from 'better-sqlite3';
 import { randomId } from '../utils/id.js';
+import {
+  hasSubmitableProgrammingArtifact,
+  isProgrammingKind,
+  normalizeProgrammingArtifact,
+  normalizeProgrammingConfig,
+  type ProgrammingArtifact,
+  type ProgrammingKind,
+} from './lesson-activity-programming.js';
 
-export const ACTIVITY_TYPES = ['reading', 'courseware', 'quiz', 'submission'] as const;
+export const ACTIVITY_TYPES = ['reading', 'courseware', 'quiz', 'submission', 'programming'] as const;
 export type ActivityType = (typeof ACTIVITY_TYPES)[number];
 
 export const ACTIVITY_STATUSES = ['not_started', 'in_progress', 'submitted', 'graded'] as const;
@@ -31,15 +39,8 @@ const STATUS_RANK: Record<ActivityStatus, number> = {
   graded: 3,
 };
 
-export class LessonActivityError extends Error {
-  constructor(
-    public readonly statusCode: number,
-    message: string,
-  ) {
-    super(message);
-    this.name = 'LessonActivityError';
-  }
-}
+import { LessonActivityError } from './lesson-activity-error.js';
+export { LessonActivityError };
 
 export interface LessonActivityRecord {
   id: string;
@@ -80,6 +81,7 @@ export interface ActivityProgressRecord {
   feedback: string | null;
   gradedAt: number | null;
   lastActivityAt: number | null;
+  artifact: ProgrammingArtifact | null;
 }
 
 export interface LessonProgressAggregate {
@@ -90,6 +92,21 @@ export interface LessonProgressAggregate {
   requiredVerified: number;
   requiredSubmitted: number;
 }
+
+export interface UnresolvedActivityBinding {
+  activityId: string;
+  title: string;
+  type: ActivityType;
+  field: 'coursewareId' | 'assessmentId' | 'assessmentAssignmentId' | 'assignmentId';
+  originalId: string;
+}
+
+export type RelinkActivityInput = {
+  coursewareId?: string;
+  assessmentId?: string;
+  assessmentAssignmentId?: string;
+  assignmentId?: string;
+};
 
 export interface CreateActivityInput {
   type: ActivityType;
@@ -153,6 +170,7 @@ interface ProgressRow {
   feedback: string | null;
   graded_at: number | null;
   last_activity_at: number | null;
+  artifact_json?: string | null;
 }
 
 export function parseJsonValue(raw: string | null | undefined, fallback: unknown = {}): unknown {
@@ -259,6 +277,14 @@ function mapBlock(row: BlockRow): LessonActivityBlockRecord {
   };
 }
 
+function parseArtifact(raw: string | null | undefined): ProgrammingArtifact | null {
+  const value = parseJsonValue(raw, null);
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const kind = (value as { kind?: unknown }).kind;
+  if (!isProgrammingKind(kind)) return null;
+  return value as ProgrammingArtifact;
+}
+
 function mapProgress(row: ProgressRow): ActivityProgressRecord {
   return {
     studentId: row.student_id,
@@ -270,6 +296,7 @@ function mapProgress(row: ProgressRow): ActivityProgressRecord {
     feedback: row.feedback,
     gradedAt: row.graded_at,
     lastActivityAt: row.last_activity_at,
+    artifact: parseArtifact(row.artifact_json),
   };
 }
 
@@ -284,6 +311,7 @@ function emptyProgress(studentId: string, activityId: string): ActivityProgressR
     feedback: null,
     gradedAt: null,
     lastActivityAt: null,
+    artifact: null,
   };
 }
 
@@ -493,16 +521,19 @@ export class LessonActivityService {
     courseId: string | null;
     blocks: LessonActivityBlockRecord[];
     activities: LessonActivityRecord[];
+    unresolvedBindings: UnresolvedActivityBinding[];
   } {
     this.assertLesson(lessonId);
     const lesson = this.db.prepare('SELECT course_id FROM lessons WHERE id = ?').get(lessonId) as {
       course_id: string | null;
     };
+    const activities = this.listActivities(lessonId, { includeHidden: true });
     return {
       lessonId,
       courseId: lesson.course_id ?? null,
       blocks: this.listBlocks(lessonId),
-      activities: this.listActivities(lessonId, { includeHidden: true }),
+      activities,
+      unresolvedBindings: this.listUnresolvedBindings(lessonId, activities),
     };
   }
 
@@ -567,6 +598,7 @@ export class LessonActivityService {
         feedback: null,
         gradedAt: null,
         lastActivityAt: null,
+        artifact: null,
       },
     }));
     return {
@@ -702,6 +734,127 @@ export class LessonActivityService {
     return rows.map(mapProgress);
   }
 
+  inspectBindings(activity: LessonActivityRecord): UnresolvedActivityBinding[] {
+    const bindings: UnresolvedActivityBinding[] = [];
+    const push = (field: UnresolvedActivityBinding['field'], raw: unknown, exists: (id: string) => boolean) => {
+      const id = typeof raw === 'string' ? raw.trim() : '';
+      if (!id) return;
+      if (!exists(id)) {
+        bindings.push({
+          activityId: activity.id,
+          title: activity.title,
+          type: activity.type,
+          field,
+          originalId: id,
+        });
+      }
+    };
+    if (activity.type === 'courseware') {
+      push('coursewareId', activity.config.coursewareId, (id) => this.coursewareExists(id));
+    }
+    if (activity.type === 'quiz') {
+      push('assessmentId', activity.config.assessmentId, (id) => this.assessmentExists(id));
+      push('assessmentAssignmentId', activity.config.assessmentAssignmentId, (id) =>
+        this.assessmentAssignmentExists(id),
+      );
+    }
+    if (activity.type === 'submission') {
+      push('assignmentId', activity.config.assignmentId, (id) => this.assignmentExists(id));
+    }
+    return bindings;
+  }
+
+  listUnresolvedBindings(lessonId: string, activities?: LessonActivityRecord[]): UnresolvedActivityBinding[] {
+    this.assertLesson(lessonId);
+    const list = activities ?? this.listActivities(lessonId, { includeHidden: true });
+    return list.flatMap((activity) => this.inspectBindings(activity));
+  }
+
+  relinkActivity(
+    activityId: string,
+    input: RelinkActivityInput,
+  ): { activity: LessonActivityRecord; unresolvedBindings: UnresolvedActivityBinding[] } {
+    const current = this.getActivity(activityId);
+    const config: Record<string, unknown> = { ...current.config };
+    if (current.type === 'courseware') {
+      if (input.coursewareId === undefined) {
+        throw new LessonActivityError(400, 'coursewareId is required to relink this activity');
+      }
+      const id = input.coursewareId.trim();
+      if (!this.coursewareExists(id)) throw new LessonActivityError(400, 'Linked courseware was not found');
+      config.coursewareId = id;
+    } else if (current.type === 'quiz') {
+      if (input.assessmentId === undefined && input.assessmentAssignmentId === undefined) {
+        throw new LessonActivityError(
+          400,
+          'assessmentId or assessmentAssignmentId is required to relink this activity',
+        );
+      }
+      if (input.assessmentId !== undefined) {
+        const id = input.assessmentId.trim();
+        if (!this.assessmentExists(id)) throw new LessonActivityError(400, 'Linked assessment was not found');
+        config.assessmentId = id;
+      }
+      if (input.assessmentAssignmentId !== undefined) {
+        const id = input.assessmentAssignmentId.trim();
+        if (id && !this.assessmentAssignmentExists(id)) {
+          throw new LessonActivityError(400, 'Linked assessment assignment was not found');
+        }
+        if (id) config.assessmentAssignmentId = id;
+        else delete config.assessmentAssignmentId;
+      }
+    } else if (current.type === 'submission') {
+      if (input.assignmentId === undefined) {
+        throw new LessonActivityError(400, 'assignmentId is required to relink this activity');
+      }
+      const id = input.assignmentId.trim();
+      if (!this.assignmentExists(id)) throw new LessonActivityError(400, 'Linked assignment was not found');
+      config.assignmentId = id;
+    } else {
+      throw new LessonActivityError(400, 'This activity type does not need resource relinking');
+    }
+    const activity = this.updateActivity(activityId, { config });
+    return { activity, unresolvedBindings: this.inspectBindings(activity) };
+  }
+
+  saveProgrammingArtifact(
+    activityId: string,
+    studentId: string,
+    raw: unknown,
+    submit = false,
+    now = Date.now(),
+  ): ActivityProgressRecord {
+    const activity = this.requireReleasedActivity(activityId, now);
+    if (activity.type !== 'programming') {
+      throw new LessonActivityError(400, 'Only programming activities accept an in-pack artifact');
+    }
+    const kind = isProgrammingKind(activity.config.kind) ? (activity.config.kind as ProgrammingKind) : null;
+    if (!kind) throw new LessonActivityError(400, 'Programming kind is not configured');
+    const artifact = normalizeProgrammingArtifact(kind, raw, now);
+    const current = this.reconcileStudentActivity(activity, studentId, now);
+    if (current.status === 'graded' || current.verified) {
+      throw new LessonActivityError(409, 'Verified or graded work cannot be overwritten by the student');
+    }
+    if (submit) {
+      if (!hasSubmitableProgrammingArtifact(artifact)) {
+        throw new LessonActivityError(400, 'Submit a programming artifact first');
+      }
+      artifact.submittedAt = now;
+    }
+    const progress = this.upsertProgress(studentId, activity, {
+      status: submit ? maxStatus(current.status, 'submitted') : maxStatus(current.status, 'in_progress'),
+      progressPercent: submit ? 100 : Math.max(current.progressPercent, 20),
+      verified: false,
+      score: current.score,
+      feedback: current.feedback,
+      gradedAt: current.gradedAt,
+      lastActivityAt: now,
+      artifact,
+    });
+    this.persistLessonSummaryForStudent(activity.lessonId, studentId, now);
+    return this.getProgress(studentId, activityId) ?? progress;
+  }
+
   private requireReleasedActivity(activityId: string, now: number): LessonActivityRecord {
     const activity = this.getActivity(activityId);
     if (!isReleased(activity, now)) {
@@ -735,62 +888,75 @@ export class LessonActivityService {
     }
     if (type === 'courseware') {
       const id = typeof out.coursewareId === 'string' ? out.coursewareId.trim() : '';
-      if (id) {
-        const row = this.db.prepare('SELECT 1 AS ok FROM courseware WHERE id = ? OR uuid = ? LIMIT 1').get(id, id) as
-          { ok: number } | undefined;
-        if (!row) throw new LessonActivityError(400, 'Linked courseware was not found');
-        out.coursewareId = id;
-      } else {
-        delete out.coursewareId;
-      }
+      if (id) out.coursewareId = id;
+      else delete out.coursewareId;
     }
     if (type === 'quiz') {
       const assessmentId = typeof out.assessmentId === 'string' ? out.assessmentId.trim() : '';
       const assessmentAssignmentId =
         typeof out.assessmentAssignmentId === 'string' ? out.assessmentAssignmentId.trim() : '';
-      if (assessmentId) {
-        const row = this.db.prepare('SELECT 1 AS ok FROM assessments WHERE id = ? LIMIT 1').get(assessmentId) as
-          { ok: number } | undefined;
-        if (!row) throw new LessonActivityError(400, 'Linked assessment was not found');
-        out.assessmentId = assessmentId;
-      } else {
-        delete out.assessmentId;
-      }
-      if (assessmentAssignmentId) {
-        const row = this.db
-          .prepare('SELECT 1 AS ok FROM assessment_assignments WHERE id = ? LIMIT 1')
-          .get(assessmentAssignmentId) as { ok: number } | undefined;
-        if (!row) throw new LessonActivityError(400, 'Linked assessment assignment was not found');
-        out.assessmentAssignmentId = assessmentAssignmentId;
-      } else {
-        delete out.assessmentAssignmentId;
-      }
+      if (assessmentId) out.assessmentId = assessmentId;
+      else delete out.assessmentId;
+      if (assessmentAssignmentId) out.assessmentAssignmentId = assessmentAssignmentId;
+      else delete out.assessmentAssignmentId;
     }
     if (type === 'submission') {
       const assignmentId = typeof out.assignmentId === 'string' ? out.assignmentId.trim() : '';
-      if (assignmentId) {
-        if (!this.assignmentExists(assignmentId)) {
-          throw new LessonActivityError(400, 'Linked assignment was not found');
-        }
-        out.assignmentId = assignmentId;
-      } else {
-        delete out.assignmentId;
-      }
+      if (assignmentId) out.assignmentId = assignmentId;
+      else delete out.assignmentId;
+    }
+    if (type === 'programming') {
+      return normalizeProgrammingConfig(out);
     }
     return out;
   }
 
   private assertPublishable(type: ActivityType, config: Record<string, unknown>, visible: boolean): void {
     if (!visible) return;
-    if (type === 'courseware' && !config.coursewareId) {
-      throw new LessonActivityError(400, 'Publish a courseware activity after linking a courseware item');
+    if (type === 'courseware') {
+      const id = typeof config.coursewareId === 'string' ? config.coursewareId : '';
+      if (!id || !this.coursewareExists(id)) {
+        throw new LessonActivityError(400, 'Publish a courseware activity after linking a courseware item');
+      }
     }
-    if (type === 'quiz' && !config.assessmentId && !config.assessmentAssignmentId) {
-      throw new LessonActivityError(400, 'Publish a quiz activity after linking an assessment');
+    if (type === 'quiz') {
+      const assessmentId = typeof config.assessmentId === 'string' ? config.assessmentId : '';
+      const assignmentId = typeof config.assessmentAssignmentId === 'string' ? config.assessmentAssignmentId : '';
+      const assessmentOk = assessmentId ? this.assessmentExists(assessmentId) : false;
+      const assignmentOk = assignmentId ? this.assessmentAssignmentExists(assignmentId) : false;
+      if (!assessmentOk && !assignmentOk) {
+        throw new LessonActivityError(400, 'Publish a quiz activity after linking an assessment');
+      }
     }
-    if (type === 'submission' && !config.assignmentId) {
-      throw new LessonActivityError(400, 'Publish a submission activity after linking an assignment');
+    if (type === 'submission') {
+      const id = typeof config.assignmentId === 'string' ? config.assignmentId : '';
+      if (!id || !this.assignmentExists(id)) {
+        throw new LessonActivityError(400, 'Publish a submission activity after linking an assignment');
+      }
     }
+    if (type === 'programming' && !isProgrammingKind(config.kind)) {
+      throw new LessonActivityError(
+        400,
+        'Publish a programming activity after choosing Scratch, Python, flowchart, or mind map',
+      );
+    }
+  }
+
+  private coursewareExists(coursewareId: string): boolean {
+    const row = this.db
+      .prepare('SELECT 1 AS ok FROM courseware WHERE id = ? OR uuid = ? LIMIT 1')
+      .get(coursewareId, coursewareId) as { ok: number } | undefined;
+    return !!row;
+  }
+
+  private assessmentExists(assessmentId: string): boolean {
+    if (!this.tableExists('assessments')) return false;
+    return !!this.db.prepare('SELECT 1 AS ok FROM assessments WHERE id = ? LIMIT 1').get(assessmentId);
+  }
+
+  private assessmentAssignmentExists(assignmentId: string): boolean {
+    if (!this.tableExists('assessment_assignments')) return false;
+    return !!this.db.prepare('SELECT 1 AS ok FROM assessment_assignments WHERE id = ? LIMIT 1').get(assignmentId);
   }
 
   private assignmentExists(assignmentId: string): boolean {
@@ -818,13 +984,17 @@ export class LessonActivityService {
   private upsertProgress(
     studentId: string,
     activity: LessonActivityRecord,
-    patch: Omit<ActivityProgressRecord, 'studentId' | 'activityId'>,
+    patch: Omit<ActivityProgressRecord, 'studentId' | 'activityId' | 'artifact'> & {
+      artifact?: ProgrammingArtifact | null;
+    },
   ): ActivityProgressRecord {
+    const existing = this.getProgress(studentId, activity.id);
+    const artifact = patch.artifact === undefined ? (existing?.artifact ?? null) : patch.artifact;
     this.db
       .prepare(
         `INSERT INTO activity_progress (
-          student_id, activity_id, status, progress_percent, verified, score, feedback, graded_at, last_activity_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          student_id, activity_id, status, progress_percent, verified, score, feedback, graded_at, last_activity_at, artifact_json
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(student_id, activity_id) DO UPDATE SET
           status = excluded.status,
           progress_percent = excluded.progress_percent,
@@ -832,7 +1002,8 @@ export class LessonActivityService {
           score = excluded.score,
           feedback = excluded.feedback,
           graded_at = excluded.graded_at,
-          last_activity_at = excluded.last_activity_at`,
+          last_activity_at = excluded.last_activity_at,
+          artifact_json = excluded.artifact_json`,
       )
       .run(
         studentId,
@@ -844,8 +1015,16 @@ export class LessonActivityService {
         patch.feedback,
         patch.gradedAt,
         patch.lastActivityAt,
+        artifact ? JSON.stringify(artifact) : null,
       );
-    return this.getProgress(studentId, activity.id) ?? { studentId, activityId: activity.id, ...patch };
+    return (
+      this.getProgress(studentId, activity.id) ?? {
+        studentId,
+        activityId: activity.id,
+        ...patch,
+        artifact,
+      }
+    );
   }
 
   reconcileStudentActivity(
@@ -864,6 +1043,7 @@ export class LessonActivityService {
       feedback: linked.feedback ?? stored.feedback,
       gradedAt: linked.gradedAt ?? stored.gradedAt,
       lastActivityAt: Math.max(stored.lastActivityAt ?? 0, linked.lastActivityAt ?? 0) || now,
+      artifact: stored.artifact,
     };
     const changed =
       stored.status !== merged.status ||

@@ -44,6 +44,7 @@ const pack = {
         updatedAt: 1,
       },
     ],
+    unresolvedBindings: [],
   },
 };
 
@@ -85,5 +86,50 @@ describe('ActivityPackEditor', () => {
       ([url, init]) => String(url).endsWith('/activities') && (init as RequestInit)?.method === 'POST',
     );
     expect(posted).toBe(true);
+  });
+
+  it('shows a relink banner when imported resources are missing', async () => {
+    const missingPack = {
+      ...pack,
+      pack: {
+        ...pack.pack,
+        activities: [
+          {
+            ...pack.pack.activities[0],
+            id: 'act-cw',
+            type: 'courseware',
+            title: '导入课件',
+            config: { coursewareId: 'cw-missing' },
+            visible: false,
+          },
+        ],
+        unresolvedBindings: [
+          {
+            activityId: 'act-cw',
+            title: '导入课件',
+            type: 'courseware',
+            field: 'coursewareId',
+            originalId: 'cw-missing',
+          },
+        ],
+      },
+    };
+    const fetchMock = globalThis.fetch as unknown as ReturnType<typeof vi.fn>;
+    fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('/activity-pack')) {
+        return { ok: true, json: async () => missingPack } as Response;
+      }
+      if (url.includes('/progress')) {
+        return {
+          ok: true,
+          json: async () => ({ success: true, activity: missingPack.pack.activities[0], progress: [] }),
+        } as Response;
+      }
+      return { ok: true, json: async () => [] } as Response;
+    });
+    render(<ActivityPackEditor lessonId="les-1" lang="zh" />);
+    await waitFor(() => expect(screen.getByTestId('unresolved-bindings-banner')).toBeTruthy());
+    expect(screen.getByText(/需重新关联/)).toBeTruthy();
   });
 });

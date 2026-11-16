@@ -1,4 +1,10 @@
-import type { LessonActivity, LessonActivityBlock, LessonProgressSummary, StudentActivityPack } from './api';
+import type {
+  LessonActivity,
+  LessonActivityBlock,
+  LessonProgressSummary,
+  StudentActivityPack,
+  UnresolvedActivityBinding,
+} from './api';
 
 async function request<T>(input: RequestInfo, init?: RequestInit): Promise<T> {
   const res = await fetch(input, { credentials: 'include', ...init });
@@ -159,6 +165,7 @@ export async function importActivityPack(lessonId: string, file: File) {
     activities: LessonActivity[];
     blocks: LessonActivityBlock[];
     warnings: string[];
+    unresolvedBindings?: UnresolvedActivityBinding[];
   }>('/api/lesson-activity-packs/import', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

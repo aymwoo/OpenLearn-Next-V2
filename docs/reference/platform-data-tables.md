@@ -150,20 +150,20 @@
 
 课时级学案活动，与 `lessons.timeline` **并列**而非嵌套。活动完成不会自动推进课堂门禁。
 
-| 列                                | 类型    | 说明                                                                                          |
-| --------------------------------- | ------- | --------------------------------------------------------------------------------------------- |
-| `id`                              | TEXT PK | 活动 ID                                                                                       |
-| `lesson_id`                       | TEXT    | 所属课节，删除课节时级联清理                                                                  |
-| `order_index`                     | INTEGER | 学生端序列顺序                                                                                |
-| `type`                            | TEXT    | P0 仅 `reading` / `courseware` / `quiz` / `submission`                                        |
-| `title`                           | TEXT    | 标题                                                                                          |
-| `config_json`                     | TEXT    | 类型配置：阅读正文、`coursewareId`、`assessmentId` / `assessmentAssignmentId`、`assignmentId` |
-| `required`                        | INTEGER | 1 = 计入课节完成                                                                              |
-| `visible`                         | INTEGER | 1 = 已发布给学生                                                                              |
-| `peer_review` / `group_mode`      | INTEGER | 预留，P0 无 UI                                                                                |
-| `submission_type` / `rubric_json` | TEXT    | 预留                                                                                          |
-| `release_at` / `due_at`           | INTEGER | 可选发布时间与截止                                                                            |
-| `created_at` / `updated_at`       | INTEGER | 时间戳                                                                                        |
+| 列                                | 类型    | 说明                                                                                                                                           |
+| --------------------------------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                              | TEXT PK | 活动 ID                                                                                                                                        |
+| `lesson_id`                       | TEXT    | 所属课节，删除课节时级联清理                                                                                                                   |
+| `order_index`                     | INTEGER | 学生端序列顺序                                                                                                                                 |
+| `type`                            | TEXT    | `reading` / `courseware` / `quiz` / `submission` / `programming`（迁移 `061` 起）                                                              |
+| `title`                           | TEXT    | 标题                                                                                                                                           |
+| `config_json`                     | TEXT    | 类型配置：阅读正文、`coursewareId`、`assessmentId` / `assessmentAssignmentId`、`assignmentId`；编程活动含 `kind` / `prompt` / 可选起始代码或图 |
+| `required`                        | INTEGER | 1 = 计入课节完成                                                                                                                               |
+| `visible`                         | INTEGER | 1 = 已发布给学生                                                                                                                               |
+| `peer_review` / `group_mode`      | INTEGER | 预留，P0 无 UI                                                                                                                                 |
+| `submission_type` / `rubric_json` | TEXT    | 预留                                                                                                                                           |
+| `release_at` / `due_at`           | INTEGER | 可选发布时间与截止                                                                                                                             |
+| `created_at` / `updated_at`       | INTEGER | 时间戳                                                                                                                                         |
 
 ### `lesson_activity_blocks`（迁移 `058`）
 
@@ -171,7 +171,7 @@
 
 ### `activity_progress`（迁移 `058`）
 
-活动级进度主口径。主键 `(student_id, activity_id)`。`status` 为 `not_started` / `in_progress` / `submitted` / `graded`。`verified = 1` 才计入课节完成；学生自报只把状态升到 `submitted`、把展示进度写成 100，不得写 `verified`。课件 / 测验 / 作业的分数仍留在原表，这里只同步展示，避免成绩双算。
+活动级进度主口径。主键 `(student_id, activity_id)`。`status` 为 `not_started` / `in_progress` / `submitted` / `graded`。`verified = 1` 才计入课节完成；学生自报只把状态升到 `submitted`、把展示进度写成 100，不得写 `verified`。课件 / 测验 / 作业的分数仍留在原表，这里只同步展示，避免成绩双算。迁移 `061` 起增加 `artifact_json`，用于学案内编程活动的草稿与提交物；编程作品不写入作业/测评成绩表。
 
 ### `segment_visits`
 
@@ -505,7 +505,7 @@ MFE 远端登记。MFE 执行边界已移除，表保留作历史数据兼容。
 
 <!-- AUTO-GENERATED:table-inventory BEGIN -->
 
-共 **105** 张表（迁移 61 个，金样生成于 2026-11-16T10:56:36.829Z）。列清单为列名（类型与约束见迁移 SQL）：
+共 **105** 张表（迁移 62 个，金样生成于 2026-11-16T11:31:19.542Z）。列清单为列名（类型与约束见迁移 SQL）：
 
 - `_academic_year_backfill`: backfilled_at, id
 - `_class_passcode_encryption`: id, note
@@ -516,7 +516,7 @@ MFE 远端登记。MFE 执行边界已移除，表保留作历史数据兼容。
 - `activity_peer_review_cycles`: anonymous, closed_at, course_id, created_at, created_by, id, lesson_id, reviews_per_student, rubric_json, status, title
 - `activity_peer_review_reports`: created_at, id, reason, reporter_student_id, review_id, status
 - `activity_peer_reviews`: activity_id, anonymous, assignment_id, comment, created_at, cycle_id, id, reviewed_at, reviewee_student_id, reviewer_student_id, scores_json, status, teacher_feedback, teacher_id, updated_at
-- `activity_progress`: activity_id, feedback, graded_at, last_activity_at, progress_percent, score, status, student_id, verified
+- `activity_progress`: activity_id, artifact_json, feedback, graded_at, last_activity_at, progress_percent, score, status, student_id, verified
 - `agent_conversations`: content, conv_key, created_at, id, role
 - `ai_persona_governance`: description_en, description_zh, enabled, persona_id, preferred_provider_id
 - `ai_personas`: base_policy, created_at, default_for_role_json, icon, id, instruction_en, instruction_zh, max_turns, mode, name_en, name_zh, plugin_id, source, tool_policy_json, updated_at, visibility_json

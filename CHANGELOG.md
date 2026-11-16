@@ -28,6 +28,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - 学案包 zip 导入导出（manifest + activities + blocks + assets），入口在课程库工具栏；导入默认未发布；
   - 教师预览态「模拟学生」与课堂学生视角、C 组 `StudentWorkspacePreview` 区分开，不写真实进度；
   - 新增 `courses` 一级实体与选课，章节可一键开课次（配合 IKVNIX 课次解耦）；讨论区为最小可用实现。
+  - 补齐编程活动（`programming`：Scratch / Python / 流程图 / 思维导图）。Python、流程图与思维导图提供学案内最小可用编辑与提交；Scratch 不内嵌 scratch.mit.edu，也不把未安装或未完成的第三方插件写成已具备完整课堂提交。作品写入 `activity_progress.artifact_json`，自报/提交不会直接 `verified`。
+  - 学案包导入后若课件/测验/作业在目标实例不存在，教师可在编排器中重新关联再发布。
+  - 管理员可在后台可视化设置课次自动归档阈值（默认 24 小时，最短 3 小时，最长 30 天）。
 - **学生登录后首屏按学习路径重排（Gitee Issue IKVKVF）**：
   - 新增固定区「现在该做什么」学习路径焦点条（`src/features/student/StudentLearningFocus.tsx`）：待办作业 → 最近课节 → 继续学习，不受自定义布局影响；最近课节按「今天未结束 → 本周后续 → 下周三」规则取数；
   - `DEFAULT_WIDGET_LAYOUT` 默认顺序改为待办作业优先，本地布局键提升为 `student_dashboard_layout_v3_*`，使老用户也能拿到新首屏；

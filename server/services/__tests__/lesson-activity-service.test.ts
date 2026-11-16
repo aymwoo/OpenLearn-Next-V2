@@ -171,4 +171,69 @@ describe('LessonActivityService（IKVO15 P0）', () => {
     const row = db.prepare('SELECT course_id FROM lessons WHERE id = ?').get(lessonId) as { course_id: string | null };
     expect(row.course_id).toBeNull();
   });
+
+  it('导入缺失课件时可先保存草稿，重新关联后再发布', () => {
+    const activity = service.createActivity(lessonId, {
+      type: 'courseware',
+      title: '待重关联课件',
+      config: { coursewareId: 'cw-missing-for-relink' },
+      visible: false,
+    });
+    expect(activity.config.coursewareId).toBe('cw-missing-for-relink');
+    const unresolved = service.listUnresolvedBindings(lessonId);
+    expect(unresolved.some((item) => item.activityId === activity.id && item.field === 'coursewareId')).toBe(true);
+    expect(() => service.updateActivity(activity.id, { visible: true })).toThrow(LessonActivityError);
+
+    const now = Date.now();
+    db.prepare('INSERT INTO courseware (id, uuid, name, type, entry, created_at) VALUES (?, ?, ?, ?, ?, ?)').run(
+      'cw-local-relink',
+      'uuid-cw-local-relink',
+      '本地课件',
+      'html',
+      '/cw/local/index.html',
+      now,
+    );
+    const relinked = service.relinkActivity(activity.id, { coursewareId: 'cw-local-relink' });
+    expect(relinked.activity.config.coursewareId).toBe('cw-local-relink');
+    expect(relinked.unresolvedBindings).toEqual([]);
+    const published = service.updateActivity(activity.id, { visible: true });
+    expect(published.visible).toBe(true);
+    db.prepare('DELETE FROM courseware WHERE id = ?').run('cw-local-relink');
+  });
+
+  it('编程活动可保存并提交作品，自报与提交都不会把 verified 置为 1，也不改门禁', () => {
+    const beforeGates = db.prepare('SELECT COUNT(*) AS n FROM segment_gate_overrides').get() as { n: number };
+    const activity = service.createActivity(lessonId, {
+      type: 'programming',
+      title: 'Python 练习',
+      config: { kind: 'python', prompt: '打印问候' },
+      visible: true,
+      required: true,
+    });
+    const draft = service.saveProgrammingArtifact(activity.id, studentId, { kind: 'python', code: 'print("hi")' });
+    expect(draft.status).toBe('in_progress');
+    expect(draft.verified).toBe(false);
+    expect(draft.artifact?.code).toContain('print');
+
+    const submitted = service.saveProgrammingArtifact(
+      activity.id,
+      studentId,
+      { kind: 'python', code: 'print("done")' },
+      true,
+    );
+    expect(submitted.status).toBe('submitted');
+    expect(submitted.verified).toBe(false);
+    expect(submitted.progressPercent).toBe(100);
+
+    const self = service.selfReportActivity(activity.id, otherStudentId);
+    expect(self.verified).toBe(false);
+    const afterGates = db.prepare('SELECT COUNT(*) AS n FROM segment_gate_overrides').get() as { n: number };
+    expect(afterGates.n).toBe(beforeGates.n);
+  });
+
+  it('未选择编程类型的活动不能发布', () => {
+    expect(() => service.createActivity(lessonId, { type: 'programming', title: '未选型', visible: true })).toThrow(
+      LessonActivityError,
+    );
+  });
 });

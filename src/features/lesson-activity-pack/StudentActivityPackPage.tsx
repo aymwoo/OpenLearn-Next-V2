@@ -5,6 +5,7 @@ import {
   CheckCircle2,
   ChevronRight,
   ClipboardCheck,
+  Code2,
   FileUp,
   Globe,
   Loader2,
@@ -22,12 +23,14 @@ import {
   type StudentActivityPack,
 } from './api';
 import { StudentPeerReviewSection } from './StudentPeerReviewSection';
+import { ProgrammingActivityPanel } from './ProgrammingActivityPanel';
 
 const TYPE_ICONS: Record<ActivityType, typeof BookOpen> = {
   reading: BookOpen,
   courseware: Globe,
   quiz: ClipboardCheck,
   submission: FileUp,
+  programming: Code2,
 };
 
 export interface StudentActivityPackPageProps {
@@ -305,6 +308,15 @@ export function StudentActivityPackPage({
                     {lang === 'zh' ? '去完成测验' : 'Open assessments'}
                   </button>
                 </div>
+              )}
+              {selected.type === 'programming' && (
+                <ProgrammingActivityPanel
+                  lessonId={lessonId}
+                  activity={selected}
+                  lang={lang}
+                  preview={preview}
+                  onSaved={load}
+                />
               )}
               {selected.type === 'submission' && (
                 <div className="flex flex-col gap-2">

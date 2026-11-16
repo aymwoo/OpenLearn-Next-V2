@@ -292,4 +292,54 @@ export function registerLessonActivityRoutes(ctx: ServerContext): void {
       }
     },
   );
+
+  app.post(
+    '/api/lessons/:lessonId/activities/:activityId/relink',
+    requireAuth('teacher', 'administrator'),
+    (req, res) => {
+      try {
+        const { lessonId, activityId } = req.params;
+        const access = staffCanManage(req, lessonId);
+        if (!access.ok) return res.status(access.status).json({ success: false, error: access.error });
+        const current = service().getActivity(activityId);
+        if (current.lessonId !== lessonId) {
+          return res.status(404).json({ success: false, error: 'Activity not found' });
+        }
+        const result = service().relinkActivity(activityId, req.body ?? {});
+        res.json({ success: true, ...result });
+      } catch (err) {
+        sendActivityError(res, err);
+      }
+    },
+  );
+
+  app.post(
+    '/api/lessons/:lessonId/activities/:activityId/programming-artifact',
+    requireAuth('student', 'teacher', 'administrator'),
+    (req, res) => {
+      try {
+        const { lessonId, activityId } = req.params;
+        const session = sessionOf(req);
+        if (!canSeeLesson(readDb(), session, lessonId)) {
+          return res.status(403).json({ success: false, error: 'Forbidden' });
+        }
+        const current = service().getActivity(activityId);
+        if (current.lessonId !== lessonId) {
+          return res.status(404).json({ success: false, error: 'Activity not found' });
+        }
+        const studentId = studentActorId(session);
+        if (!studentId) return res.status(400).json({ success: false, error: 'Student identity required' });
+        const submit = Boolean(req.body?.submit);
+        const progress = service().saveProgrammingArtifact(
+          activityId,
+          studentId,
+          req.body?.artifact ?? req.body,
+          submit,
+        );
+        res.json({ success: true, progress });
+      } catch (err) {
+        sendActivityError(res, err);
+      }
+    },
+  );
 }
