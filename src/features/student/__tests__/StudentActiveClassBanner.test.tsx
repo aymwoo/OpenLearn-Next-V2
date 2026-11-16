@@ -53,4 +53,25 @@ describe('StudentActiveClassBanner (Issue #109)', () => {
     render(<StudentActiveClassBanner activeSession={session} lang="zh" onReturn={vi.fn()} />);
     expect(screen.getByRole('status')).toBeTruthy();
   });
+
+  it('IKVNIX: 本次忽略 / 延后到明天不会阻塞返回课堂', () => {
+    const onReturn = vi.fn();
+    const onIgnore = vi.fn();
+    const onSnooze = vi.fn();
+    render(
+      <StudentActiveClassBanner
+        activeSession={session}
+        lang="zh"
+        onReturn={onReturn}
+        onIgnore={onIgnore}
+        onSnooze={onSnooze}
+      />,
+    );
+    fireEvent.click(screen.getByTestId('student-active-class-ignore'));
+    fireEvent.click(screen.getByTestId('student-active-class-snooze'));
+    fireEvent.click(screen.getByRole('button', { name: '返回课堂' }));
+    expect(onIgnore).toHaveBeenCalledTimes(1);
+    expect(onSnooze).toHaveBeenCalledTimes(1);
+    expect(onReturn).toHaveBeenCalledTimes(1);
+  });
 });

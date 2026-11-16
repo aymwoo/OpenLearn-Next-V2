@@ -130,6 +130,8 @@ PRE_CLASS_READY → IN_CLASS_TEACHING → WRAP_UP_EXIT_TICKET → ARCHIVED_REPOR
 
 `ARCHIVED_REPORT_STAGE = 'ARCHIVED_REPORT'` 是导出常量；`getOrCreateSession` 及动态流查询「活动会话」时会排除该阶段。
 
+课次与课程解耦（Gitee IKVNIX）：一次上课对应一条 `classroom_sessions` 记录。教师可通过 `POST /api/classroom/sessions/:lessonId/close` 结束**本次课次**（不必先走结课通票）；归档后 `getOrCreateSession` 仍会为同一课节创建新课次，课程整体不随课次结束。未结束提示只依据当前未归档课次。动态流的「进行中判定」与「历史查询」已拆开：`getFeedReplayForSession(sessionId)` 在 `ARCHIVED_REPORT` 后仍返回该课次历史，新课次因新的 `session_id` 不会串到上一堂。长期无教师活动的课次可按 `site_settings.classroom_session_auto_archive_after_ms` 自动归档（默认 24h，下限 3h，可用 `auto_archive_exempt` 豁免）。阶段枚举本身不变，`ARCHIVED_REPORT → IN_CLASS_TEACHING` 的回退语义保持。
+
 ### 2.2 生命周期接口
 
 | 方法                                                               | 说明                                         |

@@ -38,6 +38,23 @@ import { assessmentService } from '../services/assessment-service.js';
 import { BUILTIN_TEACHING_MODES, TEACHING_MODE_ID_PATTERN } from '../services/teaching-modes.js';
 import type { TeachingMode } from '../services/teaching-modes.js';
 import { classroomSessionService, type ClassroomActorScope } from '../services/classroom-session-service.js';
+import {
+  archiveZombieSessions,
+  buildSessionResumeFields,
+  classroomStageLabel,
+  closeClassroomSession,
+  getAutoArchiveAfterMs,
+  getLatestSessionForLesson,
+  isSessionResumable,
+  readUnfinishedPromptPrefs,
+  resolvePromptVisibility,
+  setSessionAutoArchiveExempt,
+  setAutoArchiveAfterMs,
+  snoozeUntilTomorrow,
+  studentPrefPrincipal,
+  writeUnfinishedPromptPref,
+  type ClassroomSessionRow,
+} from '../services/classroom-session-lifecycle.js';
 import { registerClassroomTeachingModeRoutes } from './classroom-teaching-modes.js';
 import { registerClassroomPresetPollRoutes } from './classroom-preset-polls.js';
 
@@ -493,13 +510,8 @@ export function registerClassroomRoutes(
         }
 
         const now = Date.now();
-        const endedAt = session.ended_at || now;
-
-        db.prepare('UPDATE classroom_sessions SET stage = ?, ended_at = ? WHERE id = ?').run(
-          ARCHIVED_REPORT_STAGE,
-          endedAt,
-          sessionId,
-        );
+        const closed = closeClassroomSession(db, session, { now, source: 'teacher' });
+        const endedAt = closed.endedAt;
 
         cleanupLessonRuntimeIfNoActiveSession(session.lesson_id);
 
@@ -639,6 +651,9 @@ export function registerClassroomRoutes(
           return res.json({
             hasActiveSession: false,
             stage: 'PRE_CLASS_READY',
+            stageLabel: classroomStageLabel('PRE_CLASS_READY'),
+            resumable: false,
+            lastActivityAt: null,
             session: null,
           });
         }
@@ -668,22 +683,28 @@ export function registerClassroomRoutes(
         } catch (_) {
           viewState = {};
         }
-        let feedReplay = feedService ? feedService.getFeedReplay(lessonId, 20) : [];
+        // 历史查询按本课次 id，不因 ARCHIVED_REPORT 被当成「无活动会话」而丢动态。
+        const sessionId = session.id ? String(session.id) : '';
+        let feedReplay = feedService ? feedService.getFeedReplay(String(lessonId), 20, sessionId) : [];
+        const resumeFields = buildSessionResumeFields(session as ClassroomSessionRow);
 
         if (readAuth.ok && readAuth.level === 'student') {
           // 答案字段不随课堂对象下发；学生端只消费显式字段，不下发整列 settings_json。
-          // 动态流回放是教师端恢复现场用的，含其他学生姓名，学生端不返回。
           if (activePoll) activePoll = redactAnswerKeys(activePoll) as Record<string, unknown>;
           delete session.settings_json;
           // Issue #239：签到码对学生的会话视图一并剥离 —— 此前随 SELECT * 下发，
           // 学生读码即可远程 POST /checkin 伪造在场出勤
           delete session.checkin_code;
-          feedReplay = [];
+          // IKVNIX：学生跳回需要恢复最近动态；动态文案是课堂上已展示过的班级可见信息。
         }
 
         res.json({
           hasActiveSession: session.stage !== ARCHIVED_REPORT_STAGE,
-          stage: session.stage,
+          stage: resumeFields.stage,
+          stageLabel: resumeFields.stageLabel,
+          resumable: resumeFields.resumable,
+          lastActivityAt: resumeFields.lastActivityAt,
+          classId: resumeFields.classId,
           session,
           activePoll,
           activeBuzzer,
@@ -693,6 +714,134 @@ export function registerClassroomRoutes(
           exitTicketCoreQuestion,
           exitTicketChallengeQuestion,
           activeAssessment,
+        });
+      } catch (e: any) {
+        sendSafeError(res, e, 500);
+      }
+    },
+  );
+
+  // IKVNIX：教师显式结束本次课次（不强制走结课通票）。课程/课节本身保持可再开新课次。
+  app.post(
+    '/api/classroom/sessions/:lessonId/close',
+    requireAuth('teacher', 'administrator'),
+    (req: Request, res: Response) => {
+      try {
+        const { lessonId } = req.params;
+        const session = getLatestSessionForLesson(db, lessonId, {
+          excludeArchived: true,
+        }) as ClassroomSessionRow | null;
+        if (!session) {
+          const latest = getLatestSessionForLesson(db, lessonId);
+          if (!latest) return res.status(404).json({ error: 'No classroom session found' });
+          if (!canManageClassroomSession(req, latest)) return res.status(403).json({ error: 'Forbidden' });
+          return res.json({
+            success: true,
+            alreadyArchived: true,
+            sessionId: latest.id,
+            lessonId: latest.lesson_id,
+            classId: latest.class_id ?? null,
+            stage: latest.stage,
+            endedAt: latest.ended_at ?? null,
+          });
+        }
+        if (!canManageClassroomSession(req, session)) {
+          return res.status(403).json({ error: 'Forbidden' });
+        }
+        const now = Date.now();
+        const closed = closeClassroomSession(db, session, { now, source: 'teacher' });
+        cleanupLessonRuntimeIfNoActiveSession(session.lesson_id);
+        try {
+          emitClassroomEvent(
+            io,
+            session.lesson_id,
+            'classroom:stage_changed',
+            {
+              lessonId: session.lesson_id,
+              stage: ARCHIVED_REPORT_STAGE,
+              classId: session.class_id,
+              sessionId: session.id,
+              reason: 'session_closed',
+            },
+            { classId: session.class_id },
+          );
+        } catch (_) {}
+        try {
+          void kernelContainer.eventBus.publish({
+            id: randomId('evt-cs-close-'),
+            type: 'classroom.session.closed',
+            source: 'classroom.session',
+            payload: { sessionId: session.id, lessonId: session.lesson_id, classId: session.class_id },
+            timestamp: now,
+          });
+        } catch (_) {}
+        res.json({
+          success: true,
+          alreadyArchived: closed.alreadyArchived,
+          sessionId: closed.sessionId,
+          lessonId: closed.lessonId,
+          classId: closed.classId,
+          stage: closed.stage,
+          endedAt: closed.endedAt,
+        });
+      } catch (e: any) {
+        sendSafeError(res, e, 500);
+      }
+    },
+  );
+
+  // IKVNIX：学生（或教师模拟）一键跳回课堂现场。classId 只取会话行，不接受客户端覆盖。
+  app.post(
+    '/api/classroom/sessions/:lessonId/resume',
+    requireAuth('student', 'teacher', 'administrator'),
+    (req: Request, res: Response) => {
+      try {
+        const { lessonId } = req.params;
+        archiveZombieSessions(db);
+        const session = getLatestSessionForLesson(db, lessonId);
+        if (!session) {
+          return res.status(404).json({ error: 'No classroom session found', resumable: false });
+        }
+        const readAuth = readDecision(req, lessonId, session);
+        if (rejectUnless(res, readAuth)) return;
+        if (!isSessionResumable(session.stage)) {
+          return res.status(409).json({
+            error: 'Session is not resumable',
+            resumable: false,
+            stage: session.stage,
+            stageLabel: classroomStageLabel(session.stage),
+            classId: session.class_id ?? null,
+          });
+        }
+
+        let viewState: Record<string, unknown> = {};
+        try {
+          const settings =
+            typeof session.settings_json === 'string' && session.settings_json ? JSON.parse(session.settings_json) : {};
+          viewState = settings.viewState ?? {};
+        } catch {
+          viewState = {};
+        }
+        const feedReplay = feedService ? feedService.getFeedReplayForSession(String(session.id), 20) : [];
+        const resumeFields = buildSessionResumeFields(session);
+        const publicSession = { ...session };
+        if (readAuth.ok && readAuth.level === 'student') {
+          delete publicSession.settings_json;
+          delete publicSession.checkin_code;
+        }
+
+        res.json({
+          success: true,
+          resumable: true,
+          lessonId: session.lesson_id,
+          classId: session.class_id ?? null,
+          sessionId: session.id,
+          stage: resumeFields.stage,
+          stageLabel: resumeFields.stageLabel,
+          lastActivityAt: resumeFields.lastActivityAt,
+          viewState,
+          feedReplay,
+          session: publicSession,
         });
       } catch (e: any) {
         sendSafeError(res, e, 500);
@@ -2456,6 +2605,59 @@ export function registerClassroomRoutes(
 
   // ── 8. 实时课堂情绪与参与度追踪 (Real-time Classroom Mood Tracker) ─────────
 
+  // IKVNIX：教师豁免本课次自动归档（长课时 / 跨周连续授课）。
+  app.post(
+    '/api/classroom/sessions/:sessionId/auto-archive-exempt',
+    requireAuth('teacher', 'administrator'),
+    (req: Request, res: Response) => {
+      try {
+        const { sessionId } = req.params;
+        const session = db.prepare('SELECT * FROM classroom_sessions WHERE id = ?').get(sessionId) as
+          ClassroomSessionRow | undefined;
+        if (!session) return res.status(404).json({ error: `Session "${sessionId}" not found` });
+        if (!canManageClassroomSession(req, session)) return res.status(403).json({ error: 'Forbidden' });
+        const exempt = req.body?.exempt !== false && req.body?.exempt !== 0;
+        const ok = setSessionAutoArchiveExempt(db, sessionId, Boolean(exempt));
+        if (!ok) return res.status(500).json({ error: 'Failed to update exemption' });
+        res.json({ success: true, sessionId, autoArchiveExempt: Boolean(exempt) });
+      } catch (e: any) {
+        sendSafeError(res, e, 500);
+      }
+    },
+  );
+
+  app.get(
+    '/api/classroom/session-lifecycle-settings',
+    requireAuth('teacher', 'administrator'),
+    (_req: Request, res: Response) => {
+      try {
+        res.json({
+          success: true,
+          autoArchiveAfterMs: getAutoArchiveAfterMs(db),
+          defaultAutoArchiveAfterMs: 24 * 60 * 60 * 1000,
+          minAutoArchiveAfterMs: 3 * 60 * 60 * 1000,
+          maxAutoArchiveAfterMs: 30 * 24 * 60 * 60 * 1000,
+        });
+      } catch (e: any) {
+        sendSafeError(res, e, 500);
+      }
+    },
+  );
+
+  app.put('/api/classroom/session-lifecycle-settings', requireAuth('administrator'), (req: Request, res: Response) => {
+    try {
+      const raw = req.body?.autoArchiveAfterMs;
+      const parsed = typeof raw === 'number' ? raw : Number.parseInt(String(raw ?? ''), 10);
+      if (!Number.isFinite(parsed)) {
+        return res.status(400).json({ error: 'autoArchiveAfterMs is required' });
+      }
+      const autoArchiveAfterMs = setAutoArchiveAfterMs(db, parsed);
+      res.json({ success: true, autoArchiveAfterMs });
+    } catch (e: any) {
+      sendSafeError(res, e, 500);
+    }
+  });
+
   // 学生端：查询自己所在班级当前进行中的课堂会话（Issue #109）
   // - 学生角色：强制使用会话自己的 studentId（忽略任何客户端传参，避免越权）
   // - 教师/管理员：可传 ?studentId= 用于「模拟学生视角」查看
@@ -2475,10 +2677,82 @@ export function registerClassroomRoutes(
           return res.status(400).json({ error: 'studentId is required' });
         }
 
-        // 取数收敛在 ClassroomSessionService（#427）。
+        // 先清理僵尸课次，再取当前课次。未结束提示基于课次而非课程整体。
+        const closed = archiveZombieSessions(db);
+        if (closed.length > 0) {
+          for (const item of closed) {
+            try {
+              cleanupLessonRuntimeIfNoActiveSession(item.lessonId);
+            } catch (_) {}
+          }
+        }
         const activeSession = classroomSessionService.getStudentActiveSession(studentId);
+        const prefs = readUnfinishedPromptPrefs(db, studentPrefPrincipal(studentId));
+        const prompt = activeSession
+          ? resolvePromptVisibility(prefs, activeSession.sessionId)
+          : { showBanner: false, ignored: false, snoozedUntil: null };
+        const enriched = activeSession
+          ? {
+              ...activeSession,
+              classId: activeSession.classId ?? null,
+              resumable: isSessionResumable(activeSession.stage),
+              stageLabel: classroomStageLabel(activeSession.stage),
+            }
+          : null;
 
-        res.json({ success: true, activeSession });
+        res.json({ success: true, activeSession: enriched, prompt });
+      } catch (e: any) {
+        sendSafeError(res, e, 500);
+      }
+    },
+  );
+
+  // IKVNIX：学生忽略或延后「课程未结束」提示，偏好写入 user_preferences。
+  app.post(
+    '/api/student/active-session/prompt',
+    requireAuth('student', 'teacher', 'administrator'),
+    (req: Request, res: Response) => {
+      try {
+        const httpSession = (req as any).session;
+        const isStudent = httpSession?.role === 'student';
+        const studentId = isStudent
+          ? String(httpSession?.studentId || '').trim()
+          : typeof req.body?.studentId === 'string'
+            ? String(req.body.studentId).trim()
+            : typeof req.query.studentId === 'string'
+              ? req.query.studentId.trim()
+              : '';
+        if (!studentId) return res.status(400).json({ error: 'studentId is required' });
+
+        const sessionId = typeof req.body?.sessionId === 'string' ? req.body.sessionId.trim() : '';
+        const action = req.body?.action === 'snooze' ? 'snooze' : req.body?.action === 'ignore' ? 'ignore' : '';
+        if (!sessionId || !action) {
+          return res.status(400).json({ error: 'sessionId and action (ignore|snooze) are required' });
+        }
+
+        const session = db
+          .prepare('SELECT id, class_id, lesson_id FROM classroom_sessions WHERE id = ?')
+          .get(sessionId) as { id: string; class_id: string | null; lesson_id: string } | undefined;
+        if (!session) return res.status(404).json({ error: 'Session not found' });
+        const membership = session.class_id
+          ? (db
+              .prepare('SELECT 1 AS ok FROM class_students WHERE class_id = ? AND student_id = ?')
+              .get(session.class_id, studentId) as { ok: number } | undefined)
+          : undefined;
+        if (!membership) return res.status(403).json({ error: 'Forbidden' });
+
+        const now = Date.now();
+        const pref = writeUnfinishedPromptPref(db, studentPrefPrincipal(studentId), {
+          action,
+          sessionId,
+          until: action === 'snooze' ? snoozeUntilTomorrow(now) : null,
+          updatedAt: now,
+        });
+        res.json({
+          success: true,
+          prompt: resolvePromptVisibility({ [sessionId]: pref }, sessionId, now),
+          pref,
+        });
       } catch (e: any) {
         sendSafeError(res, e, 500);
       }
@@ -2492,6 +2766,12 @@ export function registerClassroomRoutes(
   // 归属裁剪与显式投影（ClassroomSessionService，见 #427）。
   app.get('/api/classroom/active-sessions', requireAuth('teacher', 'administrator'), (req: Request, res: Response) => {
     try {
+      const closed = archiveZombieSessions(db);
+      for (const item of closed) {
+        try {
+          cleanupLessonRuntimeIfNoActiveSession(item.lessonId);
+        } catch (_) {}
+      }
       const sessions = classroomSessionService.listActiveSessions(resolveActorScope(req));
       res.json({ success: true, sessions });
     } catch (e: any) {

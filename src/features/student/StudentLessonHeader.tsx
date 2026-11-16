@@ -37,6 +37,7 @@ export function StudentLessonHeader(props: StudentLessonHeaderProps) {
 
   // Issue #109: 课堂仍在进行时，离开课堂给一条「可随时返回」的提示
   const activeSession = useStudentActiveSession((s) => s.activeSession);
+  const prompt = useStudentActiveSession((s) => s.prompt);
 
   // 兼容旧调用方：未显式传入锁定时，回退到 students 表派生（单一数据源仍是 locked_lesson_id）
   const currentStudent = students.find((s) => s.id === activeStudentId);
@@ -81,7 +82,7 @@ export function StudentLessonHeader(props: StudentLessonHeaderProps) {
           onClick={() => {
             setStudentViewStatus('dashboard');
             setSelectedLesson(null);
-            if (activeSession) {
+            if (activeSession && prompt?.showBanner !== false) {
               addToast?.(
                 lang === 'zh' ? '课堂仍在进行' : 'Class still in progress',
                 lang === 'zh'

@@ -5,7 +5,12 @@ import { StudentLessonHeader } from '../StudentLessonHeader';
 import { studentActiveSessionStore } from '../useStudentActiveSession';
 
 beforeEach(() => {
-  studentActiveSessionStore.setState({ activeSession: null, loading: false, studentKey: null });
+  studentActiveSessionStore.setState({
+    activeSession: null,
+    prompt: { showBanner: true, ignored: false, snoozedUntil: null },
+    loading: false,
+    studentKey: null,
+  });
 });
 
 afterEach(() => {
@@ -71,7 +76,33 @@ describe('StudentLessonHeader', () => {
     expect(setSelectedLesson).toHaveBeenCalledWith(null);
     expect(addToast).toHaveBeenCalledWith('课堂仍在进行', expect.stringContaining('返回课堂'), 'info');
 
-    studentActiveSessionStore.setState({ activeSession: null, loading: false, studentKey: null });
+    studentActiveSessionStore.setState({
+      activeSession: null,
+      prompt: { showBanner: true, ignored: false, snoozedUntil: null },
+      loading: false,
+      studentKey: null,
+    });
+  });
+
+  it('IKVNIX: does not warn when the unfinished prompt is dismissed', () => {
+    studentActiveSessionStore.setState({
+      activeSession: {
+        sessionId: 'sess-1',
+        lessonId: 'l1',
+        lessonTitle: 'Math',
+        classId: 'c1',
+        className: 'Class 1',
+        stage: 'IN_CLASS_TEACHING',
+        startedAt: Date.now(),
+      },
+      prompt: { showBanner: false, ignored: true, snoozedUntil: null },
+      loading: false,
+      studentKey: 's1',
+    });
+    const addToast = vi.fn();
+    render(<StudentLessonHeader {...makeProps({ addToast, lang: 'zh' })} />);
+    fireEvent.click(screen.getByText('Back to Dashboard'));
+    expect(addToast).not.toHaveBeenCalled();
   });
 
   it('Issue #109: does not warn when no class session is running', () => {
