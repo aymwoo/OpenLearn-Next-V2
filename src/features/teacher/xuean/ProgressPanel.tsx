@@ -3,7 +3,7 @@
  * 聚合：活动 × 学生 的完成状态概览 + 点击展开看明细 + 批阅入口。
  */
 import { useCallback, useEffect, useState } from 'react';
-import { getActivityProgressPanel, verifyActivityProgress } from '../../../services/lessonActivitiesService.js';
+import { getActivityProgressPanel, verifyActivityProgress, nudgeActivity } from '../../../services/lessonActivitiesService.js';
 import { useOptionalAppData } from '../../../context/AppDataContext.js';
 import { Loader2, ChevronDown, ChevronRight } from 'lucide-react';
 
@@ -27,6 +27,8 @@ type PanelStudent = {
   graded_at?: number | null;
   last_activity_at?: number | null;
   submission_json?: string | null;
+  nudged_at?: number | null;
+  nudge_count?: number;
 };
 
 type PanelData = {
@@ -215,6 +217,10 @@ export function ProgressPanel() {
                   activity={a}
                   studentMap={studentMap}
                   onVerify={(studentId) => setVerifying({ activityId: a.id, studentId })}
+                  onNudge={async (studentId) => {
+                    await nudgeActivity(a.id, studentId);
+                    await refresh();
+                  }}
                 />
               )}
             </div>
@@ -257,10 +263,12 @@ function StudentTable({
   activity,
   studentMap,
   onVerify,
+  onNudge,
 }: {
   activity: PanelActivity;
   studentMap: Record<string, any>;
   onVerify: (studentId: string) => void;
+  onNudge: (studentId: string) => void;
 }) {
   // 无学生数据时提示
   if (activity.students.length === 0) {
@@ -327,7 +335,17 @@ function StudentTable({
                     <span className="text-muted">—</span>
                   )}
                 </td>
-                <td className="px-4 py-2 text-right">
+                <td className="px-4 py-2 text-right space-x-1.5">
+                  {s.status !== 'graded' && (
+                    <button
+                      type="button"
+                      onClick={() => onNudge(s.student_id)}
+                      className="px-2.5 py-1 text-xs rounded border border-amber-500/30 hover:bg-amber-500/10 text-amber-600 font-bold"
+                      title={s.nudge_count ? `已催办 ${s.nudge_count} 次` : '催办'}
+                    >
+                      催办{s.nudge_count ? ` ${s.nudge_count}` : ''}
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => onVerify(s.student_id)}

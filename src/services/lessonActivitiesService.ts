@@ -118,6 +118,17 @@ export async function verifyActivityProgress(
   return { ok: true, data: await res.json() };
 }
 
+// ── 一键催办（教师端）─────────────────────────────────────────────
+export async function nudgeActivity(activityId: string, studentId: string) {
+  const res = await fetch(`/api/activities/${activityId}/nudge`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ studentId }),
+  });
+  if (!res.ok) return { ok: false, error: await res.json().catch(() => ({})) };
+  return { ok: true, data: await res.json() };
+}
+
 // ── 活动级进度面板（教师端）─────────────────────────────────────────────
 export async function getActivityProgressPanel(lessonId: string) {
   const res = await fetch(`/api/lessons/${lessonId}/activity-progress`);

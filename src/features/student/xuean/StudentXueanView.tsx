@@ -32,6 +32,8 @@ type Progress = {
   verified: number;
   score: number | null;
   submission_json?: string | null;
+  nudged_at?: number | null;
+  nudge_count?: number;
 };
 
 type XueanData = {
@@ -288,6 +290,11 @@ function ActivityItem({
               {existingSubmission && (
                 <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
                   已提交
+                </span>
+              )}
+              {progress?.nudged_at && status !== 'graded' && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-700 border border-amber-500/30 animate-pulse" title={`教师于 ${new Date(progress.nudged_at).toLocaleString()} 催办${progress.nudge_count ? `（共 ${progress.nudge_count} 次）` : ''}`}>
+                  ⚠ 教师催办{progress.nudge_count && progress.nudge_count > 1 ? ` ×${progress.nudge_count}` : ''}
                 </span>
               )}
             </div>

@@ -239,6 +239,8 @@ function ActivityEditor({
     required: existing ? Boolean(existing.required) : true,
     visible: existing ? Boolean(existing.visible) : true,
     peerReview: existing ? Boolean(existing.peer_review) : false,
+    releaseAt: existing?.release_at ? new Date(existing.release_at).toISOString().slice(0, 16) : '',
+    dueAt: existing?.due_at ? new Date(existing.due_at).toISOString().slice(0, 16) : '',
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -257,6 +259,8 @@ function ActivityEditor({
       required: form.required,
       visible: form.visible,
       peerReview: form.peerReview,
+      releaseAt: form.releaseAt ? new Date(form.releaseAt).getTime() : null,
+      dueAt: form.dueAt ? new Date(form.dueAt).getTime() : null,
     };
     if (form.submissionType) payload.submissionType = form.submissionType;
 
@@ -361,6 +365,29 @@ function ActivityEditor({
             />
             互评（P1 激活）
           </label>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1">
+            <label className="block text-xs font-semibold text-muted">发布时间（可选）</label>
+            <input
+              type="datetime-local"
+              value={form.releaseAt}
+              onChange={(e) => setForm({ ...form, releaseAt: e.target.value })}
+              className="w-full px-3 py-2 text-sm rounded-lg border border-theme bg-surface text-main focus:outline-none focus:ring-2 focus:ring-primary-theme/40"
+            />
+            <p className="text-[10px] text-muted">留空 = 立即对学生可见</p>
+          </div>
+          <div className="space-y-1">
+            <label className="block text-xs font-semibold text-muted">截止时间（可选）</label>
+            <input
+              type="datetime-local"
+              value={form.dueAt}
+              onChange={(e) => setForm({ ...form, dueAt: e.target.value })}
+              className="w-full px-3 py-2 text-sm rounded-lg border border-theme bg-surface text-main focus:outline-none focus:ring-2 focus:ring-primary-theme/40"
+            />
+            <p className="text-[10px] text-muted">留空 = 无截止</p>
+          </div>
         </div>
 
         {error && <p className="text-xs text-rose-600">{error}</p>}

@@ -430,15 +430,25 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
       const blocks = readDb
         .prepare('SELECT * FROM lesson_activity_blocks WHERE lesson_id = ? ORDER BY order_index ASC')
         .all(lessonId);
-      const activities = readDb
-        .prepare(
-          'SELECT * FROM lesson_activities WHERE lesson_id = ? AND visible = 1 ORDER BY order_index ASC, created_at ASC',
-        )
-        .all(lessonId);
+
+      // 学生端：只返回已发布（visible=1 且 release_at 为空或已到发布时间）的活动
+      // 教师/管理员端：返回全部 visible=1 活动（预览未发布的）
+      const isStaff = isAdministrator(session) || isTeacher(session);
+      const ts = now();
+      const activities = isStaff
+        ? readDb
+            .prepare(
+              'SELECT * FROM lesson_activities WHERE lesson_id = ? AND visible = 1 ORDER BY order_index ASC, created_at ASC',
+            )
+            .all(lessonId)
+        : readDb
+            .prepare(
+              'SELECT * FROM lesson_activities WHERE lesson_id = ? AND visible = 1 AND (release_at IS NULL OR release_at <= ?) ORDER BY order_index ASC, created_at ASC',
+            )
+            .all(lessonId, ts);
 
       // 学生 → 只取自己 progress；教师/管理员 → 可选学生视角 (query.studentId)
       let progressRows: any[] = [];
-      const isStaff = isAdministrator(session) || isTeacher(session);
       const requestedStudentId = req.query.studentId as string | undefined;
 
       if (isStaff && requestedStudentId) {
@@ -610,6 +620,46 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
                last_activity_at = ?
            WHERE activity_id = ? AND student_id = ?`,
         ).run(newStatus ?? null, scoreVal ?? null, ts, ts, activityId, studentId);
+      }
+
+      const row = readDb
+        .prepare('SELECT * FROM activity_progress WHERE activity_id = ? AND student_id = ?')
+        .get(activityId, studentId);
+      res.json(row);
+    } catch (err: any) {
+      sendSafeError(res, err);
+    }
+  });
+
+  // 一键催办：教师给未完成学生发催办，更新 nudged_at + nudge_count
+  app.post('/api/activities/:id/nudge', requireScopedAuth('class-staff'), (req, res) => {
+    try {
+      const activityId = req.params.id;
+      const session = (req as any).session;
+      const activity = readDb.prepare('SELECT * FROM lesson_activities WHERE id = ?').get(activityId) as
+        any | undefined;
+      if (!activity) return res.status(404).json({ success: false, error: 'Activity not found' });
+      if (rejectUnless(res, authorizeLessonStaff(readDb, session, activity.lesson_id))) return;
+
+      const { studentId } = req.body || {};
+      if (typeof studentId !== 'string' || !studentId) {
+        return res.status(400).json({ success: false, error: 'studentId required' });
+      }
+
+      const ts = now();
+      const existing = readDb
+        .prepare('SELECT * FROM activity_progress WHERE activity_id = ? AND student_id = ?')
+        .get(activityId, studentId);
+
+      if (!existing) {
+        db.prepare(
+          `INSERT INTO activity_progress (activity_id, student_id, status, progress_percent, verified, nudged_at, nudge_count, last_activity_at)
+           VALUES (?, ?, 'not_started', 0, 0, ?, 1, ?)`,
+        ).run(activityId, studentId, ts, ts);
+      } else {
+        db.prepare(
+          `UPDATE activity_progress SET nudged_at = ?, nudge_count = COALESCE(nudge_count, 0) + 1 WHERE activity_id = ? AND student_id = ?`,
+        ).run(ts, activityId, studentId);
       }
 
       const row = readDb
