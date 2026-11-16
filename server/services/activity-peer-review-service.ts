@@ -10,6 +10,7 @@ import { sanitizeUgcText } from '../../packages/core/security/ugc-sanitize.js';
 import { randomId } from '../utils/id.js';
 import { LessonActivityError, LessonActivityService, parseJsonObject } from './lesson-activity-service.js';
 import { listStudentsForLesson } from './lesson-roster.js';
+import { sharedCourseIdsForLessons } from './course-lesson-links.js';
 
 export const PEER_REVIEW_ASSIGNMENT_STATUSES = ['pending', 'submitted', 'rejected'] as const;
 export const PEER_REVIEW_STATUSES = ['submitted', 'teacher_confirmed', 'teacher_overridden', 'rejected'] as const;
@@ -187,15 +188,12 @@ export class ActivityPeerReviewService {
     const lessonIds = Array.from(new Set(activities.map((item) => item.lesson_id)));
     let courseId = input.courseId ?? null;
     if (!courseId && lessonIds.length > 0) {
-      const courses = this.db
-        .prepare(`SELECT DISTINCT course_id FROM lessons WHERE id IN (${lessonIds.map(() => '?').join(',')})`)
-        .all(...lessonIds) as Array<{ course_id: string | null }>;
-      const present = Array.from(new Set(courses.map((row) => row.course_id).filter(Boolean))) as string[];
-      if (present.length === 1) courseId = present[0];
-      if (lessonIds.length > 1 && present.length === 0) {
+      const shared = sharedCourseIdsForLessons(this.db, lessonIds);
+      if (shared.length === 1) courseId = shared[0];
+      if (lessonIds.length > 1 && shared.length === 0) {
         throw new LessonActivityError(400, '跨课节互评需要这些课节同属一门课程');
       }
-      if (present.length > 1) {
+      if (shared.length > 1) {
         throw new LessonActivityError(400, '跨课节互评不能跨越不同课程');
       }
     }

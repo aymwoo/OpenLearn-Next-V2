@@ -115,20 +115,25 @@ export function setAutoArchiveAfterMs(db: Database.Database, ms: number): number
 export function getAutoArchiveAfterMsForLesson(db: Database.Database, lessonId: string): number {
   if (!lessonId) return REGULAR_COURSE_AUTO_ARCHIVE_AFTER_MS;
   try {
-    const row = db
+    const parents = db
       .prepare(
         `SELECT c.is_long_cycle AS is_long_cycle, c.auto_archive_after_ms AS auto_archive_after_ms
-           FROM lessons l
-           LEFT JOIN courses c ON c.id = l.course_id
-          WHERE l.id = ?`,
+           FROM course_lessons cl
+           JOIN courses c ON c.id = cl.course_id
+          WHERE cl.lesson_id = ?`,
       )
-      .get(lessonId) as { is_long_cycle?: number | null; auto_archive_after_ms?: number | null } | undefined;
-    const isLongCycle = Number(row?.is_long_cycle) === 1;
-    if (isLongCycle) {
-      if (row?.auto_archive_after_ms != null && Number.isFinite(Number(row.auto_archive_after_ms))) {
-        return clampAutoArchiveAfterMs(Number(row.auto_archive_after_ms));
-      }
-      return getAutoArchiveAfterMs(db);
+      .all(lessonId) as Array<{ is_long_cycle?: number | null; auto_archive_after_ms?: number | null }>;
+    const longCycleParents = parents.filter((row) =>
+      row.is_long_cycle == null ? true : Number(row.is_long_cycle) === 1,
+    );
+    if (longCycleParents.length > 0) {
+      const values = longCycleParents.map((row) => {
+        if (row.auto_archive_after_ms != null && Number.isFinite(Number(row.auto_archive_after_ms))) {
+          return clampAutoArchiveAfterMs(Number(row.auto_archive_after_ms));
+        }
+        return getAutoArchiveAfterMs(db);
+      });
+      return Math.max(...values);
     }
   } catch {
     /* 精简测试库或缺列时退回常规课兜底 */

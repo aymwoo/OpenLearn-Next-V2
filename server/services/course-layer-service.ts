@@ -1,12 +1,14 @@
 /**
  * 课程层（Gitee IKVO15 P2）。
  *
- * course 是一级实体，lessons.course_id 挂接课节（章节）。课程整体跨周保持进行中，
+ * course 是一级实体，course_lessons 把常规课节引用为章节（多对多：
+ * 一门常规课可同时被多门长周期课程挂接）。课程整体跨周保持进行中，
  * 某个章节可通过课堂会话服务一键开课次（与 IKVNIX 课次/课程解耦配合）。
  */
 import type Database from 'better-sqlite3';
 import { randomId } from '../utils/id.js';
 import { LessonActivityError } from './lesson-activity-service.js';
+import { lessonIsInCourse, listCourseIdsForLesson } from './course-lesson-links.js';
 import { ClassroomRuntimeService } from './classroom-runtime-service.js';
 import { clampAutoArchiveAfterMs } from './classroom-session-lifecycle.js';
 
@@ -108,8 +110,8 @@ export class CourseLayerService {
   }
 
   /**
-   * 把已有常规课节提升为一门长周期课程（当前教案作为第一章）。
-   * 若该课节已挂在长周期课程下则直接返回已有课程，不强迫重建。
+   * 把已有常规课节作为第一章，创建一门新的长周期课程。
+   * 该课节仍作为常规课保留，且可同时被多门长周期课程引用。
    */
   promoteLessonToLongCycle(
     lessonId: string,
@@ -121,14 +123,9 @@ export class CourseLayerService {
       autoArchiveAfterMs?: number | null;
     },
   ): CourseRecord {
-    const lesson = this.db.prepare('SELECT id, title, content, course_id FROM lessons WHERE id = ?').get(lessonId) as
-      { id: string; title: string; content: string; course_id: string | null } | undefined;
+    const lesson = this.db.prepare('SELECT id, title, content FROM lessons WHERE id = ?').get(lessonId) as
+      { id: string; title: string; content: string } | undefined;
     if (!lesson) throw new LessonActivityError(404, '课节不存在');
-    if (lesson.course_id) {
-      const existing = this.getCourse(lesson.course_id);
-      if (existing.isLongCycle) return existing;
-      return this.updateCourse(lesson.course_id, { isLongCycle: true, autoArchiveAfterMs: input?.autoArchiveAfterMs });
-    }
     return this.createCourse({
       title: (input?.title || lesson.title || '').trim() || lesson.title,
       description: input?.description ?? String(lesson.content || '').slice(0, 2000),
@@ -193,7 +190,7 @@ export class CourseLayerService {
   deleteCourse(courseId: string): void {
     this.getCourse(courseId);
     const tx = this.db.transaction(() => {
-      this.db.prepare('UPDATE lessons SET course_id = NULL, course_order = 0 WHERE course_id = ?').run(courseId);
+      this.db.prepare('DELETE FROM course_lessons WHERE course_id = ?').run(courseId);
       this.db.prepare('DELETE FROM courses WHERE id = ?').run(courseId);
     });
     tx();
@@ -261,8 +258,11 @@ export class CourseLayerService {
     this.getCourse(courseId);
     const rows = this.db
       .prepare(
-        `SELECT id, title, course_id AS courseId, course_order AS courseOrder
-           FROM lessons WHERE course_id = ? ORDER BY course_order ASC, created_at ASC`,
+        `SELECT l.id, l.title, cl.course_id AS courseId, cl.course_order AS courseOrder
+           FROM course_lessons cl
+           JOIN lessons l ON l.id = cl.lesson_id
+          WHERE cl.course_id = ?
+          ORDER BY cl.course_order ASC, l.created_at ASC`,
       )
       .all(courseId) as CourseLessonRef[];
     return rows;
@@ -272,21 +272,18 @@ export class CourseLayerService {
     this.getCourse(courseId);
     const ids = Array.from(new Set(lessonIds.filter(Boolean)));
     const existingMax = this.db
-      .prepare('SELECT COALESCE(MAX(course_order), -1) AS maxOrder FROM lessons WHERE course_id = ?')
+      .prepare('SELECT COALESCE(MAX(course_order), -1) AS maxOrder FROM course_lessons WHERE course_id = ?')
       .get(courseId) as { maxOrder: number };
     let next = Number(existingMax.maxOrder) + 1;
     const tx = this.db.transaction(() => {
       for (const lessonId of ids) {
-        const lesson = this.db.prepare('SELECT id, course_id FROM lessons WHERE id = ?').get(lessonId) as
-          { id: string; course_id: string | null } | undefined;
+        const lesson = this.db.prepare('SELECT id FROM lessons WHERE id = ?').get(lessonId) as
+          { id: string } | undefined;
         if (!lesson) throw new LessonActivityError(404, `课节不存在：${lessonId}`);
-        if (lesson.course_id && lesson.course_id !== courseId) {
-          throw new LessonActivityError(409, '该课节已挂在其他课程下');
-        }
-        if (lesson.course_id === courseId) continue;
+        if (lessonIsInCourse(this.db, lessonId, courseId)) continue;
         this.db
-          .prepare('UPDATE lessons SET course_id = ?, course_order = ?, updated_at = ? WHERE id = ?')
-          .run(courseId, next, Date.now(), lessonId);
+          .prepare('INSERT INTO course_lessons (course_id, lesson_id, course_order, created_at) VALUES (?, ?, ?, ?)')
+          .run(courseId, lessonId, next, Date.now());
         next += 1;
       }
       this.db.prepare('UPDATE courses SET updated_at = ? WHERE id = ?').run(Date.now(), courseId);
@@ -296,12 +293,11 @@ export class CourseLayerService {
   }
 
   detachLesson(courseId: string, lessonId: string): void {
-    const lesson = this.db.prepare('SELECT course_id FROM lessons WHERE id = ?').get(lessonId) as
-      { course_id: string | null } | undefined;
-    if (!lesson || lesson.course_id !== courseId) throw new LessonActivityError(404, '课节不在该课程中');
-    this.db
-      .prepare('UPDATE lessons SET course_id = NULL, course_order = 0, updated_at = ? WHERE id = ?')
-      .run(Date.now(), lessonId);
+    const changes = this.db
+      .prepare('DELETE FROM course_lessons WHERE course_id = ? AND lesson_id = ?')
+      .run(courseId, lessonId).changes;
+    if (!changes) throw new LessonActivityError(404, '课节不在该课程中');
+    this.db.prepare('UPDATE courses SET updated_at = ? WHERE id = ?').run(Date.now(), courseId);
   }
 
   reorderLessons(courseId: string, lessonIds: string[]): CourseLessonRef[] {
@@ -312,8 +308,8 @@ export class CourseLayerService {
     const tx = this.db.transaction(() => {
       lessonIds.forEach((id, index) => {
         this.db
-          .prepare('UPDATE lessons SET course_order = ?, updated_at = ? WHERE id = ? AND course_id = ?')
-          .run(index, Date.now(), id, courseId);
+          .prepare('UPDATE course_lessons SET course_order = ? WHERE course_id = ? AND lesson_id = ?')
+          .run(index, courseId, id);
       });
     });
     tx();
@@ -383,17 +379,19 @@ export class CourseLayerService {
     return Array.from(new Set(rows.map((row) => row.class_id)));
   }
 
-  /** 若该课节属于长周期课程，把选定班级绑定到课程（幂等）。创建时不预绑，上课时再绑。 */
+  /** 若该课节只属于一门长周期课程，把选定班级绑定到该课程（幂等）。多门引用时由开课次接口带上课程再绑。 */
   bindLongCycleClassForLesson(lessonId: string, classId: string): void {
-    const lesson = this.db.prepare('SELECT id, course_id FROM lessons WHERE id = ?').get(lessonId) as
-      { id: string; course_id: string | null } | undefined;
-    if (!lesson?.course_id) return;
-    const course = this.db.prepare('SELECT id, is_long_cycle FROM courses WHERE id = ?').get(lesson.course_id) as
-      { id: string; is_long_cycle: number | null } | undefined;
-    if (!course) return;
-    const isLongCycle = course.is_long_cycle == null ? true : Number(course.is_long_cycle) === 1;
-    if (!isLongCycle) return;
-    this.enrollClass(course.id, classId);
+    const lesson = this.db.prepare('SELECT id FROM lessons WHERE id = ?').get(lessonId) as { id: string } | undefined;
+    if (!lesson) return;
+    const parentIds = listCourseIdsForLesson(this.db, lessonId);
+    const longCycleParents = parentIds.filter((courseId) => {
+      const course = this.db.prepare('SELECT is_long_cycle FROM courses WHERE id = ?').get(courseId) as
+        { is_long_cycle: number | null } | undefined;
+      if (!course) return false;
+      return course.is_long_cycle == null ? true : Number(course.is_long_cycle) === 1;
+    });
+    if (longCycleParents.length !== 1) return;
+    this.enrollClass(longCycleParents[0], classId);
   }
 
   async startLessonSession(
@@ -402,9 +400,8 @@ export class CourseLayerService {
     teacherId: string,
     classId?: string | null,
   ): Promise<{ session: Record<string, unknown>; created: boolean }> {
-    const lesson = this.db.prepare('SELECT id, course_id FROM lessons WHERE id = ?').get(lessonId) as
-      { id: string; course_id: string | null } | undefined;
-    if (!lesson || lesson.course_id !== courseId) {
+    const lesson = this.db.prepare('SELECT id FROM lessons WHERE id = ?').get(lessonId) as { id: string } | undefined;
+    if (!lesson || !lessonIsInCourse(this.db, lessonId, courseId)) {
       throw new LessonActivityError(404, '课节不在该课程中');
     }
     const resolvedClassId = classId ? String(classId) : '';
@@ -457,7 +454,9 @@ export class CourseLayerService {
     };
     if (withCount) {
       const lessons = this.db
-        .prepare('SELECT id FROM lessons WHERE course_id = ? ORDER BY course_order ASC, created_at ASC')
+        .prepare(
+          `SELECT lesson_id AS id FROM course_lessons WHERE course_id = ? ORDER BY course_order ASC, created_at ASC`,
+        )
         .all(record.id) as Array<{ id: string }>;
       record.lessonIds = lessons.map((item) => item.id);
       record.lessonCount = lessons.length;

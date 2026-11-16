@@ -109,7 +109,6 @@ export function CourseManagement() {
   const visibleLessons = useMemo(
     () =>
       filteredLessons.filter((lesson) => {
-        if (attachedLessonIds.has(lesson.id) || lesson.course_id) return false;
         if (!filterMyLessons) return true;
         return (
           !lesson.creator_id ||
@@ -117,7 +116,7 @@ export function CourseManagement() {
           lesson.creator_id === effectiveSession?.username
         );
       }),
-    [filteredLessons, attachedLessonIds, filterMyLessons, effectiveSession],
+    [filteredLessons, filterMyLessons, effectiveSession],
   );
 
   const visibleCourses = useMemo(() => {
@@ -129,10 +128,7 @@ export function CourseManagement() {
     });
   }, [longCycleCourses, lessonsSearchQuery, filterMyLessons, effectiveSession]);
 
-  const standaloneLessonCount = useMemo(
-    () => lessons.filter((lesson) => !attachedLessonIds.has(lesson.id) && !lesson.course_id).length,
-    [lessons, attachedLessonIds],
-  );
+  const standaloneLessonCount = lessons.length;
 
   const shownLessons = filterCourseType === 'long-cycle' ? [] : visibleLessons;
   const shownCourses = filterCourseType === 'regular' ? [] : visibleCourses;
@@ -503,6 +499,21 @@ export function CourseManagement() {
                         >
                           {lang === 'zh' ? '常规' : 'Regular'}
                         </span>
+                        {attachedLessonIds.has(lesson.id) ? (
+                          <span
+                            data-testid="regular-course-ref-badge"
+                            className="shrink-0 inline-flex px-1.5 py-0.5 rounded text-[11px] font-semibold bg-amber-50 text-amber-800 border border-amber-200"
+                            title={
+                              lang === 'zh'
+                                ? '可被多门长周期课程同时引用'
+                                : 'This regular course can be referenced by multiple long-cycle courses'
+                            }
+                          >
+                            {lang === 'zh'
+                              ? `已引用 · ${[...longCycleCourses].filter((course) => (course.lessonIds || []).includes(lesson.id)).length} 门长周期`
+                              : `Referenced by ${[...longCycleCourses].filter((course) => (course.lessonIds || []).includes(lesson.id)).length}`}
+                          </span>
+                        ) : null}
                         <ExtensionPointRenderer slot="course.card.badge" slotProps={{ course: lesson }} />
                         {lesson.creator_name ? (
                           <span

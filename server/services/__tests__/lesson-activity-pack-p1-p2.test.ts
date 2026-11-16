@@ -76,6 +76,7 @@ describe('学案包 P1 / P2 服务（IKVO15）', () => {
     db.prepare('DELETE FROM schedules WHERE class_id = ?').run(classId);
     db.prepare('DELETE FROM class_students WHERE class_id = ?').run(classId);
     db.prepare('DELETE FROM courses WHERE owner_user_id = ?').run(teacherId);
+    db.prepare('DELETE FROM course_lessons WHERE lesson_id IN (?, ?, ?)').run(lessonA, lessonB, otherLesson);
     db.prepare('UPDATE lessons SET course_id = NULL, course_order = 0 WHERE id IN (?, ?, ?)').run(
       lessonA,
       lessonB,
@@ -454,6 +455,7 @@ describe('长周期课程类型与开课选班', () => {
     db.prepare('DELETE FROM classroom_sessions WHERE lesson_id = ?').run(lessonId);
     db.prepare('DELETE FROM course_enrollments WHERE class_id IN (?, ?)').run(classId, extraClassId);
     db.prepare('DELETE FROM courses WHERE owner_user_id = ?').run(teacherId);
+    db.prepare('DELETE FROM course_lessons WHERE lesson_id = ?').run(lessonId);
     db.prepare('UPDATE lessons SET course_id = NULL, course_order = 0 WHERE id = ?').run(lessonId);
     db.prepare('DELETE FROM lessons WHERE id = ?').run(lessonId);
     db.prepare('DELETE FROM classes WHERE id IN (?, ?)').run(classId, extraClassId);
@@ -470,7 +472,36 @@ describe('长周期课程类型与开课选班', () => {
     expect(promoted.lessonIds).toEqual([lessonId]);
     expect(courses.enrolledClassIds(promoted.id)).toEqual([classId]);
     const again = courses.promoteLessonToLongCycle(lessonId, teacherId);
-    expect(again.id).toBe(promoted.id);
+    expect(again.id).not.toBe(promoted.id);
+    expect(again.lessonIds).toEqual([lessonId]);
+    expect(courses.listLessons(promoted.id).map((item) => item.id)).toEqual([lessonId]);
+  });
+
+  it('同一常规课节可以被多门长周期课程同时引用，并分别开课次', async () => {
+    const first = courses.createCourse({
+      title: `引用甲 ${suffix}`,
+      ownerUserId: teacherId,
+      isLongCycle: true,
+      lessonId,
+    });
+    const second = courses.createCourse({
+      title: `引用乙 ${suffix}`,
+      ownerUserId: teacherId,
+      isLongCycle: true,
+      lessonId,
+    });
+    expect(first.lessonIds).toEqual([lessonId]);
+    expect(second.lessonIds).toEqual([lessonId]);
+    expect(first.id).not.toBe(second.id);
+    const startedA = await courses.startLessonSession(first.id, lessonId, teacherId, classId);
+    const startedB = await courses.startLessonSession(second.id, lessonId, teacherId, extraClassId);
+    expect(startedA.session).toBeTruthy();
+    expect(startedB.session).toBeTruthy();
+    expect(courses.enrolledClassIds(first.id)).toEqual([classId]);
+    expect(courses.enrolledClassIds(second.id)).toEqual([extraClassId]);
+    courses.detachLesson(first.id, lessonId);
+    expect(courses.listLessons(first.id)).toEqual([]);
+    expect(courses.listLessons(second.id).map((item) => item.id)).toEqual([lessonId]);
   });
 
   it('一键开课次必须明确选择班级，选中后在开课时绑定，无须预先选课', async () => {

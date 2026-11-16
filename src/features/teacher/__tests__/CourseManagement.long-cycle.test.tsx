@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, cleanup, fireEvent, waitFor, within } from '@testing-library/react';
 import { CourseManagement } from '../CourseManagement';
 
 const fetchCourses = vi.fn();
@@ -101,20 +101,21 @@ describe('CourseManagement 长周期课程卡片', () => {
 
   afterEach(() => cleanup());
 
-  it('不再展示底部独立课程层，长周期以带徽标的卡片出现，已挂接章节不再重复列出', async () => {
+  it('不再展示底部独立课程层，长周期以带徽标的卡片出现，被引用的常规课仍作为独立卡片出现', async () => {
     render(<CourseManagement />);
     await waitFor(() => expect(screen.getByTestId('long-cycle-course-card')).toBeTruthy());
     expect(screen.queryByTestId('course-layer-board')).toBeNull();
     expect(screen.getByText('学期信息技术')).toBeTruthy();
     expect(screen.getAllByText('长周期').length).toBeGreaterThan(0);
     expect(screen.getByText('常规课')).toBeTruthy();
-    expect(screen.getByTestId('regular-course-badge')).toBeTruthy();
-    expect(screen.queryByText('第一章')).toBeNull();
-    expect(screen.getByTestId('promote-long-cycle-btn')).toBeTruthy();
-    expect(screen.getByTestId('course-list-count').textContent?.replace(/\s+/g, '')).toContain('显示2/2门课程');
+    expect(screen.getByText('第一章')).toBeTruthy();
+    expect(screen.getAllByTestId('regular-course-badge').length).toBe(2);
+    expect(screen.getByTestId('regular-course-ref-badge').textContent).toContain('已引用');
+    expect(screen.getAllByTestId('promote-long-cycle-btn').length).toBeGreaterThan(0);
+    expect(screen.getByTestId('course-list-count').textContent?.replace(/\s+/g, '')).toContain('显示3/3门课程');
   });
 
-  it('可用全部、常规、长周期筛选课程，且挂接章节不计入总数', async () => {
+  it('可用全部、常规、长周期筛选课程，被引用的常规课仍计入常规总数', async () => {
     render(<CourseManagement />);
     await waitFor(() => expect(screen.getByTestId('long-cycle-course-card')).toBeTruthy());
 
@@ -127,17 +128,20 @@ describe('CourseManagement 长周期课程卡片', () => {
     fireEvent.click(longCycleBtn!);
     expect(screen.getByText('学期信息技术')).toBeTruthy();
     expect(screen.queryByText('常规课')).toBeNull();
+    expect(screen.queryByText('第一章')).toBeNull();
     expect(screen.getByTestId('course-list-count').textContent?.replace(/\s+/g, '')).toContain('显示1/1门课程');
 
     fireEvent.click(regularBtn!);
     expect(screen.getByText('常规课')).toBeTruthy();
+    expect(screen.getByText('第一章')).toBeTruthy();
     expect(screen.queryByText('学期信息技术')).toBeNull();
-    expect(screen.getByTestId('course-list-count').textContent?.replace(/\s+/g, '')).toContain('显示1/1门课程');
+    expect(screen.getByTestId('course-list-count').textContent?.replace(/\s+/g, '')).toContain('显示2/2门课程');
 
     fireEvent.click(allBtn!);
     expect(screen.getByText('学期信息技术')).toBeTruthy();
     expect(screen.getByText('常规课')).toBeTruthy();
-    expect(screen.getByTestId('course-list-count').textContent?.replace(/\s+/g, '')).toContain('显示2/2门课程');
+    expect(screen.getByText('第一章')).toBeTruthy();
+    expect(screen.getByTestId('course-list-count').textContent?.replace(/\s+/g, '')).toContain('显示3/3门课程');
   });
 
   it('打开长周期卡片进入详情，常规课可改成长周期', async () => {
@@ -149,7 +153,9 @@ describe('CourseManagement 长周期课程卡片', () => {
     fireEvent.click(screen.getByText('管理章节与开课次'));
     expect(screen.getByTestId('long-cycle-course-detail').textContent).toContain('crs_1');
 
-    fireEvent.click(screen.getByTestId('promote-long-cycle-btn'));
+    const regularTitle = screen.getAllByTestId('course-title').find((el) => el.textContent === '常规课');
+    expect(regularTitle).toBeTruthy();
+    fireEvent.click(within(regularTitle!.closest('div.border') as HTMLElement).getByTestId('promote-long-cycle-btn'));
     expect(screen.getByText('改成长周期课程')).toBeTruthy();
     fireEvent.click(screen.getByText('确认转换'));
     await waitFor(() => expect(promoteLessonToLongCycle).toHaveBeenCalledWith('les_regular', { title: '常规课' }));

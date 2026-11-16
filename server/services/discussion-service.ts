@@ -8,6 +8,7 @@ import type Database from 'better-sqlite3';
 import { sanitizeUgcText } from '../../packages/core/security/ugc-sanitize.js';
 import { randomId } from '../utils/id.js';
 import { LessonActivityError } from './lesson-activity-service.js';
+import { lessonIsInCourse } from './course-lesson-links.js';
 
 export interface DiscussionActor {
   userId?: string | null;
@@ -57,10 +58,9 @@ export class DiscussionService {
     const lessonId = input.lessonId ?? null;
     if (!courseId && !lessonId) throw new LessonActivityError(400, '讨论必须属于课程或课节');
     if (lessonId) {
-      const lesson = this.db.prepare('SELECT id, course_id FROM lessons WHERE id = ?').get(lessonId) as
-        { id: string; course_id: string | null } | undefined;
+      const lesson = this.db.prepare('SELECT id FROM lessons WHERE id = ?').get(lessonId) as { id: string } | undefined;
       if (!lesson) throw new LessonActivityError(404, '课节不存在');
-      if (courseId && lesson.course_id && lesson.course_id !== courseId) {
+      if (courseId && !lessonIsInCourse(this.db, lessonId, courseId)) {
         throw new LessonActivityError(400, '课节不属于该课程');
       }
     }

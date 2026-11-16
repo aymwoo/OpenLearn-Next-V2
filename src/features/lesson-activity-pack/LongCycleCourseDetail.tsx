@@ -157,7 +157,7 @@ export function LongCycleCourseDetail({
                   .catch((err) => setError(err instanceof Error ? err.message : String(err)));
               }}
             >
-              <option value="">{lang === 'zh' ? '挂接课节…' : 'Attach lesson…'}</option>
+              <option value="">{lang === 'zh' ? '引用常规课为章节…' : 'Reference a regular course…'}</option>
               {attachableLessons.map((lesson) => (
                 <option key={lesson.id} value={lesson.id}>
                   {lesson.title}
@@ -167,8 +167,8 @@ export function LongCycleCourseDetail({
           </div>
           <p className="text-xs text-gray-500">
             {lang === 'zh'
-              ? '请先选择要开课的班级，再点「一键开课次」。系统会在开课时绑定该班级。'
-              : 'Select a class first, then start the session. The class is bound when the session starts.'}
+              ? '同一门常规课可以被多门长周期课程同时引用。请先选择要开课的班级，再点「一键开课次」，系统会在开课时绑定该班级。'
+              : 'The same regular course can be referenced by multiple long-cycle courses. Select a class first, then start the session; the class is bound when the session starts.'}
           </p>
           <div className="flex flex-wrap items-end gap-2 text-xs text-gray-600">
             <label className="flex flex-col gap-1">

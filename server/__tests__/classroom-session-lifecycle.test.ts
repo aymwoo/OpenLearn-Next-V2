@@ -462,6 +462,7 @@ describe('常规课程与长周期课程使用不同的自动归档阈值', () =
 
   afterAll(() => {
     db.prepare('DELETE FROM classroom_sessions WHERE lesson_id IN (?, ?)').run(regularLessonId, longLessonId);
+    db.prepare('DELETE FROM course_lessons WHERE lesson_id IN (?, ?)').run(regularLessonId, longLessonId);
     db.prepare('UPDATE lessons SET course_id = NULL, course_order = 0 WHERE id IN (?, ?)').run(
       regularLessonId,
       longLessonId,

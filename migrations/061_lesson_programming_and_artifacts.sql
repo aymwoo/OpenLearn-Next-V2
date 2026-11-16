@@ -83,6 +83,6 @@ ALTER TABLE lesson_activities_old RENAME TO lesson_activities;
 CREATE INDEX IF NOT EXISTS idx_lesson_activities_lesson_order ON lesson_activities(lesson_id, order_index);
 CREATE INDEX IF NOT EXISTS idx_lesson_activities_lesson_visible ON lesson_activities(lesson_id, visible);
 
--- SQLite cannot cheaply drop a column in all versions used here; leave artifact_json if present.
+-- SQLite cannot cheaply drop a column in all versions used here and will leave artifact_json if present.
 
 PRAGMA foreign_keys = ON;

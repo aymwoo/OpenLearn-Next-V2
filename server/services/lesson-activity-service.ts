@@ -40,6 +40,7 @@ const STATUS_RANK: Record<ActivityStatus, number> = {
 };
 
 import { LessonActivityError } from './lesson-activity-error.js';
+import { primaryCourseIdForLesson } from './course-lesson-links.js';
 export { LessonActivityError };
 
 export interface LessonActivityRecord {
@@ -524,13 +525,10 @@ export class LessonActivityService {
     unresolvedBindings: UnresolvedActivityBinding[];
   } {
     this.assertLesson(lessonId);
-    const lesson = this.db.prepare('SELECT course_id FROM lessons WHERE id = ?').get(lessonId) as {
-      course_id: string | null;
-    };
     const activities = this.listActivities(lessonId, { includeHidden: true });
     return {
       lessonId,
-      courseId: lesson.course_id ?? null,
+      courseId: primaryCourseIdForLesson(this.db, lessonId),
       blocks: this.listBlocks(lessonId),
       activities,
       unresolvedBindings: this.listUnresolvedBindings(lessonId, activities),
@@ -549,9 +547,6 @@ export class LessonActivityService {
     summary: LessonProgressAggregate;
   } {
     this.assertLesson(lessonId);
-    const lesson = this.db.prepare('SELECT course_id FROM lessons WHERE id = ?').get(lessonId) as {
-      course_id: string | null;
-    };
     const activities = this.listActivities(lessonId, { includeHidden: false, now });
     const withProgress = activities.map((activity) => {
       const progress = this.reconcileStudentActivity(activity, studentId, now);
@@ -560,7 +555,7 @@ export class LessonActivityService {
     const summary = this.persistLessonSummary(lessonId, studentId, withProgress, now);
     return {
       lessonId,
-      courseId: lesson.course_id ?? null,
+      courseId: primaryCourseIdForLesson(this.db, lessonId),
       blocks: this.listBlocks(lessonId),
       activities: withProgress,
       summary,
@@ -581,9 +576,6 @@ export class LessonActivityService {
     summary: LessonProgressAggregate;
   } {
     this.assertLesson(lessonId);
-    const lesson = this.db.prepare('SELECT course_id FROM lessons WHERE id = ?').get(lessonId) as {
-      course_id: string | null;
-    };
     const visible = this.listActivities(lessonId, { includeHidden: false, now });
     const all = this.listActivities(lessonId, { includeHidden: true, now });
     const withProgress = visible.map((activity) => ({
@@ -606,7 +598,7 @@ export class LessonActivityService {
       previewKind: 'activity-pack-student',
       unpublishedCount: all.length - visible.length,
       lessonId,
-      courseId: lesson.course_id ?? null,
+      courseId: primaryCourseIdForLesson(this.db, lessonId),
       blocks: this.listBlocks(lessonId),
       activities: withProgress,
       summary: aggregateLessonActivityProgress(
