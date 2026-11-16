@@ -24,7 +24,7 @@ describe('StudentSchedulePanel', () => {
         setStudentViewStatus={vi.fn()}
       />,
     );
-    expect(screen.getByText('My Schedule')).toBeTruthy();
+    expect(screen.getByText('T')).toBeTruthy();
     expect(screen.getByText('Join Class')).toBeTruthy();
   });
 });

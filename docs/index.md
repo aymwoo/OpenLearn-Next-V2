@@ -86,6 +86,7 @@ ai/ai-teacher-workspace
 
 workspace/workspace-runtime
 workspace/layout-manager
+workspace/student-home-layout
 ```
 
 ```{toctree}

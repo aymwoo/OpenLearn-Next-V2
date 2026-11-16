@@ -19,6 +19,7 @@ import { StudentQuickStats } from './StudentQuickStats';
 import { StudentPerformanceCharts } from './StudentPerformanceCharts';
 import { StudentAcademicYearComparison } from './StudentAcademicYearComparison';
 import { StudentSchedulePanel } from './StudentSchedulePanel';
+import { StudentLearningFocus } from './StudentLearningFocus';
 
 import { StudentAssignmentsPanel } from './StudentAssignmentsPanel';
 import { WeeklyProgressTrendChart } from '../../components/WeeklyProgressTrendChart';
@@ -77,7 +78,10 @@ export function StudentDashboardPanel(props: StudentDashboardPanelProps) {
 
   const studentCardColumns = useThemeStore((s) => s.resolvedLayouts.student.cardColumns);
 
-  const storageKey = `student_dashboard_layout_v2_${activeStudentId || 'default'}`;
+  // Issue IKVKVF follow-up：assessments ↔ progress-trends 改为 half + half 对称对齐
+  // 以及 WeeklyProgressTrendChart 去掉内层重复卡片外壳 → 提升到 v4，让老用户也拿到新默认。
+  const storageKey = `student_dashboard_layout_v4_${activeStudentId || 'default'}`;
+  const [customizeOpen, setCustomizeOpen] = useState(false);
 
   // Initialize layout configuration
   const [layout, setLayout] = useState<WidgetLayoutConfig[]>(() => {
@@ -259,7 +263,7 @@ export function StudentDashboardPanel(props: StudentDashboardPanelProps) {
             onDrop={handleDrop}
             isDragging={draggedWidgetId === 'progress-trends'}
           >
-            <WeeklyProgressTrendChart assignments={studentDashboardData.assignments} lang={lang} />
+            <WeeklyProgressTrendChart assignments={studentDashboardData.assignments} lang={lang} compact />
           </DashboardWidgetCard>
         );
 
@@ -475,7 +479,7 @@ export function StudentDashboardPanel(props: StudentDashboardPanelProps) {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* 0. Issue #109: 正在进行的课堂 → 醒目返回入口（不受组件布局影响） */}
       {activeSession && (
         <StudentActiveClassBanner activeSession={activeSession} lang={lang} onReturn={returnToActiveClass} />
@@ -511,32 +515,59 @@ export function StudentDashboardPanel(props: StudentDashboardPanelProps) {
         lang={lang}
       />
 
-      {/* 3. Modular Layout Customization Toolbar */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3.5 bg-slate-50 border border-slate-200/80 rounded-2xl shadow-3xs">
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-xl bg-indigo-500/10 text-indigo-600 flex items-center justify-center shrink-0">
-            <LayoutGrid size={16} />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-black text-slate-800 tracking-tight">
-                {lang === 'zh' ? '模块化自适应栅格工作台' : 'Modular CSS Grid Dashboard'}
-              </span>
-              <span className="text-2xs font-bold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-600 border border-indigo-100">
-                {layout.length} {lang === 'zh' ? '个自适应组件' : 'Widgets'}
-              </span>
+      {/* 3. Issue IKVKVF: 首屏学习路径焦点区（待办 → 最近课节 → 续学），不随栅格布局漂移 */}
+      <StudentLearningFocus
+        studentDashboardData={studentDashboardData}
+        lang={lang}
+        setSelectedLesson={setSelectedLesson}
+        setStudentViewStatus={setStudentViewStatus}
+        setSelectedAssignment={setSelectedAssignment}
+        setQuizStudentAnswers={setQuizStudentAnswers}
+        setSubAssignmentTab={setSubAssignmentTab}
+      />
+
+      {/* 4. Modular Layout Customization Toolbar */}
+      <div className="flex flex-col gap-2 rounded-2xl border border-slate-200/80 bg-slate-50 p-3 shadow-3xs sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-3 sm:p-3.5">
+        <div className="flex items-center justify-between gap-2.5">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-indigo-500/10 text-indigo-600">
+              <LayoutGrid size={16} />
             </div>
-            <p className="text-2xs text-slate-455">
-              {lang === 'zh'
-                ? '支持自由拖拽排序、切换 1/3~整行 宽度以及一键折叠展开'
-                : 'Drag to reorder, resize from 1/3 to full width, or collapse widgets'}
-            </p>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs font-black tracking-tight text-slate-800">
+                  {lang === 'zh' ? '模块化自适应栅格工作台' : 'Modular CSS Grid Dashboard'}
+                </span>
+                <span className="rounded-full border border-indigo-100 bg-indigo-50 px-2 py-0.5 text-2xs font-bold text-indigo-600">
+                  {layout.length} {lang === 'zh' ? '个自适应组件' : 'Widgets'}
+                </span>
+              </div>
+              <p className="hidden text-2xs text-slate-455 sm:block">
+                {lang === 'zh'
+                  ? '支持自由拖拽排序、切换 1/3~整行 宽度以及一键折叠展开'
+                  : 'Drag to reorder, resize from 1/3 to full width, or collapse widgets'}
+              </p>
+            </div>
           </div>
+
+          {/* 窄屏默认收起，避免工具条挤占首屏 */}
+          <button
+            type="button"
+            onClick={() => setCustomizeOpen((v) => !v)}
+            aria-expanded={customizeOpen}
+            aria-controls="student-dashboard-layout-controls"
+            className="shrink-0 cursor-pointer rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-2xs font-bold text-slate-600 transition-colors hover:text-indigo-600 sm:hidden"
+          >
+            {customizeOpen ? (lang === 'zh' ? '收起' : 'Close') : lang === 'zh' ? '自定义布局' : 'Customize'}
+          </button>
         </div>
 
         {/* Preset Selector & Reset Action */}
-        <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto justify-end">
-          <div className="flex items-center bg-white p-0.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 shadow-3xs">
+        <div
+          id="student-dashboard-layout-controls"
+          className={`${customizeOpen ? 'flex' : 'hidden'} w-full flex-wrap items-center justify-end gap-2 sm:flex sm:w-auto`}
+        >
+          <div className="flex items-center rounded-xl border border-slate-200 bg-white p-0.5 text-xs font-bold text-slate-600 shadow-3xs">
             {Object.entries(LAYOUT_PRESETS).map(([key, config]) => (
               <button
                 key={key}
@@ -564,11 +595,11 @@ export function StudentDashboardPanel(props: StudentDashboardPanelProps) {
         </div>
       </div>
 
-      {/* 4. Modular CSS Grid Workspace */}
+      {/* 5. Modular CSS Grid Workspace */}
       <div
         id="student-dashboard-modular-grid"
         data-card-columns={studentCardColumns}
-        className={`grid gap-6 items-start ${
+        className={`grid items-start gap-4 lg:gap-6 ${
           studentCardColumns === 1
             ? 'grid-cols-1'
             : studentCardColumns === 3
@@ -579,7 +610,7 @@ export function StudentDashboardPanel(props: StudentDashboardPanelProps) {
         {layout.filter((w) => w.visible).map((widget, index) => renderWidgetContent(widget, index))}
       </div>
 
-      {/* 5. Student Dashboard Quick Actions Floating Menu */}
+      {/* 6. Student Dashboard Quick Actions Floating Menu */}
       <StudentQuickActionsFloatingMenu
         studentDashboardData={studentDashboardData}
         activeStudentId={activeStudentId}

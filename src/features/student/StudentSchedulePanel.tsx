@@ -1,4 +1,4 @@
-import { CalendarIcon, PlayCircle } from 'lucide-react';
+import { PlayCircle } from 'lucide-react';
 
 export interface StudentSchedulePanelProps {
   schedules: any[];
@@ -9,12 +9,8 @@ export interface StudentSchedulePanelProps {
 export function StudentSchedulePanel(props: StudentSchedulePanelProps) {
   const { schedules, setSelectedLesson, setStudentViewStatus } = props;
   return (
-    <div className="bg-white rounded-xl border border-gray-200 shadow-sm flex flex-col">
-      <div className="p-4 border-b border-gray-100 flex items-center gap-2">
-        <CalendarIcon size={18} className="text-pink-500" />
-        <h3 className="font-semibold text-gray-800">My Schedule</h3>
-      </div>
-      <div className="p-4 flex-1">
+    <div className="flex flex-col">
+      <div className="flex-1">
         <p className="text-2xs text-muted px-1 pb-1.5">以下为每周重复的排课投影，日期为本周对应日。</p>
         {schedules.length === 0 ? (
           <div className="text-center p-8 text-gray-400 italic text-sm">No upcoming classes.</div>

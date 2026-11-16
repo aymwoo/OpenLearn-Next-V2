@@ -19,7 +19,7 @@ describe('StudentAssignmentsPanel', () => {
         lang="zh"
       />,
     );
-    expect(screen.getByText('My Assignments')).toBeTruthy();
+    expect(screen.getByText('HW')).toBeTruthy();
     expect(screen.getByText('Open Canvas')).toBeTruthy();
   });
 });
