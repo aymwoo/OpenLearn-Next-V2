@@ -873,6 +873,58 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
     }
   });
 
+  // ── 活动讨论区（IKVO15 P2）──────────────────────────────────────────────
+  // 获取讨论列表（含回复嵌套）
+  app.get('/api/activities/:id/discussions', requireScopedAuth('class-member'), (req, res) => {
+    try {
+      const activityId = req.params.id;
+      const rows = readDb
+        .prepare('SELECT * FROM lesson_discussions WHERE activity_id = ? ORDER BY created_at ASC')
+        .all(activityId);
+      res.json(rows);
+    } catch (err: any) {
+      sendSafeError(res, err);
+    }
+  });
+
+  // 发帖 / 回复
+  app.post('/api/activities/:id/discussions', requireScopedAuth('class-member'), (req, res) => {
+    try {
+      const activityId = req.params.id;
+      const session = (req as any).session;
+      const { content, parentId } = req.body || {};
+      if (!content || !content.trim()) {
+        return res.status(400).json({ success: false, error: 'content required' });
+      }
+      const id = `disc_${randomId()}`;
+      const ts = now();
+      db.prepare(
+        `INSERT INTO lesson_discussions (id, activity_id, author_id, content, parent_id, created_at)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+      ).run(id, activityId, session.userId, content.trim(), parentId ?? null, ts);
+      const row = readDb.prepare('SELECT * FROM lesson_discussions WHERE id = ?').get(id);
+      res.json(row);
+    } catch (err: any) {
+      sendSafeError(res, err);
+    }
+  });
+
+  // 删除帖子（仅作者本人）
+  app.delete('/api/discussions/:id', requireScopedAuth('class-member'), (req, res) => {
+    try {
+      const session = (req as any).session;
+      const row = readDb.prepare('SELECT * FROM lesson_discussions WHERE id = ?').get(req.params.id) as any | undefined;
+      if (!row) return res.status(404).json({ success: false, error: 'Not found' });
+      if (row.author_id !== session.userId && !isAdministrator(session)) {
+        return res.status(403).json({ success: false, error: 'Only author or admin can delete' });
+      }
+      db.prepare('DELETE FROM lesson_discussions WHERE id = ? OR parent_id = ?').run(req.params.id, req.params.id);
+      res.json({ success: true });
+    } catch (err: any) {
+      sendSafeError(res, err);
+    }
+  });
+
   // 活动级进度面板：返回每个活动 × 所有关联班级学生的进度聚合
   app.get('/api/lessons/:lessonId/activity-progress', requireScopedAuth('class-staff'), (req, res) => {
     try {
