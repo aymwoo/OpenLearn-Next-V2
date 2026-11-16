@@ -87,6 +87,7 @@ export function CourseManagement() {
   const [promoteTarget, setPromoteTarget] = useState<Lesson | null>(null);
   const [promoteLoading, setPromoteLoading] = useState(false);
   const [promoteError, setPromoteError] = useState<string | null>(null);
+  const [filterCourseType, setFilterCourseType] = useState<'all' | 'regular' | 'long-cycle'>('all');
 
   const loadLongCycleCourses = () =>
     fetchCourses()
@@ -127,6 +128,21 @@ export function CourseManagement() {
       return !course.ownerUserId || course.ownerUserId === effectiveSession?.userId;
     });
   }, [longCycleCourses, lessonsSearchQuery, filterMyLessons, effectiveSession]);
+
+  const standaloneLessonCount = useMemo(
+    () => lessons.filter((lesson) => !attachedLessonIds.has(lesson.id) && !lesson.course_id).length,
+    [lessons, attachedLessonIds],
+  );
+
+  const shownLessons = filterCourseType === 'long-cycle' ? [] : visibleLessons;
+  const shownCourses = filterCourseType === 'regular' ? [] : visibleCourses;
+  const listFound = shownLessons.length + shownCourses.length;
+  const listTotal =
+    filterCourseType === 'regular'
+      ? standaloneLessonCount
+      : filterCourseType === 'long-cycle'
+        ? longCycleCourses.length
+        : standaloneLessonCount + longCycleCourses.length;
 
   const handlePromoteLesson = async () => {
     if (!promoteTarget) return;
@@ -274,6 +290,34 @@ export function CourseManagement() {
               </div>
             </div>
             <div className="flex items-center gap-3 flex-wrap">
+              <div
+                className="flex items-center gap-1"
+                role="group"
+                aria-label={lang === 'zh' ? '课程类型筛选' : 'Filter by course type'}
+                data-testid="course-type-filter"
+              >
+                {(
+                  [
+                    ['all', lang === 'zh' ? '全部' : 'All'],
+                    ['regular', lang === 'zh' ? '常规' : 'Regular'],
+                    ['long-cycle', lang === 'zh' ? '长周期' : 'Long-cycle'],
+                  ] as const
+                ).map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setFilterCourseType(value)}
+                    aria-pressed={filterCourseType === value}
+                    className={`px-2 py-1 text-xs font-bold rounded-md border transition-all cursor-pointer ${
+                      filterCourseType === value
+                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-2xs'
+                        : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
               <div className="flex items-center gap-1.5">
                 <button
                   onClick={() => setFilterMyLessons(!filterMyLessons)}
@@ -320,10 +364,20 @@ export function CourseManagement() {
                   {lang === 'zh' ? '本月' : 'This Month'}
                 </button>
               </div>
-              <div className="text-xs font-semibold text-gray-500">
-                Found <span className="text-indigo-650 font-bold">{visibleLessons.length + visibleCourses.length}</span>{' '}
-                of <span className="text-gray-700 font-bold">{lessons.length + longCycleCourses.length}</span> course
-                {lessons.length + longCycleCourses.length === 1 ? '' : 's'}
+              <div className="text-xs font-semibold text-gray-500" data-testid="course-list-count">
+                {lang === 'zh' ? (
+                  <>
+                    显示 <span className="text-indigo-650 font-bold">{listFound}</span>
+                    {' / '}
+                    <span className="text-gray-700 font-bold">{listTotal}</span> 门课程
+                  </>
+                ) : (
+                  <>
+                    Found <span className="text-indigo-650 font-bold">{listFound}</span> of{' '}
+                    <span className="text-gray-700 font-bold">{listTotal}</span> course
+                    {listTotal === 1 ? '' : 's'}
+                  </>
+                )}
               </div>
             </div>
           </div>
@@ -349,23 +403,35 @@ export function CourseManagement() {
                 {lang === 'zh' ? '使用向导指南来创建新课程' : 'Create Course via Wizard'}
               </button>
             </div>
-          ) : visibleLessons.length === 0 && visibleCourses.length === 0 ? (
+          ) : shownLessons.length === 0 && shownCourses.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full py-12 text-gray-450 text-center">
               <Search size={44} className="mb-3 opacity-30 text-gray-450" />
-              <h4 className="font-semibold text-gray-700 text-sm">No Courses Match "{lessonsSearchQuery}"</h4>
+              <h4 className="font-semibold text-gray-700 text-sm">
+                {lessonsSearchQuery
+                  ? lang === 'zh'
+                    ? `没有匹配“${lessonsSearchQuery}”的课程`
+                    : `No Courses Match "${lessonsSearchQuery}"`
+                  : lang === 'zh'
+                    ? '没有符合筛选条件的课程'
+                    : 'No courses match the current filters'}
+              </h4>
               <p className="text-xs text-gray-500 mt-1 max-w-xs">
-                Double-check the spelling or try searching for another curriculum keyword.
+                {lang === 'zh' ? '可以清除搜索或类型筛选后再试。' : 'Clear the search or type filter and try again.'}
               </p>
               <button
-                onClick={() => setLessonsSearchQuery('')}
+                type="button"
+                onClick={() => {
+                  setLessonsSearchQuery('');
+                  setFilterCourseType('all');
+                }}
                 className="mt-3 text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-semibold px-3 py-1.5 rounded-lg transition-colors"
               >
-                Clear Search Filter
+                {lang === 'zh' ? '清除筛选' : 'Clear Filters'}
               </button>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-              {visibleCourses.map((course) => (
+              {shownCourses.map((course) => (
                 <div
                   key={course.id}
                   data-testid="long-cycle-course-card"
@@ -408,7 +474,7 @@ export function CourseManagement() {
                   </div>
                 </div>
               ))}
-              {visibleLessons.map((lesson) => {
+              {shownLessons.map((lesson) => {
                 const isCopying = copyingLessonId === lesson.id;
                 const isOwner =
                   !lesson.creator_id ||
@@ -431,6 +497,12 @@ export function CourseManagement() {
                         {lesson.title}
                       </div>
                       <div className="flex items-center gap-1.5 shrink-0">
+                        <span
+                          data-testid="regular-course-badge"
+                          className="shrink-0 inline-flex px-1.5 py-0.5 rounded text-[11px] font-extrabold bg-slate-100 text-slate-700 border border-slate-200"
+                        >
+                          {lang === 'zh' ? '常规' : 'Regular'}
+                        </span>
                         <ExtensionPointRenderer slot="course.card.badge" slotProps={{ course: lesson }} />
                         {lesson.creator_name ? (
                           <span

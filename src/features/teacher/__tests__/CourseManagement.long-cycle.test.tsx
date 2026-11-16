@@ -29,7 +29,17 @@ vi.mock('../../lesson-activity-pack', async () => {
 const mockAppData = {
   lang: 'zh' as const,
   session: { userId: 'usr_t', username: 'teacher', role: 'teacher' },
-  lessons: [{ id: 'les_regular', title: '常规课', content: '简介', creator_id: 'usr_t', creator_name: '张老师' }],
+  lessons: [
+    { id: 'les_regular', title: '常规课', content: '简介', creator_id: 'usr_t', creator_name: '张老师' },
+    {
+      id: 'les_ch1',
+      title: '第一章',
+      content: '已挂接',
+      creator_id: 'usr_t',
+      creator_name: '张老师',
+      course_id: 'crs_1',
+    },
+  ],
   lessonsSearchQuery: '',
   setLessonsSearchQuery: vi.fn(),
   lessonsSortOrder: 'newest',
@@ -96,10 +106,38 @@ describe('CourseManagement 长周期课程卡片', () => {
     await waitFor(() => expect(screen.getByTestId('long-cycle-course-card')).toBeTruthy());
     expect(screen.queryByTestId('course-layer-board')).toBeNull();
     expect(screen.getByText('学期信息技术')).toBeTruthy();
-    expect(screen.getByText('长周期')).toBeTruthy();
+    expect(screen.getAllByText('长周期').length).toBeGreaterThan(0);
     expect(screen.getByText('常规课')).toBeTruthy();
+    expect(screen.getByTestId('regular-course-badge')).toBeTruthy();
     expect(screen.queryByText('第一章')).toBeNull();
     expect(screen.getByTestId('promote-long-cycle-btn')).toBeTruthy();
+    expect(screen.getByTestId('course-list-count').textContent?.replace(/\s+/g, '')).toContain('显示2/2门课程');
+  });
+
+  it('可用全部、常规、长周期筛选课程，且挂接章节不计入总数', async () => {
+    render(<CourseManagement />);
+    await waitFor(() => expect(screen.getByTestId('long-cycle-course-card')).toBeTruthy());
+
+    const typeFilter = screen.getByTestId('course-type-filter');
+    const regularBtn = [...typeFilter.querySelectorAll('button')].find((btn) => btn.textContent === '常规');
+    const longCycleBtn = [...typeFilter.querySelectorAll('button')].find((btn) => btn.textContent === '长周期');
+    const allBtn = [...typeFilter.querySelectorAll('button')].find((btn) => btn.textContent === '全部');
+    expect(regularBtn && longCycleBtn && allBtn).toBeTruthy();
+
+    fireEvent.click(longCycleBtn!);
+    expect(screen.getByText('学期信息技术')).toBeTruthy();
+    expect(screen.queryByText('常规课')).toBeNull();
+    expect(screen.getByTestId('course-list-count').textContent?.replace(/\s+/g, '')).toContain('显示1/1门课程');
+
+    fireEvent.click(regularBtn!);
+    expect(screen.getByText('常规课')).toBeTruthy();
+    expect(screen.queryByText('学期信息技术')).toBeNull();
+    expect(screen.getByTestId('course-list-count').textContent?.replace(/\s+/g, '')).toContain('显示1/1门课程');
+
+    fireEvent.click(allBtn!);
+    expect(screen.getByText('学期信息技术')).toBeTruthy();
+    expect(screen.getByText('常规课')).toBeTruthy();
+    expect(screen.getByTestId('course-list-count').textContent?.replace(/\s+/g, '')).toContain('显示2/2门课程');
   });
 
   it('打开长周期卡片进入详情，常规课可改成长周期', async () => {
