@@ -83,7 +83,7 @@ export type ClassType = {
 export type LockMode = 'full' | 'navigation';
 
 export interface LockTarget {
-  tab?: 'whiteboard' | 'courseware' | 'assignment';
+  tab?: 'whiteboard' | 'courseware' | 'assignment' | 'xuean';
   assignmentId?: string;
   elementId?: string;
 }

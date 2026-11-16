@@ -1,10 +1,14 @@
-import type { Dispatch, SetStateAction } from 'react';
+import { lazy, Suspense, type Dispatch, type SetStateAction } from 'react';
 import type { StudentType } from '../../types/app';
-import { BookOpen, Minimize2, Maximize2, ChevronRight, Folder, Globe } from 'lucide-react';
+import { BookOpen, Minimize2, Maximize2, ChevronRight, Folder, Globe, BookOpenCheck } from 'lucide-react';
 import { LazyWhiteboard } from '../../components/LazyWhiteboard';
 import { LazyCourseware } from '../../components/LazyCourseware';
 import { StudentAssignmentEvalPanel } from '../../components/StudentAssignmentEvalPanel';
 import { ExtensionPointRenderer } from '../../plugin-host/extension-point-renderer';
+
+const LazyStudentXueanView = lazy(() =>
+  import('./xuean/StudentXueanView').then((m) => ({ default: m.StudentXueanView })),
+);
 
 export interface StudentLessonInteractionPanelProps {
   /** 全班专注锁定中：标签页与白板均变为只读 */
@@ -15,8 +19,8 @@ export interface StudentLessonInteractionPanelProps {
   isInteractionLocked?: boolean;
   /** 锁定模式：'full' | 'navigation' */
   lockMode?: 'full' | 'navigation';
-  studentLessonTab: 'whiteboard' | 'courseware' | 'assignment';
-  setStudentLessonTab: (tab: 'whiteboard' | 'courseware' | 'assignment') => void;
+  studentLessonTab: 'whiteboard' | 'courseware' | 'assignment' | 'xuean';
+  setStudentLessonTab: (tab: 'whiteboard' | 'courseware' | 'assignment' | 'xuean') => void;
   isStudentLessonContentCollapsed: boolean;
   setIsStudentLessonContentCollapsed: (b: boolean) => void;
   lang: 'zh' | 'en';
@@ -82,7 +86,7 @@ export function StudentLessonInteractionPanel(props: StudentLessonInteractionPan
   const isAnswerMode = (lockMode || (!interactionLocked && navigationLocked ? 'navigation' : 'full')) === 'navigation';
 
   // 锁定期间禁止自行切换标签页，仅允许跟随教师端广播的 TEACHER_CHANGE_TAB
-  const handleTabChange = (tab: 'whiteboard' | 'courseware' | 'assignment') => {
+  const handleTabChange = (tab: 'whiteboard' | 'courseware' | 'assignment' | 'xuean') => {
     if (navigationLocked) {
       if (tab !== studentLessonTab) {
         addToast(
@@ -111,7 +115,7 @@ export function StudentLessonInteractionPanel(props: StudentLessonInteractionPan
   const boardSegmentId = contentSegmentId || activeSegmentId;
   const hideSegmentBody = blockSegmentContent;
 
-  const tabButtonClass = (tab: 'whiteboard' | 'courseware' | 'assignment') =>
+  const tabButtonClass = (tab: 'whiteboard' | 'courseware' | 'assignment' | 'xuean') =>
     `px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
       studentLessonTab === tab
         ? 'bg-primary-theme/10 text-primary-theme shadow-sm font-bold'
@@ -166,6 +170,10 @@ export function StudentLessonInteractionPanel(props: StudentLessonInteractionPan
           </button>
           <button onClick={() => handleTabChange('assignment')} className={tabButtonClass('assignment')}>
             {lang === 'zh' ? '作业提交与互评' : 'Assignments & Peer Reviews'}
+          </button>
+          <button onClick={() => handleTabChange('xuean')} className={tabButtonClass('xuean')} title={lang === 'zh' ? '学案式课时包' : 'Xuean Lesson Package'}>
+            <BookOpenCheck size={12} className="inline -mt-0.5 mr-1" />
+            {lang === 'zh' ? '学案' : 'Xuean'}
           </button>
         </div>
 
@@ -339,6 +347,13 @@ export function StudentLessonInteractionPanel(props: StudentLessonInteractionPan
           lang={lang}
           addToast={addToast}
         />
+      )}
+      {!hideSegmentBody && studentLessonTab === 'xuean' && selectedLesson && (
+        <div className="flex-1 min-h-0">
+          <Suspense fallback={<div className="text-center text-muted py-8 text-sm">加载学案…</div>}>
+            <LazyStudentXueanView lessonId={selectedLesson} />
+          </Suspense>
+        </div>
       )}
     </div>
   );

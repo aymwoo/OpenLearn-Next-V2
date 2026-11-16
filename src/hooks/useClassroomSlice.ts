@@ -53,8 +53,8 @@ export interface ClassroomSliceParams {
   activeRole: SessionSlice['activeRole'];
   setStudentViewStatus: SessionSlice['setStudentViewStatus'];
   studentViewStatus: 'dashboard' | 'lesson' | 'assignment';
-  studentLessonTab: 'whiteboard' | 'courseware' | 'assignment';
-  setStudentLessonTab: (tab: 'whiteboard' | 'courseware' | 'assignment') => void;
+  studentLessonTab: 'whiteboard' | 'courseware' | 'assignment' | 'xuean';
+  setStudentLessonTab: (tab: 'whiteboard' | 'courseware' | 'assignment' | 'xuean') => void;
   setLiveClassFocusLocked: (locked: boolean) => void;
   isStudentLiveMode: boolean;
   isFollowingTeacher: boolean;

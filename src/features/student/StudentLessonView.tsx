@@ -36,8 +36,8 @@ export interface StudentLessonViewProps {
   updateStudentProgress: (percent: number) => void;
   isStudentLessonContentCollapsed: boolean;
   setIsStudentLessonContentCollapsed: (b: boolean) => void;
-  studentLessonTab: 'whiteboard' | 'courseware' | 'assignment';
-  setStudentLessonTab: (tab: 'whiteboard' | 'courseware' | 'assignment') => void;
+  studentLessonTab: 'whiteboard' | 'courseware' | 'assignment' | 'xuean';
+  setStudentLessonTab: (tab: 'whiteboard' | 'courseware' | 'assignment' | 'xuean') => void;
   elements: any[];
   activeRole: 'student' | 'teacher';
   fetchElements: (lessonId: string) => void;
