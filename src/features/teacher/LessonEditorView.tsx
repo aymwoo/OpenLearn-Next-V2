@@ -15,6 +15,7 @@ import { useWhiteboardAutoSave } from '../whiteboard/services/useWhiteboardAutoS
 import type { WhiteboardPageItem, WhiteboardDragState } from '../whiteboard/InteractiveWhiteboard';
 import { ExtensionPointRenderer } from '../../plugin-host/extension-point-renderer';
 import { useOptionalPluginHost } from '../../plugin-host/plugin-host-context';
+import { ActivityPackEditor } from '../lesson-activity-pack';
 
 export function LessonEditorView() {
   // C1-R3: 全部数据经 AppDataContext 取用（不再经 TeacherView props 透传）
@@ -68,6 +69,7 @@ export function LessonEditorView() {
   const isReadOnly = !canEdit || activeRole !== 'teacher';
 
   const [paletteCollapsed, setPaletteCollapsed] = useState(false);
+  const [editorWorkspace, setEditorWorkspace] = useState<'timeline' | 'activity-pack'>('timeline');
   const [exportingPackage, setExportingPackage] = useState(false);
   const handleExportPackage = async () => {
     if (!selectedLesson || exportingPackage) return;
@@ -316,6 +318,34 @@ export function LessonEditorView() {
 
         {/* 顶部右侧快捷操作 */}
         <div className="flex items-center gap-2 shrink-0">
+          {currentLesson && (
+            <div className="bg-surface-secondary border border-theme p-1 rounded-xl flex items-center gap-1 shadow-2xs">
+              <button
+                type="button"
+                data-testid="editor-workspace-timeline"
+                onClick={() => setEditorWorkspace('timeline')}
+                className={`px-3 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                  editorWorkspace === 'timeline'
+                    ? 'bg-surface text-primary-theme font-black shadow-xs border border-theme/60'
+                    : 'text-muted hover:text-main'
+                }`}
+              >
+                {lang === 'zh' ? '课堂环节' : 'Timeline'}
+              </button>
+              <button
+                type="button"
+                data-testid="editor-workspace-activity-pack"
+                onClick={() => setEditorWorkspace('activity-pack')}
+                className={`px-3 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                  editorWorkspace === 'activity-pack'
+                    ? 'bg-surface text-primary-theme font-black shadow-xs border border-theme/60'
+                    : 'text-muted hover:text-main'
+                }`}
+              >
+                {lang === 'zh' ? '学案活动' : 'Activities'}
+              </button>
+            </div>
+          )}
           {/* 视角切换：教师视角就地切回；学生视角在独立标签页打开，避免备课界面被整体替换 */}
           <div className="bg-surface-secondary border border-theme p-1 rounded-xl flex items-center gap-1 shadow-2xs">
             <button
@@ -426,177 +456,183 @@ export function LessonEditorView() {
       )}
 
       <div className="flex-1 flex overflow-hidden">
-        <LessonPalette
-          lang={lang}
-          onActivate={safeHandlePaletteActivate}
-          readOnly={isReadOnly}
-          collapsed={paletteCollapsed}
-          onToggleCollapse={setPaletteCollapsed}
-          pages={whiteboardPages}
-          currentPage={currentWhiteboardPage}
-          activeSegmentId={activeSegmentId}
-          onSwitchPage={(idx) => whiteboardRef.current?.switchPage?.(idx)}
-          onAddPage={(customTitle) => whiteboardRef.current?.addPage?.(customTitle)}
-          onDeletePage={(idx) => whiteboardRef.current?.deletePage?.(idx)}
-          onRenamePage={(idx, newTitle) => whiteboardRef.current?.renamePage?.(idx, newTitle)}
-          dragState={whiteboardDragState}
-          onHoverDropTarget={(target) => {
-            hoveredPageDropTargetRef.current = target;
-          }}
-        />
-        <div className="flex-1 relative bg-surface flex flex-col min-w-0">
-          <TimelineRail
-            lang={lang}
-            segments={timelineSegments}
-            activeSegmentId={activeSegmentId}
-            setActiveSegmentId={setActiveSegmentId}
-            draggedSegmentIdx={draggedSegmentIdx}
-            setDraggedSegmentIdx={setDraggedSegmentIdx}
-            selectedLesson={selectedLesson}
-            saveTimeline={saveTimeline}
-            readOnly={isReadOnly}
-            editorPanelsExpanded={editorPanelsExpanded}
-            setEditorPanelsExpanded={setEditorPanelsExpanded}
-            dragState={whiteboardDragState}
-            onHoverDropTarget={(target) => {
-              hoveredSegmentDropTargetRef.current = target;
-            }}
-          />
-          <div className="flex-1 relative flex flex-col min-w-0 overflow-y-auto">
-            {selectedLesson &&
-              activeSegmentId &&
-              editorPanelsExpanded &&
-              timelineSegments.some((s) => s.id === activeSegmentId) && (
-                <SegmentEditorCard
-                  key={activeSegmentId}
-                  lang={lang}
-                  segment={timelineSegments.find((s) => s.id === activeSegmentId)}
-                  readOnly={isReadOnly}
-                  onPatch={(patch) =>
-                    saveTimeline(
-                      selectedLesson,
-                      timelineSegments.map((s) => (s.id === activeSegmentId ? { ...s, ...patch } : s)),
-                    )
-                  }
-                  onDelete={() => {
-                    if (timelineSegments.length <= 1) {
-                      alert('无法删除！课程必须包含至少一个环节。');
-                      return;
-                    }
-                    if (
-                      window.confirm(
-                        `确定要删除环节"${timelineSegments.find((s) => s.id === activeSegmentId)?.title}"吗？`,
-                      )
-                    ) {
-                      const updated = timelineSegments.filter((s) => s.id !== activeSegmentId);
-                      saveTimeline(selectedLesson, updated);
-                      setActiveSegmentId(updated[0]?.id || null);
-                    }
-                  }}
-                />
-              )}
-            <div className="flex-1 min-h-[380px] relative flex flex-col min-w-0">
-              {!selectedLesson ? (
-                <div className="absolute inset-0 flex items-center justify-center text-muted p-8 text-center bg-surface-secondary/50">
-                  <div>
-                    <PenTool size={48} className="mx-auto mb-4 opacity-30" />
-                    <p className="font-medium text-lg text-main mb-2">No active lesson selected</p>
-                    <p className="text-sm">Please select a lesson from the Dashboard to orchestrate.</p>
-                  </div>
-                </div>
-              ) : (
-                <>
-                  <LazyWhiteboard
-                    ref={whiteboardRef}
-                    lessonId={selectedLesson}
-                    userRole={activeRole}
-                    readOnly={isReadOnly}
-                    elements={elements}
-                    activeSegmentId={activeSegmentId}
-                    hidePageBar={true}
-                    onPagesStateChange={handleWhiteboardPagesStateChange}
-                    onSegmentSync={(segId: string) => setActiveSegmentId(segId)}
-                    onElementDragChange={setWhiteboardDragState}
-                    onElementDropCheck={handleElementDropCheck}
-                    onElementAdd={async (type: string, data: any) => {
-                      if (isReadOnly) return;
-                      await flushAutoSave();
-                      setEditorSaveStatus('saving');
-                      try {
-                        const response = await fetch(`/api/lessons/${selectedLesson}/whiteboard`, {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ type, data }),
-                        });
-                        if (response.ok) {
-                          setEditorSaveStatus('saved');
-                          setEditorLastSavedTime(new Date());
-                          fetchElements(selectedLesson);
-                        } else {
-                          setEditorSaveStatus('error');
-                        }
-                      } catch (err) {
-                        setEditorSaveStatus('error');
-                      }
-                    }}
-                    onElementUpdate={(elementId: string, data: any) => {
-                      if (isReadOnly) return;
-                      queueUpdate(elementId, data);
-                    }}
-                    onElementDelete={async (elementId: string) => {
-                      if (isReadOnly) return;
-                      await flushAutoSave();
-                      setEditorSaveStatus('saving');
-                      try {
-                        const response = await fetch(`/api/lessons/${selectedLesson}/whiteboard/${elementId}`, {
-                          method: 'DELETE',
-                        });
-                        if (response.ok) {
-                          setEditorSaveStatus('saved');
-                          setEditorLastSavedTime(new Date());
-                          fetchElements(selectedLesson);
-                        } else {
-                          setEditorSaveStatus('error');
-                        }
-                      } catch (err) {
-                        setEditorSaveStatus('error');
-                      }
-                    }}
-                    onClearBoard={async () => {
-                      if (isReadOnly) return;
-                      await flushAutoSave();
-                      setEditorSaveStatus('saving');
-                      try {
-                        const response = await fetch(`/api/lessons/${selectedLesson}/whiteboard`, {
-                          method: 'DELETE',
-                        });
-                        if (response.ok) {
-                          setEditorSaveStatus('saved');
-                          setEditorLastSavedTime(new Date());
-                          fetchElements(selectedLesson);
-                        } else {
-                          setEditorSaveStatus('error');
-                        }
-                      } catch (err) {
-                        setEditorSaveStatus('error');
-                      }
-                    }}
-                    onRefresh={() => fetchElements(selectedLesson)}
-                  />
-                  {paletteEdit && !isReadOnly && getPaletteItemConfig(paletteEdit.type) && (
-                    <PaletteCardEditModal
-                      config={getPaletteItemConfig(paletteEdit.type)!}
+        {editorWorkspace === 'activity-pack' && selectedLesson ? (
+          <ActivityPackEditor lessonId={selectedLesson} lang={lang} readOnly={isReadOnly} />
+        ) : (
+          <>
+            <LessonPalette
+              lang={lang}
+              onActivate={safeHandlePaletteActivate}
+              readOnly={isReadOnly}
+              collapsed={paletteCollapsed}
+              onToggleCollapse={setPaletteCollapsed}
+              pages={whiteboardPages}
+              currentPage={currentWhiteboardPage}
+              activeSegmentId={activeSegmentId}
+              onSwitchPage={(idx) => whiteboardRef.current?.switchPage?.(idx)}
+              onAddPage={(customTitle) => whiteboardRef.current?.addPage?.(customTitle)}
+              onDeletePage={(idx) => whiteboardRef.current?.deletePage?.(idx)}
+              onRenamePage={(idx, newTitle) => whiteboardRef.current?.renamePage?.(idx, newTitle)}
+              dragState={whiteboardDragState}
+              onHoverDropTarget={(target) => {
+                hoveredPageDropTargetRef.current = target;
+              }}
+            />
+            <div className="flex-1 relative bg-surface flex flex-col min-w-0">
+              <TimelineRail
+                lang={lang}
+                segments={timelineSegments}
+                activeSegmentId={activeSegmentId}
+                setActiveSegmentId={setActiveSegmentId}
+                draggedSegmentIdx={draggedSegmentIdx}
+                setDraggedSegmentIdx={setDraggedSegmentIdx}
+                selectedLesson={selectedLesson}
+                saveTimeline={saveTimeline}
+                readOnly={isReadOnly}
+                editorPanelsExpanded={editorPanelsExpanded}
+                setEditorPanelsExpanded={setEditorPanelsExpanded}
+                dragState={whiteboardDragState}
+                onHoverDropTarget={(target) => {
+                  hoveredSegmentDropTargetRef.current = target;
+                }}
+              />
+              <div className="flex-1 relative flex flex-col min-w-0 overflow-y-auto">
+                {selectedLesson &&
+                  activeSegmentId &&
+                  editorPanelsExpanded &&
+                  timelineSegments.some((s) => s.id === activeSegmentId) && (
+                    <SegmentEditorCard
+                      key={activeSegmentId}
                       lang={lang}
-                      initialData={paletteEdit.data}
-                      onConfirm={handlePaletteConfirm}
-                      onCancel={() => setPaletteEdit(null)}
+                      segment={timelineSegments.find((s) => s.id === activeSegmentId)}
+                      readOnly={isReadOnly}
+                      onPatch={(patch) =>
+                        saveTimeline(
+                          selectedLesson,
+                          timelineSegments.map((s) => (s.id === activeSegmentId ? { ...s, ...patch } : s)),
+                        )
+                      }
+                      onDelete={() => {
+                        if (timelineSegments.length <= 1) {
+                          alert('无法删除！课程必须包含至少一个环节。');
+                          return;
+                        }
+                        if (
+                          window.confirm(
+                            `确定要删除环节"${timelineSegments.find((s) => s.id === activeSegmentId)?.title}"吗？`,
+                          )
+                        ) {
+                          const updated = timelineSegments.filter((s) => s.id !== activeSegmentId);
+                          saveTimeline(selectedLesson, updated);
+                          setActiveSegmentId(updated[0]?.id || null);
+                        }
+                      }}
                     />
                   )}
-                </>
-              )}
+                <div className="flex-1 min-h-[380px] relative flex flex-col min-w-0">
+                  {!selectedLesson ? (
+                    <div className="absolute inset-0 flex items-center justify-center text-muted p-8 text-center bg-surface-secondary/50">
+                      <div>
+                        <PenTool size={48} className="mx-auto mb-4 opacity-30" />
+                        <p className="font-medium text-lg text-main mb-2">No active lesson selected</p>
+                        <p className="text-sm">Please select a lesson from the Dashboard to orchestrate.</p>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <LazyWhiteboard
+                        ref={whiteboardRef}
+                        lessonId={selectedLesson}
+                        userRole={activeRole}
+                        readOnly={isReadOnly}
+                        elements={elements}
+                        activeSegmentId={activeSegmentId}
+                        hidePageBar={true}
+                        onPagesStateChange={handleWhiteboardPagesStateChange}
+                        onSegmentSync={(segId: string) => setActiveSegmentId(segId)}
+                        onElementDragChange={setWhiteboardDragState}
+                        onElementDropCheck={handleElementDropCheck}
+                        onElementAdd={async (type: string, data: any) => {
+                          if (isReadOnly) return;
+                          await flushAutoSave();
+                          setEditorSaveStatus('saving');
+                          try {
+                            const response = await fetch(`/api/lessons/${selectedLesson}/whiteboard`, {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ type, data }),
+                            });
+                            if (response.ok) {
+                              setEditorSaveStatus('saved');
+                              setEditorLastSavedTime(new Date());
+                              fetchElements(selectedLesson);
+                            } else {
+                              setEditorSaveStatus('error');
+                            }
+                          } catch (err) {
+                            setEditorSaveStatus('error');
+                          }
+                        }}
+                        onElementUpdate={(elementId: string, data: any) => {
+                          if (isReadOnly) return;
+                          queueUpdate(elementId, data);
+                        }}
+                        onElementDelete={async (elementId: string) => {
+                          if (isReadOnly) return;
+                          await flushAutoSave();
+                          setEditorSaveStatus('saving');
+                          try {
+                            const response = await fetch(`/api/lessons/${selectedLesson}/whiteboard/${elementId}`, {
+                              method: 'DELETE',
+                            });
+                            if (response.ok) {
+                              setEditorSaveStatus('saved');
+                              setEditorLastSavedTime(new Date());
+                              fetchElements(selectedLesson);
+                            } else {
+                              setEditorSaveStatus('error');
+                            }
+                          } catch (err) {
+                            setEditorSaveStatus('error');
+                          }
+                        }}
+                        onClearBoard={async () => {
+                          if (isReadOnly) return;
+                          await flushAutoSave();
+                          setEditorSaveStatus('saving');
+                          try {
+                            const response = await fetch(`/api/lessons/${selectedLesson}/whiteboard`, {
+                              method: 'DELETE',
+                            });
+                            if (response.ok) {
+                              setEditorSaveStatus('saved');
+                              setEditorLastSavedTime(new Date());
+                              fetchElements(selectedLesson);
+                            } else {
+                              setEditorSaveStatus('error');
+                            }
+                          } catch (err) {
+                            setEditorSaveStatus('error');
+                          }
+                        }}
+                        onRefresh={() => fetchElements(selectedLesson)}
+                      />
+                      {paletteEdit && !isReadOnly && getPaletteItemConfig(paletteEdit.type) && (
+                        <PaletteCardEditModal
+                          config={getPaletteItemConfig(paletteEdit.type)!}
+                          lang={lang}
+                          initialData={paletteEdit.data}
+                          onConfirm={handlePaletteConfirm}
+                          onCancel={() => setPaletteEdit(null)}
+                        />
+                      )}
+                    </>
+                  )}
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
+          </>
+        )}
       </div>
     </div>
   );

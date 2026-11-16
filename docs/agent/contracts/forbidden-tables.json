@@ -46,7 +46,10 @@
     "file_assets",
     "file_aliases",
     "ai_personas",
-    "ai_persona_governance"
+    "ai_persona_governance",
+    "lesson_activities",
+    "lesson_activity_blocks",
+    "activity_progress"
   ],
-  "total": 45
+  "total": 48
 }

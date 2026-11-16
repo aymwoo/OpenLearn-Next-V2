@@ -1,13 +1,37 @@
-import { PlayCircle } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { BookOpen, PlayCircle } from 'lucide-react';
+import { fetchMyActivityPacks } from '../lesson-activity-pack';
 
 export interface StudentCourseProgressListProps {
   progress: any[];
   setSelectedLesson: (lessonId: string) => void;
   setStudentViewStatus: (status: 'dashboard' | 'lesson' | 'assignment') => void;
+  onOpenActivityPack?: (lessonId: string) => void;
+  lang?: 'zh' | 'en';
 }
 
 export function StudentCourseProgressList(props: StudentCourseProgressListProps) {
-  const { progress, setSelectedLesson, setStudentViewStatus } = props;
+  const { progress, setSelectedLesson, setStudentViewStatus, onOpenActivityPack, lang = 'zh' } = props;
+  const [packIds, setPackIds] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (!onOpenActivityPack || !progress?.length) return;
+    const lessonIds = progress.map((item: { lesson_id?: string }) => item.lesson_id).filter(Boolean) as string[];
+    if (lessonIds.length === 0) return;
+    let cancelled = false;
+    fetchMyActivityPacks(lessonIds)
+      .then((result) => {
+        if (cancelled) return;
+        setPackIds(new Set(result.packs.filter((pack) => pack.activityCount > 0).map((pack) => pack.lessonId)));
+      })
+      .catch(() => {
+        if (!cancelled) setPackIds(new Set());
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [progress, onOpenActivityPack]);
+
   return (
     <div className="flex flex-col">
       <div>
@@ -37,23 +61,35 @@ export function StudentCourseProgressList(props: StudentCourseProgressListProps)
                   </div>
                   <span className="text-xs text-gray-500 font-medium shrink-0">{p.progress_percent}%</span>
                 </div>
-                <button
-                  onClick={() => {
-                    setSelectedLesson(p.lesson_id);
-                    setStudentViewStatus('lesson');
-                  }}
-                  className="w-full flex justify-center items-center gap-2 bg-teal-500 hover:bg-teal-600 text-white px-4 py-2 rounded-lg text-sm font-semibold shadow-sm transition-colors mt-auto"
-                >
-                  {p.progress_percent === 0 ? (
-                    <>
-                      <PlayCircle size={16} /> Start Learning
-                    </>
-                  ) : (
-                    <>
-                      <PlayCircle size={16} /> Continue
-                    </>
+                <div className="flex flex-col gap-2 mt-auto">
+                  <button
+                    onClick={() => {
+                      setSelectedLesson(p.lesson_id);
+                      setStudentViewStatus('lesson');
+                    }}
+                    className="w-full flex justify-center items-center gap-2 bg-teal-500 hover:bg-teal-600 text-white px-4 py-2 rounded-lg text-sm font-semibold shadow-sm transition-colors"
+                  >
+                    {p.progress_percent === 0 ? (
+                      <>
+                        <PlayCircle size={16} /> Start Learning
+                      </>
+                    ) : (
+                      <>
+                        <PlayCircle size={16} /> Continue
+                      </>
+                    )}
+                  </button>
+                  {onOpenActivityPack && packIds.has(p.lesson_id) && (
+                    <button
+                      type="button"
+                      onClick={() => onOpenActivityPack(p.lesson_id)}
+                      className="w-full flex justify-center items-center gap-2 border border-indigo-200 text-indigo-700 bg-indigo-50 hover:bg-indigo-100 px-4 py-2 rounded-lg text-sm font-semibold transition-colors"
+                    >
+                      <BookOpen size={16} />
+                      {lang === 'zh' ? '打开学案' : 'Open lesson pack'}
+                    </button>
                   )}
-                </button>
+                </div>
               </div>
             ))}
           </div>

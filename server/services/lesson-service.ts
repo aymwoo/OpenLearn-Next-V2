@@ -362,6 +362,19 @@ export class LessonService {
       if (tableExists('lesson_checkins')) {
         this.db.prepare('DELETE FROM lesson_checkins WHERE lesson_id = ?').run(lessonId);
       }
+      if (tableExists('lesson_activities') && tableExists('activity_progress')) {
+        this.db
+          .prepare(
+            'DELETE FROM activity_progress WHERE activity_id IN (SELECT id FROM lesson_activities WHERE lesson_id = ?)',
+          )
+          .run(lessonId);
+      }
+      if (tableExists('lesson_activities')) {
+        this.db.prepare('DELETE FROM lesson_activities WHERE lesson_id = ?').run(lessonId);
+      }
+      if (tableExists('lesson_activity_blocks')) {
+        this.db.prepare('DELETE FROM lesson_activity_blocks WHERE lesson_id = ?').run(lessonId);
+      }
 
       // 8. 课节主体删除
       return this.db.prepare('DELETE FROM lessons WHERE id = ?').run(lessonId);
