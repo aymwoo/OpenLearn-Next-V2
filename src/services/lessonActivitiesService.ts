@@ -88,10 +88,12 @@ export async function getXuean(lessonId: string, studentId?: string) {
   return { ok: true, data: await res.json() };
 }
 
-// ── 活动进度上报（学生自报）──────────────────────────────────────────────
+// ── 活动进度上报（学生自报 + 提交内容）──────────────────────────────────────
+export type ActivitySubmission = string | { type: 'text' | 'file' | 'link'; content: string; url?: string };
+
 export async function postActivityProgress(
   activityId: string,
-  payload: { status?: string; progressPercent?: number; studentId?: string },
+  payload: { status?: string; progressPercent?: number; studentId?: string; submission?: ActivitySubmission },
 ) {
   const res = await fetch(`/api/activities/${activityId}/progress`, {
     method: 'POST',

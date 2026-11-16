@@ -26,6 +26,7 @@ type PanelStudent = {
   score?: number | null;
   graded_at?: number | null;
   last_activity_at?: number | null;
+  submission_json?: string | null;
 };
 
 type PanelData = {
@@ -51,6 +52,20 @@ const STATUS_LABELS: Record<PanelStudent['status'], { text: string; cls: string 
   submitted: { text: '已提交', cls: 'bg-amber-500/10 text-amber-600 border-amber-500/30' },
   graded: { text: '已批阅', cls: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/30' },
 };
+
+function formatSubmission(json: string): string {
+  try {
+    const parsed = JSON.parse(json);
+    if (typeof parsed === 'string') return parsed.length > 60 ? parsed.slice(0, 60) + '…' : parsed;
+    if (parsed && typeof parsed === 'object') {
+      const content = parsed.content ?? parsed.url ?? JSON.stringify(parsed);
+      return String(content).length > 60 ? String(content).slice(0, 60) + '…' : String(content);
+    }
+    return JSON.stringify(parsed);
+  } catch {
+    return json.length > 60 ? json.slice(0, 60) + '…' : json;
+  }
+}
 
 export function ProgressPanel() {
   const appData = useOptionalAppData();
@@ -272,6 +287,9 @@ function StudentTable({
               进度
             </th>
             <th scope="col" className="text-left px-3 py-2 font-bold">
+              提交内容
+            </th>
+            <th scope="col" className="text-left px-3 py-2 font-bold">
               得分
             </th>
             <th scope="col" className="text-right px-4 py-2 font-bold">
@@ -293,6 +311,15 @@ function StudentTable({
                   {s.verified ? <span className="ml-1 text-[10px] text-emerald-600">✓</span> : null}
                 </td>
                 <td className="px-3 py-2 text-muted text-xs">{s.progress_percent}%</td>
+                <td className="px-3 py-2 text-xs text-main/70 max-w-[200px]">
+                  {s.submission_json ? (
+                    <span className="block truncate" title={formatSubmission(s.submission_json)}>
+                      {formatSubmission(s.submission_json)}
+                    </span>
+                  ) : (
+                    <span className="text-muted">—</span>
+                  )}
+                </td>
                 <td className="px-3 py-2 text-xs font-bold">
                   {s.score != null ? (
                     <span className="text-amber-600">{s.score}</span>

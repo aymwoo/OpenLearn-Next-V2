@@ -31,6 +31,7 @@ type Progress = {
   progress_percent: number;
   verified: number;
   score: number | null;
+  submission_json?: string | null;
 };
 
 type XueanData = {
@@ -240,6 +241,7 @@ function ActivityItem({
   onProgressUpdated: () => void;
 }) {
   const [saving, setSaving] = useState(false);
+  const [showSubmitModal, setShowSubmitModal] = useState(false);
   const status = progress?.status ?? 'not_started';
   const pct = progress?.progress_percent ?? 0;
   const stLabel = STATUS_LABELS[status];
@@ -253,68 +255,261 @@ function ActivityItem({
 
   const activityTypeLabel = ACTIVITY_TYPE_LABELS[activity.type] ?? activity.type;
 
-  return (
-    <div className="rounded-xl border border-theme bg-surface p-4 hover:border-primary-theme/30 transition">
-      <div className="flex items-start gap-3">
-        {/* 序号圆徽 */}
-        <div className="w-8 h-8 rounded-full bg-primary-theme/10 text-primary-theme font-black text-sm flex items-center justify-center shrink-0 border border-primary-theme/20">
-          {index + 1}
-        </div>
+  // 解析已有提交内容
+  let existingSubmission: any = null;
+  if (progress?.submission_json) {
+    try {
+      existingSubmission = JSON.parse(progress.submission_json);
+    } catch {
+      existingSubmission = progress.submission_json;
+    }
+  }
 
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-muted">{activityTypeLabel}</span>
-            {activity.required ? (
-              <span className="text-[10px] px-1.5 py-0.5 rounded bg-rose-500/10 text-rose-600">必做</span>
-            ) : null}
-            <span className={`text-[10px] px-1.5 py-0.5 rounded border ${stLabel.cls}`}>{stLabel.text}</span>
-            {progress?.verified && <span className="text-[10px] text-emerald-600">✓ 已验证</span>}
-            {progress?.score != null && (
-              <span className="text-[10px] text-amber-600 font-bold">得分 {progress.score}</span>
+  return (
+    <>
+      <div className="rounded-xl border border-theme bg-surface p-4 hover:border-primary-theme/30 transition">
+        <div className="flex items-start gap-3">
+          {/* 序号圆徽 */}
+          <div className="w-8 h-8 rounded-full bg-primary-theme/10 text-primary-theme font-black text-sm flex items-center justify-center shrink-0 border border-primary-theme/20">
+            {index + 1}
+          </div>
+
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-muted">{activityTypeLabel}</span>
+              {activity.required ? (
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-rose-500/10 text-rose-600">必做</span>
+              ) : null}
+              <span className={`text-[10px] px-1.5 py-0.5 rounded border ${stLabel.cls}`}>{stLabel.text}</span>
+              {progress?.verified && <span className="text-[10px] text-emerald-600">✓ 已验证</span>}
+              {progress?.score != null && (
+                <span className="text-[10px] text-amber-600 font-bold">得分 {progress.score}</span>
+              )}
+              {existingSubmission && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
+                  已提交
+                </span>
+              )}
+            </div>
+            <p className="mt-1 text-sm font-semibold text-main">{activity.title}</p>
+
+            {/* 已提交内容预览 */}
+            {existingSubmission && (
+              <div className="mt-2 p-2 rounded-lg bg-surface-secondary/50 border border-theme/60 max-h-24 overflow-y-auto">
+                <p className="text-[10px] text-muted font-bold mb-0.5">我的提交</p>
+                <p className="text-xs text-main/80 whitespace-pre-wrap break-all">
+                  {typeof existingSubmission === 'string'
+                    ? existingSubmission
+                    : (existingSubmission.content ?? JSON.stringify(existingSubmission))}
+                </p>
+              </div>
+            )}
+
+            {/* 进度条 */}
+            <div className="mt-2 h-1.5 rounded-full bg-surface-secondary overflow-hidden">
+              <div
+                className="h-full bg-primary-theme transition-all"
+                style={{ width: `${pct}%` }}
+                role="progressbar"
+                aria-valuenow={pct}
+                aria-valuemin={0}
+                aria-valuemax={100}
+              />
+            </div>
+          </div>
+
+          {/* 操作按钮 */}
+          <div className="flex flex-col gap-1 shrink-0">
+            {status === 'not_started' && (
+              <button
+                type="button"
+                onClick={() => mark('in_progress')}
+                disabled={saving}
+                className="px-2 py-1 text-xs rounded bg-sky-500/10 text-sky-600 border border-sky-500/30 hover:bg-sky-500/20"
+              >
+                开始
+              </button>
+            )}
+            {status === 'in_progress' && (
+              <button
+                type="button"
+                onClick={() => setShowSubmitModal(true)}
+                disabled={saving}
+                className="px-2 py-1 text-xs rounded bg-amber-500/10 text-amber-600 border border-amber-500/30 hover:bg-amber-500/20"
+              >
+                提交
+              </button>
+            )}
+            {(status === 'submitted' || status === 'graded') && (
+              <div className="flex flex-col gap-1">
+                <span className="px-2 py-1 text-xs text-muted text-center">
+                  {status === 'graded' ? '已完成' : '等待批阅'}
+                </span>
+                {status !== 'graded' && (
+                  <button
+                    type="button"
+                    onClick={() => setShowSubmitModal(true)}
+                    disabled={saving}
+                    className="px-2 py-1 text-[10px] rounded border border-theme hover:bg-surface-secondary text-muted"
+                  >
+                    重新提交
+                  </button>
+                )}
+              </div>
             )}
           </div>
-          <p className="mt-1 text-sm font-semibold text-main">{activity.title}</p>
+        </div>
+      </div>
 
-          {/* 进度条 */}
-          <div className="mt-2 h-1.5 rounded-full bg-surface-secondary overflow-hidden">
-            <div
-              className="h-full bg-primary-theme transition-all"
-              style={{ width: `${pct}%` }}
-              role="progressbar"
-              aria-valuenow={pct}
-              aria-valuemin={0}
-              aria-valuemax={100}
-            />
+      {showSubmitModal && (
+        <SubmissionModal
+          activityTitle={activity.title}
+          existing={existingSubmission}
+          onClose={() => setShowSubmitModal(false)}
+          onSaved={async () => {
+            setShowSubmitModal(false);
+            await onProgressUpdated();
+          }}
+          submitFn={async (submission) => {
+            setSaving(true);
+            const res = await postActivityProgress(activity.id, { status: 'submitted', submission });
+            setSaving(false);
+            return res.ok;
+          }}
+        />
+      )}
+    </>
+  );
+}
+
+function SubmissionModal({
+  activityTitle,
+  existing,
+  onClose,
+  onSaved,
+  submitFn,
+}: {
+  activityTitle: string;
+  existing: any;
+  onClose: () => void;
+  onSaved: () => void;
+  submitFn: (submission: any) => Promise<boolean>;
+}) {
+  const initialText = existing ? (typeof existing === 'string' ? existing : (existing.content ?? '')) : '';
+  const [content, setContent] = useState(initialText);
+  const [submissionType, setSubmissionType] = useState<'text' | 'link'>(existing?.type === 'link' ? 'link' : 'text');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!content.trim()) {
+      setError('请输入提交内容');
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    const submission =
+      submissionType === 'link' ? { type: 'link', content: content.trim(), url: content.trim() } : content.trim();
+    const ok = await submitFn(submission);
+    setSaving(false);
+    if (!ok) {
+      setError('提交失败，请重试');
+      return;
+    }
+    onSaved();
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
+      role="dialog"
+      aria-modal="true"
+      aria-label={`提交活动：${activityTitle}`}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <form
+        onSubmit={handleSubmit}
+        className="w-full max-w-md bg-surface rounded-2xl border border-theme shadow-2xl p-5 space-y-4"
+      >
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-sm font-bold">提交活动</h3>
+            <p className="text-xs text-muted mt-0.5 truncate max-w-[280px]">{activityTitle}</p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-7 h-7 rounded hover:bg-surface-secondary text-muted hover:text-main"
+            aria-label="关闭"
+          >
+            ✕
+          </button>
+        </div>
+
+        <div className="space-y-2">
+          <label className="block text-xs font-semibold text-muted">提交类型</label>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setSubmissionType('text')}
+              className={`flex-1 px-3 py-2 text-xs rounded-lg border transition ${
+                submissionType === 'text'
+                  ? 'bg-primary-theme/10 border-primary-theme/40 text-primary-theme font-bold'
+                  : 'border-theme hover:bg-surface-secondary text-main'
+              }`}
+            >
+              文本内容
+            </button>
+            <button
+              type="button"
+              onClick={() => setSubmissionType('link')}
+              className={`flex-1 px-3 py-2 text-xs rounded-lg border transition ${
+                submissionType === 'link'
+                  ? 'bg-primary-theme/10 border-primary-theme/40 text-primary-theme font-bold'
+                  : 'border-theme hover:bg-surface-secondary text-main'
+              }`}
+            >
+              链接
+            </button>
           </div>
         </div>
 
-        {/* 操作按钮 */}
-        <div className="flex flex-col gap-1 shrink-0">
-          {status === 'not_started' && (
-            <button
-              type="button"
-              onClick={() => mark('in_progress')}
-              disabled={saving}
-              className="px-2 py-1 text-xs rounded bg-sky-500/10 text-sky-600 border border-sky-500/30 hover:bg-sky-500/20"
-            >
-              开始
-            </button>
-          )}
-          {status === 'in_progress' && (
-            <button
-              type="button"
-              onClick={() => mark('submitted')}
-              disabled={saving}
-              className="px-2 py-1 text-xs rounded bg-amber-500/10 text-amber-600 border border-amber-500/30 hover:bg-amber-500/20"
-            >
-              提交
-            </button>
-          )}
-          {(status === 'submitted' || status === 'graded') && (
-            <span className="px-2 py-1 text-xs text-muted">{status === 'graded' ? '已完成' : '等待批阅'}</span>
-          )}
+        <div className="space-y-2">
+          <label className="block text-xs font-semibold text-muted">
+            {submissionType === 'link' ? '链接 URL' : '提交内容'}
+          </label>
+          <textarea
+            value={content}
+            onChange={(e) => setContent(e.target.value)}
+            rows={submissionType === 'link' ? 2 : 6}
+            className="w-full px-3 py-2 text-sm rounded-lg border border-theme bg-surface text-main focus:outline-none focus:ring-2 focus:ring-primary-theme/40 font-mono"
+            placeholder={submissionType === 'link' ? 'https://...' : '输入你的作业内容…'}
+            autoFocus
+          />
         </div>
-      </div>
+
+        {error && <p className="text-xs text-rose-600">{error}</p>}
+
+        <div className="flex justify-end gap-2 pt-1">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2 text-sm rounded-lg border border-theme hover:bg-surface-secondary"
+          >
+            取消
+          </button>
+          <button
+            type="submit"
+            disabled={saving}
+            className="px-4 py-2 text-sm font-bold rounded-lg bg-primary-theme text-white hover:opacity-90 disabled:opacity-50"
+          >
+            {saving ? '提交中…' : '确认提交'}
+          </button>
+        </div>
+      </form>
     </div>
   );
 }

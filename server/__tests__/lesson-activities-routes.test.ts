@@ -237,6 +237,36 @@ describe('学案式课时包路由 (IKVO15 · P0)', () => {
       expect(res.body.verified).toBe(0);
     });
 
+    it('学生提交作业内容写入 submission_json', async () => {
+      const list = await fetchJson(`${baseUrl}/api/lessons/${lessonId}/activities`, { headers: teacherCookie });
+      const first = list.body[0];
+      const res = await fetchJson(`${baseUrl}/api/activities/${first.id}/progress`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...studentCookie },
+        body: JSON.stringify({ status: 'submitted', submission: { type: 'text', content: '我完成了第一章阅读' } }),
+      });
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe('submitted');
+      expect(res.body.submission_json).toBeTruthy();
+      const parsed = JSON.parse(res.body.submission_json);
+      expect(parsed.content).toBe('我完成了第一章阅读');
+      expect(parsed.type).toBe('text');
+    });
+
+    it('学生提交 string 类型也能写入 submission_json', async () => {
+      const list = await fetchJson(`${baseUrl}/api/lessons/${lessonId}/activities`, { headers: teacherCookie });
+      const second = list.body[1] ?? list.body[0];
+      const res = await fetchJson(`${baseUrl}/api/activities/${second.id}/progress`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...studentCookie },
+        body: JSON.stringify({ status: 'submitted', submission: '纯文本提交内容' }),
+      });
+      expect(res.status).toBe(200);
+      expect(res.body.submission_json).toBeTruthy();
+      const parsed = JSON.parse(res.body.submission_json);
+      expect(parsed).toBe('纯文本提交内容');
+    });
+
     it('学生不能写别人的进度', async () => {
       const list = await fetchJson(`${baseUrl}/api/lessons/${lessonId}/activities`, { headers: teacherCookie });
       const first = list.body[0];

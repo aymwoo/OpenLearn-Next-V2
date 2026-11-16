@@ -491,7 +491,7 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
       // 只有本人能写自己的进度：学生强制用 session.studentId，教师/管理员才允许 body 覆盖
       const actorStudentId: string | null = studentActorId(session);
       const privileged = isAdministrator(session) || isTeacher(session);
-      const { status, progressPercent, studentId } = req.body || {};
+      const { status, progressPercent, studentId, submission } = req.body || {};
 
       let finalStudentId: string;
       if (actorStudentId && !privileged) {
@@ -530,15 +530,33 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
       const percent = Number.isFinite(progressPercent) ? Math.max(0, Math.min(100, Number(progressPercent))) : null;
       const ts = now();
 
+      // submission: string | { type: 'text'|'file'|'link', content: string, url?: string }
+      // 非空才写入；空字符串/undefined/null 不覆盖已有提交
+      const hasSubmission =
+        submission != null && submission !== '' && (typeof submission === 'string' || typeof submission === 'object');
+      const submissionJson = hasSubmission ? JSON.stringify(submission) : undefined;
+
       // verified 只能由 verify 端点写入
-      db.prepare(
-        `INSERT INTO activity_progress (activity_id, student_id, status, progress_percent, verified, last_activity_at)
-         VALUES (?, ?, ?, ?, 0, ?)
-         ON CONFLICT(activity_id, student_id) DO UPDATE SET
-           status = excluded.status,
-           progress_percent = excluded.progress_percent,
-           last_activity_at = excluded.last_activity_at`,
-      ).run(activityId, finalStudentId, finalStatus, percent ?? 0, ts);
+      if (submissionJson) {
+        db.prepare(
+          `INSERT INTO activity_progress (activity_id, student_id, status, progress_percent, verified, last_activity_at, submission_json)
+           VALUES (?, ?, ?, ?, 0, ?, ?)
+           ON CONFLICT(activity_id, student_id) DO UPDATE SET
+             status = excluded.status,
+             progress_percent = excluded.progress_percent,
+             last_activity_at = excluded.last_activity_at,
+             submission_json = excluded.submission_json`,
+        ).run(activityId, finalStudentId, finalStatus, percent ?? 0, ts, submissionJson);
+      } else {
+        db.prepare(
+          `INSERT INTO activity_progress (activity_id, student_id, status, progress_percent, verified, last_activity_at)
+           VALUES (?, ?, ?, ?, 0, ?)
+           ON CONFLICT(activity_id, student_id) DO UPDATE SET
+             status = excluded.status,
+             progress_percent = excluded.progress_percent,
+             last_activity_at = excluded.last_activity_at`,
+        ).run(activityId, finalStudentId, finalStatus, percent ?? 0, ts);
+      }
 
       const row = readDb
         .prepare('SELECT * FROM activity_progress WHERE activity_id = ? AND student_id = ?')
