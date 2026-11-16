@@ -622,6 +622,27 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
         ).run(newStatus ?? null, scoreVal ?? null, ts, ts, activityId, studentId);
       }
 
+      // 积分闭环：批阅给分时写入 student_point_logs
+      if (scoreVal != null) {
+        const classRow = readDb
+          .prepare('SELECT class_id FROM schedules WHERE lesson_id = ? LIMIT 1')
+          .get(activity.lesson_id) as { class_id: string } | undefined;
+        if (classRow) {
+          const pointId = `pt_${randomId()}`;
+          db.prepare(
+            `INSERT INTO student_point_logs (id, student_id, class_id, dimension_id, delta_points, reason, created_at)
+             VALUES (?, ?, ?, 'xuean_activity', ?, ?, ?)`,
+          ).run(
+            pointId,
+            studentId,
+            classRow.class_id,
+            scoreVal,
+            `学案活动批阅加分：${activity.title}`,
+            ts,
+          );
+        }
+      }
+
       const row = readDb
         .prepare('SELECT * FROM activity_progress WHERE activity_id = ? AND student_id = ?')
         .get(activityId, studentId);

@@ -241,6 +241,7 @@ function ActivityEditor({
     peerReview: existing ? Boolean(existing.peer_review) : false,
     releaseAt: existing?.release_at ? new Date(existing.release_at).toISOString().slice(0, 16) : '',
     dueAt: existing?.due_at ? new Date(existing.due_at).toISOString().slice(0, 16) : '',
+    rubricJson: existing?.rubric_json ?? '',
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -261,6 +262,7 @@ function ActivityEditor({
       peerReview: form.peerReview,
       releaseAt: form.releaseAt ? new Date(form.releaseAt).getTime() : null,
       dueAt: form.dueAt ? new Date(form.dueAt).getTime() : null,
+      rubricJson: form.rubricJson.trim() || null,
     };
     if (form.submissionType) payload.submissionType = form.submissionType;
 
@@ -388,6 +390,18 @@ function ActivityEditor({
             />
             <p className="text-[10px] text-muted">留空 = 无截止</p>
           </div>
+        </div>
+
+        <div className="space-y-1">
+          <label className="block text-xs font-semibold text-muted">评价量规（可选，JSON）</label>
+          <textarea
+            value={form.rubricJson}
+            onChange={(e) => setForm({ ...form, rubricJson: e.target.value })}
+            rows={4}
+            placeholder='例如：[{"criterion":"内容完整","weight":0.5,"maxScore":10},{"criterion":"表达清晰","weight":0.5,"maxScore":10}]'
+            className="w-full px-3 py-2 text-xs rounded-lg border border-theme bg-surface text-main focus:outline-none focus:ring-2 focus:ring-primary-theme/40 font-mono"
+          />
+          <p className="text-[10px] text-muted">批阅时参考此量规打分。留空则使用自由分。</p>
         </div>
 
         {error && <p className="text-xs text-rose-600">{error}</p>}
