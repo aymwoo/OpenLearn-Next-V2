@@ -96,6 +96,7 @@ export function TeacherView(_props: TeacherViewProps = {}) {
         {[
           'dashboard',
           'lesson_editor',
+          'xuean_editor',
           'live_class',
           'plugins',
           'courses',

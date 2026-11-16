@@ -23,6 +23,7 @@
 import React from 'react';
 import {
   BookOpen,
+  BookOpenCheck,
   Presentation,
   Users,
   ClipboardList,
@@ -93,6 +94,14 @@ export const BUILTIN_NAV_ITEMS: BuiltinNavItem[] = [
     icon: BookOpen,
     group: 'teaching',
     position: 10,
+  },
+  {
+    id: 'xuean_editor',
+    tab: 'xuean_editor',
+    label: { zh: '学案编辑器', en: 'Xuean Editor' },
+    icon: BookOpenCheck,
+    group: 'teaching',
+    position: 15,
   },
   {
     id: 'live_class',

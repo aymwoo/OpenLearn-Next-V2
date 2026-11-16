@@ -31,10 +31,11 @@ describe('Navigation Registry（教师工作区侧边栏 SSOT）', () => {
     expect([...positions].sort((a, b) => a - b)).toEqual(positions);
   });
 
-  it('内置入口覆盖教师工作区的全部 9 个 tab', () => {
+  it('内置入口覆盖教师工作区的全部 10 个 tab', () => {
     const tabs = BUILTIN_NAV_ITEMS.map((i) => i.tab);
     expect(tabs).toEqual([
       'courses',
+      'xuean_editor',
       'live_class',
       'classes',
       'assessments',
@@ -88,6 +89,11 @@ describe('Navigation Registry（教师工作区侧边栏 SSOT）', () => {
     // 双语原文不受当前语言影响
     expect(coursesZh?.labelEn).toBe('Courses');
     expect(coursesEn?.labelZh).toBe('课程管理');
+
+    const xueanZh = zh.find((i) => i.tab === 'xuean_editor');
+    const xueanEn = en.find((i) => i.tab === 'xuean_editor');
+    expect(xueanZh).toMatchObject({ label: '学案编辑器', labelEn: 'Xuean Editor', group: 'teaching' });
+    expect(xueanEn).toMatchObject({ label: 'Xuean Editor', labelZh: '学案编辑器', group: 'teaching' });
   });
 
   it('分组标题可按语言解析', () => {
