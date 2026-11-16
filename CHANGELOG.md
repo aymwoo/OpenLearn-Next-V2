@@ -17,7 +17,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - 新增 `POST /api/classroom/sessions/:lessonId/resume`，学生跳回时 `classId` 取自会话行，并复用恢复协议中的 `viewState` / `feedReplay`；
   - 教师可在门户显式「结束本次课次 / 稍后继续」，课次归档后课程整体仍可再开新课次，历史动态按课次保留；
   - 长期无教师活动的僵尸课次可自动归档（默认 24 小时，阈值可配且不得低于 3 小时，教师可豁免），归档后学生端不再提示；实时录成绩仍只认 `IN_CLASS_TEACHING`。
-
+- **课时级学案包 P0（Gitee Issue IKVO15）**：
+  - 新增 `lesson_activities` / `lesson_activity_blocks` / `activity_progress`，并为 `lessons` 增加可空 `course_id` 预留列（迁移 `058`）；
+  - 教师可在备课编辑器「学案活动」页签编排阅读任务、网页课件、测验与作品提交，学案首页使用可选区块 + 自由图文；
+  - 学生可从看板或课节页打开学案，按活动序列自学；自报不得直接判定完成，课节进度由已验证活动聚合；
+  - 课件 / 测验 / 作品复用既有播放器、测评中心与作业中心，学案进度只同步展示，避免成绩双算。活动完成不推进课堂门禁。
 - **学生登录后首屏按学习路径重排（Gitee Issue IKVKVF）**：
   - 新增固定区「现在该做什么」学习路径焦点条（`src/features/student/StudentLearningFocus.tsx`）：待办作业 → 最近课节 → 继续学习，不受自定义布局影响；最近课节按「今天未结束 → 本周后续 → 下周三」规则取数；
   - `DEFAULT_WIDGET_LAYOUT` 默认顺序改为待办作业优先，本地布局键提升为 `student_dashboard_layout_v3_*`，使老用户也能拿到新首屏；

@@ -49,6 +49,7 @@ export interface StudentDashboardPanelProps {
   setSubAssignmentTab: (tab: string) => void;
   /** Issue #122：打开「我的测评」全屏视图（缺省时挂件只显示摘要） */
   onOpenAssessments?: () => void;
+  onOpenActivityPack?: (lessonId: string) => void;
 }
 
 export function StudentDashboardPanel(props: StudentDashboardPanelProps) {
@@ -66,6 +67,7 @@ export function StudentDashboardPanel(props: StudentDashboardPanelProps) {
     setQuizStudentAnswers,
     setSubAssignmentTab,
     onOpenAssessments,
+    onOpenActivityPack,
   } = props;
 
   // Issue #109 / IKVNIX: 真实进行中的课次（轮询由 StudentView 顶层统一驱动）
@@ -360,6 +362,8 @@ export function StudentDashboardPanel(props: StudentDashboardPanelProps) {
               progress={studentDashboardData.progress}
               setSelectedLesson={setSelectedLesson}
               setStudentViewStatus={setStudentViewStatus}
+              onOpenActivityPack={onOpenActivityPack}
+              lang={lang}
             />
           </DashboardWidgetCard>
         );

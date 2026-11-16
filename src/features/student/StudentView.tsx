@@ -15,10 +15,14 @@ const StudentAssignmentView = lazy(() =>
 const StudentAssessmentsView = lazy(() =>
   import('../assessment/student/StudentAssessmentsView').then((m) => ({ default: m.StudentAssessmentsView })),
 );
+const StudentActivityPackPage = lazy(() =>
+  import('../lesson-activity-pack').then((m) => ({ default: m.StudentActivityPackPage })),
+);
 
 export function StudentView() {
   /** Issue #122：「我的测评」全屏视图（不改动 studentViewStatus 联合类型，避免波及 6 处调用方） */
   const [assessmentsOpen, setAssessmentsOpen] = useState(false);
+  const [activityPackOpen, setActivityPackOpen] = useState(false);
   // C1-R3: 全部数据经 AppDataContext 取用（不再经 AppShell props 透传）
   const {
     students,
@@ -72,6 +76,13 @@ export function StudentView() {
 
   const studentLayout = useThemeStore((s) => s.resolvedLayouts.student);
 
+  const openActivityPack = (lessonId: string) => {
+    if (isNavigationLocked) return;
+    setSelectedLesson(lessonId);
+    setAssessmentsOpen(false);
+    setActivityPackOpen(true);
+  };
+
   return (
     <div
       data-testid="student-view-root"
@@ -104,6 +115,30 @@ export function StudentView() {
         >
           {assessmentsOpen ? (
             <StudentAssessmentsView lang={lang as 'zh' | 'en'} onExit={() => setAssessmentsOpen(false)} />
+          ) : activityPackOpen && selectedLesson ? (
+            <StudentActivityPackPage
+              lessonId={selectedLesson}
+              lessonTitle={lessons.find((item) => item.id === selectedLesson)?.title}
+              lang={lang}
+              onBack={() => setActivityPackOpen(false)}
+              onOpenAssessments={() => {
+                setActivityPackOpen(false);
+                setAssessmentsOpen(true);
+              }}
+              onOpenAssignment={async (assignmentId) => {
+                try {
+                  const res = await fetch(`/api/assignments/${encodeURIComponent(assignmentId)}`, {
+                    credentials: 'same-origin',
+                  });
+                  const data = await res.json();
+                  setSelectedAssignment(data.assignment || data);
+                } catch {
+                  setSelectedAssignment({ id: assignmentId });
+                }
+                setActivityPackOpen(false);
+                setStudentViewStatus('assignment');
+              }}
+            />
           ) : studentViewStatus === 'lesson' ? (
             <StudentLessonView
               students={students}
@@ -140,6 +175,7 @@ export function StudentView() {
               addToast={(title: string, description: string, type: string) =>
                 addToast(title, description, type as ToastType)
               }
+              onOpenActivityPack={openActivityPack}
             />
           ) : studentViewStatus === 'assignment' && selectedAssignment ? (
             <StudentAssignmentView
@@ -173,6 +209,7 @@ export function StudentView() {
               setQuizStudentAnswers={setQuizStudentAnswers}
               setSubAssignmentTab={(tab: any) => setSubAssignmentTab(tab)}
               onOpenAssessments={() => setAssessmentsOpen(true)}
+              onOpenActivityPack={openActivityPack}
             />
           )}
         </Suspense>

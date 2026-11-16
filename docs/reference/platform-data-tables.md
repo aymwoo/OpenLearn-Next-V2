@@ -24,10 +24,10 @@
 
 ## 0. 表的来源与计数（实测）
 
-| 来源                                | 表数       | 说明                                                                                |
-| ----------------------------------- | ---------- | ----------------------------------------------------------------------------------- |
-| `migrations/*.sql`（唯一结构 SSOT） | **90**     | 空库顺序跑完 `000`–`050` 全部迁移后的核心表（`migrations/schema-golden.json` 实测） |
-| 插件私有表（运行时动态创建）        | 随安装而变 | `plugin_{scopeId}_*`，不在金样/本页清单内                                           |
+| 来源                                | 表数       | 说明                                                                                                                  |
+| ----------------------------------- | ---------- | --------------------------------------------------------------------------------------------------------------------- |
+| `migrations/*.sql`（唯一结构 SSOT） | **94**     | 空库顺序跑完 `000`–`056` 与 `058` 全部迁移后的核心表（`migrations/schema-golden.json` 实测；`057` 预留给未合并的 !7） |
+| 插件私有表（运行时动态创建）        | 随安装而变 | `plugin_{scopeId}_*`，不在金样/本页清单内                                                                             |
 
 > 早期的「内核内联 schema / bootstrap-db 建表」来源已收敛：`packages/core/db/index.ts` 模块加载即跑全量迁移，`server/bootstrap-db.ts` 只做旧插件升级与过期会话清理，不建表。逐迁移职责见 `migrations/README.md`。
 
@@ -134,15 +134,44 @@
 
 ### `lessons`
 
-| 列                          | 类型    | 说明                                                                        |
-| --------------------------- | ------- | --------------------------------------------------------------------------- |
-| `id`                        | TEXT PK | 课节 ID                                                                     |
-| `title`                     | TEXT    | 标题                                                                        |
-| `content`                   | TEXT    | 内容                                                                        |
-| `timeline`                  | TEXT    | 时间轴 JSON。环节可含 `gates: [{ id?, type, params? }]`                     |
-| `progress_mode`             | TEXT    | **已废弃**。仅当环节没有自己的 `gates` 且不是第一环时，`gated` 仍作兼容回退 |
-| `progress_conditions`       | TEXT    | **已废弃**。已知字段会映射为内置环节条件，新课请写在 `timeline.gates`       |
-| `created_at` / `updated_at` | INTEGER | 时间戳                                                                      |
+| 列                          | 类型    | 说明                                                                                 |
+| --------------------------- | ------- | ------------------------------------------------------------------------------------ |
+| `id`                        | TEXT PK | 课节 ID                                                                              |
+| `title`                     | TEXT    | 标题                                                                                 |
+| `content`                   | TEXT    | 内容                                                                                 |
+| `timeline`                  | TEXT    | 时间轴 JSON。环节可含 `gates: [{ id?, type, params? }]`                              |
+| `progress_mode`             | TEXT    | **已废弃**。仅当环节没有自己的 `gates` 且不是第一环时，`gated` 仍作兼容回退          |
+| `progress_conditions`       | TEXT    | **已废弃**。已知字段会映射为内置环节条件，新课请写在 `timeline.gates`                |
+| `created_at` / `updated_at` | INTEGER | 时间戳                                                                               |
+| `creator_id`                | TEXT    | 创建教师                                                                             |
+| `course_id`                 | TEXT    | 可空预留列（迁移 `058`）。供以后课程层挂接，P0 不创建 `courses` 表，既有数据无需迁移 |
+
+### `lesson_activities`（迁移 `058`，Gitee IKVO15 P0）
+
+课时级学案活动，与 `lessons.timeline` **并列**而非嵌套。活动完成不会自动推进课堂门禁。
+
+| 列                                | 类型    | 说明                                                                                          |
+| --------------------------------- | ------- | --------------------------------------------------------------------------------------------- |
+| `id`                              | TEXT PK | 活动 ID                                                                                       |
+| `lesson_id`                       | TEXT    | 所属课节，删除课节时级联清理                                                                  |
+| `order_index`                     | INTEGER | 学生端序列顺序                                                                                |
+| `type`                            | TEXT    | P0 仅 `reading` / `courseware` / `quiz` / `submission`                                        |
+| `title`                           | TEXT    | 标题                                                                                          |
+| `config_json`                     | TEXT    | 类型配置：阅读正文、`coursewareId`、`assessmentId` / `assessmentAssignmentId`、`assignmentId` |
+| `required`                        | INTEGER | 1 = 计入课节完成                                                                              |
+| `visible`                         | INTEGER | 1 = 已发布给学生                                                                              |
+| `peer_review` / `group_mode`      | INTEGER | 预留，P0 无 UI                                                                                |
+| `submission_type` / `rubric_json` | TEXT    | 预留                                                                                          |
+| `release_at` / `due_at`           | INTEGER | 可选发布时间与截止                                                                            |
+| `created_at` / `updated_at`       | INTEGER | 时间戳                                                                                        |
+
+### `lesson_activity_blocks`（迁移 `058`）
+
+学案首页可选区块：`learning_goals` / `key_points` / `resources` / `operation_tips` / `work_appreciation` / `freeform`。半结构化，不做强约束。`content_json` 通常含 `text`。
+
+### `activity_progress`（迁移 `058`）
+
+活动级进度主口径。主键 `(student_id, activity_id)`。`status` 为 `not_started` / `in_progress` / `submitted` / `graded`。`verified = 1` 才计入课节完成；学生自报只把状态升到 `submitted`、把展示进度写成 100，不得写 `verified`。课件 / 测验 / 作业的分数仍留在原表，这里只同步展示，避免成绩双算。
 
 ### `segment_visits`
 
@@ -162,7 +191,7 @@
 
 ### `student_lesson_progress`
 
-`student_id` + `lesson_id` 复合主键，`completed` / `progress_percent` / `completed_segments` / `assigned_at`。迁移 `032` 起新增 `verified`（1 = 教师/课件/受信插件已验证，成绩只采用该部分）与 `verified_progress_percent`（验证时的进度值，学生自报只改 `progress_percent`，不覆盖此列）。
+`student_id` + `lesson_id` 复合主键，`completed` / `progress_percent` / `completed_segments` / `assigned_at`。迁移 `032` 起新增 `verified`（1 = 教师/课件/受信插件已验证，成绩只采用该部分）与 `verified_progress_percent`（验证时的进度值，学生自报只改 `progress_percent`，不覆盖此列）。若课节存在已发布的必做学案活动，迁移 `058` 起该表退为汇总：`progress_percent` 反映自报/提交展示进度，`verified` / `verified_progress_percent` 只按已验证活动聚合；没有必做活动的课节保持原写法。
 
 ### `schedules`
 
@@ -476,12 +505,13 @@ MFE 远端登记。MFE 执行边界已移除，表保留作历史数据兼容。
 
 <!-- AUTO-GENERATED:table-inventory BEGIN -->
 
-共 **92** 张表（迁移 58 个，金样生成于 2026-11-16T09:49:47.747Z）。列清单为列名（类型与约束见迁移 SQL）：
+共 **95** 张表（迁移 59 个，金样将在合并后重新生成）。列清单为列名（类型与约束见迁移 SQL）：
 
 - `_academic_year_backfill`: backfilled_at, id
 - `_class_passcode_encryption`: id, note
 - `_lesson_think_cleanup`: id, note
 - `_migrations`: applied_at, checksum, name
+- `activity_progress`: activity_id, feedback, graded_at, last_activity_at, progress_percent, score, status, student_id, verified
 - `agent_conversations`: content, conv_key, created_at, id, role
 - `ai_persona_governance`: description_en, description_zh, enabled, persona_id, preferred_provider_id
 - `ai_personas`: base_policy, created_at, default_for_role_json, icon, id, instruction_en, instruction_zh, max_turns, mode, name_en, name_zh, plugin_id, source, tool_policy_json, updated_at, visibility_json
@@ -526,10 +556,12 @@ MFE 远端登记。MFE 执行边界已移除，表保留作历史数据兼容。
 - `file_assets`: access_scope, author_id, blob_id, course_id, created_at, deleted_at, id, lesson_id, metadata_json, mime, original_name, purpose
 - `file_blobs`: backend_id, created_at, id, ref_count, sha256, size_bytes, storage_key
 - `icebreaker_checkins`: checkin_date, class_id, created_at, id, lesson_id, mood, scope_key, student_id, updated_at
+- `lesson_activities`: config_json, created_at, due_at, group_mode, id, lesson_id, order_index, peer_review, release_at, required, rubric_json, submission_type, title, type, updated_at, visible
+- `lesson_activity_blocks`: block_type, content_json, created_at, id, lesson_id, order_index, updated_at
 - `lesson_checkins`: checked_in_at, lesson_id, student_id
 - `lesson_preset_polls`: correct_option, created_at, id, lesson_id, options_json, question_type, sort_order, title, updated_at
 - `lesson_quiz_submissions`: answer, element_id, id, is_correct, lesson_id, score, student_id, student_name, submitted_at, time_spent_ms
-- `lessons`: content, created_at, creator_id, id, progress_conditions, progress_mode, source_package_hash, source_package_id, source_package_key, timeline, title, updated_at
+- `lessons`: content, course_id, created_at, creator_id, id, progress_conditions, progress_mode, source_package_hash, source_package_id, source_package_key, timeline, title, updated_at
 - `mfe_remotes`: created_at, entry, meta, name, updated_at
 - `pending_commands`: actor_id, command_type, created_at, id, payload
 - `plugin_assignment_files`: asset_id, assignment_id, deleted_at, id, mime, original_name, sha256, size, stored_path, student_id, submission_id, uploaded_at, version_id

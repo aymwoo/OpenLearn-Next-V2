@@ -47,6 +47,7 @@ export interface StudentLessonViewProps {
   studentSelectedCourseware: string | null;
   setStudentSelectedCourseware: (id: string | null) => void;
   addToast: (title: string, description: string, type: string) => void;
+  onOpenActivityPack?: (lessonId: string) => void;
 }
 
 export function StudentLessonView(props: StudentLessonViewProps) {
@@ -83,6 +84,7 @@ export function StudentLessonView(props: StudentLessonViewProps) {
     studentSelectedCourseware,
     setStudentSelectedCourseware,
     addToast,
+    onOpenActivityPack,
   } = props;
   const segmentAccess = useSegmentAccess(selectedLesson, activeSegmentId);
   const checkingSegment = !!activeSegmentId && (segmentAccess.status === 'idle' || segmentAccess.status === 'loading');
@@ -159,6 +161,7 @@ export function StudentLessonView(props: StudentLessonViewProps) {
         addToast={addToast}
         lang={lang}
         onOpenIcebreaker={() => setIcebreakerOpen(true)}
+        onOpenActivityPack={onOpenActivityPack}
       />
       <StudentCheckinPanel lessonId={selectedLesson} lang={lang} addToast={addToast} />
       <SegmentGateBanner access={segmentAccess} lang={lang} />

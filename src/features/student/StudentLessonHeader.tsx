@@ -18,6 +18,8 @@ export interface StudentLessonHeaderProps {
   addToast?: (title: string, description: string, type: string) => void;
   /** Issue #131: 打开课前心情打卡弹窗 */
   onOpenIcebreaker?: () => void;
+  /** IKVO15：打开该课节的学案活动页（独立于课堂环节 / 门禁） */
+  onOpenActivityPack?: (lessonId: string) => void;
 }
 
 export function StudentLessonHeader(props: StudentLessonHeaderProps) {
@@ -33,6 +35,7 @@ export function StudentLessonHeader(props: StudentLessonHeaderProps) {
     lang = 'zh',
     addToast,
     onOpenIcebreaker,
+    onOpenActivityPack,
   } = props;
 
   // Issue #109: 课堂仍在进行时，离开课堂给一条「可随时返回」的提示
@@ -98,6 +101,16 @@ export function StudentLessonHeader(props: StudentLessonHeaderProps) {
         </button>
       )}
       <div className="flex items-center gap-3">
+        {onOpenActivityPack && selectedLesson && !locked && (
+          <button
+            type="button"
+            data-testid="open-activity-pack-btn"
+            onClick={() => onOpenActivityPack(selectedLesson)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-indigo-200 dark:border-indigo-800/60 bg-indigo-50/80 hover:bg-indigo-100/80 text-indigo-800 dark:text-indigo-200 text-xs font-semibold shadow-3xs transition-colors cursor-pointer"
+          >
+            {lang === 'zh' ? '打开学案' : 'Open lesson pack'}
+          </button>
+        )}
         {onOpenIcebreaker && (
           <button
             type="button"

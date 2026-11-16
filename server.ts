@@ -104,6 +104,7 @@ import { registerCoursewareRoutes } from './server/routes/courseware.js';
 import { registerBridgeRoutes } from './server/routes/bridge.js';
 import { registerRuntimePolicyRoutes } from './server/routes/runtime-policies.js';
 import { registerLessonsRoutes } from './server/routes/lessons.js';
+import { registerLessonActivityRoutes } from './server/routes/lesson-activities.js';
 import { registerCoursePackageRoutes } from './server/routes/course-packages.js';
 import { registerWorkspaceRoutes } from './server/routes/workspace.js';
 import { registerProcessesRoutes } from './server/routes/processes.js';
@@ -403,6 +404,7 @@ async function startServer() {
   registerBridgeRoutes(ctx);
   registerRuntimePolicyRoutes(ctx);
   registerLessonsRoutes(ctx);
+  registerLessonActivityRoutes(ctx);
   registerCoursePackageRoutes(ctx);
   registerWorkspaceRoutes(ctx);
 
