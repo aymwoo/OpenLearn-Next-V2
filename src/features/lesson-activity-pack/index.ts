@@ -7,6 +7,6 @@ export {
 } from './ActivityPackTeacherPreview';
 export { TeacherActivityProgressPanel } from './TeacherActivityProgressPanel';
 export { ActivityPackTransferButtons, ImportActivityPackToolbarButton } from './ActivityPackTransferButtons';
-export { CourseLayerBoard } from './CourseLayerBoard';
+export { LongCycleCourseDetail } from './LongCycleCourseDetail';
 export { CourseDiscussionBoard } from './CourseDiscussionBoard';
 export * from './api';

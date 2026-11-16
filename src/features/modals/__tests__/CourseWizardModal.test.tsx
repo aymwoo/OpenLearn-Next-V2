@@ -217,3 +217,55 @@ describe('CourseWizardModal 预设阶段名称本地化 (#493)', () => {
     expect(standardSegs.every((s) => !/[\u4e00-\u9fa5]/.test(s.title))).toBe(true);
   });
 });
+
+describe('CourseWizardModal 课程类型选择', () => {
+  it('第一步默认展示常规课程与长周期课程选项', () => {
+    render(<CourseWizardModal {...makeProps({ wizardStep: 1, lang: 'zh' })} />);
+    expect(screen.getByTestId('wizard-course-type')).toBeTruthy();
+    expect(screen.getByText('常规课程（默认）')).toBeTruthy();
+    expect(screen.getByText('长周期课程')).toBeTruthy();
+    expect(screen.queryByText('上课班级（可选，可多选）')).toBeNull();
+  });
+
+  it('选择长周期后展示班级多选与归档阈值，不必强制选班', () => {
+    const setWizardCourseType = vi.fn();
+    const setWizardClassIds = vi.fn();
+    render(
+      <CourseWizardModal
+        {...makeProps({
+          wizardStep: 1,
+          lang: 'zh',
+          wizardCourseType: 'long_cycle',
+          setWizardCourseType,
+          wizardClassIds: [],
+          setWizardClassIds,
+          classes: [
+            { id: 'cls_1', name: '高一（1）班' },
+            { id: 'cls_2', name: '高一（2）班' },
+          ],
+        })}
+      />,
+    );
+    expect(screen.getByText('上课班级（可选，可多选）')).toBeTruthy();
+    expect(screen.getByText('高一（1）班')).toBeTruthy();
+    expect(screen.getByText(/不必现在排完全部分章节/)).toBeTruthy();
+    fireEvent.click(screen.getByText('高一（2）班'));
+    expect(setWizardClassIds).toHaveBeenCalledWith(['cls_2']);
+  });
+
+  it('总览部署步骤会标出长周期类型', () => {
+    render(
+      <CourseWizardModal
+        {...makeProps({
+          wizardStep: 4,
+          lang: 'zh',
+          wizardCourseType: 'long_cycle',
+          wizardCourseTitle: '学期信息技术',
+          wizardClassIds: ['cls_1'],
+        })}
+      />,
+    );
+    expect(screen.getByTestId('wizard-deploy-course-type').textContent).toContain('长周期');
+    expect(screen.getByText(/这份教案作为第一章/)).toBeTruthy();
+  });
+});

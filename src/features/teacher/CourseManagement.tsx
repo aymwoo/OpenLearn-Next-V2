@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { copyToClipboard } from '../../utils/clipboard';
 import {
   BookOpen,
@@ -21,11 +21,11 @@ import {
 } from 'lucide-react';
 import Markdown from 'react-markdown';
 import type { Lesson, SessionType } from '../../types/app';
-import { useAppStore } from '../../store/appStore';
 import { useAppData } from '../../context/AppDataContext';
 import { ExtensionPointRenderer } from '../../plugin-host/extension-point-renderer';
 import { extractCourseSummary } from '../../utils/courseSummary';
-import { CourseLayerBoard, ImportActivityPackToolbarButton } from '../lesson-activity-pack';
+import { ImportActivityPackToolbarButton, LongCycleCourseDetail } from '../lesson-activity-pack';
+import { fetchCourses, promoteLessonToLongCycle, type CourseRecord } from '../lesson-activity-pack/p1-api';
 
 interface CourseStats {
   whiteboardCount: number;
@@ -82,6 +82,68 @@ export function CourseManagement() {
   const [deleteStatsLoading, setDeleteStatsLoading] = useState(false);
   const [copiedLessonId, setCopiedLessonId] = useState<string | null>(null);
   const [exportingLessonId, setExportingLessonId] = useState<string | null>(null);
+  const [longCycleCourses, setLongCycleCourses] = useState<CourseRecord[]>([]);
+  const [selectedCourseId, setSelectedCourseId] = useState<string | null>(null);
+  const [promoteTarget, setPromoteTarget] = useState<Lesson | null>(null);
+  const [promoteLoading, setPromoteLoading] = useState(false);
+  const [promoteError, setPromoteError] = useState<string | null>(null);
+
+  const loadLongCycleCourses = () =>
+    fetchCourses()
+      .then((result) => setLongCycleCourses((result.courses || []).filter((course) => course.isLongCycle !== false)))
+      .catch(() => setLongCycleCourses([]));
+
+  useEffect(() => {
+    void loadLongCycleCourses();
+  }, []);
+
+  const attachedLessonIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const course of longCycleCourses) {
+      for (const lessonId of course.lessonIds || []) ids.add(lessonId);
+    }
+    return ids;
+  }, [longCycleCourses]);
+
+  const visibleLessons = useMemo(
+    () =>
+      filteredLessons.filter((lesson) => {
+        if (attachedLessonIds.has(lesson.id) || lesson.course_id) return false;
+        if (!filterMyLessons) return true;
+        return (
+          !lesson.creator_id ||
+          lesson.creator_id === effectiveSession?.userId ||
+          lesson.creator_id === effectiveSession?.username
+        );
+      }),
+    [filteredLessons, attachedLessonIds, filterMyLessons, effectiveSession],
+  );
+
+  const visibleCourses = useMemo(() => {
+    const query = lessonsSearchQuery.trim().toLowerCase();
+    return longCycleCourses.filter((course) => {
+      if (query && !course.title.toLowerCase().includes(query)) return false;
+      if (!filterMyLessons) return true;
+      return !course.ownerUserId || course.ownerUserId === effectiveSession?.userId;
+    });
+  }, [longCycleCourses, lessonsSearchQuery, filterMyLessons, effectiveSession]);
+
+  const handlePromoteLesson = async () => {
+    if (!promoteTarget) return;
+    setPromoteLoading(true);
+    setPromoteError(null);
+    try {
+      const result = await promoteLessonToLongCycle(promoteTarget.id, { title: promoteTarget.title });
+      setPromoteTarget(null);
+      await loadLongCycleCourses();
+      await fetchLessons();
+      setSelectedCourseId(result.course.id);
+    } catch (err) {
+      setPromoteError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setPromoteLoading(false);
+    }
+  };
 
   const handleExportPackage = async (lesson: Lesson) => {
     setExportingLessonId(lesson.id);
@@ -171,7 +233,7 @@ export function CourseManagement() {
             <ExtensionPointRenderer slot="course.list.toolbar.action" slotProps={{ lang, onRefresh: fetchLessons }} />
           </div>
         </div>
-        {lessons.length > 0 && (
+        {(lessons.length > 0 || longCycleCourses.length > 0) && (
           <div className="px-5 py-3.5 border-b border-gray-100 bg-gray-50/50 flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
             <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
               <div className="relative w-full sm:w-64">
@@ -259,15 +321,15 @@ export function CourseManagement() {
                 </button>
               </div>
               <div className="text-xs font-semibold text-gray-500">
-                Found <span className="text-indigo-650 font-bold">{filteredLessons.length}</span> of{' '}
-                <span className="text-gray-700 font-bold">{lessons.length}</span> course
-                {lessons.length === 1 ? '' : 's'}
+                Found <span className="text-indigo-650 font-bold">{visibleLessons.length + visibleCourses.length}</span>{' '}
+                of <span className="text-gray-700 font-bold">{lessons.length + longCycleCourses.length}</span> course
+                {lessons.length + longCycleCourses.length === 1 ? '' : 's'}
               </div>
             </div>
           </div>
         )}
         <div className="flex-1 overflow-y-auto p-4">
-          {lessons.length === 0 ? (
+          {lessons.length === 0 && longCycleCourses.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-gray-400 min-h-[300px]">
               <BookOpen size={48} className="mb-4 opacity-30 text-indigo-500" />
               <h3 className="text-lg font-bold text-gray-800">
@@ -287,7 +349,7 @@ export function CourseManagement() {
                 {lang === 'zh' ? '使用向导指南来创建新课程' : 'Create Course via Wizard'}
               </button>
             </div>
-          ) : filteredLessons.length === 0 ? (
+          ) : visibleLessons.length === 0 && visibleCourses.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full py-12 text-gray-450 text-center">
               <Search size={44} className="mb-3 opacity-30 text-gray-450" />
               <h4 className="font-semibold text-gray-700 text-sm">No Courses Match "{lessonsSearchQuery}"</h4>
@@ -303,166 +365,269 @@ export function CourseManagement() {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-              {filteredLessons
-                .filter((lesson) => {
-                  if (!filterMyLessons) return true;
-                  return (
-                    !lesson.creator_id ||
-                    lesson.creator_id === effectiveSession?.userId ||
-                    lesson.creator_id === effectiveSession?.username
-                  );
-                })
-                .map((lesson) => {
-                  const isCopying = copyingLessonId === lesson.id;
-                  const isOwner =
-                    !lesson.creator_id ||
-                    lesson.creator_id === effectiveSession?.userId ||
-                    lesson.creator_id === effectiveSession?.username;
-                  const canManage = isAdmin || isOwner;
-
-                  return (
+              {visibleCourses.map((course) => (
+                <div
+                  key={course.id}
+                  data-testid="long-cycle-course-card"
+                  className="border border-amber-200 hover:border-amber-400 rounded-xl p-4 flex flex-col bg-amber-50/40 hover:shadow-md transition-all"
+                >
+                  <div className="flex items-center justify-between mb-2 gap-2">
                     <div
-                      key={lesson.id}
-                      className={`border border-gray-200 hover:border-indigo-300 rounded-xl p-4 flex flex-col bg-gray-50/50 hover:shadow-md transition-all ${isCopying ? 'opacity-60 pointer-events-none' : ''}`}
+                      className="font-semibold text-gray-800 text-lg truncate cursor-pointer hover:text-indigo-600 transition-colors"
+                      title={course.title}
+                      onClick={() => setSelectedCourseId(course.id)}
                     >
-                      <div className="flex items-center justify-between mb-2 gap-2">
-                        <div
-                          data-testid="course-title"
-                          className="font-semibold text-gray-800 text-lg truncate cursor-pointer hover:text-indigo-600 transition-colors"
-                          title={lesson.title}
-                          onClick={() => onViewCourse(lesson.id)}
-                        >
-                          {lesson.title}
-                        </div>
-                        <div className="flex items-center gap-1.5 shrink-0">
-                          <ExtensionPointRenderer slot="course.card.badge" slotProps={{ course: lesson }} />
-                          {lesson.creator_name ? (
-                            <span
-                              className={`text-xs font-medium px-1.5 py-0.5 rounded border flex items-center gap-0.5 ${
-                                isOwner
-                                  ? 'bg-indigo-50 text-indigo-700 border-indigo-200 font-semibold'
-                                  : 'bg-slate-100 text-slate-600 border-slate-200'
-                              }`}
-                              title={
-                                lang === 'zh'
-                                  ? `创建教师: ${lesson.creator_name}`
-                                  : `Created by: ${lesson.creator_name}`
-                              }
-                            >
-                              {isOwner ? '👑 ' : '👤 '}
-                              {lesson.creator_name}
-                            </span>
-                          ) : null}
-                          <span className="inline-flex items-center gap-1 bg-indigo-50 text-indigo-700 px-1.5 py-0.5 border border-indigo-100 rounded text-xs font-bold">
-                            <Users size={10} className="text-indigo-500" />
-                            {lesson.enrollment_count || 0}
-                          </span>
-                        </div>
+                      {course.title}
+                    </div>
+                    <span className="shrink-0 inline-flex px-1.5 py-0.5 rounded text-[11px] font-extrabold bg-amber-100 text-amber-800 border border-amber-200">
+                      {lang === 'zh' ? '长周期' : 'Long-cycle'}
+                    </span>
+                  </div>
+                  <div className="text-sm text-gray-500 line-clamp-3 mb-4 flex-1 leading-relaxed">
+                    {course.description ? (
+                      course.description
+                    ) : (
+                      <span className="italic text-gray-400">
+                        {lang === 'zh'
+                          ? '暂无课程简介。打开后可管理章节、选课班级与开课次。'
+                          : 'No description yet. Open to manage chapters, classes, and sessions.'}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex justify-between items-center mt-auto text-xs text-gray-500">
+                    <span>
+                      {course.lessonCount ?? 0} {lang === 'zh' ? '个章节' : 'chapters'}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedCourseId(course.id)}
+                      className="px-2 py-1 text-xs font-semibold text-indigo-700 hover:bg-indigo-50 rounded"
+                    >
+                      {lang === 'zh' ? '管理章节与开课次' : 'Manage chapters'}
+                    </button>
+                  </div>
+                </div>
+              ))}
+              {visibleLessons.map((lesson) => {
+                const isCopying = copyingLessonId === lesson.id;
+                const isOwner =
+                  !lesson.creator_id ||
+                  lesson.creator_id === effectiveSession?.userId ||
+                  lesson.creator_id === effectiveSession?.username;
+                const canManage = isAdmin || isOwner;
+
+                return (
+                  <div
+                    key={lesson.id}
+                    className={`border border-gray-200 hover:border-indigo-300 rounded-xl p-4 flex flex-col bg-gray-50/50 hover:shadow-md transition-all ${isCopying ? 'opacity-60 pointer-events-none' : ''}`}
+                  >
+                    <div className="flex items-center justify-between mb-2 gap-2">
+                      <div
+                        data-testid="course-title"
+                        className="font-semibold text-gray-800 text-lg truncate cursor-pointer hover:text-indigo-600 transition-colors"
+                        title={lesson.title}
+                        onClick={() => onViewCourse(lesson.id)}
+                      >
+                        {lesson.title}
                       </div>
-                      <div className="text-sm text-gray-500 line-clamp-3 mb-4 flex-1 leading-relaxed">
-                        {extractCourseSummary(lesson.content) || (
-                          <span className="italic text-gray-400">
-                            {lang === 'zh' ? '暂无课程大纲与简介' : 'No outline or summary available.'}
-                          </span>
-                        )}
-                      </div>
-                      <div className="flex justify-between items-center mt-auto">
-                        <button
-                          onClick={() => handleCopyId(lesson.id)}
-                          className={`flex items-center gap-1 text-xs rounded px-1.5 py-0.5 transition-all cursor-pointer ${
-                            copiedLessonId === lesson.id
-                              ? 'text-emerald-700 bg-emerald-50 border border-emerald-200'
-                              : 'text-subtle hover:text-indigo-600 hover:bg-indigo-50 border border-transparent'
-                          }`}
-                          title={
-                            copiedLessonId === lesson.id
-                              ? lang === 'zh'
-                                ? '已复制!'
-                                : 'Copied!'
-                              : lang === 'zh'
-                                ? '复制课程 ID'
-                                : 'Copy Course ID'
-                          }
-                        >
-                          {copiedLessonId === lesson.id ? <ClipboardCheck size={12} /> : <Clipboard size={12} />}
-                          <span className="font-mono">
-                            {copiedLessonId === lesson.id
-                              ? lang === 'zh'
-                                ? '已复制!'
-                                : 'Copied!'
-                              : `${lesson.id.substring(0, 8)}…`}
-                          </span>
-                        </button>
-                        <div className="flex items-center gap-0.5">
-                          <button
-                            onClick={() => onViewCourse(lesson.id)}
-                            className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors cursor-pointer"
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <ExtensionPointRenderer slot="course.card.badge" slotProps={{ course: lesson }} />
+                        {lesson.creator_name ? (
+                          <span
+                            className={`text-xs font-medium px-1.5 py-0.5 rounded border flex items-center gap-0.5 ${
+                              isOwner
+                                ? 'bg-indigo-50 text-indigo-700 border-indigo-200 font-semibold'
+                                : 'bg-slate-100 text-slate-600 border-slate-200'
+                            }`}
                             title={
-                              canManage
-                                ? lang === 'zh'
-                                  ? '查看与编辑'
-                                  : 'View & Edit'
-                                : lang === 'zh'
-                                  ? '查看只读 (他人课程)'
-                                  : 'View Read-Only'
+                              lang === 'zh' ? `创建教师: ${lesson.creator_name}` : `Created by: ${lesson.creator_name}`
                             }
                           >
-                            {canManage ? <Edit3 size={15} /> : <Eye size={15} />}
-                          </button>
-                          <button
-                            onClick={() => onCopyCourse(lesson.id)}
-                            className="p-1.5 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded transition-colors cursor-pointer"
-                            title={lang === 'zh' ? '克隆为我的备课' : 'Clone Course'}
-                          >
-                            <Copy size={14} />
-                          </button>
-                          {canManage && (
-                            <button
-                              onClick={() => void handleExportPackage(lesson)}
-                              disabled={exportingLessonId === lesson.id}
-                              className="p-1.5 text-gray-400 hover:text-sky-600 hover:bg-sky-50 rounded transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-wait"
-                              title={
-                                lang === 'zh'
-                                  ? '导出为课程包（教学环节 + 白板元素 + 内联附件，可拖回导入框）'
-                                  : 'Export as course package (segments + whiteboard elements + embedded assets)'
-                              }
-                            >
-                              {exportingLessonId === lesson.id ? (
-                                <Loader2 size={14} className="animate-spin" />
-                              ) : (
-                                <FileDown size={14} />
-                              )}
-                            </button>
-                          )}
-                          {canManage ? (
-                            <button
-                              onClick={() => handleOpenDeleteConfirm(lesson)}
-                              className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors cursor-pointer"
-                              title={lang === 'zh' ? '删除课程' : 'Delete Course'}
-                            >
-                              <Trash2 size={14} />
-                            </button>
-                          ) : (
-                            <span
-                              className="p-1.5 text-gray-300 cursor-not-allowed"
-                              title={lang === 'zh' ? '仅创建教师或管理员可删除' : 'Only creator or admin can delete'}
-                            >
-                              <Trash2 size={14} />
-                            </span>
-                          )}
-                          <ExtensionPointRenderer slot="course.card.action" slotProps={{ course: lesson, lang }} />
-                        </div>
+                            {isOwner ? '👑 ' : '👤 '}
+                            {lesson.creator_name}
+                          </span>
+                        ) : null}
+                        <span className="inline-flex items-center gap-1 bg-indigo-50 text-indigo-700 px-1.5 py-0.5 border border-indigo-100 rounded text-xs font-bold">
+                          <Users size={10} className="text-indigo-500" />
+                          {lesson.enrollment_count || 0}
+                        </span>
                       </div>
                     </div>
-                  );
-                })}
+                    <div className="text-sm text-gray-500 line-clamp-3 mb-4 flex-1 leading-relaxed">
+                      {extractCourseSummary(lesson.content) || (
+                        <span className="italic text-gray-400">
+                          {lang === 'zh' ? '暂无课程大纲与简介' : 'No outline or summary available.'}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex justify-between items-center mt-auto">
+                      <button
+                        onClick={() => handleCopyId(lesson.id)}
+                        className={`flex items-center gap-1 text-xs rounded px-1.5 py-0.5 transition-all cursor-pointer ${
+                          copiedLessonId === lesson.id
+                            ? 'text-emerald-700 bg-emerald-50 border border-emerald-200'
+                            : 'text-subtle hover:text-indigo-600 hover:bg-indigo-50 border border-transparent'
+                        }`}
+                        title={
+                          copiedLessonId === lesson.id
+                            ? lang === 'zh'
+                              ? '已复制!'
+                              : 'Copied!'
+                            : lang === 'zh'
+                              ? '复制课程 ID'
+                              : 'Copy Course ID'
+                        }
+                      >
+                        {copiedLessonId === lesson.id ? <ClipboardCheck size={12} /> : <Clipboard size={12} />}
+                        <span className="font-mono">
+                          {copiedLessonId === lesson.id
+                            ? lang === 'zh'
+                              ? '已复制!'
+                              : 'Copied!'
+                            : `${lesson.id.substring(0, 8)}…`}
+                        </span>
+                      </button>
+                      <div className="flex items-center gap-0.5">
+                        <button
+                          onClick={() => onViewCourse(lesson.id)}
+                          className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors cursor-pointer"
+                          title={
+                            canManage
+                              ? lang === 'zh'
+                                ? '查看与编辑'
+                                : 'View & Edit'
+                              : lang === 'zh'
+                                ? '查看只读 (他人课程)'
+                                : 'View Read-Only'
+                          }
+                        >
+                          {canManage ? <Edit3 size={15} /> : <Eye size={15} />}
+                        </button>
+                        <button
+                          onClick={() => onCopyCourse(lesson.id)}
+                          className="p-1.5 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded transition-colors cursor-pointer"
+                          title={lang === 'zh' ? '克隆为我的备课' : 'Clone Course'}
+                        >
+                          <Copy size={14} />
+                        </button>
+                        {canManage && (
+                          <button
+                            onClick={() => void handleExportPackage(lesson)}
+                            disabled={exportingLessonId === lesson.id}
+                            className="p-1.5 text-gray-400 hover:text-sky-600 hover:bg-sky-50 rounded transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-wait"
+                            title={
+                              lang === 'zh'
+                                ? '导出为课程包（教学环节 + 白板元素 + 内联附件，可拖回导入框）'
+                                : 'Export as course package (segments + whiteboard elements + embedded assets)'
+                            }
+                          >
+                            {exportingLessonId === lesson.id ? (
+                              <Loader2 size={14} className="animate-spin" />
+                            ) : (
+                              <FileDown size={14} />
+                            )}
+                          </button>
+                        )}
+                        {canManage ? (
+                          <button
+                            onClick={() => handleOpenDeleteConfirm(lesson)}
+                            className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors cursor-pointer"
+                            title={lang === 'zh' ? '删除课程' : 'Delete Course'}
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        ) : (
+                          <span
+                            className="p-1.5 text-gray-300 cursor-not-allowed"
+                            title={lang === 'zh' ? '仅创建教师或管理员可删除' : 'Only creator or admin can delete'}
+                          >
+                            <Trash2 size={14} />
+                          </span>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPromoteError(null);
+                            setPromoteTarget(lesson);
+                          }}
+                          className="px-1.5 py-1 text-[11px] font-semibold text-amber-800 hover:bg-amber-50 rounded transition-colors cursor-pointer"
+                          title={lang === 'zh' ? '改成长周期课程' : 'Convert to long-cycle course'}
+                          data-testid="promote-long-cycle-btn"
+                        >
+                          {lang === 'zh' ? '改成长周期' : 'Make long-cycle'}
+                        </button>
+                        <ExtensionPointRenderer slot="course.card.action" slotProps={{ course: lesson, lang }} />
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
       </div>
 
+      {selectedCourseId && (
+        <LongCycleCourseDetail
+          lang={lang}
+          courseId={selectedCourseId}
+          lessons={lessons}
+          classes={classes || []}
+          onClose={() => setSelectedCourseId(null)}
+          onChanged={() => {
+            void loadLongCycleCourses();
+            void fetchLessons();
+          }}
+        />
+      )}
+      {promoteTarget && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-[2px] flex items-center justify-center z-[9999] p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full border border-gray-100 overflow-hidden">
+            <div className="px-5 py-4 border-b border-gray-100 bg-amber-50">
+              <h3 className="font-bold text-amber-900 text-sm">
+                {lang === 'zh' ? '改成长周期课程' : 'Convert to long-cycle course'}
+              </h3>
+            </div>
+            <div className="p-5 space-y-3 text-sm text-gray-700">
+              <p>
+                {lang === 'zh' ? (
+                  <>
+                    将把「<span className="font-semibold">{promoteTarget.title}</span>
+                    」作为第一章，创建一门长周期课程。班级可稍后在课程详情中补充。
+                  </>
+                ) : (
+                  <>
+                    This will create a long-cycle course with &quot;{promoteTarget.title}&quot; as chapter 1. Classes
+                    can be added later.
+                  </>
+                )}
+              </p>
+              {promoteError && <p className="text-rose-700 text-xs">{promoteError}</p>}
+            </div>
+            <div className="px-5 py-3 border-t border-gray-100 bg-gray-50 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setPromoteTarget(null);
+                  setPromoteError(null);
+                }}
+                className="px-4 py-2 text-xs font-medium text-gray-600 hover:bg-gray-100 border border-gray-200 rounded-lg"
+              >
+                {lang === 'zh' ? '取消' : 'Cancel'}
+              </button>
+              <button
+                type="button"
+                onClick={() => void handlePromoteLesson()}
+                disabled={promoteLoading}
+                className="px-4 py-2 text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 rounded-lg disabled:opacity-50"
+              >
+                {promoteLoading ? (lang === 'zh' ? '转换中…' : 'Converting…') : lang === 'zh' ? '确认转换' : 'Convert'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {/* ── 删除确认弹窗 ── */}
-      <CourseLayerBoard lang={lang} lessons={lessons} classes={classes || []} />
       {deleteTarget && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-[2px] flex items-center justify-center z-[9999] p-4">
           <div className="bg-white rounded-xl shadow-2xl max-w-md w-full border border-gray-100 overflow-hidden">

@@ -70,6 +70,9 @@ export function useCourseWizard(options: UseCourseWizardOptions) {
   const [wizardCourseTimeline, setWizardCourseTimeline] = useState<any[]>(() => getDefaultWizardTimeline(lang));
   const [wizardIsSubmitting, setWizardIsSubmitting] = useState(false);
   const [wizardIsGeneratingOutline, setWizardIsGeneratingOutline] = useState(false);
+  const [wizardCourseType, setWizardCourseType] = useState<'regular' | 'long_cycle'>('regular');
+  const [wizardClassIds, setWizardClassIds] = useState<string[]>([]);
+  const [wizardAutoArchiveAfterMs, setWizardAutoArchiveAfterMs] = useState<number | null>(null);
 
   /**
    * 依据课题调用后端 AI Provider 真实生成 Markdown 教学大纲。
@@ -161,6 +164,26 @@ export function useCourseWizard(options: UseCourseWizardOptions) {
             body: JSON.stringify({ timeline: wizardCourseTimeline }),
           });
         }
+        if (wizardCourseType === 'long_cycle' && newLessonId) {
+          const courseRes = await fetch('/api/courses', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              title: wizardCourseTitle,
+              description: wizardCourseDescription,
+              isLongCycle: true,
+              lessonId: newLessonId,
+              classIds: wizardClassIds,
+              autoArchiveAfterMs: wizardAutoArchiveAfterMs,
+            }),
+          });
+          const courseData = await courseRes.json().catch(() => null);
+          if (!courseRes.ok || !courseData?.success) {
+            throw new Error(
+              courseData?.error || (lang === 'zh' ? '长周期课程创建失败' : 'Failed to create the long-cycle course'),
+            );
+          }
+        }
         await fetchLessons();
         if (newLessonId) {
           setSelectedLesson(newLessonId);
@@ -168,9 +191,13 @@ export function useCourseWizard(options: UseCourseWizardOptions) {
         }
         addToast(
           lang === 'zh' ? '⭐ 课程发布成功' : '⭐ Course Deployed Successfully',
-          lang === 'zh'
-            ? `课程《${wizardCourseTitle}》已成功保存到核心SQLite并已自动激活！`
-            : `Course "${wizardCourseTitle}" is now live in SQLite and auto-activated.`,
+          wizardCourseType === 'long_cycle'
+            ? lang === 'zh'
+              ? `已创建长周期课程《${wizardCourseTitle}》，当前教案已作为第一章。讲完请结束本次课次，课程本身保持进行中。`
+              : `Long-cycle course "${wizardCourseTitle}" is ready, with this lesson as chapter 1.`
+            : lang === 'zh'
+              ? `课程《${wizardCourseTitle}》已成功保存到核心SQLite并已自动激活！`
+              : `Course "${wizardCourseTitle}" is now live in SQLite and auto-activated.`,
           'success',
         );
         setIsCourseWizardOpen(false);
@@ -179,13 +206,20 @@ export function useCourseWizard(options: UseCourseWizardOptions) {
         setWizardCourseDescription('');
         setWizardCourseContent('');
         setWizardCourseTimeline(getDefaultWizardTimeline(lang));
+        setWizardCourseType('regular');
+        setWizardClassIds([]);
+        setWizardAutoArchiveAfterMs(null);
         setWizardStep(1);
       } else {
         addToast('Error', 'SQLite save failed', 'warning');
       }
     } catch (err) {
       console.error(err);
-      addToast('Error', 'Launch Exception', 'warning');
+      addToast(
+        lang === 'zh' ? '课程发布失败' : 'Course Deploy Failed',
+        err instanceof Error ? err.message : lang === 'zh' ? '发布过程出现异常' : 'Launch Exception',
+        'error',
+      );
     } finally {
       setWizardIsSubmitting(false);
     }
@@ -209,6 +243,12 @@ export function useCourseWizard(options: UseCourseWizardOptions) {
     wizardIsSubmitting,
     setWizardIsSubmitting,
     wizardIsGeneratingOutline,
+    wizardCourseType,
+    setWizardCourseType,
+    wizardClassIds,
+    setWizardClassIds,
+    wizardAutoArchiveAfterMs,
+    setWizardAutoArchiveAfterMs,
     handleGenerateOutline,
     handleDeployWizardCourse,
   };

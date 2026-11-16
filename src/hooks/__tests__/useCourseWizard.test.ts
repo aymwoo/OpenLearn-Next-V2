@@ -195,3 +195,97 @@ describe('useCourseWizard —— AI 大纲生成', () => {
     ]);
   });
 });
+
+describe('useCourseWizard —— 长周期课程部署', () => {
+  let addToast: ReturnType<typeof vi.fn>;
+  let fetchLessons: ReturnType<typeof vi.fn>;
+  const originalFetch = globalThis.fetch;
+
+  function renderWizard() {
+    return renderHook(() =>
+      useCourseWizard({
+        lang: 'zh',
+        addToast: addToast as any,
+        fetchLessons: fetchLessons as any,
+        setSelectedLesson: vi.fn(),
+        setTeacherTab: vi.fn(),
+      }),
+    );
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    addToast = vi.fn();
+    fetchLessons = vi.fn().mockResolvedValue(undefined);
+    globalThis.fetch = vi.fn();
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+    vi.restoreAllMocks();
+  });
+
+  it('默认课程类型为常规课程，部署时不创建 courses 实体', async () => {
+    (globalThis.fetch as any).mockImplementation(async (url: string) => {
+      if (url === '/api/lessons') {
+        return { ok: true, json: async () => ({ result: { lessonId: 'les_regular' } }) };
+      }
+      if (String(url).includes('/timeline')) {
+        return { ok: true, json: async () => ({ success: true }) };
+      }
+      return { ok: false, json: async () => ({ error: 'unexpected' }) };
+    });
+
+    const { result } = renderWizard();
+    expect(result.current.wizardCourseType).toBe('regular');
+    act(() => result.current.setWizardCourseTitle('常规课'));
+
+    await act(async () => {
+      await result.current.handleDeployWizardCourse();
+    });
+
+    const urls = (globalThis.fetch as any).mock.calls.map((call: [string]) => call[0]);
+    expect(urls).toContain('/api/lessons');
+    expect(urls).not.toContain('/api/courses');
+    expect(addToast).toHaveBeenCalledWith('⭐ 课程发布成功', expect.stringContaining('常规课'), 'success');
+  });
+
+  it('长周期部署会创建课程实体，并把教案作为第一章且带上所选班级', async () => {
+    (globalThis.fetch as any).mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url === '/api/lessons') {
+        return { ok: true, json: async () => ({ result: { lessonId: 'les_ch1' } }) };
+      }
+      if (String(url).includes('/timeline')) {
+        return { ok: true, json: async () => ({ success: true }) };
+      }
+      if (url === '/api/courses') {
+        const payload = JSON.parse(String(init?.body || '{}'));
+        expect(payload).toMatchObject({
+          title: '学期信息技术',
+          isLongCycle: true,
+          lessonId: 'les_ch1',
+          classIds: ['cls_a'],
+        });
+        return { ok: true, json: async () => ({ success: true, course: { id: 'crs_1' } }) };
+      }
+      return { ok: false, json: async () => ({ error: 'unexpected' }) };
+    });
+
+    const { result } = renderWizard();
+    act(() => {
+      result.current.setWizardCourseTitle('学期信息技术');
+      result.current.setWizardCourseDescription('跨周授课');
+      result.current.setWizardCourseType('long_cycle');
+      result.current.setWizardClassIds(['cls_a']);
+    });
+
+    await act(async () => {
+      await result.current.handleDeployWizardCourse();
+    });
+
+    expect((globalThis.fetch as any).mock.calls.some((call: [string]) => call[0] === '/api/courses')).toBe(true);
+    expect(result.current.wizardCourseType).toBe('regular');
+    expect(result.current.wizardClassIds).toEqual([]);
+    expect(addToast).toHaveBeenCalledWith('⭐ 课程发布成功', expect.stringContaining('长周期课程'), 'success');
+  });
+});

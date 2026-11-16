@@ -412,3 +412,87 @@ describe('学案包 P1 / P2 服务（IKVO15）', () => {
     db.prepare('DELETE FROM courseware WHERE id = ?').run(localId);
   });
 });
+
+describe('长周期课程类型与开课选班', () => {
+  const db = kernelContainer.db;
+  const courses = new CourseLayerService(db);
+  const suffix = uuidv7().slice(0, 8);
+  const teacherId = `usr_lc2_t_${suffix}`;
+  const lessonId = `les_lc2_${suffix}`;
+  const classId = `cls_lc2_${suffix}`;
+  const extraClassId = `cls_lc2b_${suffix}`;
+  const now = Date.now();
+
+  beforeAll(() => {
+    db.prepare(`INSERT INTO users (id, username, password_hash, role, name, created_at) VALUES (?, ?, ?, ?, ?, ?)`).run(
+      teacherId,
+      `lc2_${suffix}`,
+      'x',
+      'teacher',
+      '教师',
+      now,
+    );
+    db.prepare(`INSERT INTO classes (id, name, description, owner_user_id, created_at) VALUES (?, ?, '', ?, ?)`).run(
+      classId,
+      '一班',
+      teacherId,
+      now,
+    );
+    db.prepare(`INSERT INTO classes (id, name, description, owner_user_id, created_at) VALUES (?, ?, '', ?, ?)`).run(
+      extraClassId,
+      '二班',
+      teacherId,
+      now,
+    );
+    db.prepare(
+      `INSERT INTO lessons (id, title, content, timeline, progress_mode, creator_id, created_at, updated_at)
+       VALUES (?, ?, '', '[]', 'manual', ?, ?, ?)`,
+    ).run(lessonId, '常规课节', teacherId, now, now);
+  });
+
+  afterAll(() => {
+    db.prepare('DELETE FROM classroom_sessions WHERE lesson_id = ?').run(lessonId);
+    db.prepare('DELETE FROM course_enrollments WHERE class_id IN (?, ?)').run(classId, extraClassId);
+    db.prepare('DELETE FROM courses WHERE owner_user_id = ?').run(teacherId);
+    db.prepare('UPDATE lessons SET course_id = NULL, course_order = 0 WHERE id = ?').run(lessonId);
+    db.prepare('DELETE FROM lessons WHERE id = ?').run(lessonId);
+    db.prepare('DELETE FROM classes WHERE id IN (?, ?)').run(classId, extraClassId);
+    db.prepare('DELETE FROM users WHERE id = ?').run(teacherId);
+  });
+
+  it('既有课程层行视为长周期，并可把常规课节提升为长周期课程', () => {
+    const created = courses.createCourse({ title: `既有课程 ${suffix}`, ownerUserId: teacherId });
+    expect(created.isLongCycle).toBe(true);
+    expect(created.autoArchiveAfterMs).toBeNull();
+
+    const promoted = courses.promoteLessonToLongCycle(lessonId, teacherId, { classIds: [classId] });
+    expect(promoted.isLongCycle).toBe(true);
+    expect(promoted.lessonIds).toEqual([lessonId]);
+    expect(courses.enrolledClassIds(promoted.id)).toEqual([classId]);
+    const again = courses.promoteLessonToLongCycle(lessonId, teacherId);
+    expect(again.id).toBe(promoted.id);
+  });
+
+  it('一键开课次必须使用教师明确选择的班级，未选或误用其他班都要拒绝', async () => {
+    const course = courses.promoteLessonToLongCycle(lessonId, teacherId, { classIds: [classId] });
+    await expect(courses.startLessonSession(course.id, lessonId, teacherId)).rejects.toThrow(/请指定要开课的班级/);
+    await expect(courses.startLessonSession(course.id, lessonId, teacherId, extraClassId)).rejects.toThrow(
+      /只能为已选课班级开启课次/,
+    );
+    const started = await courses.startLessonSession(course.id, lessonId, teacherId, classId);
+    expect(started.session).toBeTruthy();
+  });
+
+  it('课程级自动归档阈值会钳制在 3 小时至 30 天', () => {
+    const course = courses.createCourse({
+      title: `阈值 ${suffix}`,
+      ownerUserId: teacherId,
+      autoArchiveAfterMs: 60_000,
+    });
+    expect(course.autoArchiveAfterMs).toBe(3 * 60 * 60 * 1000);
+    const updated = courses.updateCourse(course.id, { autoArchiveAfterMs: 40 * 24 * 60 * 60 * 1000 });
+    expect(updated.autoArchiveAfterMs).toBe(30 * 24 * 60 * 60 * 1000);
+    const cleared = courses.updateCourse(course.id, { autoArchiveAfterMs: null });
+    expect(cleared.autoArchiveAfterMs).toBeNull();
+  });
+});

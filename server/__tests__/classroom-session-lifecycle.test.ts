@@ -18,12 +18,15 @@ import { findActiveLessonForStudent } from '../utils/auto-record-score.js';
 import {
   DEFAULT_AUTO_ARCHIVE_AFTER_MS,
   MIN_AUTO_ARCHIVE_AFTER_MS,
+  REGULAR_COURSE_AUTO_ARCHIVE_AFTER_MS,
   archiveZombieSessions,
   closeClassroomSession,
   getAutoArchiveAfterMs,
+  getAutoArchiveAfterMsForLesson,
   setAutoArchiveAfterMs,
   setSessionAutoArchiveExempt,
 } from '../services/classroom-session-lifecycle.js';
+import { CourseLayerService } from '../services/course-layer-service.js';
 
 const teacherId = 'usr-lc-teacher';
 const teacherToken = 'tok-lc-teacher';
@@ -430,5 +433,71 @@ describe('生命周期设置权限', () => {
       autoArchiveAfterMs: DEFAULT_AUTO_ARCHIVE_AFTER_MS,
     });
     expect(denied.status).toBe(403);
+  });
+});
+
+describe('常规课程与长周期课程使用不同的自动归档阈值', () => {
+  const regularLessonId = 'les-lc-regular-archive';
+  const longLessonId = 'les-lc-long-archive';
+  let courseId = '';
+
+  beforeAll(() => {
+    const now = Date.now();
+    db.prepare(
+      'INSERT OR REPLACE INTO lessons (id, title, created_at, updated_at, creator_id) VALUES (?, ?, ?, ?, ?)',
+    ).run(regularLessonId, '常规课', now, now, teacherId);
+    db.prepare(
+      'INSERT OR REPLACE INTO lessons (id, title, created_at, updated_at, creator_id) VALUES (?, ?, ?, ?, ?)',
+    ).run(longLessonId, '长周期章节', now, now, teacherId);
+    const courses = new CourseLayerService(db);
+    const course = courses.createCourse({
+      title: '阈值覆盖课',
+      ownerUserId: teacherId,
+      isLongCycle: true,
+      autoArchiveAfterMs: 5 * 60 * 60 * 1000,
+      lessonId: longLessonId,
+    });
+    courseId = course.id;
+  });
+
+  afterAll(() => {
+    db.prepare('DELETE FROM classroom_sessions WHERE lesson_id IN (?, ?)').run(regularLessonId, longLessonId);
+    db.prepare('UPDATE lessons SET course_id = NULL, course_order = 0 WHERE id IN (?, ?)').run(
+      regularLessonId,
+      longLessonId,
+    );
+    if (courseId) db.prepare('DELETE FROM courses WHERE id = ?').run(courseId);
+    db.prepare('DELETE FROM lessons WHERE id IN (?, ?)').run(regularLessonId, longLessonId);
+  });
+
+  it('未挂长周期课程的课节使用更短的常规课兜底阈值', () => {
+    expect(getAutoArchiveAfterMsForLesson(db, regularLessonId)).toBe(REGULAR_COURSE_AUTO_ARCHIVE_AFTER_MS);
+    expect(REGULAR_COURSE_AUTO_ARCHIVE_AFTER_MS).toBe(MIN_AUTO_ARCHIVE_AFTER_MS);
+    insertSession('sess-lc-regular-stale', {
+      lesson_id: regularLessonId,
+      last_activity_at: Date.now() - REGULAR_COURSE_AUTO_ARCHIVE_AFTER_MS - 1000,
+    });
+    const closed = archiveZombieSessions(db);
+    expect(closed.some((item) => item.sessionId === 'sess-lc-regular-stale')).toBe(true);
+  });
+
+  it('长周期课程可使用课程级阈值覆盖站点默认，未到阈值则不归档', () => {
+    expect(getAutoArchiveAfterMsForLesson(db, longLessonId)).toBe(5 * 60 * 60 * 1000);
+    const now = Date.now();
+    insertSession('sess-lc-long-fresh', {
+      lesson_id: longLessonId,
+      last_activity_at: now - 4 * 60 * 60 * 1000,
+    });
+    archiveZombieSessions(db, now);
+    expect(db.prepare('SELECT stage FROM classroom_sessions WHERE id = ?').get('sess-lc-long-fresh').stage).toBe(
+      'IN_CLASS_TEACHING',
+    );
+    insertSession('sess-lc-long-stale', {
+      lesson_id: longLessonId,
+      last_activity_at: now - 6 * 60 * 60 * 1000,
+      created_at: now + 1,
+    });
+    const closed = archiveZombieSessions(db, now);
+    expect(closed.some((item) => item.sessionId === 'sess-lc-long-stale')).toBe(true);
   });
 });

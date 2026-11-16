@@ -16,6 +16,8 @@ export const DEFAULT_AUTO_ARCHIVE_AFTER_MS = 24 * 60 * 60 * 1000;
 export const MIN_AUTO_ARCHIVE_AFTER_MS = 3 * 60 * 60 * 1000;
 /** 阈值上限：30 天，防止把开关设成「永不归档」。 */
 export const MAX_AUTO_ARCHIVE_AFTER_MS = 30 * 24 * 60 * 60 * 1000;
+/** 常规课程兜底阈值：较短，避免「稍后继续」让课次跨周一直挂着；仍不低于全站下限。 */
+export const REGULAR_COURSE_AUTO_ARCHIVE_AFTER_MS = MIN_AUTO_ARCHIVE_AFTER_MS;
 
 export const UNFINISHED_PROMPT_PREF_KEY = 'classroom.unfinished_prompt';
 
@@ -103,6 +105,42 @@ export function setAutoArchiveAfterMs(db: Database.Database, ms: number): number
      ON CONFLICT(id) DO UPDATE SET classroom_session_auto_archive_after_ms = excluded.classroom_session_auto_archive_after_ms`,
   ).run(value);
   return value;
+}
+
+/**
+ * 按课节解析自动归档阈值。
+ * 长周期课程：课程级阈值（已钳制）优先，否则跟站点默认。
+ * 常规课程（未挂长周期课程）：使用更短的兜底阈值，避免课次无限期悬挂。
+ */
+export function getAutoArchiveAfterMsForLesson(db: Database.Database, lessonId: string): number {
+  if (!lessonId) return REGULAR_COURSE_AUTO_ARCHIVE_AFTER_MS;
+  try {
+    const row = db
+      .prepare(
+        `SELECT c.is_long_cycle AS is_long_cycle, c.auto_archive_after_ms AS auto_archive_after_ms
+           FROM lessons l
+           LEFT JOIN courses c ON c.id = l.course_id
+          WHERE l.id = ?`,
+      )
+      .get(lessonId) as { is_long_cycle?: number | null; auto_archive_after_ms?: number | null } | undefined;
+    const isLongCycle = Number(row?.is_long_cycle) === 1;
+    if (isLongCycle) {
+      if (row?.auto_archive_after_ms != null && Number.isFinite(Number(row.auto_archive_after_ms))) {
+        return clampAutoArchiveAfterMs(Number(row.auto_archive_after_ms));
+      }
+      return getAutoArchiveAfterMs(db);
+    }
+  } catch {
+    /* 精简测试库或缺列时退回常规课兜底 */
+  }
+  return REGULAR_COURSE_AUTO_ARCHIVE_AFTER_MS;
+}
+
+export function getAutoArchiveAfterMsForSession(
+  db: Database.Database,
+  session: Pick<ClassroomSessionRow, 'lesson_id'>,
+): number {
+  return getAutoArchiveAfterMsForLesson(db, session.lesson_id);
 }
 
 /** 回写教师活动时间。列不存在（未迁库的精简测试 schema）时静默跳过。 */
@@ -197,7 +235,6 @@ function isExempt(session: ClassroomSessionRow): boolean {
  * （升级后不立即改变实际课堂状态；再经过一个阈值且仍无教师活动才归档）。
  */
 export function archiveZombieSessions(db: Database.Database, now = Date.now()): CloseSessionResult[] {
-  const threshold = getAutoArchiveAfterMs(db);
   let rows: ClassroomSessionRow[] = [];
   try {
     rows = db
@@ -218,6 +255,7 @@ export function archiveZombieSessions(db: Database.Database, now = Date.now()): 
       touchSessionActivity(db, session.id, now);
       continue;
     }
+    const threshold = getAutoArchiveAfterMsForSession(db, session);
     if (now - Number(session.last_activity_at) >= threshold) {
       closed.push(closeClassroomSession(db, session, { now, source: 'auto' }));
     }

@@ -48,14 +48,27 @@ export function registerCourseLayerRoutes(ctx: ServerContext): void {
       const userId = actorUserId(session) || session?.userId;
       if (!userId) return res.status(400).json({ success: false, error: 'User identity required' });
       const body = req.body ?? {};
-      const course = service().createCourse({
-        title: body.title,
-        description: body.description,
-        ownerUserId: userId,
-        term: body.term,
-        visibility: body.visibility,
-        thumbnail: body.thumbnail,
-      });
+      const classIds = Array.isArray(body.classIds) ? body.classIds : undefined;
+      const course =
+        body.promoteLesson && body.lessonId
+          ? service().promoteLessonToLongCycle(String(body.lessonId), userId, {
+              title: body.title,
+              description: body.description,
+              classIds,
+              autoArchiveAfterMs: body.autoArchiveAfterMs,
+            })
+          : service().createCourse({
+              title: body.title,
+              description: body.description,
+              ownerUserId: userId,
+              term: body.term,
+              visibility: body.visibility,
+              thumbnail: body.thumbnail,
+              isLongCycle: body.isLongCycle !== false,
+              autoArchiveAfterMs: body.autoArchiveAfterMs,
+              lessonId: body.lessonId,
+              classIds,
+            });
       res.status(201).json({ success: true, course });
     } catch (err) {
       sendError(res, err);
@@ -73,7 +86,8 @@ export function registerCourseLayerRoutes(ctx: ServerContext): void {
       if (!allowed) return res.status(403).json({ success: false, error: 'Forbidden' });
       const course = service().getCourse(req.params.courseId);
       const lessons = service().listLessons(req.params.courseId);
-      res.json({ success: true, course, lessons });
+      const enrollments = service().listEnrollments(req.params.courseId);
+      res.json({ success: true, course, lessons, enrollments });
     } catch (err) {
       sendError(res, err);
     }

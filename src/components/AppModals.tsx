@@ -393,6 +393,13 @@ export function AppModals(props: AppModalsProps = {}) {
         wizardIsGeneratingOutline={wizardIsGeneratingOutline}
         handleGenerateOutline={handleGenerateOutline}
         handleDeployWizardCourse={handleDeployWizardCourse}
+        wizardCourseType={cw?.wizardCourseType}
+        setWizardCourseType={cw?.setWizardCourseType}
+        wizardClassIds={cw?.wizardClassIds}
+        setWizardClassIds={cw?.setWizardClassIds}
+        wizardAutoArchiveAfterMs={cw?.wizardAutoArchiveAfterMs}
+        setWizardAutoArchiveAfterMs={cw?.setWizardAutoArchiveAfterMs}
+        classes={classes}
       />
 
       <ImportLessonsModal

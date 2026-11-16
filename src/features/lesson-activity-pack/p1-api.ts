@@ -86,7 +86,20 @@ export interface CourseRecord {
   thumbnail: string | null;
   createdAt: number;
   updatedAt: number;
+  isLongCycle?: boolean;
+  autoArchiveAfterMs?: number | null;
   lessonCount?: number;
+  lessonIds?: string[];
+}
+
+export interface CourseEnrollment {
+  id: string;
+  courseId: string;
+  classId: string | null;
+  studentId: string | null;
+  createdAt: number;
+  className?: string | null;
+  studentName?: string | null;
 }
 
 export interface CourseLessonRef {
@@ -234,10 +247,15 @@ export function fetchCourses() {
 }
 
 export function createCourse(body: {
-  title: string;
+  title?: string;
   description?: string;
   visibility?: CourseRecord['visibility'];
   term?: string;
+  isLongCycle?: boolean;
+  autoArchiveAfterMs?: number | null;
+  lessonId?: string;
+  classIds?: string[];
+  promoteLesson?: boolean;
 }) {
   return request<{ course: CourseRecord }>('/api/courses', {
     method: 'POST',
@@ -246,8 +264,39 @@ export function createCourse(body: {
   });
 }
 
+export function promoteLessonToLongCycle(
+  lessonId: string,
+  body?: { title?: string; description?: string; classIds?: string[]; autoArchiveAfterMs?: number | null },
+) {
+  return createCourse({ lessonId, promoteLesson: true, ...body });
+}
+
+export function updateCourse(
+  courseId: string,
+  body: Partial<{
+    title: string;
+    description: string;
+    term: string | null;
+    visibility: CourseRecord['visibility'];
+    isLongCycle: boolean;
+    autoArchiveAfterMs: number | null;
+  }>,
+) {
+  return request<{ course: CourseRecord }>(`/api/courses/${encodeURIComponent(courseId)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+}
+
 export function fetchCourse(courseId: string) {
-  return request<{ course: CourseRecord; lessons: CourseLessonRef[] }>(`/api/courses/${encodeURIComponent(courseId)}`);
+  return request<{ course: CourseRecord; lessons: CourseLessonRef[]; enrollments?: CourseEnrollment[] }>(
+    `/api/courses/${encodeURIComponent(courseId)}`,
+  );
+}
+
+export function fetchCourseEnrollments(courseId: string) {
+  return request<{ enrollments: CourseEnrollment[] }>(`/api/courses/${encodeURIComponent(courseId)}/enrollments`);
 }
 
 export function attachCourseLessons(courseId: string, lessonIds: string[]) {
@@ -266,7 +315,7 @@ export function enrollCourseClass(courseId: string, classId: string) {
   });
 }
 
-export function startCourseLessonSession(courseId: string, lessonId: string, classId?: string) {
+export function startCourseLessonSession(courseId: string, lessonId: string, classId: string) {
   return request<{ session: { id: string }; created: boolean }>(
     `/api/courses/${encodeURIComponent(courseId)}/lessons/${encodeURIComponent(lessonId)}/start-session`,
     { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ classId }) },

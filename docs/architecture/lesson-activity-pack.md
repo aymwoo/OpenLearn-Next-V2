@@ -26,7 +26,7 @@
 | `submission`  | 作品提交，需关联作业中心作业                                              | 学生跳到既有作业页提交与批阅                                                                                                                                                                                                           |
 | `programming` | 编程活动，`config.kind` 为 `scratch` / `python` / `flowchart` / `mindmap` | 内置 Python 源码编辑、流程图/思维导图最小编辑器；Scratch 不内嵌 scratch.mit.edu，仅在已安装独立离线插件时尝试打开插件视图，否则提交作品说明。学案内作品写入 `activity_progress.artifact_json`，不另建成绩口径，教师确认后才 `verified` |
 
-`lessons.course_id` 为可空预留列，供以后课程层挂接，本轮不创建 `courses` 表。
+`lessons.course_id` 为可空列：P0 预留，P2 起挂接 `courses` 一级实体（长周期课程）。
 
 ## 主要接口
 
@@ -48,7 +48,7 @@
 
 ## P2
 
-- **课程层**：`courses` 为一级实体，`lessons.course_id` / `course_order` 挂接章节，`course_enrollments` 支持按班级或学生选课。课程跨周保持进行中；教师可对某个章节「一键开课次」，复用 IKVNIX 的 `getOrCreateSession`（已归档课次会开新会话）。
+- **课程层 / 长周期课程**：`courses` 为一级实体（`is_long_cycle`、可空的课程级 `auto_archive_after_ms`），`lessons.course_id` / `course_order` 挂接章节，`course_enrollments` 支持按班级或学生选课。教师在「创建新课程」向导第一步选择「长周期课程」后，部署时创建课程实体并把当前教案作为第一章；课程管理以带「长周期」徽标的卡片展示，打开后可加章节、选课、开课次和进入讨论区。已有常规课可自愿改成长周期。课程跨周保持进行中；「一键开课次」必须明确指定班级（不会暗默使用列表第一项），复用 IKVNIX 的 `getOrCreateSession`（已归档课次会开新会话）。常规课程不套用长周期语义，课次使用更短的自动归档兜底。
 - **讨论区**：最小可用实现，支持发帖、回复、锁定、删除与举报。正文同样去 HTML、隐藏外链。不做投票、分组或富文本编辑器。
 
 ## 新增接口（P1 / P2）
@@ -63,4 +63,4 @@
 
 ## 课次自动归档阈值设置（IKVNIX）
 
-僵尸课次自动归档阈值写入 `site_settings.classroom_session_auto_archive_after_ms`（默认 24 小时，下限 3 小时，上限 30 天）。管理员可在后台「站点信息设置」中的「课次自动归档阈值」表单调整，接口仍为 `GET` / `PUT /api/classroom/session-lifecycle-settings`。
+僵尸课次自动归档阈值写入 `site_settings.classroom_session_auto_archive_after_ms`（默认 24 小时，下限 3 小时，上限 30 天）。管理员可在后台「站点信息设置」中的「课次自动归档阈值」表单调整，接口仍为 `GET` / `PUT /api/classroom/session-lifecycle-settings`。长周期课程可用 `courses.auto_archive_after_ms` 覆盖站点默认（同样钳制在 3 小时–30 天，空值表示跟站点）；常规课程使用 3 小时兜底阈值，避免「稍后继续」让课次跨周悬挂。实时录成绩仍只认 `IN_CLASS_TEACHING`。

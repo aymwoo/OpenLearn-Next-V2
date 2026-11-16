@@ -42,6 +42,13 @@ export interface CourseWizardModalProps {
   wizardIsGeneratingOutline: boolean;
   handleGenerateOutline: () => Promise<void>;
   handleDeployWizardCourse: () => void;
+  wizardCourseType?: 'regular' | 'long_cycle';
+  setWizardCourseType?: (v: 'regular' | 'long_cycle') => void;
+  wizardClassIds?: string[];
+  setWizardClassIds?: (v: string[]) => void;
+  wizardAutoArchiveAfterMs?: number | null;
+  setWizardAutoArchiveAfterMs?: (v: number | null) => void;
+  classes?: Array<{ id: string; name: string }>;
 }
 
 export function CourseWizardModal(props: CourseWizardModalProps) {
@@ -66,6 +73,13 @@ export function CourseWizardModal(props: CourseWizardModalProps) {
     wizardIsGeneratingOutline,
     handleGenerateOutline,
     handleDeployWizardCourse,
+    wizardCourseType = 'regular',
+    setWizardCourseType,
+    wizardClassIds = [],
+    setWizardClassIds,
+    wizardAutoArchiveAfterMs = null,
+    setWizardAutoArchiveAfterMs,
+    classes = [],
   } = props;
 
   return (
@@ -168,6 +182,150 @@ export function CourseWizardModal(props: CourseWizardModalProps) {
                 </p>
               </div>
             </div>
+
+            <fieldset className="space-y-3" data-testid="wizard-course-type">
+              <legend className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">
+                {lang === 'zh' ? '课程类型' : 'Course Type'}
+              </legend>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <label
+                  className={`flex items-start gap-3 p-3.5 rounded-xl border cursor-pointer transition-colors ${
+                    wizardCourseType === 'regular'
+                      ? 'border-indigo-300 bg-indigo-50/70'
+                      : 'border-gray-200 bg-white hover:border-gray-300'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="wizard_course_type"
+                    value="regular"
+                    checked={wizardCourseType === 'regular'}
+                    onChange={() => setWizardCourseType?.('regular')}
+                    className="mt-1"
+                  />
+                  <span>
+                    <span className="block text-sm font-semibold text-gray-800">
+                      {lang === 'zh' ? '常规课程（默认）' : 'Regular course (default)'}
+                    </span>
+                    <span className="block text-xs text-gray-600 leading-relaxed mt-1">
+                      {lang === 'zh'
+                        ? '按一节课配置时间轴和大纲。上完结束即可，学生不会因课次长期停在课中而一直看到未结束提示。'
+                        : 'Set up one lesson as usual. After class ends, students will not keep seeing an unfinished-session prompt.'}
+                    </span>
+                  </span>
+                </label>
+                <label
+                  className={`flex items-start gap-3 p-3.5 rounded-xl border cursor-pointer transition-colors ${
+                    wizardCourseType === 'long_cycle'
+                      ? 'border-indigo-300 bg-indigo-50/70'
+                      : 'border-gray-200 bg-white hover:border-gray-300'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="wizard_course_type"
+                    value="long_cycle"
+                    checked={wizardCourseType === 'long_cycle'}
+                    onChange={() => setWizardCourseType?.('long_cycle')}
+                    className="mt-1"
+                  />
+                  <span>
+                    <span className="block text-sm font-semibold text-gray-800">
+                      {lang === 'zh' ? '长周期课程' : 'Long-cycle course'}
+                    </span>
+                    <span className="block text-xs text-gray-600 leading-relaxed mt-1">
+                      {lang === 'zh'
+                        ? '这门课可以跨多次上课。当前教案将作为第一章，以后可在课程卡片中加章节、开课次。讲完只结束本次课次，课程保持进行中。'
+                        : 'This course can span multiple class meetings. The current lesson becomes chapter 1; you can add chapters and start sessions later. Ending a session keeps the course in progress.'}
+                    </span>
+                  </span>
+                </label>
+              </div>
+              {wizardCourseType === 'long_cycle' && (
+                <div className="rounded-xl border border-indigo-100 bg-slate-50 p-3.5 space-y-3">
+                  <div>
+                    <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">
+                      {lang === 'zh' ? '上课班级（可选，可多选）' : 'Classes (optional, multi-select)'}
+                    </p>
+                    {classes.length === 0 ? (
+                      <p className="text-xs text-gray-500">
+                        {lang === 'zh'
+                          ? '暂时没有可选择的班级。可以先不选，以后在课程详情里补充。'
+                          : 'No classes available yet. You can skip this and add classes later in the course details.'}
+                      </p>
+                    ) : (
+                      <div className="flex flex-col gap-1.5 max-h-36 overflow-y-auto">
+                        {classes.map((item) => {
+                          const checked = wizardClassIds.includes(item.id);
+                          return (
+                            <label key={item.id} className="flex items-center gap-2 text-sm text-gray-700">
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={() => {
+                                  if (!setWizardClassIds) return;
+                                  setWizardClassIds(
+                                    checked
+                                      ? wizardClassIds.filter((id) => id !== item.id)
+                                      : [...wizardClassIds, item.id],
+                                  );
+                                }}
+                              />
+                              <span>{item.name}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    )}
+                    <p className="text-xs text-gray-500 mt-1.5">
+                      {lang === 'zh'
+                        ? '不必现在排完全部分章节。班级可先不选，以后在课程详情里补充。'
+                        : 'You do not need to plan every chapter now. Classes can be added later in the course details.'}
+                    </p>
+                  </div>
+                  <div>
+                    <label
+                      htmlFor="wizard-auto-archive-hours"
+                      className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1"
+                    >
+                      {lang === 'zh' ? '课次自动归档（可选）' : 'Session auto-archive (optional)'}
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        id="wizard-auto-archive-hours"
+                        type="number"
+                        min={3}
+                        max={720}
+                        placeholder={lang === 'zh' ? '跟站点默认' : 'Site default'}
+                        value={
+                          wizardAutoArchiveAfterMs == null
+                            ? ''
+                            : String(Math.round(wizardAutoArchiveAfterMs / (60 * 60 * 1000)))
+                        }
+                        onChange={(event) => {
+                          const raw = event.target.value.trim();
+                          if (!setWizardAutoArchiveAfterMs) return;
+                          if (!raw) {
+                            setWizardAutoArchiveAfterMs(null);
+                            return;
+                          }
+                          const hours = Number(raw);
+                          if (!Number.isFinite(hours)) return;
+                          setWizardAutoArchiveAfterMs(Math.round(hours * 60 * 60 * 1000));
+                        }}
+                        className="w-32 px-3 py-1.5 border border-gray-250 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      />
+                      <span className="text-xs text-gray-600">{lang === 'zh' ? '小时' : 'hours'}</span>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {lang === 'zh'
+                        ? '留空则跟站点设置。自定义范围须在 3 小时至 30 天之间。'
+                        : 'Leave blank to follow the site default. Custom values must be between 3 hours and 30 days.'}
+                    </p>
+                  </div>
+                </div>
+              )}
+            </fieldset>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 font-sans">
               <div className="md:col-span-2 space-y-4">
@@ -661,9 +819,27 @@ export function CourseWizardModal(props: CourseWizardModalProps) {
                 <div className="font-bold text-indigo-950 text-base sm:text-lg truncate">
                   {wizardCourseTitle || (lang === 'zh' ? '未指定课程主题' : 'Blank Topic')}
                 </div>
-                <span className="inline-flex px-2 py-0.5 rounded text-xs font-extrabold bg-indigo-50 text-indigo-800 uppercase tracking-wide border border-indigo-150 shrink-0">
-                  {wizardCourseCategory}
-                </span>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <span
+                    className={`inline-flex px-2 py-0.5 rounded text-xs font-extrabold uppercase tracking-wide border ${
+                      wizardCourseType === 'long_cycle'
+                        ? 'bg-amber-50 text-amber-800 border-amber-200'
+                        : 'bg-slate-50 text-slate-700 border-slate-200'
+                    }`}
+                    data-testid="wizard-deploy-course-type"
+                  >
+                    {wizardCourseType === 'long_cycle'
+                      ? lang === 'zh'
+                        ? '长周期'
+                        : 'Long-cycle'
+                      : lang === 'zh'
+                        ? '常规课程'
+                        : 'Regular'}
+                  </span>
+                  <span className="inline-flex px-2 py-0.5 rounded text-xs font-extrabold bg-indigo-50 text-indigo-800 uppercase tracking-wide border border-indigo-150">
+                    {wizardCourseCategory}
+                  </span>
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4 text-xs">
@@ -689,6 +865,14 @@ export function CourseWizardModal(props: CourseWizardModalProps) {
               <div className="bg-slate-50 border border-gray-150 p-3 rounded-lg text-xs text-gray-600 line-clamp-2 italic leading-relaxed text-left">
                 {wizardCourseDescription || (lang === 'zh' ? '无科目描述内容' : 'No description written.')}
               </div>
+
+              {wizardCourseType === 'long_cycle' && (
+                <p className="text-xs text-gray-600 leading-relaxed">
+                  {lang === 'zh'
+                    ? `部署时会创建一门长周期课程，并把这份教案作为第一章。已选班级 ${wizardClassIds.length} 个，可在课程详情中继续补充。`
+                    : `Deploying will create a long-cycle course with this lesson as chapter 1. ${wizardClassIds.length} class(es) selected; more can be added later.`}
+                </p>
+              )}
 
               {/* Progress map view */}
               <div className="space-y-1.5 select-none">

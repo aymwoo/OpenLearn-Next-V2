@@ -134,17 +134,17 @@
 
 ### `lessons`
 
-| 列                          | 类型    | 说明                                                                                 |
-| --------------------------- | ------- | ------------------------------------------------------------------------------------ |
-| `id`                        | TEXT PK | 课节 ID                                                                              |
-| `title`                     | TEXT    | 标题                                                                                 |
-| `content`                   | TEXT    | 内容                                                                                 |
-| `timeline`                  | TEXT    | 时间轴 JSON。环节可含 `gates: [{ id?, type, params? }]`                              |
-| `progress_mode`             | TEXT    | **已废弃**。仅当环节没有自己的 `gates` 且不是第一环时，`gated` 仍作兼容回退          |
-| `progress_conditions`       | TEXT    | **已废弃**。已知字段会映射为内置环节条件，新课请写在 `timeline.gates`                |
-| `created_at` / `updated_at` | INTEGER | 时间戳                                                                               |
-| `creator_id`                | TEXT    | 创建教师                                                                             |
-| `course_id`                 | TEXT    | 可空预留列（迁移 `058`）。供以后课程层挂接，P0 不创建 `courses` 表，既有数据无需迁移 |
+| 列                          | 类型    | 说明                                                                                |
+| --------------------------- | ------- | ----------------------------------------------------------------------------------- |
+| `id`                        | TEXT PK | 课节 ID                                                                             |
+| `title`                     | TEXT    | 标题                                                                                |
+| `content`                   | TEXT    | 内容                                                                                |
+| `timeline`                  | TEXT    | 时间轴 JSON。环节可含 `gates: [{ id?, type, params? }]`                             |
+| `progress_mode`             | TEXT    | **已废弃**。仅当环节没有自己的 `gates` 且不是第一环时，`gated` 仍作兼容回退         |
+| `progress_conditions`       | TEXT    | **已废弃**。已知字段会映射为内置环节条件，新课请写在 `timeline.gates`               |
+| `created_at` / `updated_at` | INTEGER | 时间戳                                                                              |
+| `creator_id`                | TEXT    | 创建教师                                                                            |
+| `course_id`                 | TEXT    | 可空列（迁移 `058` 预留，`060` 起挂接 `courses`）。长周期课程的章节通过此列归属课程 |
 
 ### `lesson_activities`（迁移 `058`，Gitee IKVO15 P0）
 
@@ -505,7 +505,7 @@ MFE 远端登记。MFE 执行边界已移除，表保留作历史数据兼容。
 
 <!-- AUTO-GENERATED:table-inventory BEGIN -->
 
-共 **105** 张表（迁移 62 个，金样生成于 2026-11-16T11:31:19.542Z）。列清单为列名（类型与约束见迁移 SQL）：
+共 **105** 张表（迁移 63 个，金样生成于 2026-11-16T14:37:17.016Z）。列清单为列名（类型与约束见迁移 SQL）：
 
 - `_academic_year_backfill`: backfilled_at, id
 - `_class_passcode_encryption`: id, note
@@ -551,7 +551,7 @@ MFE 远端登记。MFE 执行边界已移除，表保留作历史数据兼容。
 - `client_sessions`: expires_at, id, session_data, updated_at
 - `computer_labs`: cols, created_at, id, room_number, rows
 - `course_enrollments`: class_id, course_id, created_at, id, student_id
-- `courses`: created_at, description, id, owner_user_id, term, thumbnail, title, updated_at, visibility
+- `courses`: auto_archive_after_ms, created_at, description, id, is_long_cycle, owner_user_id, term, thumbnail, title, updated_at, visibility
 - `courseware`: created_at, entry, id, name, type, uuid
 - `courseware_attempt`: courseware_id, finished_at, id, started_at, status, student_id
 - `courseware_score_config`: auto_record_enabled, auto_record_min_completion, auto_record_strategy, courseware_id, courseware_name, lesson_id, raw_full_score, score_fields, score_policy, target_full_score, updated_at, weight_percentage

@@ -8,6 +8,7 @@ import type Database from 'better-sqlite3';
 import { randomId } from '../utils/id.js';
 import { LessonActivityError } from './lesson-activity-service.js';
 import { ClassroomRuntimeService } from './classroom-runtime-service.js';
+import { clampAutoArchiveAfterMs } from './classroom-session-lifecycle.js';
 
 export const COURSE_VISIBILITIES = ['private', 'enrolled', 'public'] as const;
 export type CourseVisibility = (typeof COURSE_VISIBILITIES)[number];
@@ -22,7 +23,10 @@ export interface CourseRecord {
   thumbnail: string | null;
   createdAt: number;
   updatedAt: number;
+  isLongCycle: boolean;
+  autoArchiveAfterMs: number | null;
   lessonCount?: number;
+  lessonIds?: string[];
 }
 
 export interface CourseLessonRef {
@@ -42,6 +46,15 @@ export interface CourseEnrollment {
   studentName?: string | null;
 }
 
+export function normalizeCourseAutoArchiveAfterMs(raw: unknown): number | null {
+  if (raw == null || raw === '') return null;
+  const value = Number(raw);
+  if (!Number.isFinite(value)) {
+    throw new LessonActivityError(400, '自动归档阈值无效');
+  }
+  return clampAutoArchiveAfterMs(value);
+}
+
 export class CourseLayerService {
   constructor(private readonly db: Database.Database) {}
 
@@ -52,35 +65,86 @@ export class CourseLayerService {
     term?: string | null;
     visibility?: CourseVisibility;
     thumbnail?: string | null;
+    isLongCycle?: boolean;
+    autoArchiveAfterMs?: number | null;
+    lessonId?: string | null;
+    classIds?: string[];
   }): CourseRecord {
     const title = String(input.title || '').trim();
     if (!title) throw new LessonActivityError(400, '课程标题不能为空');
     const now = Date.now();
     const id = randomId('crs_');
-    this.db
-      .prepare(
-        `INSERT INTO courses (id, title, description, owner_user_id, term, visibility, thumbnail, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      )
-      .run(
-        id,
-        title.slice(0, 120),
-        String(input.description || '').slice(0, 2000),
-        input.ownerUserId,
-        input.term ?? null,
-        input.visibility && COURSE_VISIBILITIES.includes(input.visibility) ? input.visibility : 'enrolled',
-        input.thumbnail ?? null,
-        now,
-        now,
-      );
+    const isLongCycle = input.isLongCycle !== false;
+    const autoArchiveAfterMs = normalizeCourseAutoArchiveAfterMs(input.autoArchiveAfterMs);
+    const lessonId = input.lessonId ? String(input.lessonId) : '';
+    const classIds = Array.from(new Set((input.classIds || []).map(String).filter(Boolean)));
+
+    const insert = this.db.transaction(() => {
+      this.db
+        .prepare(
+          `INSERT INTO courses (
+             id, title, description, owner_user_id, term, visibility, thumbnail,
+             is_long_cycle, auto_archive_after_ms, created_at, updated_at
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        )
+        .run(
+          id,
+          title.slice(0, 120),
+          String(input.description || '').slice(0, 2000),
+          input.ownerUserId,
+          input.term ?? null,
+          input.visibility && COURSE_VISIBILITIES.includes(input.visibility) ? input.visibility : 'enrolled',
+          input.thumbnail ?? null,
+          isLongCycle ? 1 : 0,
+          autoArchiveAfterMs,
+          now,
+          now,
+        );
+      if (lessonId) this.attachLessons(id, [lessonId]);
+      for (const classId of classIds) this.enrollClass(id, classId);
+    });
+    insert();
     return this.getCourse(id);
+  }
+
+  /**
+   * 把已有常规课节提升为一门长周期课程（当前教案作为第一章）。
+   * 若该课节已挂在长周期课程下则直接返回已有课程，不强迫重建。
+   */
+  promoteLessonToLongCycle(
+    lessonId: string,
+    ownerUserId: string,
+    input?: {
+      title?: string;
+      description?: string;
+      classIds?: string[];
+      autoArchiveAfterMs?: number | null;
+    },
+  ): CourseRecord {
+    const lesson = this.db.prepare('SELECT id, title, content, course_id FROM lessons WHERE id = ?').get(lessonId) as
+      { id: string; title: string; content: string; course_id: string | null } | undefined;
+    if (!lesson) throw new LessonActivityError(404, '课节不存在');
+    if (lesson.course_id) {
+      const existing = this.getCourse(lesson.course_id);
+      if (existing.isLongCycle) return existing;
+      return this.updateCourse(lesson.course_id, { isLongCycle: true, autoArchiveAfterMs: input?.autoArchiveAfterMs });
+    }
+    return this.createCourse({
+      title: (input?.title || lesson.title || '').trim() || lesson.title,
+      description: input?.description ?? String(lesson.content || '').slice(0, 2000),
+      ownerUserId,
+      isLongCycle: true,
+      autoArchiveAfterMs: input?.autoArchiveAfterMs ?? null,
+      lessonId: lesson.id,
+      classIds: input?.classIds,
+    });
   }
 
   getCourse(courseId: string): CourseRecord {
     const row = this.db.prepare('SELECT * FROM courses WHERE id = ?').get(courseId) as
       Record<string, unknown> | undefined;
     if (!row) throw new LessonActivityError(404, '课程不存在');
-    return this.mapCourse(row);
+    return this.mapCourse(row, true);
   }
 
   updateCourse(
@@ -91,6 +155,8 @@ export class CourseLayerService {
       term: string | null;
       visibility: CourseVisibility;
       thumbnail: string | null;
+      isLongCycle: boolean;
+      autoArchiveAfterMs: number | null;
     }>,
   ): CourseRecord {
     const current = this.getCourse(courseId);
@@ -98,10 +164,16 @@ export class CourseLayerService {
     if (!title) throw new LessonActivityError(400, '课程标题不能为空');
     const visibility =
       patch.visibility && COURSE_VISIBILITIES.includes(patch.visibility) ? patch.visibility : current.visibility;
+    const isLongCycle = patch.isLongCycle != null ? Boolean(patch.isLongCycle) : current.isLongCycle;
+    const autoArchiveAfterMs =
+      patch.autoArchiveAfterMs !== undefined
+        ? normalizeCourseAutoArchiveAfterMs(patch.autoArchiveAfterMs)
+        : current.autoArchiveAfterMs;
     this.db
       .prepare(
         `UPDATE courses
-            SET title = ?, description = ?, term = ?, visibility = ?, thumbnail = ?, updated_at = ?
+            SET title = ?, description = ?, term = ?, visibility = ?, thumbnail = ?,
+                is_long_cycle = ?, auto_archive_after_ms = ?, updated_at = ?
           WHERE id = ?`,
       )
       .run(
@@ -110,6 +182,8 @@ export class CourseLayerService {
         patch.term !== undefined ? patch.term : current.term,
         visibility,
         patch.thumbnail !== undefined ? patch.thumbnail : current.thumbnail,
+        isLongCycle ? 1 : 0,
+        autoArchiveAfterMs,
         Date.now(),
         courseId,
       );
@@ -320,13 +394,16 @@ export class CourseLayerService {
     if (!lesson || lesson.course_id !== courseId) {
       throw new LessonActivityError(404, '课节不在该课程中');
     }
-    const enrolled = this.enrolledClassIds(courseId);
-    const resolvedClassId = classId || (enrolled.length === 1 ? enrolled[0] : null);
-    if (resolvedClassId && enrolled.length > 0 && !enrolled.includes(resolvedClassId)) {
-      throw new LessonActivityError(400, '只能为已选课班级开启课次');
-    }
+    const resolvedClassId = classId ? String(classId) : '';
     if (!resolvedClassId) {
       throw new LessonActivityError(400, '请指定要开课的班级');
+    }
+    const enrolled = this.enrolledClassIds(courseId);
+    if (enrolled.length === 0) {
+      throw new LessonActivityError(400, '请先为课程选择上课班级');
+    }
+    if (!enrolled.includes(resolvedClassId)) {
+      throw new LessonActivityError(400, '只能为已选课班级开启课次');
     }
     const runtime = new ClassroomRuntimeService(this.db);
     const before = this.db
@@ -363,12 +440,19 @@ export class CourseLayerService {
       thumbnail: (row.thumbnail as string | null) ?? null,
       createdAt: Number(row.created_at),
       updatedAt: Number(row.updated_at),
+      // 迁移前的 courses 行本来就是课程层长周期实体；缺列时按长周期对待。
+      isLongCycle: row.is_long_cycle == null ? true : Number(row.is_long_cycle) === 1,
+      autoArchiveAfterMs:
+        row.auto_archive_after_ms == null || row.auto_archive_after_ms === ''
+          ? null
+          : Number(row.auto_archive_after_ms),
     };
     if (withCount) {
-      const count = this.db.prepare('SELECT COUNT(*) AS n FROM lessons WHERE course_id = ?').get(record.id) as {
-        n: number;
-      };
-      record.lessonCount = Number(count.n);
+      const lessons = this.db
+        .prepare('SELECT id FROM lessons WHERE course_id = ? ORDER BY course_order ASC, created_at ASC')
+        .all(record.id) as Array<{ id: string }>;
+      record.lessonIds = lessons.map((item) => item.id);
+      record.lessonCount = lessons.length;
     }
     return record;
   }

@@ -16,6 +16,8 @@ export type Lesson = {
   enrollment_count?: number;
   creator_id?: string | null;
   creator_name?: string | null;
+  course_id?: string | null;
+  course_order?: number | null;
 };
 
 export type TimelineSegment = {
