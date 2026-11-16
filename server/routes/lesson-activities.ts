@@ -414,6 +414,108 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
     }
   });
 
+  // ── 学案包导入导出（manifest + activities + blocks）──────────────────────
+  // 导出：返回当前 lesson 的全部活动 + 首页块（不含进度）
+  app.get('/api/lessons/:lessonId/xuean/export', requireScopedAuth('class-staff'), (req, res) => {
+    try {
+      const lessonId = req.params.lessonId;
+      const session = (req as any).session;
+      if (rejectUnless(res, authorizeLessonStaff(readDb, session, lessonId))) return;
+
+      const activities = readDb
+        .prepare(
+          'SELECT type, title, config_json, required, visible, peer_review, group_mode, submission_type, rubric_json, release_at, due_at, order_index FROM lesson_activities WHERE lesson_id = ? ORDER BY order_index ASC',
+        )
+        .all(lessonId);
+      const blocks = readDb
+        .prepare(
+          'SELECT block_type, content_json, order_index FROM lesson_activity_blocks WHERE lesson_id = ? ORDER BY order_index ASC',
+        )
+        .all(lessonId);
+
+      res.json({
+        manifest: {
+          format: 'xuean-package',
+          version: 1,
+          exportedAt: Date.now(),
+          activityCount: activities.length,
+          blockCount: blocks.length,
+        },
+        activities,
+        blocks,
+      });
+    } catch (err: any) {
+      sendSafeError(res, err);
+    }
+  });
+
+  // 导入：清空当前 lesson 的活动 + 首页块，按导入 JSON 重建
+  app.post('/api/lessons/:lessonId/xuean/import', requireScopedAuth('class-staff'), (req, res) => {
+    try {
+      const lessonId = req.params.lessonId;
+      const session = (req as any).session;
+      if (rejectUnless(res, authorizeLessonStaff(readDb, session, lessonId))) return;
+
+      const { activities, blocks } = req.body || {};
+      if (!Array.isArray(activities) || !Array.isArray(blocks)) {
+        return res.status(400).json({ success: false, error: 'activities and blocks arrays required' });
+      }
+
+      const tx = db.transaction(() => {
+        // 清空现有活动 + 首页块（级联清理 activity_progress）
+        db.prepare('DELETE FROM activity_progress WHERE activity_id IN (SELECT id FROM lesson_activities WHERE lesson_id = ?)').run(lessonId);
+        db.prepare('DELETE FROM lesson_activities WHERE lesson_id = ?').run(lessonId);
+        db.prepare('DELETE FROM lesson_activity_blocks WHERE lesson_id = ?').run(lessonId);
+
+        // 重建活动
+        for (const a of activities) {
+          db.prepare(
+            `INSERT INTO lesson_activities (id, lesson_id, order_index, type, title, config_json, required, visible, peer_review, group_mode, submission_type, rubric_json, release_at, due_at, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          ).run(
+            randomId(),
+            lessonId,
+            a.order_index ?? 0,
+            a.type ?? 'other',
+            a.title ?? '未命名活动',
+            a.config_json ?? null,
+            a.required ? 1 : 0,
+            a.visible ? 1 : 0,
+            a.peer_review ? 1 : 0,
+            a.group_mode ?? 'individual',
+            a.submission_type ?? null,
+            a.rubric_json ?? null,
+            a.release_at ?? null,
+            a.due_at ?? null,
+            now(),
+            now(),
+          );
+        }
+
+        // 重建首页块
+        for (const b of blocks) {
+          db.prepare(
+            `INSERT INTO lesson_activity_blocks (id, lesson_id, block_type, content_json, order_index, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          ).run(
+            randomId(),
+            lessonId,
+            b.block_type ?? 'free',
+            b.content_json ?? '{}',
+            b.order_index ?? 0,
+            now(),
+            now(),
+          );
+        }
+      });
+
+      tx();
+      res.json({ success: true, activityCount: activities.length, blockCount: blocks.length });
+    } catch (err: any) {
+      sendSafeError(res, err);
+    }
+  });
+
   // ══════════════════════════════════════════════════════════════════════
   // 学生端：学案聚合 + 活动进度上报
   // ══════════════════════════════════════════════════════════════════════

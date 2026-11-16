@@ -3,9 +3,10 @@
  * teacherTab === 'xuean_editor' 时渲染。
  * 内部两个 sub-tab：活动编排 / 学案首页块；支持教师预览（模拟学生视角）。
  */
-import { Suspense, lazy, useState } from 'react';
+import { Suspense, lazy, useRef, useState } from 'react';
 import { useOptionalAppData } from '../../../context/AppDataContext.js';
-import { Loader2, Eye } from 'lucide-react';
+import { Loader2, Eye, Download, Upload } from 'lucide-react';
+import { exportXueanPackage, importXueanPackage } from '../../../services/lessonActivitiesService.js';
 
 const XueanActivitiesPanel = lazy(() =>
   import('./XueanActivitiesPanel').then((m) => ({ default: m.XueanActivitiesPanel })),
@@ -26,6 +27,54 @@ export function XueanEditor() {
 
   const [subTab, setSubTab] = useState<SubTab>('activities');
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [ioBusy, setIoBusy] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleExport = async () => {
+    if (!selectedLesson) return;
+    setIoBusy(true);
+    const res = await exportXueanPackage(selectedLesson);
+    setIoBusy(false);
+    if (!res.ok) return;
+    const blob = new Blob([JSON.stringify(res.data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `xuean-${lessonTitle.replace(/[^\w\u4e00-\u9fa5]/g, '_')}-${Date.now()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleImportClick = () => fileInputRef.current?.click();
+
+  const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !selectedLesson) return;
+    const text = await file.text();
+    try {
+      const data = JSON.parse(text);
+      if (!Array.isArray(data.activities) || !Array.isArray(data.blocks)) {
+        alert('学案包格式无效：缺少 activities 或 blocks 数组');
+        return;
+      }
+      if (!confirm(`将覆盖当前学案的全部 ${data.activities.length} 个活动和 ${data.blocks.length} 个首页块，确定导入？`)) {
+        return;
+      }
+      setIoBusy(true);
+      const res = await importXueanPackage(selectedLesson, data);
+      setIoBusy(false);
+      if (res.ok) {
+        alert(`导入成功：${res.data.activityCount} 个活动，${res.data.blockCount} 个首页块`);
+        window.location.reload();
+      } else {
+        alert('导入失败：' + (res.error?.error ?? '未知错误'));
+      }
+    } catch {
+      alert('JSON 解析失败');
+    } finally {
+      e.target.value = '';
+    }
+  };
 
   return (
     <>
@@ -55,6 +104,35 @@ export function XueanEditor() {
                   进度面板
                 </TabButton>
               </div>
+
+              {/* 导出 / 导入 学案包 */}
+              <button
+                type="button"
+                onClick={handleExport}
+                disabled={!selectedLesson || ioBusy}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg border border-theme hover:bg-surface-secondary disabled:opacity-40 text-main"
+                title="导出学案包为 JSON"
+              >
+                <Download size={12} />
+                导出
+              </button>
+              <button
+                type="button"
+                onClick={handleImportClick}
+                disabled={!selectedLesson || ioBusy}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg border border-theme hover:bg-surface-secondary disabled:opacity-40 text-main"
+                title="从 JSON 导入学案包（会覆盖当前内容）"
+              >
+                <Upload size={12} />
+                导入
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="application/json,.json"
+                className="hidden"
+                onChange={handleImportFile}
+              />
 
               {/* 教师预览（模拟学生视角，Issue 里 P1 能力先让它能跑） */}
               <button

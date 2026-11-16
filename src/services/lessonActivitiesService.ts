@@ -135,3 +135,23 @@ export async function getActivityProgressPanel(lessonId: string) {
   if (!res.ok) return { ok: false, error: await res.json().catch(() => ({})) };
   return { ok: true, data: await res.json() };
 }
+
+// ── 学案包导入导出 ──────────────────────────────────────────────
+export async function exportXueanPackage(lessonId: string) {
+  const res = await fetch(`/api/lessons/${lessonId}/xuean/export`);
+  if (!res.ok) return { ok: false, error: await res.json().catch(() => ({})) };
+  return { ok: true, data: await res.json() };
+}
+
+export async function importXueanPackage(
+  lessonId: string,
+  payload: { activities: any[]; blocks: any[] },
+) {
+  const res = await fetch(`/api/lessons/${lessonId}/xuean/import`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) return { ok: false, error: await res.json().catch(() => ({})) };
+  return { ok: true, data: await res.json() };
+}
