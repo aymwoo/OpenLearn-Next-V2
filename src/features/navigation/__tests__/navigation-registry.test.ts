@@ -31,11 +31,12 @@ describe('Navigation Registry（教师工作区侧边栏 SSOT）', () => {
     expect([...positions].sort((a, b) => a - b)).toEqual(positions);
   });
 
-  it('内置入口覆盖教师工作区的全部 10 个 tab', () => {
+  it('内置入口覆盖教师工作区的全部 11 个 tab', () => {
     const tabs = BUILTIN_NAV_ITEMS.map((i) => i.tab);
     expect(tabs).toEqual([
       'courses',
       'xuean_editor',
+      'xuean_courses',
       'live_class',
       'classes',
       'assessments',

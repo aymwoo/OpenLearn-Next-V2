@@ -33,6 +33,9 @@ const AssessmentCenter = lazy(() =>
   import('../assessment/AssessmentCenter').then((m) => ({ default: m.AssessmentCenter })),
 );
 const XueanEditor = lazy(() => import('./xuean/XueanEditor').then((m) => ({ default: m.XueanEditor })));
+const XueanCourseManagement = lazy(() =>
+  import('./xuean/XueanCourseManagement').then((m) => ({ default: m.XueanCourseManagement })),
+);
 
 import { useOptionalAppData } from '../../context/AppDataContext';
 import { useThemeStore } from '../../store/themeStore';
@@ -97,6 +100,7 @@ export function TeacherView(_props: TeacherViewProps = {}) {
           'dashboard',
           'lesson_editor',
           'xuean_editor',
+          'xuean_courses',
           'live_class',
           'plugins',
           'courses',
@@ -138,6 +142,8 @@ export function TeacherView(_props: TeacherViewProps = {}) {
             <LessonEditorView />
           ) : teacherTab === 'xuean_editor' ? (
             <XueanEditor />
+          ) : teacherTab === 'xuean_courses' ? (
+            <XueanCourseManagement />
           ) : teacherTab === 'live_class' ? null : teacherTab === 'plugins' ? (
             <PluginView />
           ) : teacherTab === 'courses' ? (

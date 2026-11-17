@@ -16,6 +16,34 @@ export type Lesson = {
   enrollment_count?: number;
   creator_id?: string | null;
   creator_name?: string | null;
+  course_id?: string | null;
+};
+
+/** 学案课程（courses 表，见 migrations/057）。 */
+export type Course = {
+  id: string;
+  title: string;
+  description: string | null;
+  owner_user_id: string;
+  term: string | null;
+  visibility: string;
+  thumbnail: string | null;
+  created_at: number;
+  updated_at: number;
+  lesson_count?: number;
+  enrollment_count?: number;
+};
+
+export type CourseEnrollment = {
+  course_id: string;
+  student_id: string;
+  class_id: string | null;
+  enrolled_at?: number;
+};
+
+export type CourseDetail = Course & {
+  lessons: Lesson[];
+  enrollments: CourseEnrollment[];
 };
 
 export type TimelineSegment = {

@@ -24,6 +24,7 @@ import React from 'react';
 import {
   BookOpen,
   BookOpenCheck,
+  FolderOpen,
   Presentation,
   Users,
   ClipboardList,
@@ -102,6 +103,14 @@ export const BUILTIN_NAV_ITEMS: BuiltinNavItem[] = [
     icon: BookOpenCheck,
     group: 'teaching',
     position: 15,
+  },
+  {
+    id: 'xuean_courses',
+    tab: 'xuean_courses',
+    label: { zh: '学案课程管理', en: 'Study Plan Courses' },
+    icon: FolderOpen,
+    group: 'teaching',
+    position: 17,
   },
   {
     id: 'live_class',

@@ -363,6 +363,16 @@ export class LessonService {
         this.db.prepare('DELETE FROM lesson_checkins WHERE lesson_id = ?').run(lessonId);
       }
 
+      // 7.5 学案课时包：先删活动子表（进度/互评/讨论），再删活动与首页块
+      try {
+        const activityIds = 'SELECT id FROM lesson_activities WHERE lesson_id = ?';
+        this.db.prepare(`DELETE FROM activity_progress WHERE activity_id IN (${activityIds})`).run(lessonId);
+        this.db.prepare(`DELETE FROM activity_peer_reviews WHERE activity_id IN (${activityIds})`).run(lessonId);
+        this.db.prepare(`DELETE FROM lesson_discussions WHERE activity_id IN (${activityIds})`).run(lessonId);
+        this.db.prepare('DELETE FROM lesson_activities WHERE lesson_id = ?').run(lessonId);
+        this.db.prepare('DELETE FROM lesson_activity_blocks WHERE lesson_id = ?').run(lessonId);
+      } catch {}
+
       // 8. 课节主体删除
       return this.db.prepare('DELETE FROM lessons WHERE id = ?').run(lessonId);
     });

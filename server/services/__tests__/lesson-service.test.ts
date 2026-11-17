@@ -498,6 +498,45 @@ Topic: "物理实验"
         ).n,
       ).toBe(0);
     });
+
+    it('级联删除应清理学案课时包的活动、首页块与进度', () => {
+      const lessonId = `lesson-xuean-cascade-${uuidv7()}`;
+      const activityId = `act-xuean-cascade-${uuidv7()}`;
+      const now = Date.now();
+      db.prepare(
+        'INSERT INTO lessons (id, title, content, creator_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
+      ).run(lessonId, '【XUEAN-CASCADE】课时', '', teacherAliceId, now, now);
+      db.prepare(
+        `INSERT INTO lesson_activities (id, lesson_id, order_index, type, title, created_at, updated_at)
+         VALUES (?, ?, 0, 'reading', '读一读', ?, ?)`,
+      ).run(activityId, lessonId, now, now);
+      db.prepare(
+        `INSERT INTO lesson_activity_blocks (id, lesson_id, block_type, order_index, content_json, created_at, updated_at)
+         VALUES (?, ?, 'learning_goals', 0, '{}', ?, ?)`,
+      ).run(uuidv7(), lessonId, now, now);
+      db.prepare(
+        `INSERT INTO activity_progress (activity_id, student_id, status, progress_percent, verified)
+         VALUES (?, ?, 'submitted', 100, 0)`,
+      ).run(activityId, studentId);
+      db.prepare(
+        `INSERT INTO activity_peer_reviews (id, activity_id, reviewer_id, reviewee_id, score, created_at)
+         VALUES (?, ?, ?, ?, 90, ?)`,
+      ).run(uuidv7(), activityId, studentId, 'stu-other', now);
+      db.prepare(
+        `INSERT INTO lesson_discussions (id, activity_id, author_id, content, created_at)
+         VALUES (?, ?, ?, '讨论', ?)`,
+      ).run(uuidv7(), activityId, studentId, now);
+
+      const result = service.deleteLessonCascade(lessonId);
+      expect(result.deleted).toBe(true);
+      const count = (table: string, where: string, id: string) =>
+        (db.prepare(`SELECT COUNT(*) as n FROM ${table} WHERE ${where}`).get(id) as { n: number }).n;
+      expect(count('lesson_activities', 'lesson_id = ?', lessonId)).toBe(0);
+      expect(count('lesson_activity_blocks', 'lesson_id = ?', lessonId)).toBe(0);
+      expect(count('activity_progress', 'activity_id = ?', activityId)).toBe(0);
+      expect(count('activity_peer_reviews', 'activity_id = ?', activityId)).toBe(0);
+      expect(count('lesson_discussions', 'activity_id = ?', activityId)).toBe(0);
+    });
   });
 
   describe('7. 作业互评与版本多模态展开 (getEvalSubmissions / getEvalGrades / getStudentEvalStatus)', () => {

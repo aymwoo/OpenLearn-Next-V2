@@ -85,6 +85,14 @@ export function XueanEditor() {
         <div className="px-4 py-2.5 border-b border-theme bg-surface/85 backdrop-blur-md">
           <div className="flex items-center justify-between gap-3 flex-wrap">
             <div className="flex items-center gap-2 min-w-0">
+              <button
+                type="button"
+                onClick={() => appData?.setTeacherTab('xuean_courses')}
+                className="px-2 py-1 text-[11px] font-bold rounded-lg border border-theme text-muted hover:text-main hover:bg-surface-secondary shrink-0"
+                title="返回学案课程管理"
+              >
+                ← 学案课程
+              </button>
               <span className="text-[10px] font-black uppercase tracking-wider text-primary-theme">学案编辑器</span>
               <span className="text-xs text-muted truncate">· {lessonTitle}</span>
             </div>
@@ -150,6 +158,19 @@ export function XueanEditor() {
             </div>
           </div>
         </div>
+
+        {!selectedLesson && (
+          <div className="px-4 py-2 text-xs text-amber-500 border-b border-theme">
+            尚未选择课时，请先到「学案课程管理」新增课时并点击「编辑学案」。
+            <button
+              type="button"
+              onClick={() => appData?.setTeacherTab('xuean_courses')}
+              className="ml-2 underline font-bold"
+            >
+              前往
+            </button>
+          </div>
+        )}
 
         {/* 面板主体 */}
         <div className="flex-1 min-h-0 relative">

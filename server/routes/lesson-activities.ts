@@ -31,6 +31,7 @@
 import type { Request } from 'express';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
 import { requireScopedAuth } from '../middleware/data-scope.js';
+import { getActorId } from '../middleware/auth.js';
 import { sendSafeError } from '../utils/error-handler.js';
 import { randomId } from '../utils/id.js';
 import {
@@ -42,6 +43,7 @@ import {
   rejectUnless,
   studentActorId,
 } from '../services/class-access.js';
+import { LessonService } from '../services/lesson-service.js';
 import type { ServerContext } from '../context.js';
 
 // ── 内部常量 ─────────────────────────────────────────────────────────────
@@ -117,6 +119,37 @@ function requestSession(req: Request): AccessSession {
 
 function now() {
   return Date.now();
+}
+
+/**
+ * 学案课程归属校验（镜像 checkLessonOwnership）：
+ * - 管理员放行；
+ * - 教师仅可操作本人课程（owner_user_id === userId / username）；
+ * - 历史空 owner_user_id 视为共享放行，避免教师被锁死在旧数据外。
+ */
+function checkCourseOwnership(
+  req: Request,
+  course: { owner_user_id?: string | null },
+): { allowed: boolean; status: number; error?: string } {
+  const session = requestSession(req);
+  if (!session) return { allowed: false, status: 401, error: 'Authentication required' };
+  if (isAdministrator(session)) return { allowed: true, status: 200 };
+  const owner = course.owner_user_id;
+  if (!owner || owner === session.userId || owner === session.username) return { allowed: true, status: 200 };
+  return { allowed: false, status: 403, error: 'Forbidden: course belongs to another teacher' };
+}
+
+function getLessonService(): LessonService {
+  return new LessonService(
+    kernelContainer.db,
+    kernelContainer.commandBus,
+    kernelContainer.aiService,
+    kernelContainer.getReadDb(),
+  );
+}
+
+function normalizeVisibility(value: unknown): 'private' | 'school' {
+  return value === 'school' ? 'school' : 'private';
 }
 
 function parseActivity(body: unknown): ParseResult<ActivityValue> {
@@ -1042,10 +1075,22 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
   });
 
   // ── 课程层 CRUD（IKVO15 P2）──────────────────────────────────────────────
-  // 课程列表
-  app.get('/api/courses', requireScopedAuth('class-staff'), (_req, res) => {
+  // 课程列表（带课时/选课计数；教师仅可见本人或历史共享课程）
+  app.get('/api/courses', requireScopedAuth('class-staff'), (req, res) => {
     try {
-      const courses = readDb.prepare('SELECT * FROM courses ORDER BY created_at DESC').all();
+      const session = requestSession(req);
+      const countSql = `SELECT c.*,
+        (SELECT COUNT(*) FROM lessons l WHERE l.course_id = c.id) AS lesson_count,
+        (SELECT COUNT(*) FROM course_enrollments e WHERE e.course_id = c.id) AS enrollment_count
+        FROM courses c`;
+      const courses = isAdministrator(session)
+        ? readDb.prepare(`${countSql} ORDER BY c.created_at DESC`).all()
+        : readDb
+            .prepare(
+              `${countSql} WHERE c.owner_user_id = ? OR c.owner_user_id = '' OR c.owner_user_id IS NULL
+               ORDER BY c.created_at DESC`,
+            )
+            .all(session.userId ?? '');
       res.json(courses);
     } catch (err: unknown) {
       sendSafeError(res, err);
@@ -1063,7 +1108,17 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
       db.prepare(
         `INSERT INTO courses (id, title, description, owner_user_id, term, visibility, thumbnail, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      ).run(id, title.trim(), description ?? '', session.userId ?? '', term ?? '', visibility ?? 'private', '', ts, ts);
+      ).run(
+        id,
+        title.trim(),
+        description ?? '',
+        session.userId ?? '',
+        term ?? '',
+        normalizeVisibility(visibility),
+        '',
+        ts,
+        ts,
+      );
       const row = readDb.prepare('SELECT * FROM courses WHERE id = ?').get(id);
       res.json(row);
     } catch (err: unknown) {
@@ -1077,6 +1132,8 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
       const course = readDb.prepare('SELECT * FROM courses WHERE id = ?').get(req.params.id) as
         Record<string, unknown> | undefined;
       if (!course) return res.status(404).json({ success: false, error: 'Course not found' });
+      const own = checkCourseOwnership(req, course as { owner_user_id?: string | null });
+      if (!own.allowed) return res.status(own.status).json({ success: false, error: own.error });
       const lessons = readDb
         .prepare('SELECT * FROM lessons WHERE course_id = ? ORDER BY created_at ASC')
         .all(req.params.id);
@@ -1090,12 +1147,24 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
   // 更新课程
   app.put('/api/courses/:id', requireScopedAuth('class-staff'), (req, res) => {
     try {
+      const course = readDb.prepare('SELECT * FROM courses WHERE id = ?').get(req.params.id) as
+        Record<string, unknown> | undefined;
+      if (!course) return res.status(404).json({ success: false, error: 'Course not found' });
+      const own = checkCourseOwnership(req, course as { owner_user_id?: string | null });
+      if (!own.allowed) return res.status(own.status).json({ success: false, error: own.error });
       const { title, description, term, visibility } = req.body || {};
       const ts = now();
       db.prepare(
         `UPDATE courses SET title = COALESCE(?, title), description = COALESCE(?, description),
            term = COALESCE(?, term), visibility = COALESCE(?, visibility), updated_at = ? WHERE id = ?`,
-      ).run(title ?? null, description ?? null, term ?? null, visibility ?? null, ts, req.params.id);
+      ).run(
+        title ?? null,
+        description ?? null,
+        term ?? null,
+        visibility === undefined ? null : normalizeVisibility(visibility),
+        ts,
+        req.params.id,
+      );
       const row = readDb.prepare('SELECT * FROM courses WHERE id = ?').get(req.params.id);
       res.json(row);
     } catch (err: unknown) {
@@ -1106,6 +1175,11 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
   // 删除课程（下属 lesson 的 course_id 置 NULL）
   app.delete('/api/courses/:id', requireScopedAuth('class-staff'), (req, res) => {
     try {
+      const course = readDb.prepare('SELECT * FROM courses WHERE id = ?').get(req.params.id) as
+        Record<string, unknown> | undefined;
+      if (!course) return res.status(404).json({ success: false, error: 'Course not found' });
+      const own = checkCourseOwnership(req, course as { owner_user_id?: string | null });
+      if (!own.allowed) return res.status(own.status).json({ success: false, error: own.error });
       const id = req.params.id;
       db.prepare('UPDATE lessons SET course_id = NULL WHERE course_id = ?').run(id);
       db.prepare('DELETE FROM course_enrollments WHERE course_id = ?').run(id);
@@ -1116,13 +1190,42 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
     }
   });
 
-  // 把 lesson 挂到课程（或从课程移除：course_id 传 null）
+  // 新建课时并挂到课程（一步完成，返回 lessonId）
+  app.post('/api/courses/:courseId/lessons', requireScopedAuth('class-staff'), async (req, res) => {
+    try {
+      const session = requestSession(req);
+      const course = readDb.prepare('SELECT * FROM courses WHERE id = ?').get(req.params.courseId) as
+        Record<string, unknown> | undefined;
+      if (!course) return res.status(404).json({ success: false, error: 'Course not found' });
+      const own = checkCourseOwnership(req, course as { owner_user_id?: string | null });
+      if (!own.allowed) return res.status(own.status).json({ success: false, error: own.error });
+      const { title } = req.body || {};
+      if (!title || !String(title).trim()) return res.status(400).json({ success: false, error: 'title required' });
+      const creatorId = session.userId ?? session.username ?? 'usr_teacher';
+      const actorId = getActorId(req) || 'teacher';
+      const result = (await getLessonService().createLesson(
+        { title: String(title).trim(), content: '', creatorId },
+        actorId,
+      )) as { lessonId?: string };
+      if (!result?.lessonId) return res.status(500).json({ success: false, error: 'Failed to create lesson' });
+      db.prepare('UPDATE lessons SET course_id = ? WHERE id = ?').run(req.params.courseId, result.lessonId);
+      res.json({ success: true, lessonId: result.lessonId });
+    } catch (err: unknown) {
+      sendSafeError(res, err);
+    }
+  });
+
+  // 把 lesson 挂到课程
   app.put('/api/courses/:courseId/lessons/:lessonId', requireScopedAuth('class-staff'), (req, res) => {
     try {
       const { courseId, lessonId } = req.params;
-      // 校验课程存在
-      const course = readDb.prepare('SELECT id FROM courses WHERE id = ?').get(courseId);
+      const course = readDb.prepare('SELECT * FROM courses WHERE id = ?').get(courseId) as
+        Record<string, unknown> | undefined;
       if (!course) return res.status(404).json({ success: false, error: 'Course not found' });
+      const own = checkCourseOwnership(req, course as { owner_user_id?: string | null });
+      if (!own.allowed) return res.status(own.status).json({ success: false, error: own.error });
+      const lesson = readDb.prepare('SELECT id FROM lessons WHERE id = ?').get(lessonId);
+      if (!lesson) return res.status(404).json({ success: false, error: 'Lesson not found' });
       db.prepare('UPDATE lessons SET course_id = ? WHERE id = ?').run(courseId, lessonId);
       res.json({ success: true, courseId, lessonId });
     } catch (err: unknown) {
@@ -1133,6 +1236,11 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
   // 课程选课
   app.post('/api/courses/:id/enroll', requireScopedAuth('class-staff'), (req, res) => {
     try {
+      const course = readDb.prepare('SELECT * FROM courses WHERE id = ?').get(req.params.id) as
+        Record<string, unknown> | undefined;
+      if (!course) return res.status(404).json({ success: false, error: 'Course not found' });
+      const own = checkCourseOwnership(req, course as { owner_user_id?: string | null });
+      if (!own.allowed) return res.status(own.status).json({ success: false, error: own.error });
       const { studentId, classId } = req.body || {};
       if (!studentId) return res.status(400).json({ success: false, error: 'studentId required' });
       db.prepare(`INSERT OR IGNORE INTO course_enrollments (course_id, student_id, class_id) VALUES (?, ?, ?)`).run(

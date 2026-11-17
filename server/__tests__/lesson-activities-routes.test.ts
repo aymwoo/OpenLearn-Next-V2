@@ -130,6 +130,15 @@ describe('学案式课时包路由 (IKVO15 · P0)', () => {
     db.prepare('DELETE FROM classes WHERE id = ?').run(classId);
     db.prepare('DELETE FROM client_sessions WHERE id IN (?, ?)').run(teacherToken, studentToken);
     db.prepare('DELETE FROM users WHERE id IN (?, ?)').run(teacherId, studentId);
+    // 学案课程管理测试产生的课程与课时
+    db.prepare(
+      "UPDATE lessons SET course_id = NULL WHERE course_id IN (SELECT id FROM courses WHERE title LIKE '【XCRS-TEST】%')",
+    ).run();
+    db.prepare(
+      "DELETE FROM course_enrollments WHERE course_id IN (SELECT id FROM courses WHERE title LIKE '【XCRS-TEST】%')",
+    ).run();
+    db.prepare("DELETE FROM courses WHERE title LIKE '【XCRS-TEST】%'").run();
+    db.prepare("DELETE FROM lessons WHERE title LIKE '【XLSON-TEST】%'").run();
     await new Promise<void>((resolve, reject) => server.close((e) => (e ? reject(e) : resolve())));
   });
 
@@ -335,6 +344,163 @@ describe('学案式课时包路由 (IKVO15 · P0)', () => {
     it('学生不能访问教师进度面板', async () => {
       const res = await fetchJson(`${baseUrl}/api/lessons/${lessonId}/activity-progress`, { headers: studentCookie });
       expect([401, 403]).toContain(res.status);
+    });
+  });
+
+  // ── 学案课程管理 API ─────────────────────────────────────────────
+  describe('学案课程管理 API', () => {
+    const postCourse = (title: string, extra: Record<string, unknown> = {}) =>
+      fetchJson(`${baseUrl}/api/courses`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...teacherCookie },
+        body: JSON.stringify({ title: `【XCRS-TEST】${title}`, ...extra }),
+      });
+
+    it('课程接口要求教师登录', async () => {
+      const res = await fetchJson(`${baseUrl}/api/courses`);
+      expect(res.status).toBe(401);
+    });
+
+    it('创建课程校验 title，默认 visibility 为 private，绑定创建者', async () => {
+      const bad = await fetchJson(`${baseUrl}/api/courses`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...teacherCookie },
+        body: JSON.stringify({ title: '   ' }),
+      });
+      expect(bad.status).toBe(400);
+
+      const res = await postCourse('基础课程');
+      expect(res.status).toBe(200);
+      expect(res.body.id).toMatch(/^course_/);
+      expect(res.body.owner_user_id).toBe(teacherId);
+      expect(res.body.visibility).toBe('private');
+    });
+
+    it('列表带 lesson_count/enrollment_count，详情带 lessons/enrollments', async () => {
+      const created = await postCourse('统计课程');
+      const courseId = created.body.id as string;
+      await fetchJson(`${baseUrl}/api/courses/${courseId}/lessons/${lessonId}`, {
+        method: 'PUT',
+        headers: teacherCookie,
+      });
+
+      const list = await fetchJson(`${baseUrl}/api/courses`, { headers: teacherCookie });
+      expect(list.status).toBe(200);
+      const row = (list.body as unknown as TestRow[]).find((c) => c.id === courseId)!;
+      expect(row.lesson_count).toBe(1);
+      expect(row.enrollment_count).toBe(0);
+
+      const detail = await fetchJson<{ lessons: TestRow[]; enrollments: TestRow[] }>(
+        `${baseUrl}/api/courses/${courseId}`,
+        { headers: teacherCookie },
+      );
+      expect(detail.body.lessons.length).toBe(1);
+      expect(detail.body.enrollments).toEqual([]);
+
+      await fetchJson(`${baseUrl}/api/courses/${courseId}/lessons/${lessonId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', ...teacherCookie },
+        body: JSON.stringify({}),
+      });
+      // detach 不支持，这里只是确保 attach 幂等
+      db.prepare('UPDATE lessons SET course_id = NULL WHERE id = ?').run(lessonId);
+    });
+
+    it('更新课程并归一化 visibility', async () => {
+      const created = await postCourse('待更新');
+      const id = created.body.id as string;
+      const res = await fetchJson(`${baseUrl}/api/courses/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', ...teacherCookie },
+        body: JSON.stringify({ title: '【XCRS-TEST】已更新', visibility: 'arbitrary' }),
+      });
+      expect(res.status).toBe(200);
+      expect(res.body.title).toBe('【XCRS-TEST】已更新');
+      expect(res.body.visibility).toBe('private');
+    });
+
+    it('删除课程保留课时但清空 course_id', async () => {
+      const created = await postCourse('待删除');
+      const id = created.body.id as string;
+      await fetchJson(`${baseUrl}/api/courses/${id}/lessons/${lessonId}`, {
+        method: 'PUT',
+        headers: teacherCookie,
+      });
+      const res = await fetchJson(`${baseUrl}/api/courses/${id}`, { method: 'DELETE', headers: teacherCookie });
+      expect(res.status).toBe(200);
+      expect(
+        (db.prepare('SELECT course_id FROM lessons WHERE id = ?').get(lessonId) as { course_id: string | null })
+          .course_id,
+      ).toBeNull();
+      expect(db.prepare('SELECT id FROM lessons WHERE id = ?').get(lessonId)).toBeTruthy();
+    });
+
+    it('POST /api/courses/:id/lessons 一步创建并挂载课时', async () => {
+      const created = await postCourse('含课时课程');
+      const id = created.body.id as string;
+      const res = await fetchJson(`${baseUrl}/api/courses/${id}/lessons`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...teacherCookie },
+        body: JSON.stringify({ title: '【XLSON-TEST】第 1 课时' }),
+      });
+      expect(res.status).toBe(200);
+      expect(res.body.lessonId).toBeTruthy();
+      const row = db.prepare('SELECT course_id, creator_id FROM lessons WHERE id = ?').get(res.body.lessonId) as {
+        course_id: string;
+        creator_id: string;
+      };
+      expect(row.course_id).toBe(id);
+      expect(row.creator_id).toBe(teacherId);
+    });
+
+    it('挂载不存在的课时返回 404', async () => {
+      const created = await postCourse('挂载校验');
+      const res = await fetchJson(`${baseUrl}/api/courses/${created.body.id}/lessons/nonexistent`, {
+        method: 'PUT',
+        headers: teacherCookie,
+      });
+      expect(res.status).toBe(404);
+    });
+
+    it('其他教师不能修改或删除本课程（IDOR 防护）', async () => {
+      const created = await postCourse('他人课程');
+      const id = created.body.id as string;
+      const otherId = rid('teach2');
+      const otherToken = rid('tok_t2');
+      const now = Date.now();
+      db.prepare(
+        'INSERT OR REPLACE INTO users (id, username, password_hash, role, name, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+      ).run(otherId, `teacher_${otherId.slice(-6)}`, 'hash', 'teacher', '另一教师', now);
+      db.prepare(
+        'INSERT OR REPLACE INTO client_sessions (id, session_data, updated_at, expires_at) VALUES (?, ?, ?, ?)',
+      ).run(otherToken, JSON.stringify({ userId: otherId, role: 'teacher', username: 'other' }), now, now + 3600000);
+      const otherCookie = { Cookie: `edu_os_token=${otherToken}` };
+      try {
+        const put = await fetchJson(`${baseUrl}/api/courses/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', ...otherCookie },
+          body: JSON.stringify({ title: '越权修改' }),
+        });
+        expect(put.status).toBe(403);
+        const del = await fetchJson(`${baseUrl}/api/courses/${id}`, { method: 'DELETE', headers: otherCookie });
+        expect(del.status).toBe(403);
+      } finally {
+        db.prepare('DELETE FROM client_sessions WHERE id = ?').run(otherToken);
+        db.prepare('DELETE FROM users WHERE id = ?').run(otherId);
+      }
+    });
+
+    it('历史空 owner 的课程对教师放行', async () => {
+      const created = await postCourse('历史共享');
+      const id = created.body.id as string;
+      db.prepare('UPDATE courses SET owner_user_id = ? WHERE id = ?').run('', id);
+      const res = await fetchJson(`${baseUrl}/api/courses/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', ...teacherCookie },
+        body: JSON.stringify({ description: '兼容旧数据' }),
+      });
+      expect(res.status).toBe(200);
+      expect(res.body.description).toBe('兼容旧数据');
     });
   });
 });
