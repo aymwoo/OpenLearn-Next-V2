@@ -9,6 +9,7 @@ import { SegmentGateBanner } from './SegmentGateBanner';
 import { useSegmentAccess } from './useSegmentAccess';
 import { StudentIcebreakerModal } from './StudentIcebreakerModal';
 import { useStudentActiveSession } from './useStudentActiveSession';
+import type { StudentFullscreenPanel } from './studentFullscreenLayout';
 
 export interface StudentLessonViewProps {
   students: StudentType[];
@@ -25,8 +26,8 @@ export interface StudentLessonViewProps {
   setSelectedLesson: (id: string | null) => void;
   lessons: Lesson[];
   selectedLesson: string | null;
-  studentFullscreenPanel: 'left' | 'right' | 'none';
-  setStudentFullscreenPanel: Dispatch<SetStateAction<'left' | 'right' | 'none'>>;
+  studentFullscreenPanel: StudentFullscreenPanel;
+  setStudentFullscreenPanel: Dispatch<SetStateAction<StudentFullscreenPanel>>;
   timelineSegments: any[];
   lang: 'zh' | 'en';
   activeSegmentId: string | null;

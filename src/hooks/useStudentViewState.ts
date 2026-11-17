@@ -7,6 +7,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { AddToast } from './useToast';
 import type { LockMode, LockTarget } from '../types/app';
+import type { StudentFullscreenPanel } from '../features/student/studentFullscreenLayout';
 
 export type StudentViewStatus = 'dashboard' | 'lesson' | 'assignment';
 
@@ -117,13 +118,20 @@ export function useStudentViewState(deps: {
   };
 
   const [studentSelectedCourseware, setStudentSelectedCourseware] = useState<string | null>(null);
-  const [studentFullscreenPanel, setStudentFullscreenPanel] = useState<'none' | 'left' | 'right'>('none');
+  const [studentFullscreenPanel, setStudentFullscreenPanel] = useState<StudentFullscreenPanel>('none');
   const [isStudentLessonContentCollapsed, setIsStudentLessonContentCollapsed] = useState(true);
 
-  // Reset Lesson Content to collapsed when leaving student lesson view
+  // 离开课节视图时复位两个「课节布局」状态。
+  //
+  // 二者必须**一起**复位：`studentFullscreenPanel` 与 `isStudentLessonContentCollapsed`
+  // 会共同决定双栏的显隐（见 features/student/studentFullscreenLayout.ts）。
+  // 只复位折叠态会留下 `fullscreen='left' + collapsed=true` 这种组合 ——
+  // 左栏全屏要求左栏可见，右栏又要让位，于是**两个栏都不显示**，学生回到课节
+  // 只看到一片空白，且「退出全屏」按钮也跟着消失，无法自救。
   useEffect(() => {
     if (studentViewStatus !== 'lesson') {
       setIsStudentLessonContentCollapsed(true);
+      setStudentFullscreenPanel('none');
     }
   }, [studentViewStatus]);
 

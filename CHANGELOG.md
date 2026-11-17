@@ -20,6 +20,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - 新增布局约定文档 `docs/workspace/student-home-layout.md` 并接入文档目录。
   - follow-up：`assessments` ↔ `progress-trends` 默认尺寸改为 `half + half`，左右对称对齐；`WeeklyProgressTrendChart` 新增 `compact` prop 让嵌入 DashboardWidgetCard 时去掉内层重复卡片外壳与独立 header，消除双层卡片和高度断层。
 
+### Fixes
+
+- **学生端点击「全屏」按钮无反应（Gitee Issue IKVSIN）**：
+  - **根因是 Tailwind v4 的类覆盖顺序，而非条件拦截**：旧实现里「默认态」与「右栏全屏态」产出的是**同一个 class 集合**（都是 `w-1/3 md:block hidden`），「右栏全屏」只是在其后**追加**了一个 `hidden` —— 追加并不能让 `md:block` 失效。Tailwind v4 生成的 CSS 在同一 `@layer utilities` 内，`.hidden { display:none }`（实测 L262）位置早于 `@media (min-width:48rem)` 内的 `.md\:block { display:block }`（实测 L271），同层同优先级下后者胜出 ⇒ **桌面端 `display:block` 覆盖 `display:none`**，被要求隐藏的左栏依然可见，视觉上就是「点了全屏没反应」。
+  - **修复口径**：每个状态必须产出**唯一且完整**的显隐表达，两种意图不再共用同一个 class 集合 —— 「所有宽度都隐藏」用单一的 `hidden`（**不得**再带 `md:block`），「仅桌面端显示」用 `hidden md:block`（仓库既有写法，与 `StudentAssignmentQuestionPanel` 一致），「所有宽度都显示」不带任何 display 类。原先靠「先写 `md:block hidden` 再追加一个 `hidden`」的字符串拼接被移除。
+  - 新增 `src/features/student/studentFullscreenLayout.ts` 收敛双栏显隐规则（`resolveContentPanelClass` / `resolveInteractionPanelClass`）与共享类型 `StudentFullscreenPanel`，两个面板与 `useStudentViewState` 共用同一份定义，避免再次漂移；内容栏折叠、右栏全屏、左栏全屏三条路径的 class 由状态推导，不再手工拼接。
+  - **窄屏（<48rem）行为保持不变**：内容栏仍是「仅桌面端显示」（`hidden md:block`），窄屏下展开课程内容不显示内容栏、其「全屏」按钮不可达 —— 这是修复前就存在的限制，本次修复不改动，避免引入未预期的移动端布局变化。
+  - **顺带修掉一个「全屏后整页空白」的状态泄漏**：`studentFullscreenPanel` 与 `isStudentLessonContentCollapsed` 共同决定双栏显隐，但此前离开课节视图只复位了折叠态 —— 于是会残留 `fullscreen='left' + collapsed=true`（左栏全屏要求左栏可见，右栏又要让位 ⇒ **两个栏都不显示**），学生回到课节只看到空白页，且左栏的「退出全屏」按钮随之消失、无法自救。现在两个状态**一起复位**（`useStudentViewState`），且布局规则里「左栏全屏」优先于折叠态，双重保险。
+  - **测试**：新增 `src/features/student/__tests__/studentFullscreenLayout.test.ts`（按窄屏 / 桌面端两个宽度分别断言每个状态的显隐结果、宽度分配、「两栏同时隐藏」空白页防线、全屏位互斥）、`src/features/student/__tests__/StudentLessonFullscreen.test.tsx`（组件层复核同一套语义）、`src/hooks/__tests__/useStudentViewState.test.ts`（离开课节视图时两个布局状态一起复位）。上述用例均已用反证验证过 —— 逐条回退修复即变红，非恒真断言。
+  - **端到端（真实浏览器）验证**：新增 `e2e/student-fullscreen-layout.spec.ts` —— 在 Chromium 里走完「教师开课 → 学生登录 → 返回课堂 → 展开课程内容 → 点全屏」全链路，直接断言 computed `display`（纯 DOM 类名断言无法证明 Tailwind 实际生成的 CSS 顺序），并额外覆盖窄屏视口（500px）以锁定「窄屏行为与修复前一致」。修复前实测左栏 `display: "block"`（即「点了全屏没反应」），修复后为 `"none"`；同时新增 `data-testid` 锚点 `student-lesson-content-panel` / `student-lesson-interaction-panel` / `student-content-fullscreen-toggle` / `student-interaction-fullscreen-toggle`。
+
 ## [0.7.17] - 2026-11-15
 
 ### Features

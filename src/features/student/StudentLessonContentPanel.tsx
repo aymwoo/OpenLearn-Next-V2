@@ -4,14 +4,15 @@ import { Activity, BookOpen, Minimize2, Maximize2, Lock, CheckCircle2 } from 'lu
 import Markdown from 'react-markdown';
 import type { SegmentAccessState } from './useSegmentAccess';
 import { ExtensionPointRenderer } from '../../plugin-host/extension-point-renderer';
+import { resolveContentPanelClass, type StudentFullscreenPanel } from './studentFullscreenLayout';
 
 export interface StudentLessonContentPanelProps {
   students: StudentType[];
   activeStudentId: string | null;
   /** 全班专注锁定中：学生端进入只读跟随模式 */
   isStudentLocked?: boolean;
-  studentFullscreenPanel: 'left' | 'right' | 'none';
-  setStudentFullscreenPanel: Dispatch<SetStateAction<'left' | 'right' | 'none'>>;
+  studentFullscreenPanel: StudentFullscreenPanel;
+  setStudentFullscreenPanel: Dispatch<SetStateAction<StudentFullscreenPanel>>;
   timelineSegments: any[];
   lang: 'zh' | 'en';
   activeSegmentId: string | null;
@@ -54,21 +55,15 @@ export function StudentLessonContentPanel(props: StudentLessonContentPanelProps)
   };
   return (
     <div
-      className={`${
-        isStudentLessonContentCollapsed
-          ? 'hidden'
-          : studentFullscreenPanel === 'left'
-            ? 'w-full'
-            : 'w-1/3 md:block hidden'
-      } border-gray-100 pr-4 overflow-y-auto ${studentFullscreenPanel === 'right' ? 'hidden' : ''} ${
-        studentFullscreenPanel === 'left' ? '' : 'border-r'
-      } transition-all duration-300`}
+      data-testid="student-lesson-content-panel"
+      className={`${resolveContentPanelClass(studentFullscreenPanel, isStudentLessonContentCollapsed)} border-gray-100 pr-4 overflow-y-auto transition-all duration-300`}
     >
       <div className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-4 flex items-center justify-between pointer-events-auto shrink-0 select-none border-b border-gray-100 pb-2">
         <span className="flex items-center gap-1">
           <BookOpen size={14} className="text-indigo-500" /> Lesson Content (课程内容)
         </span>
         <button
+          data-testid="student-content-fullscreen-toggle"
           onClick={() => setStudentFullscreenPanel((p) => (p === 'left' ? 'none' : 'left'))}
           className="p-1 hover:bg-gray-100 text-subtle hover:text-main rounded transition-colors cursor-pointer flex items-center gap-1"
           title={studentFullscreenPanel === 'left' ? '退出全屏' : '全屏'}

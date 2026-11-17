@@ -5,6 +5,7 @@ import { LazyWhiteboard } from '../../components/LazyWhiteboard';
 import { LazyCourseware } from '../../components/LazyCourseware';
 import { StudentAssignmentEvalPanel } from '../../components/StudentAssignmentEvalPanel';
 import { ExtensionPointRenderer } from '../../plugin-host/extension-point-renderer';
+import { resolveInteractionPanelClass, type StudentFullscreenPanel } from './studentFullscreenLayout';
 
 export interface StudentLessonInteractionPanelProps {
   /** 全班专注锁定中：标签页与白板均变为只读 */
@@ -20,8 +21,8 @@ export interface StudentLessonInteractionPanelProps {
   isStudentLessonContentCollapsed: boolean;
   setIsStudentLessonContentCollapsed: (b: boolean) => void;
   lang: 'zh' | 'en';
-  studentFullscreenPanel: 'left' | 'right' | 'none';
-  setStudentFullscreenPanel: Dispatch<SetStateAction<'left' | 'right' | 'none'>>;
+  studentFullscreenPanel: StudentFullscreenPanel;
+  setStudentFullscreenPanel: Dispatch<SetStateAction<StudentFullscreenPanel>>;
   selectedLesson: string | null;
   elements: any[];
   activeRole: 'student' | 'teacher';
@@ -120,7 +121,8 @@ export function StudentLessonInteractionPanel(props: StudentLessonInteractionPan
 
   return (
     <div
-      className={`${isStudentLessonContentCollapsed || studentFullscreenPanel === 'right' ? 'w-full flex-grow' : 'flex-grow flex-1'} relative flex flex-col min-h-0 ${studentFullscreenPanel === 'left' ? 'hidden' : ''} transition-all duration-300`}
+      data-testid="student-lesson-interaction-panel"
+      className={`${resolveInteractionPanelClass(studentFullscreenPanel, isStudentLessonContentCollapsed)} relative flex flex-col min-h-0 transition-all duration-300`}
     >
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2">
@@ -183,6 +185,7 @@ export function StudentLessonInteractionPanel(props: StudentLessonInteractionPan
           />
 
           <button
+            data-testid="student-interaction-fullscreen-toggle"
             onClick={() => setStudentFullscreenPanel((p) => (p === 'right' ? 'none' : 'right'))}
             className="p-1 hover:bg-gray-100 text-subtle hover:text-main rounded transition-colors cursor-pointer flex items-center gap-1"
             title={studentFullscreenPanel === 'right' ? '退出全屏' : '全屏'}
