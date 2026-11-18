@@ -15,16 +15,18 @@
 | 课件 Bridge | `@openlearn/bridge-sdk`                 | `packages/bridge-sdk/src/bridge.js`     |
 | 数据库      | SQLite（`better-sqlite3`，同步 API）    | `packages/core/db/`                     |
 
-**仓库与镜像**
+**仓库平台**
 
-| 平台           | 地址                                          | 用途                                                           |
-| :------------- | :-------------------------------------------- | :------------------------------------------------------------- |
-| GitHub（主仓） | `https://github.com/aymwoo/OpenLearn-Next-V2` | Issue / PR / CI / Release 主入口                               |
-| Gitee（镜像）  | `https://gitee.com/aymwoo/openlearn-next`     | 国内访问 GitHub 受限时的克隆与 Issue 通道（单向同步，不跑 CI） |
+| 平台                | 地址                                          | 用途                                                       |
+| :------------------ | :-------------------------------------------- | :--------------------------------------------------------- |
+| **Gitee（主平台）** | `https://gitee.com/aymwoo/openlearn-next`     | Issue / PR / 分支 / 合并 / Release 主入口                  |
+| GitHub（归档副本）  | `https://github.com/aymwoo/OpenLearn-Next-V2` | 历史快照；其 Actions 仍跑自动化 CI，但不参与本仓库协作流程 |
 
-> 工作副本建议配两个远端：`origin`=GitHub、`gitee`=镜像（`git remote add gitee https://gitee.com/aymwoo/openlearn-next.git`）。拉取 GitHub 优先、失败回退 Gitee。
+> 工作副本的 `origin` 即 Gitee（`git fetch origin` / `git push origin <branch>`），主干跟踪 `origin/main`。
 >
-> **镜像快进已自动化**：`.github/workflows/sync-gitee-mirror.yml` 单向、只快进，分叉即停（**永不 force-push、不开自动双向镜像**）。普通贡献者 / Agent 只在 GitHub 提 Issue 与 PR 即可。一个变更只在一个平台开 Issue / PR。
+> **只在 Gitee 提 Issue 与 PR**：命令行用 `gitee issue create` / `gitee pr create` / `gitee pr merge`，不再用 `gh`。
+> **不做跨平台自动同步**：不要在其他平台开自动双向镜像（会覆盖分支 / 标签 / 提交）。
+> ⚠️ Gitee 侧合并不触发 GitHub Actions（未接入 Gitee Go 流水线），**本地全套质量门禁是唯一自动化防线**。
 
 > **枚举表是机器生成的，不要凭记忆或凭训练语料写。**
 > 7 张权威事实表在 `contracts/`，由 `python3 audit-tools/agent_facts.py` 从源码抽取，

@@ -10,6 +10,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Docs
+
+- **仓库平台模型切换为 Gitee 单平台**：Gitee 成为本仓库 **Issue / PR / 分支 / 合并 的唯一入口**，GitHub 仓库降级为归档副本（其 Actions 仍跑自动化 CI，但不参与协作流程）。
+  - `AGENTS.md`：协作规范由「双平台（GitHub 主仓 / Gitee 镜像）」改写为「Gitee 单平台」；Issue / PR / 合并的命令行口径由 `gh issue create` / `gh pr create` / `gh pr merge` 统一改为 `gitee` CLI；补充「Gitee 侧合并不触发 GitHub Actions（未接入 Gitee Go 流水线），**本地全套质量门禁是唯一自动化防线**」的显式告警。
+  - `docs/contributing/contributing.md`、`docs/agent/agent-handbook.md`：同口径改写（平台表、Issue 优先、PR 交付、Squash Merge、远端配置）。
+  - `README.md`、`DOCS_INDEX.md`、`docs/index.md` 与快速上手 / 安装 / 部署指南：仓库横幅与 `git clone` 命令改为 **Gitee 优先**（GitHub 归档副本降为备选注释）。
+  - `docs/ops/gitee-mirror-sync-verification.md`：加时点声明，标明该文是「GitHub → Gitee 镜像同步」的 **2026-11-14 历史验证快照**，现行口径以 Gitee 单平台规范为准。
+  - **Issue / PR 模板迁到 Gitee 原生路径**：`.github/ISSUE_TEMPLATE/` → `.gitee/ISSUE_TEMPLATE/`（Gitee 官方支持该目录，且兼容 GitHub 的 YAML 表单 schema；`.gitee` 优先级高于 `.github`）。表单补上 Gitee 独有的 `labels`（缺陷自动打 `bug`、建议自动打 `enhancement`），`config.yml` 的 contact_links 换成 Gitee blob 地址并把过期的「Gitee 镜像」条目换成「已知问题」。另新增 `.gitee/PULL_REQUEST_TEMPLATE.zh-CN.md`，把 AGENTS.md 的 PR 交付口径（Conventional Commits 标题、`Closes: <完整 URL>` 绑定 Issue、改动要点 / 设计取舍 / 测试计划 / UI 截图）固化成模板。
+  - `docs/beta/`（`README.md` / `feedback.md` / `privacy.md`）：模板路径与「开 GitHub Issue」等平台表述同步为 Gitee。
+  - 未改动：`docs/release-notes/*`（历史版本记录）、`docs/tutorials/plugin-development-tutorial.md`（描述的是独立的 `openlearn-skills` 仓库的平台布局）、以及 GitHub 归档副本上的 `.github/workflows/*`（在 Gitee 侧不生效，是否退役由维护者决定）。
+
 ### Features
 
 - **学生登录后首屏按学习路径重排（Gitee Issue IKVKVF）**：

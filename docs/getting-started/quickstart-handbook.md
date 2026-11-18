@@ -38,9 +38,9 @@ npx openlearn-next@latest --demo -o    # 一次性演示数据，退出即销毁
 | pnpm | 10.33.4            | 仓库是 pnpm workspace，`npm i` 会装出第二棵依赖树并漏编原生模块 |
 
 ```bash
-git clone https://github.com/aymwoo/OpenLearn-Next-V2.git OpenLearn-Next-V2
-# 国内网络访问 GitHub 受限时改用 Gitee 镜像（内容一致，GitHub → Gitee 单向同步）：
-# git clone https://gitee.com/aymwoo/openlearn-next.git OpenLearn-Next-V2
+git clone https://gitee.com/aymwoo/openlearn-next.git OpenLearn-Next-V2
+# GitHub 归档副本（内容一致）：
+# git clone https://github.com/aymwoo/OpenLearn-Next-V2.git OpenLearn-Next-V2
 cd OpenLearn-Next-V2
 
 corepack enable && corepack prepare pnpm@10.33.4 --activate
@@ -51,17 +51,15 @@ pnpm dev
 
 `pnpm dev` 会同时起 Express 与 Vite（HMR），默认端口 **9000**。
 
-> 🔁 **源在哪里拉？** 主仓是 [github.com/aymwoo/OpenLearn-Next-V2](https://github.com/aymwoo/OpenLearn-Next-V2)（Issue / PR / CI / Release 主入口）；国内网络访问 GitHub 受限时用镜像 [gitee.com/aymwoo/openlearn-next](https://gitee.com/aymwoo/openlearn-next)，内容与 `main` 一致，但 CI、Release 与 npm 发布仍只在 GitHub 侧跑。**不要**在 Gitee 侧开自动双向镜像（会覆盖分支 / 标签 / 提交）。
->
-> 想两边都留着（推荐，GitHub 不通时可切源）：
+> 🔁 **源在哪里拉？** 主平台是 [gitee.com/aymwoo/openlearn-next](https://gitee.com/aymwoo/openlearn-next)（Issue / PR / 分支 / 合并 主入口），克隆命令与 `origin` 都指向它；GitHub 上的 [aymwoo/OpenLearn-Next-V2](https://github.com/aymwoo/OpenLearn-Next-V2) 是归档副本，其 Actions 仍在跑自动化 CI。
 >
 > ```bash
-> git clone https://github.com/aymwoo/OpenLearn-Next-V2.git OpenLearn-Next-V2
+> git clone https://gitee.com/aymwoo/openlearn-next.git OpenLearn-Next-V2
 > cd OpenLearn-Next-V2
-> git remote add gitee https://gitee.com/aymwoo/openlearn-next.git   # 已有则跳过
+> git remote -v   # origin 即 Gitee
 > ```
 >
-> 日常 `git fetch origin`（GitHub 优先，不通就 `git fetch gitee`）。镜像由 GitHub Actions 自动快进（`.github/workflows/sync-gitee-mirror.yml`，单向、只快进、分叉即停），**你不需要手动推镜像**。
+> 日常 `git fetch origin` 即可。**不要**在其它平台开自动双向镜像（会覆盖分支 / 标签 / 提交）。
 
 > 版本不一致时，`preinstall` 守卫会在安装阶段直接拦住，并告诉你该换 Node 还是该 `pnpm rebuild better-sqlite3` —— 不用等启动时才撞上 `ERR_DLOPEN_FAILED`。
 

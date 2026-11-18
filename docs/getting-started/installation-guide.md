@@ -139,9 +139,9 @@ npm update -g openlearn-next
 
 ```bash
 # 克隆仓库
-git clone https://github.com/aymwoo/OpenLearn-Next-V2.git openlearnv2
-# 国内网络访问 GitHub 受限时，改用 Gitee 镜像（内容一致，单向同步）：
-# git clone https://gitee.com/aymwoo/openlearn-next.git openlearnv2
+git clone https://gitee.com/aymwoo/openlearn-next.git openlearnv2
+# GitHub 归档副本（内容一致）：
+# git clone https://github.com/aymwoo/OpenLearn-Next-V2.git openlearnv2
 cd openlearnv2
 
 # 安装依赖（仓库是 pnpm workspace，见 pnpm-workspace.yaml，必须用 pnpm）
@@ -155,7 +155,7 @@ pnpm run dev
 open http://localhost:9000
 ```
 
-> 🔁 **仓库双平台**：主仓 [github.com/aymwoo/OpenLearn-Next-V2](https://github.com/aymwoo/OpenLearn-Next-V2)，镜像 [gitee.com/aymwoo/openlearn-next](https://gitee.com/aymwoo/openlearn-next)。镜像只做 **GitHub → Gitee 单向同步**：CI、Release、npm 包发布仍在 GitHub 侧执行，Gitee 侧只用于国内克隆与提交 Issue；提 Issue / PR 请只在一个平台开一份。
+> 🔁 **仓库单平台（Gitee）**：[gitee.com/aymwoo/openlearn-next](https://gitee.com/aymwoo/openlearn-next) 是 **Issue / PR / 分支 / 合并 的唯一入口**；自动化 CI 目前仍只在 GitHub 归档副本上运行，因此合并前的本地质量门禁是唯一防线。
 
 > ⚠️ **不要用 `npm install`**。本仓库是 pnpm workspace（`pnpm-workspace.yaml` + `pnpm-lock.yaml`），含 4 个子包：`packages/core`、`packages/plugin-sdk`、`packages/plugin-test-kit`、`packages/bridge-sdk`（MFE 边界已移除，`mfe-whiteboard` 不复存在）。`npm install` 会生成第二份依赖树（`package-lock.json`），与 pnpm 的 `allowBuilds` 白名单（`better-sqlite3` 等原生模块需编译）行为不一致，容易在启动时抛原生模块加载错误。
 >

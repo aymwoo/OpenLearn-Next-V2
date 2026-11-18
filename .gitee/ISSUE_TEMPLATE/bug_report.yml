@@ -1,6 +1,8 @@
 name: 缺陷报告
 description: 公测期间报告一个可复现的问题。请先在学校内部登记，由运维开单。
 title: '[缺陷] '
+labels:
+  - bug
 body:
   - type: markdown
     attributes:

@@ -1,5 +1,9 @@
 # Gitee 镜像同步加固验证报告
 
+> ⚠️ **时点声明（2026-11-17 起平台模型已变更）**：本文是 **2026-11-14 对「GitHub 主仓 → Gitee 镜像」同步链路的验证快照**。
+> 自 2026-11-17 起，**Gitee 已成为本仓库唯一的 Issue / PR / 分支 / 合并入口**，GitHub 仓库降级为归档副本（其 Actions 仍在跑自动化 CI）。
+> 因此本文描述的「镜像同步」不再属于仓库的协作流程，下文的流程与操作口径**以 [`../contributing/contributing.md`](../contributing/contributing.md) 与根目录 `AGENTS.md` 的现行 Gitee 单平台规范为准**；本文仅作为历史验证记录留存。
+
 > **文档标识**: `docs/ops/gitee-mirror-sync-verification.md`  
 > **关联 PR**: [#516 chore(gitee-mirror): 让镜像同步失败可见并支持严格模式](https://github.com/aymwoo/OpenLearn-Next-V2/pull/516)  
 > **执行日期**: 2026-11-14  

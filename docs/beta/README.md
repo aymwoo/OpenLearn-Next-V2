@@ -8,15 +8,15 @@
 | ----------------------------------------- | -------------------------- | ---------------------------------------- |
 | [公测说明与教师招募公告](announcement.md) | 学校教师                   | 功能范围、限制、数据怎么处理。发布前填空 |
 | [已知问题与限制](known-issues.md)         | 运维、作者、需要细节的教师 | 只写当前代码和审计、演练对得上的事实     |
-| [反馈与问题上报](feedback.md)             | 教师、运维                 | 学校内部怎么报，什么时候开 GitHub Issue  |
+| [反馈与问题上报](feedback.md)             | 教师、运维                 | 学校内部怎么报，什么时候开 Gitee Issue   |
 | [隐私与学生数据说明（草稿）](privacy.md)  | 学校、法务、运维           | 草稿。标出必须由学校或法务确认的句子     |
 | [公测运营手册](operations.md)             | 运维                       | 上线前检查、监控看什么、停服后怎么恢复   |
 
 仓库里的 Issue 表单：
 
-- `.github/ISSUE_TEMPLATE/bug_report.yml`
-- `.github/ISSUE_TEMPLATE/feature_request.yml`
-- `.github/ISSUE_TEMPLATE/config.yml`
+- `.gitee/ISSUE_TEMPLATE/bug_report.yml`
+- `.gitee/ISSUE_TEMPLATE/feature_request.yml`
+- `.gitee/ISSUE_TEMPLATE/config.yml`
 
 ## 清单里还没做完的
 
@@ -38,7 +38,7 @@
 - 公测由谁托管，网址、起止日期、名额、每日可用时段、停机怎么通知。
 - 面向哪些学校、哪些学科、大约多少教师和学生。
 - 教师反馈找谁（姓名、邮箱或即时通讯）。响应时限。学生是否允许直接联系运维。
-- 教师能否登录本 GitHub 仓库开 Issue，还是只由运维代开。
+- 教师能否登录本 Gitee 仓库开 Issue，还是只由运维代开。
 - 是否在公测启用 AI。若启用，用哪一家 OpenAI 兼容服务，学生作业和姓名能否进入提示词。
 - 是否允许管理员安装社区插件或 ZIP。社区注册表安装默认关闭。第三方插件默认进子进程，原始出站连接默认拒绝。
 - 是否允许班级临时口令。口令在 `classes.class_passcode` 里是 AES-256-GCM 密文（前缀 `olenc1:`），`site-backup` 的数据库快照也是密文。授权教师的接口仍显示原文。密钥文件要单独备份。

@@ -124,25 +124,18 @@ PYTHONPATH=$HOME/.cache/pylibs bash scripts/build-docs.sh $HOME/.cache/docs-buil
 
 为了保障代码库的长期演进质量、保证变更可追溯并避免自动化工具污染主干分支，所有参与本项目开发的 AI Agent（包括 Antigravity、CodeBuddy、Cursor、Claude Code、GitHub Copilot 等）均须遵守以下规范：
 
-> 🔁 **仓库托管双平台**：主仓 [github.com/aymwoo/OpenLearn-Next-V2](https://github.com/aymwoo/OpenLearn-Next-V2)（Issue / PR / CI / Release 主入口）；镜像 [gitee.com/aymwoo/openlearn-next](https://gitee.com/aymwoo/openlearn-next)（**国内网络访问 GitHub 受限**时用于克隆源码与提 Issue，**单向同步**，不跑 CI / 不发 Release）。
-> 迁移规则：**一个变更只在一个平台开一份 Issue / PR**；**禁止在 Gitee 侧开启自动双向镜像**；issue / PR 编号不跨平台复用。
+> 🔁 **仓库托管平台（Gitee 单平台）**：[gitee.com/aymwoo/openlearn-next](https://gitee.com/aymwoo/openlearn-next) 是 **Issue / PR / 分支 / 合并 / Release / npm 发布的唯一入口**。
 >
-> **镜像快进已自动化**：`.github/workflows/sync-gitee-mirror.yml` 在 `main` 推送后自动同步（单向、只快进，发现分叉就停下并报错，绝不 force-push）；未配 `GITEE_USERNAME` / `GITEE_TOKEN` 时自动跳过，不阻塞主干 CI。
+> - 命令行统一用 `gitee` CLI（`gitee issue create` / `gitee pr create` / `gitee pr merge`），不再使用 `gh`；Issue 编号为 `I...` 字符串、PR 编号为 `!N` 整数。
+> - **Issue / PR 模板**：`.gitee/ISSUE_TEMPLATE/`（缺陷报告 / 功能建议）与 `.gitee/PULL_REQUEST_TEMPLATE.zh-CN.md`（PR 正文骨架）；新开单、新提 PR 直接用模板。
+> - 本地克隆的 `origin` 即 Gitee：`git fetch origin` / `git push origin <branch>`；主干跟踪 `origin/main`。
+> - **不做跨平台自动同步**：不再把其它平台作为协作入口，Agent 一律不在其它平台提 Issue / PR、不向其推送分支或标签。（GitHub 仓库上残留的 `.github/workflows/sync-gitee-mirror.yml` 是「GitHub → Gitee」的历史单向快进，只会快进、不会回退 Gitee，对本流程无影响；是否保留由维护者决定。）
 >
-> **判断同步是否成功**：该 job 设置了 `continue-on-error`（失败不阻塞主干），所以 run 结论显示 success **不代表同步成功**。请查看 run 页面的 **Step Summary「Gitee 镜像同步结果」**（区分「已跳过 / 成功 / 失败」）与 ANNOTATIONS。手动触发 `workflow_dispatch` 时可选 `strict=true`，让失败直接反映到 run 结论，便于维护者核验 Secret 与网络配置。
->
-> 需要手动兜底时（维护者，需 Gitee 写权限）：
->
-> ```bash
-> git remote add gitee https://gitee.com/aymwoo/openlearn-next.git   # 已有则跳过
-> git push gitee main --tags                                        # 只快进，不 force-push
-> ```
->
-> 普通贡献者只管在 GitHub 提 Issue 与 PR，镜像由维护者同步。若你本来是从 Gitee 克隆的（`origin` 已是镜像），`git push origin main --tags` 即为快进。
+> ⚠️ **CI 现状**：Gitee 侧合并**不会**触发 GitHub Actions —— 本仓库未接入 Gitee Go 流水线，Gitee 不执行 `.github/workflows` 下的工作流。因此**第 5.3 节的本地全套质量门禁是唯一的自动化防线**，缺一不可。
 
 ### 5.1 问题驱动（Issue-First 流程）
 
-- **优先提 Issue**：无论是发现系统缺陷、安全隐患、性能退化，还是设计新特性，推荐优先在 GitHub 上发起 Issue（使用 `gh issue create` 或 Web 界面）；国内网络无法访问 GitHub 时，改为在 Gitee 镜像发起（`gitee issue create -R aymwoo/openlearn-next`，编号为 `I...` 字符串），**同一问题不要两边各提一份**。
+- **优先提 Issue**：无论是发现系统缺陷、安全隐患、性能退化，还是设计新特性，推荐优先在 Gitee 上发起 Issue（使用 `gitee issue create -R aymwoo/openlearn-next` 或 Web 界面 `gitee.com/aymwoo/openlearn-next/issues`；编号为 `I...` 字符串），**只在这一处提，不要重复开单**。
 - **完整记录上下文**：Issue 应阐明问题现象、影响范围、复现步骤、根本原因分析及预期的解决方案。
 - **方案对齐**：对于涉及跨模块、架构变动或公共 API 的复杂任务，先就方案与人类维护者达成一致，再切入实现。
 
@@ -151,7 +144,7 @@ PYTHONPATH=$HOME/.cache/pylibs bash scripts/build-docs.sh $HOME/.cache/docs-buil
 - **严禁直推主干**：AI Agent **绝对禁止**直接向 `main` / `master` 分支 push 代码。
 - **专用特性分支**：每次开发任务必须创建专用分支，命名推荐遵循 `<agent-name>/<issue-id>-<slug>`（例如 `codebuddy/issue-383-ai-provider-isolation`）。
 - **提交规范**：严格执行 Conventional Commits 格式（如 `feat(kernel): ...`、`fix(whiteboard): ...`、`chore(release): ...`）。
-- **规范发起 PR**：使用 `gh pr create` 发起 Pull Request，说明改动内容、原因、绑定 Issue（如 `Fixes #383`），并附带清晰的测试计划；涉及前端界面的修改强制提供截图或操作证据。
+- **规范发起 PR**：使用 `gitee pr create` 发起 Pull Request，说明改动内容、原因、绑定 Issue（如 `Closes: https://gitee.com/aymwoo/openlearn-next/issues/IKVSIN`），并附带清晰的测试计划；涉及前端界面的修改强制提供截图或操作证据。
 
 ### 5.3 本地全套质量门禁（Pre-PR Quality Gates）
 
@@ -179,5 +172,5 @@ bash audit-tools/run.sh
 ### 5.4 人类授权合并与分支生命周期闭环
 
 - **严禁自主合并**：AI Agent **不得自行合并任何 PR**。必须在人类维护者进行代码审查并给出明确指令后，方可执行合并。
-- **推荐 Squash Merge**：授权合并时推荐采用 `gh pr merge <pr_number> --squash --delete-branch`，保持主分支 git 历史扁平清晰。
+- **推荐 Squash Merge**：授权合并时推荐采用 `gitee pr merge <pr_number> --method squash --delete-branch`，保持主分支 git 历史扁平清晰。
 - **分支清理与对齐**：合并后及时切回 `main` 分支拉取最新代码，并清理已合入的本地临时分支。

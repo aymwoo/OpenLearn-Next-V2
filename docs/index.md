@@ -4,7 +4,7 @@
 
 > 🚀 **第一次使用？** 先读 [快速上手手册](getting-started/quickstart-handbook.md)：安装 → 运行 → 上一节课 → 写第一个插件，一页走完，关键步骤配截图。
 >
-> 🔁 **仓库双平台**：主仓 [github.com/aymwoo/OpenLearn-Next-V2](https://github.com/aymwoo/OpenLearn-Next-V2)（Issue / PR / CI / Release 主入口）｜ 镜像 [gitee.com/aymwoo/openlearn-next](https://gitee.com/aymwoo/openlearn-next)（国内网络访问 GitHub 受限时用于克隆与提 Issue；单向同步，不跑 CI）。
+> 🔁 **仓库单平台（Gitee）**：[gitee.com/aymwoo/openlearn-next](https://gitee.com/aymwoo/openlearn-next) 是 **Issue / PR / 分支 / 合并 的唯一入口**；自动化 CI 目前仍只在 GitHub 归档副本上运行，合并前的本地质量门禁是唯一防线。
 
 ---
 

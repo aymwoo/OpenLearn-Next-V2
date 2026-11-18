@@ -93,32 +93,26 @@
 
 All AI coding agents (including Antigravity, CodeBuddy, Cursor, Claude Code, Copilot, etc.) working in this repository MUST strictly abide by the following collaboration lifecycle:
 
-> 🔁 **仓库双平台（GitHub 主仓 / Gitee 镜像）**
+> 🔁 **仓库托管平台（Gitee 单平台）**
 >
-> | 平台           | 地址                                        | 用途                                                                                 |
-> | -------------- | ------------------------------------------- | ------------------------------------------------------------------------------------ |
-> | GitHub（主仓） | https://github.com/aymwoo/OpenLearn-Next-V2 | **Issue / PR / CI / Release / npm 发布的主入口**                                     |
-> | Gitee（镜像）  | https://gitee.com/aymwoo/openlearn-next     | 国内网络访问 GitHub 受限时的**克隆与 Issue 通道**（只读镜像，不跑 CI、不发 Release） |
+> | 平台                | 地址                                        | 用途                                                        |
+> | ------------------- | ------------------------------------------- | ----------------------------------------------------------- |
+> | **Gitee（主平台）** | https://gitee.com/aymwoo/openlearn-next     | **Issue / PR / 分支 / 合并 / Release / npm 发布的唯一入口** |
+> | GitHub（归档副本）  | https://github.com/aymwoo/OpenLearn-Next-V2 | 历史快照；其自带 CI 仍在运行，但**不参与本仓库的协作流程**  |
 >
-> 镜像由 GitHub **单向同步**（绝不 force-push）。规则：**一个变更只在一个平台开一份 Issue / PR**（不要两边各提一份）；**禁止在 Gitee 侧开启自动双向镜像**（会覆盖分支 / 标签 / 提交，冲掉 GitHub 上的 PR 合并结果）；issue / PR 编号不跨平台复用（GitHub 是整数，Gitee issue 是 `I...` 字符串）。
+> 规则：
 >
-> **镜像快进已自动化**：`.github/workflows/sync-gitee-mirror.yml` 在每次 `main` 推送后自动快进镜像（单向、只快进；发现分叉就停下，**绝不 force-push**）。普通贡献者 / Agent 只管在 GitHub 提 Issue 与 PR，**不需要你做任何镜像相关操作**。
+> - **一切 Issue / PR / 合并只在 Gitee 完成**：命令行统一用 `gitee` CLI（`gitee issue create` / `gitee pr create` / `gitee pr merge`），不再使用 `gh`。
+> - 本地克隆的 `origin` 即 Gitee：`git fetch origin` / `git push origin <branch>`；主干跟踪 `origin/main`。
+> - **不做跨平台自动同步**：Agent 一律不在 GitHub 提 Issue / PR、不向 GitHub 推送分支或标签。（GitHub 仓库上残留的 `.github/workflows/sync-gitee-mirror.yml` 是「GitHub → Gitee」的历史单向快进，只会快进、不会回退 Gitee，对本流程无影响；是否保留由维护者决定。）
+> - Issue / PR 编号沿用 Gitee 形式：Issue 为 `I...` 字符串、PR 为 `!N` 整数。
+> - **Issue / PR 模板**：`.gitee/ISSUE_TEMPLATE/`（缺陷报告 / 功能建议，Gitee 原生 YAML 表单）与 `.gitee/PULL_REQUEST_TEMPLATE.zh-CN.md`（PR 正文骨架）；新开单、新提 PR 直接用模板。
 >
-> 维护者只需一次性配置 Secret：`GITEE_USERNAME` + `GITEE_TOKEN`（Gitee → 设置 → 私人令牌 → 勾 `projects`）。未配置时该 workflow 自动跳过，不影响主干 CI。
->
-> 自动同步失败 / 需手动兜底时：
->
-> ```bash
-> # 从 GitHub 克隆的仓库：origin=GitHub，需要先把镜像加成第二个远端
-> git remote add gitee https://gitee.com/aymwoo/openlearn-next.git   # 已有则跳过（git remote -v 可查）
-> git push gitee main --tags                                        # 只快进，不 force-push；--tags 同步 release tag
-> ```
->
-> 若你本来就是从 Gitee 克隆的（`origin` 已是镜像），则 `git push origin main --tags` 即为快进；想同时保留 GitHub 再 `git remote add github https://github.com/aymwoo/OpenLearn-Next-V2.git`。
+> ⚠️ **CI 现状（合并前必读）**：Gitee 侧合并**不会**触发 GitHub Actions —— 本仓库未接入 Gitee Go 流水线，Gitee 不执行 `.github/workflows` 下的工作流。因此**合并前的本地全套质量门禁（第 3 节）是唯一的自动化防线**，缺一不可；不要因为「反正有 CI 跑」而跳过本地门禁。
 
 ### 1. Issue-First 驱动流程 (Issue-Driven Workflow)
 
-- **推荐优先提 Issue**：当发现系统缺陷（Bug）、潜在安全漏洞、性能退化、代码坏味道或构想新功能时，**推荐首先通过 GitHub Issue（命令行 `gh issue create` 或 Web 端）进行完整记录与方案对齐**。国内网络无法访问 GitHub 时，改为在 Gitee 镜像提 Issue（`gitee issue create -R aymwoo/openlearn-next`，注意编号是 `I...` 字符串）；**同一问题只提一处**。
+- **推荐优先提 Issue**：当发现系统缺陷（Bug）、潜在安全漏洞、性能退化、代码坏味道或构想新功能时，**推荐首先通过 Gitee Issue（命令行 `gitee issue create -R aymwoo/openlearn-next`，或 Web 端 `gitee.com/aymwoo/openlearn-next/issues`）进行完整记录与方案对齐**；注意 Gitee 的 Issue 编号是 `I...` 字符串。**只在这一处提，不再向其他平台重复开单。**
 - **Issue 结构要素**：
   - 清晰准确的标题（如 `fix(whiteboard): ...` 或 `feat(ai-provider): ...`）；
   - 问题背景与复现步骤（Reproduction Steps / Impact Scope）；
@@ -132,11 +126,11 @@ All AI coding agents (including Antigravity, CodeBuddy, Cursor, Claude Code, Cop
 - **专用特性分支**：每次改动必须基于最新的主干（`origin/main`）创建独立的工作分支，分支命名遵循规范：
   - 格式：`<agent-or-tool>/<issue-id>-<slug>` 或 `<agent-or-tool>/<slug>`
   - 示例：`codebuddy/issue-383-ai-provider-isolation`、`cursor/fix-whiteboard-loop`、`codebuddy/release-v0.7.11`。
-- **共用一个分支**：同一变更对应的分支与 PR **只在一个平台创建**（默认 GitHub；GitHub 不可达时才走 Gitee），另一个平台只接收 `main` 快进，不接收同名分支。
+- **只在一个平台创建分支与 PR**：同一变更的分支与 PR **只在 Gitee 创建**（`gitee pr create`）；不再向其他平台推送同名分支或开同名 PR。
 - **常规提交规范**：提交信息必须严格遵循 Conventional Commits 格式。
-- **规范化 PR 交付（`gh pr create`）**：
+- **规范化 PR 交付（`gitee pr create`）**：
   - PR 标题使用 Conventional Commits 格式；
-  - 关联 Issue 关键词：在正文中通过 `Fixes #xxx`、`Closes #xxx` 或 `Refs #xxx` 绑定问题跟踪；
+  - 关联 Issue 关键词：在正文中通过 `Closes: https://gitee.com/aymwoo/openlearn-next/issues/<issue-id>` 绑定问题跟踪。**Gitee 用完整 URL 关闭 Issue，不识别 GitHub 的 `Fixes #123` 简写**（实测写完整 URL 后合并即自动关闭对应 Issue）；
   - 阐述改动要点：简要罗列变更内容（What）与设计取舍（Why）；
   - 完整的测试计划（Test Plan）：列出执行并通过的单元测试、集成测试或端到端验证；
   - **UI 变更强制附图**：凡修改前端、界面或交互，PR 描述中必须包含实拍截图（Screenshot）或操作录屏证据。
@@ -155,7 +149,7 @@ All AI coding agents (including Antigravity, CodeBuddy, Cursor, Claude Code, Cop
 ### 4. 人类授权合并与闭环守卫 (Human-Authorized Merge & Close)
 
 - **严禁擅自合并**：AI Agent **绝对不得自主合并（Merge）任何 Pull Request**。所有 PR 的合并必须等待人类开发者/维护者的明确授权指令（如「确认合并」、「合并这个 PR」）。
-- **合并策略**：在获得人类明确授权后，推荐采用 Squash Merge 方式合并入 `main`（`gh pr merge <pr-number> --squash --delete-branch`），保持主干历史线性清晰。
+- **合并策略**：在获得人类明确授权后，推荐采用 Squash Merge 方式合并入 `main`（`gitee pr merge <pr-number> --method squash --delete-branch`），保持主干历史线性清晰。
 - **分支生命周期闭环**：合并完成后，切回本地 `main` 分支，执行 `git pull` 对齐最新代码，并清理已合入的本地及远程临时分支。
 
 ## Release & CHANGELOG Workflow
