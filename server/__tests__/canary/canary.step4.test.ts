@@ -33,6 +33,7 @@ import {
   IPointsDimensionRegistryToken,
   IPointsLedgerServiceToken,
   IClassRosterServiceToken,
+  ILessonOutlineServiceToken,
   IDatabaseToken,
   ISemesterGradeServiceToken,
   ILessonEngineServiceToken,
@@ -169,6 +170,7 @@ function createServices(registry: ServiceRegistry, db: Database.Database): void 
   registry.register(IPointsDimensionRegistryToken, simpleMock('points-dim') as any);
   registry.register(IPointsLedgerServiceToken, simpleMock('points-ledger') as any);
   registry.register(IClassRosterServiceToken, simpleMock('roster') as never);
+  registry.register(ILessonOutlineServiceToken, simpleMock('lesson-outline') as never);
   registry.register(ISemesterGradeServiceToken, simpleMock('grade') as any);
   registry.register(ILessonEngineServiceToken, simpleMock('lesson-engine') as any);
   registry.register(IClassroomRuntimeServiceToken, simpleMock('classroom-rt') as any);

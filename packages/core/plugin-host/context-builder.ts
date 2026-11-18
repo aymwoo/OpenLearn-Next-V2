@@ -40,6 +40,7 @@ import {
   IPointsDimensionRegistryToken,
   IPointsLedgerServiceToken,
   IClassRosterServiceToken,
+  ILessonOutlineServiceToken,
   IClassroomLifecycleServiceToken,
   IInteractionRuntimeServiceToken,
   IClassroomMessageServiceToken,
@@ -58,6 +59,7 @@ import type {
   IPointsDimensionRegistry,
   IPointsLedgerService,
   IClassRosterService,
+  ILessonOutlineService,
   PointsDimensionSpec,
   IClassroomLifecycleService,
   IInteractionRuntimeService,
@@ -775,6 +777,7 @@ function wrapPluginRuntimeService<T>(
   tracker: ResourceTracker,
   pluginId: string,
   manifestId?: string,
+  capabilities?: readonly string[],
 ): T {
   if (tokenName === IClassroomMessageServiceToken.name) {
     return wrapClassroomMessageService(raw as IClassroomMessageService, tracker, pluginId) as T;
@@ -791,6 +794,9 @@ function wrapPluginRuntimeService<T>(
   // Issue #367：inline 默认不拦 SQL（存量插件会整批炸），打开开关后与 worker 同一口径。
   if (tokenName === '@openlearn/core:IDatabase' && isSqlGuardAllModesEnabled()) {
     return createGuardedPluginDatabase(raw, pluginId, manifestId);
+  }
+  if (tokenName === ILessonOutlineServiceToken.name) {
+    return wrapLessonOutlineService(raw as ILessonOutlineService, pluginId, capabilities) as T;
   }
   return raw;
 }
@@ -841,6 +847,40 @@ function wrapRosterService(
     getStudent: safe(async (studentId: string) => {
       assertReadable('getStudent', { studentId });
       return service.getStudent(studentId);
+    }),
+  };
+}
+
+/**
+ * 包装课节标题只读服务。能力门禁与名册相同口径；可见性在服务内部按当前登录用户判断。
+ */
+function wrapLessonOutlineService(
+  service: ILessonOutlineService,
+  pluginId: string,
+  capabilities?: readonly string[],
+): ILessonOutlineService {
+  const CAP_LESSON_READ = 'lesson:read';
+  const safe = <T extends (...args: never[]) => unknown>(fn: T): T => createSafeFunction(fn) as unknown as T;
+  const assertReadable = () => {
+    const hasCap = hasCapability(capabilities ?? [], CAP_LESSON_READ);
+    recordSecurityAudit('plugin.lesson_outline_read', {
+      pluginId,
+      method: 'getOutline',
+      hasCapability: hasCap,
+      ...(hasCap ? {} : { denied: true }),
+    });
+    if (hasCap) return;
+    console.error(
+      `[Security] 插件 "${pluginId}" 调用 lessonOutline.getOutline 被拒：缺少能力 "${CAP_LESSON_READ}"。` +
+        `请在 manifest.capabilitiesProposed 声明它。`,
+    );
+    throw new PluginCapabilityDeniedError(pluginId, CAP_LESSON_READ, 'read', 'getOutline');
+  };
+
+  return {
+    getOutline: safe(async (lessonId: string) => {
+      assertReadable();
+      return service.getOutline(lessonId);
     }),
   };
 }
@@ -1080,6 +1120,7 @@ export async function buildContext(
   const pointsDimensionRegistry = await serviceRegistry.tryResolve(IPointsDimensionRegistryToken);
   const pointsLedgerService = await serviceRegistry.tryResolve(IPointsLedgerServiceToken);
   const rosterService = await serviceRegistry.tryResolve(IClassRosterServiceToken);
+  const lessonOutlineService = await serviceRegistry.tryResolve(ILessonOutlineServiceToken);
 
   // 2. 逐个包装 IService — 应用 createSafeFunction + ResourceTracker 集成
   const wrappedCommandBus = wrapCommandBus(commandBusService, tracker, pluginId, manifest.id, actionRegistryService);
@@ -1107,6 +1148,9 @@ export async function buildContext(
     : null;
   const wrappedRoster = rosterService
     ? wrapRosterService(rosterService, pluginId, manifest.capabilitiesProposed)
+    : null;
+  const wrappedLessonOutline = lessonOutlineService
+    ? wrapLessonOutlineService(lessonOutlineService, pluginId, manifest.capabilitiesProposed)
     : null;
 
   // 3. 冻结包装对象的原型链（迁移自 PluginRuntime lines 512-518）
@@ -1142,6 +1186,7 @@ export async function buildContext(
     pointsDimension: wrappedPointsDimension,
     pointsLedger: wrappedPointsLedger,
     roster: wrappedRoster,
+    lessonOutline: wrappedLessonOutline,
   };
 
   // === Phase 6: Null out incompatible optional service keys (D-12) =============
@@ -1161,6 +1206,7 @@ export async function buildContext(
       '@openlearn/core:IPointsDimensionRegistry': 'pointsDimension',
       '@openlearn/core:IPointsLedgerService': 'pointsLedger',
       '@openlearn/core:IClassRosterService': 'roster',
+      '@openlearn/core:ILessonOutlineService': 'lessonOutline',
     };
     for (const tokenName of skipTokens) {
       const serviceKey = TOKEN_TO_SERVICE_KEY[tokenName];
@@ -1313,13 +1359,26 @@ export async function buildContext(
         // Issue #327：字符串路径也必须过代理 —— 否则按名字解析的插件会绕过回收拦截。
         return serviceRegistry
           .resolveByName(token)
-          .then((raw) => wrapPluginRuntimeService(raw, token, tracker, pluginId, manifest.id) as T);
+          .then(
+            (raw) =>
+              wrapPluginRuntimeService(raw, token, tracker, pluginId, manifest.id, manifest.capabilitiesProposed) as T,
+          );
       }
       // Issue #327：课堂阶段门禁 / 课堂互动提供者只能经 ctx.resolve 拿到，
       // 它们不进 ResourceTracker —— 在这里做 per-plugin 代理，dispose 时精确注销。
       return serviceRegistry
         .resolve(token)
-        .then((raw) => wrapPluginRuntimeService(raw, token.name, tracker, pluginId, manifest.id) as T);
+        .then(
+          (raw) =>
+            wrapPluginRuntimeService(
+              raw,
+              token.name,
+              tracker,
+              pluginId,
+              manifest.id,
+              manifest.capabilitiesProposed,
+            ) as T,
+        );
     },
     // V3.2: 插件向 DI 容器提供服务（对应 manifest.provides）
     provide: async <T>(token: Token<T>, instance: T): Promise<void> => {

@@ -29,6 +29,7 @@ describe('PluginContextAdapter (EU-02)', () => {
         pointsDimension: null,
         pointsLedger: null,
         roster: null,
+        lessonOutline: null,
       },
       resolve: vi.fn().mockResolvedValue('resolved_service'),
       provide: vi.fn().mockResolvedValue(undefined),

@@ -28,6 +28,7 @@ import {
   IPointsDimensionRegistryToken,
   IPointsLedgerServiceToken,
   IClassRosterServiceToken,
+  ILessonOutlineServiceToken,
   IDatabaseToken,
   ISemesterGradeServiceToken,
   ILessonEngineServiceToken,
@@ -185,6 +186,7 @@ describe('金丝雀第 5 步：生命周期彻底回收断言（9.1 ~ 9.6）', (
     registry.register(IPointsDimensionRegistryToken, simpleMock('points-dim') as any);
     registry.register(IPointsLedgerServiceToken, simpleMock('points-ledger') as any);
     registry.register(IClassRosterServiceToken, simpleMock('roster') as never);
+    registry.register(ILessonOutlineServiceToken, simpleMock('lesson-outline') as never);
     registry.register(ISemesterGradeServiceToken, simpleMock('grade') as any);
     registry.register(ILessonEngineServiceToken, simpleMock('lesson-engine') as any);
     registry.register(IClassroomRuntimeServiceToken, simpleMock('classroom-rt') as any);

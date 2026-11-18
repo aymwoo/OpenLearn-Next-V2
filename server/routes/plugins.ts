@@ -13,6 +13,8 @@ import { kernelContainer } from '../../packages/core/kernel/index.js';
 import { checkVersion, type UpdateSource } from '../services/version-fetcher.js';
 import { encryptApiKey, decryptApiKey, maskApiKey } from '../utils/crypto.js';
 import { getActorId, requireAuth } from '../middleware/auth.js';
+import { runWithLessonViewer } from '../../packages/core/di/lesson-viewer.js';
+import { lessonViewerFromRequest } from '../services/lesson-viewer-http.js';
 import { requireScopedAuth } from '../middleware/data-scope.js';
 import { isAdministrator } from '../services/class-access.js';
 import { recordSecurityAudit } from '../../packages/core/observability/audit-log.js';
@@ -2063,7 +2065,10 @@ export function registerPluginsRoutes(ctx: ServerContext) {
       }
 
       const cmd = await kernelContainer.commandBus.createCommand(resolvedType, payload ?? {}, getActorId(req));
-      const result = await kernelContainer.commandBus.execute(cmd);
+      const viewer = lessonViewerFromRequest(req);
+      const result = viewer
+        ? await runWithLessonViewer(viewer, () => kernelContainer.commandBus.execute(cmd))
+        : await kernelContainer.commandBus.execute(cmd);
       res.json({ success: true, result });
     } catch (err: any) {
       pluginLog.error({ error: err.message }, '[execute-command]');
@@ -2102,7 +2107,10 @@ export function registerPluginsRoutes(ctx: ServerContext) {
 
       const rawCmd = bus.createCommand(resolvedType, payload ?? {}, pluginActor);
       const boundCmd = bindPluginCommand(rawCmd, pluginActor);
-      const result = await bus.execute(boundCmd as never);
+      const viewer = lessonViewerFromRequest(req);
+      const result = viewer
+        ? await runWithLessonViewer(viewer, () => bus.execute(boundCmd as never))
+        : await bus.execute(boundCmd as never);
       res.json({ success: true, result });
     } catch (err: any) {
       pluginLog.error({ error: err.message }, '[sandbox-command]');

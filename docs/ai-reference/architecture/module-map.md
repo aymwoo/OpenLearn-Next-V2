@@ -218,7 +218,7 @@
 
 | 路径                                                                                         | 职责                                                    | 关键符号                                                                                |
 | -------------------------------------------------------------------------------------------- | ------------------------------------------------------- | --------------------------------------------------------------------------------------- |
-| `packages/plugin-sdk/index.ts`                                                               | npm 运行期出口（Token 值、`Token`、`PluginHttpRouter`） | 32 个 `*Token` 值导出                                                                   |
+| `packages/plugin-sdk/index.ts`                                                               | npm 运行期出口（Token 值、`Token`、`PluginHttpRouter`） | 41 个 `*Token` 值导出                                                                   |
 | `packages/plugin-sdk/openlearn.d.ts`                                                         | **公开类型契约**（自包含，不 re-export 内部）           | `PluginContext`（L455）、`Manifest`（L40）、`ActionDescriptor`（L126）、`PlatformEvent` |
 | `packages/plugin-sdk/cli.mjs`                                                                | 构建/打包/签名 CLI                                      | `frontendBareSpecifierGuard`（L272）、打包三件套（L546-553）、`signZip`（L233）         |
 | `packages/plugin-test-kit/index.ts`                                                          | Mock 上下文                                             | `createMockContext`（L328）、`MockCommandBus`（L62）                                    |

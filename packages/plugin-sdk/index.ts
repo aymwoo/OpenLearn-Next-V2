@@ -565,6 +565,11 @@ export {
 // 会被 sql-guard 拒绝。需在 manifest 声明 management:read。
 export type { IClassRosterService, RosterClassSummary, RosterStudentRef } from '../core/di/interfaces.js';
 export { IClassRosterServiceToken } from '../core/di/interfaces.js';
+// ── 课节标题只读（lessons 仍在 sql-guard 黑名单）────────────────────────
+// 进程插件按 lessonId 读取标题与时间线环节标题。需 lesson:read，且只能看到
+// 当前登录用户在 GET /api/lessons/:id 里也能看到的课节。
+export type { ILessonOutlineService, LessonOutline, LessonSegmentTitle } from '../core/di/interfaces.js';
+export { ILessonOutlineServiceToken } from '../core/di/interfaces.js';
 
 // ── 文件存储三插槽扩展（LayoutPolicy / StorageBackend / FileProcessor） ──
 export type {

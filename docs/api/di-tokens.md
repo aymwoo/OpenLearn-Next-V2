@@ -41,6 +41,8 @@ interface PluginContext {
     ai: IAIService | null; // Provider 未配置时也为 null
     pointsDimension: IPointsDimensionRegistry | null;
     pointsLedger: IPointsLedgerService | null;
+    roster: IClassRosterService | null; // 受管名册（management:read）
+    lessonOutline: ILessonOutlineService | null; // 课节标题（lesson:read）
   };
   pluginId: string; // plugins 表的行 UUID，不是 manifest.id
   manifest: Manifest;
@@ -163,6 +165,7 @@ interface PluginContext {
 | 导出 Token                           | 解析类型                        | 标识字符串                                      |
 | ------------------------------------ | ------------------------------- | ----------------------------------------------- |
 | `IClassRosterServiceToken`           | `IClassRosterService`           | `@openlearn/core:IClassRosterService`           |
+| `ILessonOutlineServiceToken`         | `ILessonOutlineService`         | `@openlearn/core:ILessonOutlineService`         |
 | `IFileStorageExtensionRegistryToken` | `IFileStorageExtensionRegistry` | `@openlearn/core:IFileStorageExtensionRegistry` |
 
 ### J. ClassroomFlowServer / 通讯协议 / 提交适配器 Token
@@ -179,6 +182,8 @@ interface PluginContext {
 > 统一学分发放 / 奖励目录 / 兑换见 `/api/classroomflowserver/*`；通讯协议 `ctx.resolve(IClassroomMessageServiceToken)` 后经 `registerChannel({ name, shared?, rolesAllowed?, requiredPayloadFields? })` 注册消息频道（owner 由宿主按 pluginId 注入，插件不可自报），再用 `send()` / `ack()` / `replay()` 收发可靠消息。提交适配器经 `ctx.resolve(ISubmissionRegistryToken)` 的 `register(adapter)`（`descriptor.owner` 由宿主按 pluginId 注入）扩展成绩采集，把第三方教学模式的作答投影为 `NormalizedSubmission` 进入统一成绩面板。
 
 > `IFileStorageExtensionRegistryToken` 仅面向内核宿主与同进程受信任扩展（布局策略 / 存储后端 / 文件处理器）；第三方 `process` / `worker` 插件不跨 IPC 传递二进制流插槽，见[文件存储扩展设计](../architecture/file-storage-extension-design.md) §4。
+
+> `ILessonOutlineServiceToken` / `ctx.services.lessonOutline.getOutline(lessonId)` 是进程插件读取课节标题的通道。`lessons` 仍在 sql-guard 黑名单。返回 `{ id, title, segments }`，`segments` 只含时间线环节的 id 与 title。需 `lesson:read`。没有当前登录用户，或该用户在 `GET /api/lessons/:id` 中看不见这节课，则拒绝；课节不存在返回 `null`。
 
 ---
 

@@ -12,6 +12,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Features
 
+- **课节标题只读服务**：进程插件仍不能 SQL 读取 `lessons`。新增 `ILessonOutlineService` / `ctx.services.lessonOutline.getOutline(lessonId)`，在宿主内返回课节标题和 `timeline` 环节标题。调用方须声明 `lesson:read`，并且只能看到当前登录用户在 `GET /api/lessons/:id` 中可见的课节（`canSeeLesson`）。课节不存在返回 null。
+
 - **ClassroomFlow Mode Pack 契约（P0）与白板包骨架（P1 起）**（Issues #546 / #547）：
   - 新增 `ModePackContribution` / `normalizeSegmentType` / `resolveModePackForSegment`（`packages/core/plugin-host/mode-pack.ts`），并经 `@openlearn/plugin-sdk` 导出；manifest 贡献键 `mode.pack`。
   - 明确 `teachingModeId`（风格标签）与 Mode Pack（交付引擎）正交；缺省 `segment.type` 归一为 `whiteboard`。

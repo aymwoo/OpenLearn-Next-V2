@@ -29,6 +29,8 @@ import { compileRoutePattern } from '../../packages/core/plugin-host/http-router
 import { isPublicRouteApproved } from '../../packages/core/plugin-host/public-routes.js';
 import { parseRequiresEntry } from '../../packages/core/esm-loader/manifest-utils.js';
 import { IAuthSessionBridgeToken } from '../../packages/core/di/interfaces.js';
+import { runWithLessonViewer } from '../../packages/core/di/lesson-viewer.js';
+import { lessonViewerFromRequest } from '../services/lesson-viewer-http.js';
 
 /** 平台已有的保留管理动作路径（当只有单段子路径且完全匹配时放行给后续 Express 路由） */
 const RESERVED_ACTIONS = new Set([
@@ -524,7 +526,10 @@ export async function pluginApiGatewayMiddleware(req: Request, res: Response, ne
 
   // 10. 普通 RESTful 派发请求并等待响应（带 5000ms 超时熔断守卫）
   try {
-    const response: PluginApiResponse = await pluginHost.dispatchHttpRequest(pluginId, reqDto, 5000);
+    const viewer = lessonViewerFromRequest(req);
+    const response: PluginApiResponse = viewer
+      ? await runWithLessonViewer(viewer, () => pluginHost.dispatchHttpRequest(pluginId, reqDto, 5000))
+      : await pluginHost.dispatchHttpRequest(pluginId, reqDto, 5000);
 
     // 10. 响应安全清洗与返回
     const status =

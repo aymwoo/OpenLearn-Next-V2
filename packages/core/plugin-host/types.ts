@@ -15,7 +15,7 @@ import type { IProcessService } from '../di/interfaces.js';
 import type { IStorageService } from '../di/interfaces.js';
 import type { IAIService } from '../di/interfaces.js';
 import type { IPointsDimensionRegistry } from '../di/interfaces.js';
-import type { IClassRosterService, IPointsLedgerService } from '../di/interfaces.js';
+import type { IClassRosterService, ILessonOutlineService, IPointsLedgerService } from '../di/interfaces.js';
 import type { Manifest } from '../esm-loader/manifest-schema.js';
 import type { Token } from '../di/token.js';
 import type { ContributionSummary } from './contribution-registry.js';
@@ -226,7 +226,7 @@ export interface IPluginHttpRouter {
 
 export interface PluginContext {
   /**
-   * 10 个内核服务，通过 Token DI 获取的接口代理。
+   * 内核服务，通过 Token DI 获取的接口代理。
    *
    * 审计 E-4：每个 key 的运行时契约是 **`T | null`** —— `buildContext` 的
    * D-12 降级机制（manifest.optional 里的 Token 版本不兼容时）会把对应 key
@@ -251,6 +251,11 @@ export interface PluginContext {
      * 这是插件读取班级 / 学生信息的唯一受支持通道（直查核心表会被 sql-guard 拒绝）。
      */
     roster: IClassRosterService | null;
+    /**
+     * 课节标题只读（`lesson:read`）。按 lessonId 返回标题与时间线环节标题。
+     * 直查 `lessons` 会被 sql-guard 拒绝。可见性跟当前登录用户，与 GET /api/lessons/:id 相同。
+     */
+    lessonOutline: ILessonOutlineService | null;
   };
   /**
    * 插件唯一标识符。

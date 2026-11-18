@@ -19,6 +19,8 @@ import {
   type AIPersona,
 } from '../ai-persona-registry.js';
 import { sendSafeError } from '../utils/error-handler.js';
+import { runWithLessonViewer } from '../../packages/core/di/lesson-viewer.js';
+import { lessonViewerFromRequest } from '../services/lesson-viewer-http.js';
 import { getFileStorageService } from '../services/file-storage/index.js';
 import { resolveAccessibleAiProvider } from '../services/ai-provider-resolver.js';
 import type { Request } from 'express';
@@ -166,8 +168,10 @@ export function registerOsRoutes(ctx: ServerContext) {
       // AbortSignal）。10s 为宽上限：覆盖合法的慢命令（如对接外部网关的
       // 插件命令），又不至于无限挂死。
       let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+      const viewer = lessonViewerFromRequest(req);
+      const executeCommand = () => kernelContainer.commandBus.execute(cmd);
       const result = await Promise.race([
-        kernelContainer.commandBus.execute(cmd),
+        viewer ? runWithLessonViewer(viewer, executeCommand) : executeCommand(),
         new Promise<never>((_, reject) => {
           timeoutHandle = setTimeout(
             () => reject(new Error(`Command execution timed out after 10s: ${commandType}`)),

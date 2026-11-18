@@ -168,6 +168,7 @@ interface PluginContext {
     pointsDimension: IPointsDimensionRegistry | null; // 积分维度注册表
     pointsLedger: IPointsLedgerService | null; // 积分账本
     roster: IClassRosterService | null; // 受管名册读取（需 management:read）
+    lessonOutline: ILessonOutlineService | null; // 课节标题只读（需 lesson:read）
   };
   pluginId: string; // 插件 ID
   manifest: Manifest; // 插件 manifest
@@ -529,7 +530,7 @@ interface ClassroomTool {
 
 ### 3.2 PluginContext — 插件上下文的完整 API
 
-插件通过 `activate(ctx)` 接收上下文对象。`ctx.services` 直接提供 10 个内核核心服务，同时还直接提供了内置的日志、自建表数据库与 HTTP 路由器：
+插件通过 `activate(ctx)` 接收上下文对象。`ctx.services` 直接提供 11 个内核核心服务，同时还直接提供了内置的日志、自建表数据库与 HTTP 路由器：
 
 | 功能 / 服务     | 访问方式                       | 用途                                                                |
 | --------------- | ------------------------------ | ------------------------------------------------------------------- |
@@ -543,6 +544,7 @@ interface ClassroomTool {
 | PointsDimension | `ctx.services.pointsDimension` | 积分维度注册；Worker / Process 模式为 `null`                        |
 | PointsLedger    | `ctx.services.pointsLedger`    | 积分账本读写；Worker / Process 模式为 `null`                        |
 | Roster          | `ctx.services.roster`          | 班级 / 学生只读（需 `management:read`）；核心表的唯一受支持读取通道 |
+| Lesson outline  | `ctx.services.lessonOutline`   | 课节标题与时间线环节标题（需 `lesson:read`）；不可 SQL 读 `lessons` |
 | **HTTP Router** | `ctx.http`                     | **（v0.3.11 新增）注册 RESTful API（GET/POST/PUT/DELETE 等）**      |
 | Database API    | `ctx.db`                       | 命名空间自建表操作与版本迁移 (`migrate`)                            |
 | Structured Log  | `ctx.log`                      | 自动携带 pluginId 与时间戳的结构化日志                              |

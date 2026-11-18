@@ -137,12 +137,12 @@ def extract_tokens() -> dict:
         "_note": "字符串 resolve 只允许命中本集合；Token 对象路径不受限。"
                  "越界会显式报错（不是静默降级）。",
         "_count_trap": "三个数字都对，口径不同，别混："
-                      "① SDK 值导出的 Token 对象共 32 个；"
-                      "② 其中能用 Token 对象 resolve 的 30 个；"
-                      "③ IActivityRegistryToken 只能用名字字符串 "
-                      "'@openlearn/activity-ecosystem:IActivityRegistry' 收录（Token 对象不在白名单里）；"
-                      "④ INetworkProxyServiceToken 导出但**完全不可解析** —— "
-                      "插件按名字 resolve 它会显式报错。",
+                      "① SDK 值导出的 Token 对象共 41 个；"
+                      "② PLUGIN_RESOLVABLE_TOKENS 里有 38 个（字符串 resolve 的白名单主体）；"
+                      "③ 另加名字 '@openlearn/activity-ecosystem:IActivityRegistry'，可解析名字共 39 个；"
+                      "④ 导出但不在 PLUGIN_RESOLVABLE_TOKENS 的是 IActivityRegistryToken"
+                      "（只能按上面的名字字符串 resolve）、IFileStorageExtensionRegistryToken、"
+                      "INetworkProxyServiceToken（按名字 resolve 会显式报错）。",
         "_source": "packages/core/di/interfaces.ts:946",
         "tokens": tokens,
         "extra_names": extra_names,

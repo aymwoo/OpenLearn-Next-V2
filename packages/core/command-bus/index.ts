@@ -1,5 +1,6 @@
 import { v7 as uuidv7 } from 'uuid';
 import { EventBus } from '../event-bus/index.js';
+import { currentLessonViewer, lessonViewerForActor, runWithLessonViewer } from '../di/lesson-viewer.js';
 import { warnDeprecation } from '../extension-points/index.js';
 import { pluginIdFromActor, pluginIdFromCommandType, recordPluginCommand } from '../observability/plugin-metrics.js';
 
@@ -99,6 +100,15 @@ export class CommandBus {
   }
 
   public async execute<T extends PlatformCommand>(command: T): Promise<any> {
+    const actorId = typeof command.actorId === 'string' ? command.actorId.trim() : '';
+    // 已有外层 viewer（HTTP 会话）时不覆盖。plugin: actor 的命令因此沿用发起请求的用户。
+    if (currentLessonViewer()) return this.executeBound(command);
+    const viewer = lessonViewerForActor(actorId);
+    if (viewer) return runWithLessonViewer(viewer, () => this.executeBound(command));
+    return this.executeBound(command);
+  }
+
+  private async executeBound<T extends PlatformCommand>(command: T): Promise<any> {
     const actorId = typeof command.actorId === 'string' ? command.actorId.trim() : '';
     if (!actorId) {
       throw new Error('[Security] Command actorId is required. Empty actors are rejected.');

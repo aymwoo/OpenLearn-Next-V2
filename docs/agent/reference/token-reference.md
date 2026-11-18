@@ -167,7 +167,7 @@ export const PLUGIN_RESOLVABLE_TOKEN_NAMES: ReadonlySet<string> = new Set([
 
 ## 3. 31 个可解析 Token 全表
 
-`worker` 列 = 是否在 `BASE_WORKER_SERVICE_TOKENS`（9 个，§4）里；
+`worker` 列 = 是否在 `BASE_WORKER_SERVICE_TOKENS`（10 个，§4）里；
 `services` 列 = 是否同时能以 `ctx.services.<同名键>` 拿到包装代理。
 
 ### 3.1 基础服务（8）
@@ -234,7 +234,7 @@ export const PLUGIN_RESOLVABLE_TOKEN_NAMES: ReadonlySet<string> = new Set([
 这是本页里最容易踩的一次字符串不一致。
 ```
 
-### 3.5 具名业务服务（7）
+### 3.5 具名业务服务（8）
 
 | SDK 常量                                | Token 名                                           | TS 类型                            | 方法数          |
 | --------------------------------------- | -------------------------------------------------- | ---------------------------------- | --------------- |
@@ -244,6 +244,7 @@ export const PLUGIN_RESOLVABLE_TOKEN_NAMES: ReadonlySet<string> = new Set([
 | `IStageGuardServiceToken`               | `@openlearn/core:IStageGuardService`               | `IStageGuardService`               | 4               |
 | `ICoursewareRuntimeScriptRegistryToken` | `@openlearn/core:ICoursewareRuntimeScriptRegistry` | `ICoursewareRuntimeScriptRegistry` | 5               |
 | `IAssessmentGraderRegistryToken`        | `@openlearn/core:IAssessmentGraderRegistry`        | `IAssessmentGraderRegistry`        | 5 + `gradeItem` |
+| `ILessonOutlineServiceToken`            | `@openlearn/core:ILessonOutlineService`            | `ILessonOutlineService`            | 1 `getOutline`  |
 | `IAuthSessionBridgeToken`               | `@openlearn/core:IAuthSessionBridgeService`        | `IAuthSessionBridgeService`        | —               |
 
 ````{danger}
@@ -325,7 +326,7 @@ version 只参与 `Token` 的 `toString()`，**不参与** `resolveByName` 的�
 Token 白名单决定「能不能 resolve 到」，worker 基线决定「RPC 允许不允许」。
 两者独立，交集才是 worker 插件的实际可用面。
 
-### 4.1 `BASE_WORKER_SERVICE_TOKENS`（9 个，逐字照抄）
+### 4.1 `BASE_WORKER_SERVICE_TOKENS`（10 个，逐字照抄）
 
 ```typescript
 export const BASE_WORKER_SERVICE_TOKENS: readonly string[] = Object.freeze([
@@ -338,6 +339,7 @@ export const BASE_WORKER_SERVICE_TOKENS: readonly string[] = Object.freeze([
   '@openlearn/core:IAIService',
   '@openlearn/core:IDatabase',
   '@openlearn/core:INetworkProxyService',
+  '@openlearn/core:ILessonOutlineService',
 ]);
 ```
 
@@ -346,7 +348,7 @@ export const BASE_WORKER_SERVICE_TOKENS: readonly string[] = Object.freeze([
 前端同名服务的 token 名是 `@openlearn/frontend:...`（§7）—— 名字不同，别混。
 
 同文件还有一个 `ALL_SERVICE_TOKENS`，注释自称「兼容性超集列表，保留供历史外部模块引用」，
-= 上面 9 个 + `IPointsDimensionRegistry` 等。
+= 上面 10 个 + `IPointsDimensionRegistry` 等。
 
 ```{warning}
 **不要用 `ALL_SERVICE_TOKENS` 判断自己能用什么。** 它不是门禁输入，
@@ -931,15 +933,15 @@ grep 时两个都要试。见 {doc}`http-api` 第 5 节。
 
 | 断言                                                                                | 来源                                                                                                                              |
 | ----------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| `PLUGIN_RESOLVABLE_TOKENS` 30 项 + `PLUGIN_RESOLVABLE_TOKEN_NAMES` 追加 1 个名字    | ``packages/core/di/interfaces.ts`→`PLUGIN_RESOLVABLE_TOKENS`（L946） 起）                                                         |
+| `PLUGIN_RESOLVABLE_TOKENS` + `PLUGIN_RESOLVABLE_TOKEN_NAMES` 追加 1 个名字          | ``packages/core/di/interfaces.ts`→`PLUGIN_RESOLVABLE_TOKENS`起；计数以`tokens.json` 为准）                                        |
 | E-2 背景：字符串路径此前直达 `serviceRegistry.resolveByName` 无门禁                 | 同上，白名单上方注释块                                                                                                            |
 | 「新增对外 Token 时同步加到这里」                                                   | 同上                                                                                                                              |
-| 31 个 token 名的逐字字符串                                                          | `interfaces.ts` 内每条 `export const I*Token = new Token<...>('...')`                                                             |
+| 可解析 token 名的逐字字符串                                                         | `interfaces.ts` 内每条 `export const I*Token = new Token<...>('...')`；计数以 `tokens.json` 为准                                  |
 | `IPlatformServiceRegistryToken` → `@openlearn/core:IPlatformServiceRegistryService` | `interfaces.ts`（常量名 ≠ token 名）                                                                                              |
 | `IAuthSessionBridgeToken` 带 version `'1.0.0'`                                      | `interfaces.ts`                                                                                                                   |
 | `IDatabaseToken` 泛型为 `SqliteDatabase`                                            | `interfaces.ts`                                                                                                                   |
 | 5 个白名单外内部 Token                                                              | `interfaces.ts`（`ICapabilityGovernanceServiceToken` 等声明处）                                                                   |
-| `BASE_WORKER_SERVICE_TOKENS` 9 项逐字                                               | ``packages/core/worker-runtime/worker-manager.ts`→`BASE_WORKER_SERVICE_TOKENS`（L76））                                           |
+| `BASE_WORKER_SERVICE_TOKENS` 10 项逐字                                              | ``packages/core/worker-runtime/worker-manager.ts`→`BASE_WORKER_SERVICE_TOKENS`（L76））                                           |
 | `ALL_SERVICE_TOKENS` 为「兼容性超集」                                               | 同文件 L131132 起                                                                                                                 |
 | `IPluginHost` 于 2026-10-04 移出 worker 基线及「后门」理由                          | `docs/reference/plugin-trust-boundary.md`；测试 `expect(BASE_WORKER_SERVICE_TOKENS).not.toContain('@openlearn/core:IPluginHost')` |
 | `requires` 正则原文                                                                 | `packages/core/esm-loader/manifest-schema.ts`                                                                                     |

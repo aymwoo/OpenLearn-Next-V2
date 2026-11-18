@@ -107,11 +107,13 @@ parentPort.on('message', async function(msg) {
       return;
     }
     try {
-      var result = await handler.execute(msg.command);
-      parentPort.postMessage({
-        type: 'commandResult',
-        invokeId: msg.invokeId,
-        value: result
+      await runWithLessonInvocation(msg.invocationId, async function() {
+        var result = await handler.execute(msg.command);
+        parentPort.postMessage({
+          type: 'commandResult',
+          invokeId: msg.invokeId,
+          value: result
+        });
       });
     } catch (err) {
       parentPort.postMessage({
@@ -127,11 +129,13 @@ parentPort.on('message', async function(msg) {
   // 1c. Intercept HTTP request from host (V5.2)
   if (msg && msg.type === 'httpRequest') {
     try {
-      var res = await pluginHttpRouter.handle(msg.request);
-      parentPort.postMessage({
-        type: 'httpResponse',
-        invokeId: msg.invokeId,
-        response: res
+      await runWithLessonInvocation(msg.invocationId, async function() {
+        var res = await pluginHttpRouter.handle(msg.request);
+        parentPort.postMessage({
+          type: 'httpResponse',
+          invokeId: msg.invokeId,
+          response: res
+        });
       });
     } catch (err) {
       parentPort.postMessage({
@@ -267,7 +271,8 @@ parentPort.on('message', async function(msg) {
         '@openlearn/core:ICapabilityService': 'capability',
         '@openlearn/core:IProcessService': 'processManager',
         '@openlearn/core:IStorageService': 'storage',
-        '@openlearn/core:IAIService': 'ai'
+        '@openlearn/core:IAIService': 'ai',
+        '@openlearn/core:ILessonOutlineService': 'lessonOutline'
       };
 
       eventBusProxy = createEventBusProxy(parentPort);

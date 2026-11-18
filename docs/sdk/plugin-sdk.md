@@ -166,9 +166,9 @@ type Actor = PluginApiRequest['actor']; // ✅ 正确写法
 
 ### 导出 Token 清单
 
-> 当前 SDK 值导出 **32 个** Token（`packages/plugin-sdk/index.ts` 实测，机器抽取见 `docs/agent/contracts/tokens.json`）。方法签名与标识字符串以 [DI Token 字典](../api/di-tokens.md) 为权威；下表为速查。
+> 当前 SDK 值导出 **41 个** Token（`packages/plugin-sdk/index.ts` 实测，机器抽取见 `docs/agent/contracts/tokens.json`）。方法签名与标识字符串以 [DI Token 字典](../api/di-tokens.md) 为权威；下表为速查。
 >
-> **三个数字的口径别混**：SDK 导出 **32** 个；其中能用 Token **对象** resolve 的 **30** 个；加上按名字收录的 `@openlearn/activity-ecosystem:IActivityRegistry` 共 **31** 个可解析名字。`IActivityRegistryToken` 只能按名字 resolve（Token 对象不在白名单里）；`INetworkProxyServiceToken` 导出但**完全不可解析** —— 按名字 resolve 它会显式报错。
+> **三个数字的口径别混**：SDK 导出 **41** 个；`PLUGIN_RESOLVABLE_TOKENS` 有 **38** 个；加上按名字收录的 `@openlearn/activity-ecosystem:IActivityRegistry` 共 **39** 个可解析名字。`IActivityRegistryToken` 只能按那个名字 resolve；`INetworkProxyServiceToken` 与 `IFileStorageExtensionRegistryToken` 导出但不在该白名单里，按名字 resolve 会显式报错。
 
 | Token 常量名                            | 服务接口类型                       | 说明                                                                                                                     |
 | :-------------------------------------- | :--------------------------------- | :----------------------------------------------------------------------------------------------------------------------- |
@@ -191,6 +191,7 @@ type Actor = PluginApiRequest['actor']; // ✅ 正确写法
 | `IInteractionRuntimeServiceToken`       | `IInteractionRuntimeService`       | 课堂互动运行时（抢答/点名处理器贡献）                                                                                    |
 | `ILearningAnalyticsServiceToken`        | `ILearningAnalyticsService`        | 学习分析与指标引擎                                                                                                       |
 | `ILessonEngineServiceToken`             | `ILessonEngineService`             | 课程引擎控制接口                                                                                                         |
+| `ILessonOutlineServiceToken`            | `ILessonOutlineService`            | 课节标题与时间线环节标题（`lesson:read`，按当前用户 `canSeeLesson`）                                                     |
 | `INetworkProxyServiceToken`             | `INetworkProxyService`             | 插件出站网络宿主代发（**导出但不可 resolve**，见下） ⚠️ **导出但不可 resolve** ⚠️ **导出但不可 resolve**                 |
 | `IPlatformServiceRegistryToken`         | `IPlatformServiceRegistryService`  | 平台服务注册表                                                                                                           |
 | `IPluginDistributionManagerToken`       | `PluginDistributionManager`        | 插件分发与仓库管理                                                                                                       |

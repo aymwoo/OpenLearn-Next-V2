@@ -638,6 +638,38 @@ export interface IClassRosterService {
 
 export const IClassRosterServiceToken = new Token<IClassRosterService>('@openlearn/core:IClassRosterService');
 
+/**
+ * 时间线环节标题。只含 id / title，不含 notes、元素或其它课节字段。
+ */
+export interface LessonSegmentTitle {
+  id: string;
+  title: string;
+}
+
+/**
+ * 课节标题只读视图（`lessons.title` + `lessons.timeline` 的环节标题）。
+ * 不含 content、creator_id 或其它列。
+ */
+export interface LessonOutline {
+  id: string;
+  title: string;
+  segments: LessonSegmentTitle[];
+}
+
+/**
+ * 课节标题只读服务。
+ *
+ * `lessons` 在 sql-guard 的禁读表里，进程插件不能直查。本服务按 lessonId
+ * 返回标题与时间线环节标题。门禁：manifest 声明 `lesson:read`，并且当前调用
+ * 必须带有宿主绑定的登录用户；可见性与 `GET /api/lessons/:id` 的 `canSeeLesson` 相同。
+ * 课节不存在返回 null；用户看不见则拒绝。插件不能传入 viewer。
+ */
+export interface ILessonOutlineService {
+  getOutline(lessonId: string): Promise<LessonOutline | null>;
+}
+
+export const ILessonOutlineServiceToken = new Token<ILessonOutlineService>('@openlearn/core:ILessonOutlineService');
+
 // ── ClassroomFlowServer：统一学分发放 / 目录 / 兑换服务（Q8/Q7/Q6）─────────
 // 结构接口在此声明以避免 interfaces → service → interfaces 循环依赖；
 // 具体实现见 credit-award-service.ts / reward-catalog-service.ts / credit-redemption-service.ts。
@@ -1151,6 +1183,7 @@ export const PLUGIN_RESOLVABLE_TOKENS = [
   IPointsDimensionRegistryToken,
   IPointsLedgerServiceToken,
   IClassRosterServiceToken,
+  ILessonOutlineServiceToken,
   ILessonEngineServiceToken,
   IClassroomRuntimeServiceToken,
   IPresenceEngineServiceToken,

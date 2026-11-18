@@ -27,6 +27,7 @@ import {
   IPointsDimensionRegistryToken,
   IPointsLedgerServiceToken,
   IClassRosterServiceToken,
+  ILessonOutlineServiceToken,
 } from '../../di/interfaces.js';
 import { Token } from '../../di/token.js';
 import type { ActionDescriptor } from '../../registry/index.js';
@@ -113,6 +114,9 @@ async function setupRegistry(): Promise<ServiceRegistry> {
     listClassStudents: vi.fn().mockResolvedValue([]),
     getStudent: vi.fn().mockResolvedValue(null),
   };
+  const mockLessonOutline = {
+    getOutline: vi.fn().mockResolvedValue({ id: 'les-1', title: '牛顿定律', segments: [] }),
+  };
   const mockPointsLedger = {
     addPoints: vi.fn().mockResolvedValue({
       studentId: '',
@@ -137,6 +141,7 @@ async function setupRegistry(): Promise<ServiceRegistry> {
   await registry.register(IPointsDimensionRegistryToken, mockPointsDimension as any);
   await registry.register(IPointsLedgerServiceToken, mockPointsLedger as any);
   await registry.register(IClassRosterServiceToken, mockRoster);
+  await registry.register(ILessonOutlineServiceToken, mockLessonOutline);
 
   return registry;
 }
@@ -169,9 +174,9 @@ describe('buildContext', () => {
     expect(ctx.pluginId).toBe('plugin-id-123');
     expect(ctx.manifest).toBe(testManifest);
 
-    // 验证 10 个 services 键（7 个核心 + 2 个积分 + 受管名册）
+    // 验证 services 键（7 个核心 + 2 个积分 + 受管名册 + 课节标题）
     const keys = Object.keys(ctx.services);
-    expect(keys).toHaveLength(10);
+    expect(keys).toHaveLength(11);
     expect(keys).toContain('commandBus');
     expect(keys).toContain('eventBus');
     expect(keys).toContain('actionRegistry');
@@ -182,6 +187,7 @@ describe('buildContext', () => {
     expect(keys).toContain('pointsDimension');
     expect(keys).toContain('pointsLedger');
     expect(keys).toContain('roster');
+    expect(keys).toContain('lessonOutline');
   });
 
   // ── 受管名册（Issue #366）─────────────────────────────────────────────
@@ -202,6 +208,30 @@ describe('buildContext', () => {
       try {
         await expect(ctx.services.roster!.listClassStudents('class-1')).rejects.toThrow(/management:read/);
         expect(error.mock.calls.some((call) => String(call[0]).includes('roster.listClassStudents'))).toBe(true);
+      } finally {
+        error.mockRestore();
+      }
+    });
+  });
+
+  describe('services.lessonOutline', () => {
+    it('声明 lesson:read 后可以调用 getOutline', async () => {
+      const manifest: Manifest = { ...testManifest, capabilitiesProposed: ['lesson:read'] };
+      const ctx = await setupContext({ manifest });
+
+      await expect(ctx.services.lessonOutline!.getOutline('les-1')).resolves.toEqual({
+        id: 'les-1',
+        title: '牛顿定律',
+        segments: [],
+      });
+    });
+
+    it('未声明 lesson:read 时拒绝', async () => {
+      const ctx = await setupContext();
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+      try {
+        await expect(ctx.services.lessonOutline!.getOutline('les-1')).rejects.toThrow(/lesson:read/);
+        expect(error.mock.calls.some((call) => String(call[0]).includes('lessonOutline.getOutline'))).toBe(true);
       } finally {
         error.mockRestore();
       }

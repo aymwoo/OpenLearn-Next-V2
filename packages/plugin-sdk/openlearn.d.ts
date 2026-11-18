@@ -487,6 +487,12 @@ interface PluginContext {
      * 这是插件读取班级 / 学生信息的唯一受支持通道（直查核心表会被 sql-guard 拒绝）。
      */
     roster: IClassRosterService | null;
+    /**
+     * 课节标题只读。需在 manifest 声明 `lesson:read`。
+     * 按 lessonId 返回标题与时间线环节标题；可见性跟当前登录用户。
+     * 直查 `lessons` 会被 sql-guard 拒绝。
+     */
+    lessonOutline: ILessonOutlineService | null;
   };
   pluginId: string;
   manifest: Manifest;
@@ -631,6 +637,33 @@ interface IClassRosterService {
   listClasses(): Promise<RosterClassSummary[]>;
   listClassStudents(classId: string): Promise<RosterStudentRef[]>;
   getStudent(studentId: string): Promise<RosterStudentRef | null>;
+}
+
+/** 时间线环节标题。只含 id / title。 */
+interface LessonSegmentTitle {
+  id: string;
+  title: string;
+}
+
+/**
+ * 课节标题只读视图。不含 content、creator 或其它列。
+ * `segments` 来自 `lessons.timeline`。
+ */
+interface LessonOutline {
+  id: string;
+  title: string;
+  segments: LessonSegmentTitle[];
+}
+
+/**
+ * 课节标题只读服务。
+ *
+ * `lessons` 在 sql-guard 禁读表里。`getOutline(lessonId)` 在宿主内读取标题。
+ * 门禁：`lesson:read`，且调用发生在已登录用户的命令或插件 HTTP 请求里。
+ * 课节不存在返回 null；当前用户看不见则抛错。插件不能自报 viewer。
+ */
+interface ILessonOutlineService {
+  getOutline(lessonId: string): Promise<LessonOutline | null>;
 }
 
 interface ILessonEngineService {
@@ -1294,6 +1327,7 @@ declare const ISemesterGradeServiceToken: Token<ISemesterGradeService>;
 declare const IPointsDimensionRegistryToken: Token<IPointsDimensionRegistry>;
 declare const IPointsLedgerServiceToken: Token<IPointsLedgerService>;
 declare const IClassRosterServiceToken: Token<IClassRosterService>;
+declare const ILessonOutlineServiceToken: Token<ILessonOutlineService>;
 declare const ILessonEngineServiceToken: Token<ILessonEngineService>;
 declare const IClassroomRuntimeServiceToken: Token<IClassroomRuntimeService>;
 declare const IPresenceEngineServiceToken: Token<IPresenceEngineService>;
@@ -1667,6 +1701,9 @@ export type {
   IClassRosterService,
   RosterClassSummary,
   RosterStudentRef,
+  ILessonOutlineService,
+  LessonOutline,
+  LessonSegmentTitle,
   ILessonEngineService,
   IClassroomRuntimeService,
   IPresenceEngineService,
@@ -1787,6 +1824,7 @@ export {
   IPointsDimensionRegistryToken,
   IPointsLedgerServiceToken,
   IClassRosterServiceToken,
+  ILessonOutlineServiceToken,
   ILessonEngineServiceToken,
   IClassroomRuntimeServiceToken,
   IPresenceEngineServiceToken,

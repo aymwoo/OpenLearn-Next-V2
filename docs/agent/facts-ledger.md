@@ -18,23 +18,23 @@
 
 ## 0. 裁决速查（15 条）
 
-| #   | 事实                             | **真值**                                  | agent-docs          | 平台 `docs/`                        | 裁决                             |
-| --- | -------------------------------- | ----------------------------------------- | ------------------- | ----------------------------------- | -------------------------------- |
-| 1   | 平台版本                         | `0.7.8`                                   | `0.7.8` ✅          | `0.7.8` ✅                          | 一致                             |
-| 2   | **plugin-sdk 版本**              | **`3.7.5`**                               | `3.7.4` ❌          | `3.7.4`（27 篇）❌                  | **两套都过期，全改 3.7.5**       |
-| 3   | **`capabilityRequired` 数量**    | **19**                                    | 19 ✅               | 20（多含 `quiz:write`）❌           | **agent-docs 对**                |
-| 4   | `segment:gate_eval` 归属         | 真实门禁能力，**非** `capabilityRequired` | 「属另一套登记」 ✅ | §1.1 未列                           | **agent-docs 对**                |
-| 5   | SDK 值导出的 Token               | 32                                        | 未提                | 32 ✅                               | **平台对**                       |
-| 6   | **可解析 Token 数量**            | **31**                                    | 31 ✅               | 速查表只有 27 行 ❌                 | **agent-docs 对；平台需补表**    |
-| 7   | `INetworkProxyServiceToken`      | 导出但**完全不可解析**                    | 未提                | 未提                                | **两套都缺，已补**               |
-| 8   | `ExtensionSlot` 成员             | 120                                       | 120 ✅              | 120 ✅                              | 一致                             |
-| 9   | 有渲染调用点的 anchor            | 8                                         | 8 ✅                | 未列                                | agent-docs 对                    |
-| 10  | **`contributes` A 组（严格键）** | **71**                                    | 69 ❌               | 无此区分                            | **改 71**                        |
-| 11  | `contributes` B 组（宽松键）     | 38                                        | 38 ✅               | 无此区分                            | 一致                             |
-| 12  | frame 通道 bridge op             | 10                                        | 10 ✅               | 虚构 `ui.register`/`context.get` ❌ | **agent-docs 对**                |
-| 13  | view 通道 bridge op              | 8                                         | 8 ✅                | 12 行表且与 frame 混写              | 以 `frontend-guide.md` §6.3 为准 |
-| 14  | **SQL 禁写表数量**               | **40**                                    | 未标数              | 36 ❌                               | **改 40**                        |
-| 15  | `ctx.services.*` 的可空性        | 9 个全为 `T \| null`                      | 9 个 ✅             | `.d.ts` 快照称非空 ❌               | **agent-docs 对**                |
+| #   | 事实                             | **真值**                                  | agent-docs          | 平台 `docs/`                        | 裁决                                    |
+| --- | -------------------------------- | ----------------------------------------- | ------------------- | ----------------------------------- | --------------------------------------- |
+| 1   | 平台版本                         | `0.7.8`                                   | `0.7.8` ✅          | `0.7.8` ✅                          | 一致                                    |
+| 2   | **plugin-sdk 版本**              | **`3.7.5`**                               | `3.7.4` ❌          | `3.7.4`（27 篇）❌                  | **两套都过期，全改 3.7.5**              |
+| 3   | **`capabilityRequired` 数量**    | **19**                                    | 19 ✅               | 20（多含 `quiz:write`）❌           | **agent-docs 对**                       |
+| 4   | `segment:gate_eval` 归属         | 真实门禁能力，**非** `capabilityRequired` | 「属另一套登记」 ✅ | §1.1 未列                           | **agent-docs 对**                       |
+| 5   | SDK 值导出的 Token               | 41                                        | 未提                | 见 tokens.json                      | **与 tokens.json 的 sdk_exported 对齐** |
+| 6   | **可解析 Token 数量**            | **39**                                    | 旧口径 31           | 见 tokens.json                      | **38 个白名单 Token + 1 个名字**        |
+| 7   | `INetworkProxyServiceToken`      | 导出但**完全不可解析**                    | 未提                | 未提                                | **两套都缺，已补**                      |
+| 8   | `ExtensionSlot` 成员             | 120                                       | 120 ✅              | 120 ✅                              | 一致                                    |
+| 9   | 有渲染调用点的 anchor            | 8                                         | 8 ✅                | 未列                                | agent-docs 对                           |
+| 10  | **`contributes` A 组（严格键）** | **71**                                    | 69 ❌               | 无此区分                            | **改 71**                               |
+| 11  | `contributes` B 组（宽松键）     | 38                                        | 38 ✅               | 无此区分                            | 一致                                    |
+| 12  | frame 通道 bridge op             | 10                                        | 10 ✅               | 虚构 `ui.register`/`context.get` ❌ | **agent-docs 对**                       |
+| 13  | view 通道 bridge op              | 8                                         | 8 ✅                | 12 行表且与 frame 混写              | 以 `frontend-guide.md` §6.3 为准        |
+| 14  | **SQL 禁写表数量**               | **40**                                    | 未标数              | 36 ❌                               | **改 40**                               |
+| 15  | `ctx.services.*` 的可空性        | 9 个全为 `T \| null`                      | 9 个 ✅             | `.d.ts` 快照称非空 ❌               | **agent-docs 对**                       |
 
 ---
 
@@ -89,11 +89,11 @@ vfs:write          whiteboard:read   whiteboard:write
 
 ### 1.3 Token：三个数字，三种口径（裁决 #5、#6、#7）
 
-| 口径                         | 数量   | 出处                                                                                           |
-| :--------------------------- | ------ | ---------------------------------------------------------------------------------------------- |
-| SDK 值导出的 Token 对象      | **32** | `packages/plugin-sdk/index.ts` 的 `export { …Token }`                                          |
-| 可解析集合（Token 对象路径） | **30** | `packages/core/di/interfaces.ts:946` `PLUGIN_RESOLVABLE_TOKENS`                                |
-| 可解析集合（含按名字收录）   | **31** | 同上 `PLUGIN_RESOLVABLE_TOKEN_NAMES`（追加 `@openlearn/activity-ecosystem:IActivityRegistry`） |
+| 口径                       | 数量   | 出处                                                                                           |
+| :------------------------- | ------ | ---------------------------------------------------------------------------------------------- |
+| SDK 值导出的 Token 对象    | **41** | `packages/plugin-sdk/index.ts` 的 `export { …Token }`；`tokens.json` 的 `sdk_exported`         |
+| 字符串 resolve 白名单      | **38** | `packages/core/di/interfaces.ts` `PLUGIN_RESOLVABLE_TOKENS`                                    |
+| 可解析名字（含活动注册表） | **39** | 同上 `PLUGIN_RESOLVABLE_TOKEN_NAMES`（追加 `@openlearn/activity-ecosystem:IActivityRegistry`） |
 
 **三个数字都对，但只看数字会掉进两个坑：**
 
@@ -103,9 +103,9 @@ vfs:write          whiteboard:read   whiteboard:write
 - `INetworkProxyServiceToken` —— SDK 导出，但**完全不在**可解析集合里。
   按名字 resolve 它会**显式报错**（不是静默降级）。
 
-所以「SDK 导出 32」与「可解析 31」不矛盾，差的正好是这两个特殊项。
+所以「SDK 导出 41」与「可解析名字 39」不矛盾：多出来的是 `INetworkProxyServiceToken` 与 `IFileStorageExtensionRegistryToken`（导出但不在白名单），活动注册表则是「导出了 Token 对象、白名单里只有名字字符串」。
 
-**平台 `docs/sdk/plugin-sdk.md:169` 的「32 个」是对的**，但它自带的速查表只有 27 行，
+**平台 `docs/sdk/plugin-sdk.md` 的 Token 计数与 `tokens.json` 一致**，但它自带的速查表可能少于导出总数，
 缺 4 个（`ICoursewareRuntimeScriptRegistryToken` / `IClassroomLifecycleServiceToken` /
 `IInteractionRuntimeServiceToken` / `IAssessmentGraderRegistryToken`）—— 数字对、表不全，
 是最坏的失败形态。
