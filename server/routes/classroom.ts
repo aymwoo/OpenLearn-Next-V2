@@ -40,6 +40,7 @@ import type { TeachingMode } from '../services/teaching-modes.js';
 import { classroomSessionService, type ClassroomActorScope } from '../services/classroom-session-service.js';
 import { registerClassroomTeachingModeRoutes } from './classroom-teaching-modes.js';
 import { registerClassroomPresetPollRoutes } from './classroom-preset-polls.js';
+import { registerClassroomFlowServerRoutes } from './classroomflowserver.js';
 
 // 教学模式的领域常量与 id 规范收敛在 service 层；这里 re-export 保持既有导入路径
 // （测试与插件历史上直接从路由模块引用 BUILTIN_TEACHING_MODES）。
@@ -448,6 +449,7 @@ export function registerClassroomRoutes(
   // 挂载独立解耦的教学模式与预设投票子路由（Issue #434）
   registerClassroomTeachingModeRoutes(app as any);
   registerClassroomPresetPollRoutes(app as any);
+  registerClassroomFlowServerRoutes(app);
 
   // ── 1. 课堂会话与生命周期阶段 ──────────────────────────────────────────
 

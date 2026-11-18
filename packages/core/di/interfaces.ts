@@ -29,6 +29,7 @@
  */
 
 import { Token } from './token.js';
+import type { SubmissionRegistry, SubmissionAggregator } from '../submission-adapter/registry.js';
 import type { PlatformCommand, CommandHandler, CommandMetadata } from '../command-bus/index.js';
 import type { PlatformEvent, EventSubscriber } from '../event-bus/index.js';
 import type { ActionDescriptor } from '../registry/index.js';
@@ -637,6 +638,131 @@ export interface IClassRosterService {
 
 export const IClassRosterServiceToken = new Token<IClassRosterService>('@openlearn/core:IClassRosterService');
 
+// ── ClassroomFlowServer：统一学分发放 / 目录 / 兑换服务（Q8/Q7/Q6）─────────
+// 结构接口在此声明以避免 interfaces → service → interfaces 循环依赖；
+// 具体实现见 credit-award-service.ts / reward-catalog-service.ts / credit-redemption-service.ts。
+
+/** 统一学分发放结果（与 CreditAwardService 的 AwardResult 同形） */
+export interface CreditAwardResult {
+  ok: boolean;
+  code?: string;
+  message?: string;
+  pointLogId?: string;
+  awardId?: string;
+  deltaPoints?: number;
+  balanceAfter?: number;
+  idempotentHit?: boolean;
+}
+export interface CreditAwardInput {
+  studentId: string;
+  classId: string;
+  dimensionId: string;
+  deltaPoints: number;
+  source: string;
+  idempotencyKey: string;
+  reason: string;
+  actorId?: string | null;
+}
+export interface ICreditAwardService {
+  award(input: CreditAwardInput): CreditAwardResult;
+}
+export const ICreditAwardServiceToken = new Token<ICreditAwardService>('@openlearn/core:ICreditAwardService');
+
+/** 奖励目录读取端口（供门面/其它服务消费；完整 CRUD 见 RewardCatalogService 类） */
+export interface IRewardCatalogReader {
+  getById(id: string): unknown;
+  listAvailable(now?: number): unknown[];
+}
+export const IRewardCatalogServiceToken = new Token<IRewardCatalogReader>('@openlearn/core:IRewardCatalogService');
+
+/** 学分兑换端口 */
+export interface RedeemInput {
+  studentId: string;
+  classId: string;
+  rewardId: string;
+  costPoints?: number;
+  idempotencyKey: string;
+  actorId?: string | null;
+  role?: string | null;
+  reason?: string | null;
+  dimensionId?: string;
+}
+export interface RedeemResultView {
+  ok: boolean;
+  code?: string;
+  message?: string;
+  redemptionId?: string;
+  pointLogId?: string;
+  balanceBefore?: number;
+  balanceAfter?: number;
+  costPoints?: number;
+  idempotentHit?: boolean;
+}
+export interface ICreditRedemptionService {
+  redeem(input: RedeemInput): RedeemResultView;
+  getBalance(studentId: string, classId: string, dimensionId?: string): number;
+}
+export const ICreditRedemptionServiceToken = new Token<ICreditRedemptionService>(
+  '@openlearn/core:ICreditRedemptionService',
+);
+
+/** 通讯协议可靠投递服务（ClassroomMessageService 的结构端口） */
+export interface IClassroomMessageService {
+  send(input: {
+    channel: string;
+    msgType: 'request' | 'response';
+    lessonId?: string | null;
+    classId?: string | null;
+    targetUserIds?: string[] | null;
+    senderActorId: string;
+    senderRole: string;
+    senderPluginId?: string | null;
+    correlationId?: string | null;
+    payload: unknown;
+    ttlMs?: number | null;
+    messageId?: string;
+  }): {
+    ok: boolean;
+    code?: string;
+    error?: string;
+    messageId?: string;
+    seq?: number;
+    duplicated?: boolean;
+  };
+  ack(messageId: string): boolean;
+  replay(query: {
+    lessonId?: string | null;
+    classId?: string | null;
+    sinceSeq: number;
+    viewerId: string;
+    limit?: number;
+  }): Array<{
+    seq: number;
+    id: string;
+    channel: string;
+    msgType: string;
+    correlationId: string | null;
+    payload: unknown;
+    status: string;
+    createdAt: number;
+  }>;
+  /** 注册 channel（owner 由宿主按 pluginId 注入，插件不可自报） */
+  registerChannel(desc: {
+    name: string;
+    shared?: boolean;
+    rolesAllowed?: string[];
+    requiredPayloadFields?: string[];
+  }): { ok: boolean; code?: string; message?: string };
+  listChannels(): ReadonlyArray<{ name: string; owner: string; shared?: boolean }>;
+}
+export const IClassroomMessageServiceToken = new Token<IClassroomMessageService>(
+  '@openlearn/core:IClassroomMessageService',
+);
+
+/** 提交适配器注册表/聚合器 Token（声明在此以满足 SDK parity 的 DI 声明点扫描） */
+export const ISubmissionRegistryToken = new Token<SubmissionRegistry>('@openlearn/submission-adapter:IRegistry');
+export const ISubmissionAggregatorToken = new Token<SubmissionAggregator>('@openlearn/submission-adapter:IAggregator');
+
 /**
  * Interface for LessonEngineService.
  */
@@ -1043,6 +1169,12 @@ export const PLUGIN_RESOLVABLE_TOKENS = [
   IInteractionRuntimeServiceToken,
   IClassroomCountdownServiceToken,
   IAssessmentGraderRegistryToken,
+  ICreditAwardServiceToken,
+  IRewardCatalogServiceToken,
+  ICreditRedemptionServiceToken,
+  IClassroomMessageServiceToken,
+  ISubmissionRegistryToken,
+  ISubmissionAggregatorToken,
 ] as const;
 
 // IActivityRegistryToken 定义在 activity-ecosystem（interfaces.ts import 它会形成

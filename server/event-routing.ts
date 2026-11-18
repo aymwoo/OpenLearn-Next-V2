@@ -508,6 +508,26 @@ export const SOCKET_ROUTES: readonly SocketRoute[] = [
     },
     description: '积分/金币变更 → 获得者本人 + 教师房间',
   },
+  {
+    // 通讯协议 Tier B：可靠消息经 ClassroomMessageService 落库后 publish，
+    // 由本路由投递到课节/班级房间或指定用户房间。_meta.correlationId = messageId，
+    // 前端据 messageId 去重（Q5），重连未确认消息由 /messages 拉取补投（Q13=C）。
+    eventType: 'classroom.message',
+    socketEvent: 'classroom:message',
+    rooms: (event) => {
+      const p = (event.payload ?? {}) as {
+        lessonId?: string | null;
+        classId?: string | null;
+        targetUserIds?: string[] | null;
+      };
+      const rooms = classroomEventRooms(p.lessonId, {
+        classId: p.classId ?? undefined,
+        userIds: p.targetUserIds ?? undefined,
+      });
+      return rooms.length > 0 ? rooms : null;
+    },
+    description: '通讯协议可靠消息 → 课节/班级房间 + 指定用户房间',
+  },
 
   // ── 关于被删除的 spotlight 路由 ──────────────────────────────────────────
   // 原先这里有两条 `spotlight:state_updated`（冒号）/ `spotlight.state_updated`

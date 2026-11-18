@@ -897,6 +897,16 @@ export interface ClassroomActiveSegmentMainConfig {
   icon?: string;
 }
 
+/** A contribution to the classroom.active_segment.student_main slot (学生端对称工作区). */
+export interface ClassroomActiveSegmentStudentMainConfig {
+  id: string;
+  segmentType?: string;
+  label: string;
+  icon?: string;
+  /** true = 命中该环节时学生端主视图自动切到本工作区（替代原生内容面板） */
+  primary?: boolean;
+}
+
 /** A contribution to the student.academic_year.metric_card slot. */
 export interface StudentAcademicYearMetricCardConfig {
   id: string;
@@ -1034,6 +1044,7 @@ export type ContributionConfig =
   | TimetableImportSourceConfig
   | TimetableEntryActionConfig
   | ClassroomActiveSegmentMainConfig
+  | ClassroomActiveSegmentStudentMainConfig
   | StudentAcademicYearMetricCardConfig
   | EditorTimelineNodeBadgeConfig
   | StudentSegmentBadgeConfig
