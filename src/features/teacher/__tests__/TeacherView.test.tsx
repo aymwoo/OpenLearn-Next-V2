@@ -5,6 +5,14 @@ import { FrontendPluginHost } from '../../../plugin-host/plugin-host';
 import { TeacherView } from '../TeacherView';
 import { AppDataProvider } from '../../../context/AppDataContext';
 
+vi.mock('../xuean/XueanEditor', () => ({
+  XueanEditor: () => <div>Xuean editor test marker</div>,
+}));
+
+vi.mock('../../../components/PluginTabPanel', () => ({
+  PluginTabPanel: () => <div>Plugin tab fallback test marker</div>,
+}));
+
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
@@ -279,6 +287,13 @@ describe('TeacherView', () => {
     expect(await screen.findByText(/Openlearn Next Reference Hub/i, {}, { timeout: 5000 })).toBeTruthy();
     // The dashboard child must NOT be present on the help tab (tab switch works).
     expect(screen.queryByText('Live Class')).toBeTruthy(); // nav still present
+  });
+
+  it('renders the Xuean editor without the plugin tab fallback', async () => {
+    renderView({ teacherTab: 'xuean_editor' });
+
+    expect(await screen.findByText('Xuean editor test marker')).toBeTruthy();
+    expect(screen.queryByText('Plugin tab fallback test marker')).toBeNull();
   });
 
   it('does not throw for timetable and computer_labs tabs', () => {

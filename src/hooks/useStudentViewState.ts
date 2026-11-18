@@ -73,7 +73,9 @@ export function useStudentViewState(deps: {
     setStudentViewStatusState('lesson');
   }, [isNavigationLocked, setIsFollowingTeacher]);
 
-  const [studentLessonTab, setStudentLessonTab] = useState<'whiteboard' | 'courseware' | 'assignment'>('whiteboard');
+  const [studentLessonTab, setStudentLessonTab] = useState<'whiteboard' | 'courseware' | 'assignment' | 'xuean'>(
+    'whiteboard',
+  );
 
   // 当锁定时指定了目标 Tab，自动切换到对应 Tab
   useEffect(() => {

@@ -90,6 +90,14 @@ describe('NavigationSidebar (紧凑化与分类折叠)', () => {
     expect(setTeacherTab).toHaveBeenCalledWith('live_class');
   });
 
+  it('navigates to the Xuean editor from the builtin teaching navigation', () => {
+    const setTeacherTab = vi.fn();
+    render(<NavigationSidebar {...defaultProps} setTeacherTab={setTeacherTab} />);
+
+    fireEvent.click(screen.getByRole('button', { name: '学案编辑器' }));
+    expect(setTeacherTab).toHaveBeenCalledWith('xuean_editor');
+  });
+
   it('handles mini icon mode (mainNavCollapsed: true)', () => {
     const setMainNavCollapsed = vi.fn();
     const { container } = render(

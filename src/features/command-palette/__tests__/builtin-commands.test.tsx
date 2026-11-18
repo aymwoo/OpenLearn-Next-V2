@@ -34,9 +34,10 @@ describe('内置命令清单', () => {
   it('跳转命令与侧边栏入口同源（一条不多、一条不少）', () => {
     const ctx = makeCtx();
     const goto = buildBuiltinCommands(ctx).filter((c) => c.id.startsWith(`${BUILTIN_COMMAND_PREFIX}goto.`));
-    // 9 个内置入口 - 1 个仅管理员可见 = 8 个跳转命令
+    // 10 个内置入口 - 1 个仅管理员可见 = 9 个跳转命令
     expect(goto.map((c) => c.id)).toEqual([
       'builtin.goto.courses',
+      'builtin.goto.xuean_editor',
       'builtin.goto.live_class',
       'builtin.goto.classes',
       'builtin.goto.assessments',

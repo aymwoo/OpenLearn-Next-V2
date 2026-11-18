@@ -1,12 +1,27 @@
 {
   "_comment": "数据库结构金样（自动生成，勿手改）：空库跑完 migrations/ 全部迁移后的表→列快照。启动时 assertSchemaMatchesGolden 以子集校验（实际库缺金样结构即拒绝启动；多出的表/列不报错）。改迁移后请运行 pnpm db:gen-golden 再生成。",
-  "migrationCount": 62,
-  "generatedAt": "2026-11-18T12:20:10.963Z",
+  "migrationCount": 68,
+  "generatedAt": "2026-11-18T13:05:54.680Z",
   "tables": {
     "_academic_year_backfill": ["backfilled_at", "id"],
     "_class_passcode_encryption": ["id", "note"],
     "_lesson_think_cleanup": ["id", "note"],
     "_migrations": ["applied_at", "checksum", "name"],
+    "activity_peer_reviews": ["activity_id", "comment", "created_at", "id", "reviewee_id", "reviewer_id", "score"],
+    "activity_progress": [
+      "activity_id",
+      "graded_at",
+      "last_activity_at",
+      "nudge_count",
+      "nudged_at",
+      "progress_percent",
+      "score",
+      "self_eval_json",
+      "status",
+      "student_id",
+      "submission_json",
+      "verified"
+    ],
     "agent_conversations": ["content", "conv_key", "created_at", "id", "role"],
     "ai_persona_governance": ["description_en", "description_zh", "enabled", "persona_id", "preferred_provider_id"],
     "ai_personas": [
@@ -357,6 +372,18 @@
     ],
     "client_sessions": ["expires_at", "id", "session_data", "updated_at"],
     "computer_labs": ["cols", "created_at", "id", "room_number", "rows"],
+    "course_enrollments": ["class_id", "course_id", "enrolled_at", "student_id"],
+    "courses": [
+      "created_at",
+      "description",
+      "id",
+      "owner_user_id",
+      "term",
+      "thumbnail",
+      "title",
+      "updated_at",
+      "visibility"
+    ],
     "courseware": ["created_at", "entry", "id", "name", "type", "uuid"],
     "courseware_attempt": ["courseware_id", "finished_at", "id", "started_at", "status", "student_id"],
     "courseware_score_config": [
@@ -417,7 +444,35 @@
       "student_id",
       "updated_at"
     ],
+    "lesson_activities": [
+      "config_json",
+      "created_at",
+      "due_at",
+      "group_mode",
+      "id",
+      "lesson_id",
+      "order_index",
+      "peer_review",
+      "release_at",
+      "required",
+      "rubric_json",
+      "submission_type",
+      "title",
+      "type",
+      "updated_at",
+      "visible"
+    ],
+    "lesson_activity_blocks": [
+      "block_type",
+      "content_json",
+      "created_at",
+      "id",
+      "lesson_id",
+      "order_index",
+      "updated_at"
+    ],
     "lesson_checkins": ["checked_in_at", "lesson_id", "student_id"],
+    "lesson_discussions": ["activity_id", "author_id", "content", "created_at", "id", "parent_id", "updated_at"],
     "lesson_preset_polls": [
       "correct_option",
       "created_at",
@@ -443,6 +498,7 @@
     ],
     "lessons": [
       "content",
+      "course_id",
       "created_at",
       "creator_id",
       "id",

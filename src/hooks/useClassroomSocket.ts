@@ -32,8 +32,8 @@ export interface UseClassroomSocketOptions {
   setLiveClassFeed: (updater: (prev: any[]) => any[]) => void;
   setSelectedLesson: (id: string | null) => void;
   setStudentViewStatus: (status: 'dashboard' | 'lesson' | 'assignment') => void;
-  studentLessonTab: 'whiteboard' | 'courseware' | 'assignment';
-  setStudentLessonTab: (tab: 'whiteboard' | 'courseware' | 'assignment') => void;
+  studentLessonTab: 'whiteboard' | 'courseware' | 'assignment' | 'xuean';
+  setStudentLessonTab: (tab: 'whiteboard' | 'courseware' | 'assignment' | 'xuean') => void;
   /** 当前打开的作业（教师最大化打断作业工作区时需暂存并在退出后写回） */
   selectedAssignment: any | null;
   setSelectedAssignment: (assignment: any | null) => void;
@@ -114,7 +114,7 @@ export function useClassroomSocket(options: UseClassroomSocketOptions) {
    */
   const interruptedViewRef = useRef<{
     viewStatus: 'dashboard' | 'lesson' | 'assignment';
-    lessonTab: 'whiteboard' | 'courseware' | 'assignment';
+    lessonTab: 'whiteboard' | 'courseware' | 'assignment' | 'xuean';
     lessonId: string | null;
     assignment: any | null;
   } | null>(null);
@@ -581,7 +581,7 @@ export function useClassroomSocket(options: UseClassroomSocketOptions) {
 
     socket.on(
       'student-lesson-tab-changed',
-      (data: { lessonId?: string; tab?: 'whiteboard' | 'courseware' | 'assignment' }) => {
+      (data: { lessonId?: string; tab?: 'whiteboard' | 'courseware' | 'assignment' | 'xuean' }) => {
         if (activeRoleRef.current === 'student' && data?.tab) {
           if (!data.lessonId || data.lessonId === selectedLessonRef.current) {
             setStudentLessonTab(data.tab);
