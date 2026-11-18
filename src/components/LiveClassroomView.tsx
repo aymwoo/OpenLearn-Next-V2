@@ -44,8 +44,14 @@ import type { WhiteboardPageItem, WhiteboardHandle } from '../features/whiteboar
 import { TeacherAssignmentGradePanel } from './TeacherAssignmentGradePanel';
 import { TopPerformersWidget } from '../features/teacher/TopPerformersWidget';
 import { resolvePluginCommandType } from '../../packages/core/plugin-host/plugin-namespace';
+import { normalizeSegmentType } from '../../packages/core/plugin-host/mode-pack';
 import { ExtensionPointRenderer } from '../plugin-host/extension-point-renderer';
 import { useOptionalPluginHost } from '../plugin-host/plugin-host-context';
+import {
+  isModePacksEnabled,
+  registerWhiteboardModePack,
+  unregisterWhiteboardModePack,
+} from '../features/classroom/mode-pack';
 import { ClassroomSyncChannel, CLASSROOM_SYNC_CHANNEL_NAME } from '../services/classroom-sync-channel';
 import { getOptionalSocket, onSocketInstance } from '../services/socket-service';
 import { classroomMacroEngine } from '../features/classroom/ecosystem/macro-engine/classroom-macro-engine';
@@ -772,6 +778,17 @@ export function LiveClassroomView({
   const segmentMainExtensions = host?.getExtensions('classroom.active_segment.main') || [];
   const hasSegmentMainExtension = segmentMainExtensions.length > 0;
   const currentActiveSegment = timelineSegments.find((s) => s.id === activeSegmentId);
+
+  // Mode Pack 灰度：仅 flag 开启时注册内置白板工作区；关闭时卸载，保持既有白板中栏路径。
+  useEffect(() => {
+    if (!host) return;
+    if (isModePacksEnabled()) {
+      registerWhiteboardModePack();
+      return () => unregisterWhiteboardModePack();
+    }
+    unregisterWhiteboardModePack();
+    return undefined;
+  }, [host]);
 
   // 最小授课壳：注入工作区控制器，让插件工作区复用宿主现成的流程状态与动作，
   // 而不自建流程引擎。setActiveSegment 只需改 activeSegmentId —— 下方 effect
@@ -3046,7 +3063,12 @@ export function LiveClassroomView({
                       <ExtensionPointRenderer
                         slot="classroom.active_segment.main"
                         slotProps={{
-                          segment: currentActiveSegment,
+                          segment: isModePacksEnabled()
+                            ? {
+                                ...currentActiveSegment,
+                                type: normalizeSegmentType((currentActiveSegment as { type?: string }).type),
+                              }
+                            : currentActiveSegment,
                           lessonId: selectedLesson,
                           classId: liveClassSelectedClassId,
                           lang,

@@ -4,7 +4,7 @@
  * 由 packages/plugin-sdk/generate-dts.mts 从 packages/core/ 源码抽取。
  * 手写契约请改 openlearn.d.ts —— 本文件会在 build 时被覆盖。
  *
- * 覆盖符号：278 个（入口导出但手写 d.ts 未声明的 278 项及其类型引用闭包）
+ * 覆盖符号：283 个（入口导出但手写 d.ts 未声明的 283 项及其类型引用闭包）
  */
 
 /** @see packages/core/analytics-engine/types.ts */
@@ -634,6 +634,9 @@ interface CustomPresenceDefinition {
     readonly providerFn?: (entityId: string) => Promise<Partial<PresenceEntity>>;
 }
 
+/** @see packages/core/plugin-host/mode-pack.ts */
+declare const DEFAULT_MODE_PACK_SEGMENT_TYPE: 'whiteboard';
+
 /** @see packages/core/plugin-host/contribution-registry.ts */
 /** A contribution to the classroom.diagnostic.feed slot. */
 interface DiagnosticFeedConfig {
@@ -1095,6 +1098,31 @@ type LessonStatus = 'idle' | 'draft' | 'ready' | 'active' | 'paused' | 'complete
  * ManifestV3 类型 — 由 manifestSchemaV3 推导的类型，保留供引用。
  */
 type ManifestV3 = z.infer<typeof manifestSchemaV3>;
+
+/** @see packages/core/plugin-host/mode-pack.ts */
+/** Mode Pack 在 manifest.contributes['mode.pack'] 中的声明形态 */
+interface ModePackContribution {
+    /** 全局唯一，建议 `@openlearn/mode-*` 或 `ext-*:mode-*` */
+    id: string;
+    /** 展示名 */
+    label: string;
+    /** 英文名（可选） */
+    labelEn?: string;
+    /** 本包认领的环节类型（如 whiteboard / xuean:study）；可多值 */
+    segmentTypes: string[];
+    /** 是否为缺省无 type 环节的回落包（通常仅白板包为 true） */
+    isDefault?: boolean;
+    /** 备课面入口（teacher.panel / 专用 prep 槽的贡献 id，可选） */
+    prepContributionId?: string;
+    /** 教师课中工作区扩展 id（classroom.active_segment.main） */
+    teacherWorkspaceId?: string;
+    /** 学生课中工作区扩展 id（classroom.active_segment.student_main） */
+    studentWorkspaceId?: string;
+    /** SubmissionAdapter id 列表（可选） */
+    adapterIds?: string[];
+    /** ClassroomMessage channel 名列表（可选） */
+    channels?: string[];
+}
 
 /** @see packages/core/plugin-host/contribution-registry.ts */
 /** A contribution to the nav.user_menu slot. */
@@ -2511,7 +2539,13 @@ declare const logger: any; // 初始化器非字面量，未收敛
 /** @see packages/core/esm-loader/manifest-schema.ts */
 declare const manifestSchemaV3: z.ZodObject<{ id: z.ZodString; name: z.ZodString; version: z.ZodString; main: z.ZodString; icon: z.ZodOptional<z.ZodString>; description: z.ZodOptional<z.ZodString>; requires: z.ZodOptional<z.ZodArray<z.ZodString>>; optional: z.ZodOptional<z.ZodArray<z.ZodString>>; capabilitiesProposed: z.ZodOptional<z.ZodArray<z.ZodString>>; network: z.ZodOptional<z.ZodObject<{ outbound: z.ZodOptional<z.ZodArray<z.ZodString>>; }, z.core.$strip>>; }, z.core.$loose>;
 
+declare function modePackCoversSegmentType(pack: ModePackContribution, segmentType: string): boolean;
+
+declare function normalizeSegmentType(type: string | null | undefined): string;
+
 declare function removeTempZip(zipPath: string | undefined): void;
+
+declare function resolveModePackForSegment(packs: readonly ModePackContribution[], segmentType: string | null | undefined): ModePackContribution | null;
 
 declare function resolveTrustedPublicKeys(explicitKeys?: string[], env: NodeJS.ProcessEnv): string[];
 
@@ -2658,6 +2692,7 @@ export type {
   LessonEventType,
   LessonSnapshot,
   ManifestV3,
+  ModePackContribution,
   NavUserMenuConfig,
   NormalizedAnalyticsEvent,
   NotificationTabsConfig,
@@ -2773,9 +2808,13 @@ export {
   CAP_AI_PERSONA,
   CAP_STUDENT_DATA_READ,
   CAP_STUDENT_DATA_WRITE,
+  DEFAULT_MODE_PACK_SEGMENT_TYPE,
   KNOWN_CAPABILITIES,
   ServiceScope,
   assertValidManifestCapabilities,
   isKnownCapability,
+  modePackCoversSegmentType,
+  normalizeSegmentType,
+  resolveModePackForSegment,
   validateManifestCapabilities,
 };
