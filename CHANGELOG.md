@@ -28,6 +28,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - 扩展点 / 宿主匹配升级为 `extensionCoversSegmentType` 前缀规则；注册 `xuean:preview|study|drill` 子类型。
   - `classroom-flow-server` 注册 `xuean:task` 通道与 `xuean-adapter`（`activity_progress` → 统一成绩面板投影）；学生工作区进度写库后发可靠消息通知。
   - 门禁仍由 lesson-engine 裁决；学案自报进度不自动放行。
+- **Mode Pack P3：备课面统一**（Issue #553）：
+  - Mode Pack 声明 `prepContributionId`；flag 开时 `ModePackPrepShell` 按 `segment.type` 决议白板/学案备课面，TeacherView 不再硬编码双壳主路径。
+  - 侧栏学案入口并入「备课」；Timeline 新建默认 `whiteboard`；白板包注册 timeline 类型。
+  - `routePrepDrop`：跨包拖放按环节类型路由（白板 → page_meta；学案 → 活动存储约定）；activities 与 timeline 不并表。
 
 ### Docs
 

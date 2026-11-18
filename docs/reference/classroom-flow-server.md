@@ -54,6 +54,18 @@ Manifest 贡献键：`contributes['mode.pack']`（见 `@openlearn/plugin-sdk` �
 
 flag 关闭时行为与既有平行 tab / 无适配器路径一致。
 
+### 1.1.1 备课面统一（P3）
+
+flag 开启时：
+
+- Mode Pack 声明 `prepContributionId`（白板 `prep-whiteboard` / 学案 `prep-xuean`）。
+- `TeacherView` 不再以 `lesson_editor` / `xuean_editor` 双硬编码为主路径；两者均进入 `ModePackPrepShell`，按当前 `activeSegment.type` 决议备课面。
+- 侧栏「学案编辑器」入口并入「备课」（`lesson_editor`）；关闭 flag 时仍为平行双入口。
+- Timeline 新建环节默认 `whiteboard`；环节类型选择列出已注册类型（含 `whiteboard` 与 `xuean*`）。
+- **活动与 timeline 不并表**：`lesson_activities` 仍独立存储；用 `segment.type` + `activity.config_json.segmentId`（或白板 `page_meta.segmentId`）关联。跨包拖放经 `routePrepDrop()`：白板环节 → page_meta/元素；学案环节 → 学案存储（拦截白板元素误写入）。
+
+flag 关闭 = 旧双编辑器路径，零行为变化。
+
 ---
 
 ## 2. 通讯协议（ClassroomMessage）

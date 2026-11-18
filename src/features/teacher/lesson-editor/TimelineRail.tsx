@@ -4,6 +4,8 @@ import { DEFAULT_SEGMENT_COLOR, getSegmentType, getSegmentColor } from './timeli
 import type { WhiteboardDragState } from '../../whiteboard/InteractiveWhiteboard';
 import { resolveSegmentDuration } from '../../../utils/timeline-duration';
 import { ExtensionPointRenderer } from '../../../plugin-host/extension-point-renderer';
+import { isModePacksEnabled } from '../../classroom/mode-pack/flags';
+import { DEFAULT_MODE_PACK_SEGMENT_TYPE } from '../../../../packages/core/plugin-host/mode-pack';
 
 export interface TimelineRailProps {
   lang: 'zh' | 'en';
@@ -99,11 +101,13 @@ export function TimelineRail({
   const handleAdd = () => {
     if (readOnly || !selectedLesson) return;
     const newSegId = 'seg-' + Math.random().toString(36).slice(2, 9);
+    // Mode Pack flag 开：新建默认 whiteboard；关闭保持旧 lecture 默认
+    const defaultType = isModePacksEnabled() ? DEFAULT_MODE_PACK_SEGMENT_TYPE : 'lecture';
     const newSeg = {
       id: newSegId,
       title: lang === 'zh' ? `新环节 ${segments.length + 1}` : `Segment ${segments.length + 1}`,
       notes: '',
-      type: 'lecture',
+      type: defaultType,
       duration: '10m',
       color: DEFAULT_SEGMENT_COLOR,
     };

@@ -13,6 +13,7 @@ import {
   resolveBuiltinNavigationItems,
   resolveGroupLabel,
 } from '../navigation-registry';
+import { setModePacksEnabledForTests } from '../../classroom/mode-pack/flags';
 
 describe('Navigation Registry（教师工作区侧边栏 SSOT）', () => {
   it('四个分组的标题与顺序固定', () => {
@@ -106,5 +107,17 @@ describe('Navigation Registry（教师工作区侧边栏 SSOT）', () => {
     const items = resolveBuiltinNavigationItems('teacher', 'zh');
     expect(items.find((i) => i.tab === 'live_class')?.highlight).toBe(true);
     expect(items.find((i) => i.tab === 'courses')?.highlight).toBe(false);
+  });
+
+  it('Mode Pack flag 开时学案入口并入统一备课（lesson_editor）', () => {
+    setModePacksEnabledForTests(true);
+    try {
+      const zh = resolveBuiltinNavigationItems('teacher', 'zh');
+      expect(zh.some((i) => i.tab === 'xuean_editor')).toBe(false);
+      const prep = zh.find((i) => i.tab === 'lesson_editor');
+      expect(prep).toMatchObject({ label: '备课', labelEn: 'Lesson Prep', group: 'teaching' });
+    } finally {
+      setModePacksEnabledForTests(null);
+    }
   });
 });

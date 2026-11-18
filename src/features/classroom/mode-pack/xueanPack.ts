@@ -14,6 +14,7 @@ export const XUEAN_MODE_PACK: ModePackContribution = {
   labelEn: 'Guided Study (Xuean)',
   segmentTypes: [XUEAN_MODE_PACK_SEGMENT_TYPE],
   isDefault: false,
+  prepContributionId: 'prep-xuean',
   teacherWorkspaceId: 'mode-xuean-teacher',
   studentWorkspaceId: 'mode-xuean-student',
   adapterIds: ['xuean-adapter'],
