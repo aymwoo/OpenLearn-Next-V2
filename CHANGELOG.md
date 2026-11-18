@@ -20,6 +20,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - **Mode Pack P1 续：白板画布挂载**（Issue #547）：
   - `WhiteboardHostBridge` 向工作区透传与旧中栏同一 LazyWhiteboard 契约（全屏广播、`activeSegmentId`、页状态回调）。
   - flag 开启时教师中栏白板与 `segment_main`、学生 primary `student_main` 均挂真实画布；flag 关闭路径不变。
+- **Mode Pack P2 首切片：学案包**（Issue #550）：
+  - 内置 `@openlearn/mode-xuean`（`segmentTypes: ['xuean']`）；flag 开启时注册双端 primary 工作区并贡献 timeline 环节类型。
+  - 教师工作区包装 `ProgressPanel`，学生工作区包装 `StudentXueanView`；作答仍走 lesson-activities（SubmissionAdapter 后续）。
 
 ### Docs
 

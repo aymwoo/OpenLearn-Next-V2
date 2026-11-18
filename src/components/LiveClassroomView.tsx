@@ -51,6 +51,8 @@ import {
   isModePacksEnabled,
   registerWhiteboardModePack,
   unregisterWhiteboardModePack,
+  registerXueanModePack,
+  unregisterXueanModePack,
   WhiteboardHostBridgeProvider,
   WhiteboardModeWorkspace,
   type WhiteboardHostBridgeValue,
@@ -782,14 +784,19 @@ export function LiveClassroomView({
   const hasSegmentMainExtension = segmentMainExtensions.length > 0;
   const currentActiveSegment = timelineSegments.find((s) => s.id === activeSegmentId);
 
-  // Mode Pack 灰度：仅 flag 开启时注册内置白板工作区；关闭时卸载，保持既有白板中栏路径。
+  // Mode Pack 灰度：仅 flag 开启时注册内置白板/学案工作区；关闭时卸载，保持既有路径。
   useEffect(() => {
     if (!host) return;
     if (isModePacksEnabled()) {
       registerWhiteboardModePack();
-      return () => unregisterWhiteboardModePack();
+      registerXueanModePack();
+      return () => {
+        unregisterWhiteboardModePack();
+        unregisterXueanModePack();
+      };
     }
     unregisterWhiteboardModePack();
+    unregisterXueanModePack();
     return undefined;
   }, [host]);
 

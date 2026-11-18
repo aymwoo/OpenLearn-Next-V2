@@ -16,6 +16,8 @@ import {
   isModePacksEnabled,
   registerWhiteboardModePack,
   unregisterWhiteboardModePack,
+  registerXueanModePack,
+  unregisterXueanModePack,
   WhiteboardHostBridgeProvider,
   type WhiteboardHostBridgeValue,
 } from '../classroom/mode-pack';
@@ -130,14 +132,19 @@ export function StudentLessonView(props: StudentLessonViewProps) {
     (ext) => (ext as { slotProps?: Record<string, unknown> }).slotProps?.primary === true,
   );
 
-  // Mode Pack 灰度：学生端独立会话也需注册白板包（与教师 LiveClassroom 对称）。
+  // Mode Pack 灰度：学生端独立会话也需注册白板/学案包（与教师 LiveClassroom 对称）。
   useEffect(() => {
     if (!studentHost) return;
     if (isModePacksEnabled()) {
       registerWhiteboardModePack();
-      return () => unregisterWhiteboardModePack();
+      registerXueanModePack();
+      return () => {
+        unregisterWhiteboardModePack();
+        unregisterXueanModePack();
+      };
     }
     unregisterWhiteboardModePack();
+    unregisterXueanModePack();
     return undefined;
   }, [studentHost]);
 

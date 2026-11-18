@@ -9,3 +9,6 @@ export {
   type WhiteboardHostBridgeValue,
   type WhiteboardHostCanvasProps,
 } from './whiteboardHostBridge';
+export { XUEAN_MODE_PACK, XUEAN_MODE_PACK_ID, XUEAN_MODE_PACK_SEGMENT_TYPE } from './xueanPack';
+export { registerXueanModePack, unregisterXueanModePack } from './registerXueanModePack';
+export { XueanModeWorkspace, XueanTeacherModeWorkspace, XueanStudentModeWorkspace } from './XueanModeWorkspace';
