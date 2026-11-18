@@ -81,6 +81,13 @@ import {
 import { assertPluginSqlAllowed } from '../plugin-host/sql-guard.js';
 import { recordSecurityAudit } from '../observability/audit-log.js';
 import { CAP_STUDENT_DATA_READ, CAP_STUDENT_DATA_WRITE, hasCapability } from '../plugin-host/method-policy.js';
+import {
+  closeLessonInvocation,
+  currentLessonViewer,
+  lessonViewerForInvocation,
+  openLessonInvocation,
+  runWithLessonViewer,
+} from '../di/lesson-viewer.js';
 
 /**
  * 后端 Worker 侧的 Token 名集合。
@@ -160,7 +167,7 @@ export class ServiceHost {
    */
   private readonly pendingCommandExecutes = new Map<
     string,
-    { resolve: (val: unknown) => void; reject: (err: Error) => void }
+    { resolve: (val: unknown) => void; reject: (err: Error) => void; closeInvocation: () => void }
   >();
   private readonly pendingHttpRequests = new Map<
     string,
@@ -292,6 +299,7 @@ export class ServiceHost {
           const pending = this.pendingCommandExecutes.get(rMsg.invokeId);
           if (pending) {
             this.pendingCommandExecutes.delete(rMsg.invokeId);
+            pending.closeInvocation();
             pending.resolve(rMsg.value);
           }
           break;
@@ -302,6 +310,7 @@ export class ServiceHost {
           const pending = this.pendingCommandExecutes.get(eMsg.invokeId);
           if (pending) {
             this.pendingCommandExecutes.delete(eMsg.invokeId);
+            pending.closeInvocation();
             const err = new Error(eMsg.message);
             err.stack = eMsg.stack;
             pending.reject(err);
@@ -568,6 +577,24 @@ export class ServiceHost {
   }
 
   /**
+   * 把当前登录用户登记成一次子进程调用。没有 viewer 时 id 为 null，服务会拒绝读标题。
+   */
+  private openInvocation(): { id: string | null; close: () => void } {
+    const viewer = currentLessonViewer();
+    if (!viewer) return { id: null, close: () => {} };
+    const id = openLessonInvocation(viewer);
+    let closed = false;
+    return {
+      id,
+      close: () => {
+        if (closed) return;
+        closed = true;
+        closeLessonInvocation(id);
+      },
+    };
+  }
+
+  /**
    * 向 Worker 隔离线程派发 HTTP 请求 DTO，并等待响应（带超时守卫）
    *
    * @param transport - Worker 通信运输层
@@ -580,23 +607,26 @@ export class ServiceHost {
     timeoutMs: number = 5000,
   ): Promise<PluginApiResponse> {
     const invokeId = globalThis.crypto.randomUUID();
+    const invocation = this.openInvocation();
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         if (this.pendingHttpRequests.has(invokeId)) {
           this.pendingHttpRequests.delete(invokeId);
+          invocation.close();
           const err = new Error(`Plugin API request timed out after ${timeoutMs}ms`);
           err.name = 'GatewayTimeoutError';
           reject(err);
         }
       }, timeoutMs);
-
       this.pendingHttpRequests.set(invokeId, {
         resolve: (val) => {
           clearTimeout(timer);
+          invocation.close();
           resolve(val);
         },
         reject: (err) => {
           clearTimeout(timer);
+          invocation.close();
           reject(err);
         },
         timer,
@@ -606,11 +636,13 @@ export class ServiceHost {
         transport.postMessage({
           type: 'httpRequest',
           invokeId,
+          invocationId: invocation.id,
           request,
         });
       } catch (err: any) {
         clearTimeout(timer);
         this.pendingHttpRequests.delete(invokeId);
+        invocation.close();
         reject(err);
       }
     });
@@ -948,11 +980,17 @@ export class ServiceHost {
           commandBus.registerHandler(commandType, {
             execute: async (command) => {
               const rpcId = globalThis.crypto.randomUUID();
+              const invocation = this.openInvocation();
               return new Promise((resolve, reject) => {
-                this.pendingCommandExecutes.set(rpcId, { resolve, reject });
+                this.pendingCommandExecutes.set(rpcId, {
+                  resolve,
+                  reject,
+                  closeInvocation: invocation.close,
+                });
                 transport.postMessage({
                   type: 'executeCommand',
                   invokeId: rpcId,
+                  invocationId: invocation.id,
                   commandType,
                   command,
                 });
@@ -1108,6 +1146,24 @@ export class ServiceHost {
         }
       }
 
+      if (msg.token === '@openlearn/core:ILessonOutlineService') {
+        const pluginId = this.pluginId || this.pluginActorId.replace(/^plugin:/, '');
+        const hasCap = hasCapability(this.effectiveCapabilities, 'lesson:read');
+        recordSecurityAudit('plugin.lesson_outline_read', {
+          pluginId,
+          method: msg.method,
+          hasCapability: hasCap,
+          ...(hasCap ? {} : { denied: true }),
+        });
+        if (!hasCap) {
+          throw new WorkerCapabilityError(
+            this.pluginActorId,
+            msg.token,
+            `Capability denied for actor ${this.pluginActorId}: 读取课节标题需要 'lesson:read' 能力`,
+          );
+        }
+      }
+
       // ── Intercept IPointsLedgerService calls for student data privacy audit ──
       if (msg.token === '@openlearn/core:IPointsLedgerService') {
         const studentId = Array.isArray(msg.args) && typeof msg.args[0] === 'string' ? msg.args[0] : '';
@@ -1150,7 +1206,11 @@ export class ServiceHost {
       // structured clone algorithm throws DataCloneError if the result
       // contains unserializable values. This is a documented constraint
       // of the Worker RPC boundary.
-      const result = await method.apply(service, effectiveArgs);
+      const invocationId = (msg as InvokeMessage & { invocationId?: unknown }).invocationId;
+      const viewer = typeof invocationId === 'string' ? lessonViewerForInvocation(invocationId) : null;
+      const result = viewer
+        ? await runWithLessonViewer(viewer, () => method.apply(service, effectiveArgs))
+        : await method.apply(service, effectiveArgs);
 
       // ── Return result to Worker ───────────────────────────────────
       try {

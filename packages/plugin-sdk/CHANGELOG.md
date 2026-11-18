@@ -11,6 +11,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Features
 
+- **课节标题只读服务**：新增 `ILessonOutlineService`、`LessonOutline`、`LessonSegmentTitle` 与 `ILessonOutlineServiceToken`。`PluginContext.services.lessonOutline.getOutline(lessonId)` 返回 `{ id, title, segments }`。需 `lesson:read`。不放宽 sql-guard。
+
 - **Mode Pack 契约导出（平台 Issues #546 / #547 / #550）**：
   - 新增 `ModePackContribution` 类型与 `DEFAULT_MODE_PACK_SEGMENT_TYPE` / `normalizeSegmentType` / `extensionCoversSegmentType` / `modePackCoversSegmentType` / `resolveModePackForSegment` 助手；manifest 贡献键 `mode.pack`。
   - 与门户 `teachingModeId` 正交：Mode Pack 按 `segment.type` 路由交付引擎；扩展点 `targetType` 与包声明共用前缀覆盖规则。

@@ -81,6 +81,21 @@ const db = await ctx.resolve(IDatabaseToken); // 类型: SqliteDatabase (Inline)
 > 返回体刻意不含 email / private_notes / password / 班级口令；需要更多字段请提 issue，
 > 不要在插件里退回直查。
 
+> **课节标题不要直查 `lessons`**：这张表同时在 sql-guard 的读写黑名单里，进程插件
+> `SELECT title FROM lessons` 会被拒绝。受支持的读取通道是 `ctx.services.lessonOutline`
+> （或 `ctx.resolve(ILessonOutlineServiceToken)`），需在 manifest 声明 `lesson:read`：
+>
+> ```ts
+> const outline = await ctx.services.lessonOutline!.getOutline(lessonId);
+> // 课节不存在 → null
+> // { id, title, segments: [{ id, title }, ...] }
+> // segments 来自 lessons.timeline，只含环节 id / title
+> ```
+>
+> 宿主按**当前登录用户**做对象级授权，口径与 `GET /api/lessons/:id` 的 `canSeeLesson` 相同。
+> 调用必须发生在该用户发起的命令或插件 HTTP 请求里；后台定时任务没有 viewer，会被拒绝。
+> 插件不能自己传入 viewer。返回体不含 `content` 或其它列。
+
 ### 1.1 ⚠️ SQL-Guard 核心数据表硬黑名单与隔离机制（安全红线）
 
 为防止第三方插件通过手写 SQL 或注入绕过权限模型窃取系统凭证、破坏课堂数据或越权操控核心状态，宿主在 `packages/core/plugin-host/sql-guard.ts` 中部署了严格的 Fail-Closed SQL 审计器：

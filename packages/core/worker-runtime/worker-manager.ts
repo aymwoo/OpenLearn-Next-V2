@@ -83,6 +83,9 @@ export const BASE_WORKER_SERVICE_TOKENS: readonly string[] = Object.freeze([
   '@openlearn/core:IAIService',
   '@openlearn/core:IDatabase',
   '@openlearn/core:INetworkProxyService',
+  // 课节标题只读。句柄默认可解析；真正的门禁在服务内部（lesson:read + canSeeLesson），
+  // 与 IDatabase 靠语句守卫收窄范围是同一思路。不把 lessons 放进 SQL 白名单。
+  '@openlearn/core:ILessonOutlineService',
 ]);
 
 /**

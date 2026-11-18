@@ -42,6 +42,7 @@ import {
   IPointsDimensionRegistryToken,
   IPointsLedgerServiceToken,
   IClassRosterServiceToken,
+  ILessonOutlineServiceToken,
   ILessonEngineServiceToken,
   IStageGuardServiceToken,
   IAssessmentGraderRegistryToken,
@@ -70,6 +71,8 @@ import { StorageService } from '../di/storage-service.js';
 import { AIService } from '../di/ai-service.js';
 import { SemesterGradeService } from '../di/semester-grade-service.js';
 import { ClassRosterService } from '../di/roster-service.js';
+import { LessonOutlineService } from '../di/lesson-outline-service.js';
+import { lessonViewerFromActorId, setLessonViewerResolver } from '../di/lesson-viewer.js';
 import { PointsDimensionRegistry } from '../di/points-dimension-registry.js';
 import { PointsLedgerService } from '../di/points-ledger-service.js';
 import { RewardCatalogService } from '../di/reward-catalog-service.js';
@@ -295,6 +298,9 @@ export class Kernel {
 
     // Issue #366：受管名册读取（插件禁止直查 classes / students / class_students 的替代通道）
     this.serviceRegistry.register(IClassRosterServiceToken, new ClassRosterService(this.db));
+    // 课节标题只读。lessons 仍在 sql-guard 黑名单；可见用户由命令 actor / HTTP 会话绑定。
+    setLessonViewerResolver((actorId) => lessonViewerFromActorId(this.db, actorId));
+    this.serviceRegistry.register(ILessonOutlineServiceToken, new LessonOutlineService(this.db));
     this.serviceRegistry.register(ILessonEngineServiceToken, { getRuntime: async () => this.lessonRuntime } as any);
     this.serviceRegistry.register(IClassroomRuntimeServiceToken, {
       getRuntimeKernel: async () => this.classroomRuntime,

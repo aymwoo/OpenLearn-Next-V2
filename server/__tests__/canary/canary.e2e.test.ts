@@ -31,6 +31,7 @@ import {
   IPointsDimensionRegistryToken,
   IPointsLedgerServiceToken,
   IClassRosterServiceToken,
+  ILessonOutlineServiceToken,
   IDatabaseToken,
   ISemesterGradeServiceToken,
   ILessonEngineServiceToken,
@@ -299,6 +300,9 @@ describe('金丝雀插件双模式全链路测试（步骤 3）', () => {
         listClassStudents: vi.fn().mockResolvedValue([]),
         getStudent: vi.fn().mockResolvedValue(null),
       },
+      lessonOutline: {
+        getOutline: vi.fn().mockResolvedValue(null),
+      },
     };
 
     const basePairs: Array<[any, unknown]> = [
@@ -312,6 +316,7 @@ describe('金丝雀插件双模式全链路测试（步骤 3）', () => {
       [IPointsDimensionRegistryToken, services.pointsDimension],
       [IPointsLedgerServiceToken, services.pointsLedger],
       [IClassRosterServiceToken, services.roster],
+      [ILessonOutlineServiceToken, services.lessonOutline],
     ];
 
     const extra = createExtraServices();
@@ -499,6 +504,7 @@ describe('金丝雀插件双模式全链路测试（步骤 3）', () => {
           'IStorageServiceToken',
           'IAIServiceToken',
           'IDatabaseToken',
+          'ILessonOutlineServiceToken',
         ];
         if (WORKER_ALLOWED.includes(tokenName)) {
           expect(p?.detail).toBe('resolved:true');

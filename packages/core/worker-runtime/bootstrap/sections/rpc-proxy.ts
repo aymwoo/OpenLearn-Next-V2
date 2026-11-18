@@ -14,6 +14,12 @@ export const RPC_PROXY_SECTION = `
 // ── 内联 RPC Proxy 实现（在 Worker 隔离上下文中运行） ──
 
 var pendingCalls = new Map();
+var lessonInvocation = new (requireFn('node:async_hooks').AsyncLocalStorage)();
+
+function runWithLessonInvocation(invocationId, fn) {
+  if (!invocationId) return fn();
+  return lessonInvocation.run(invocationId, fn);
+}
 
 // ── 插件命令命名空间解析（与 packages/core/plugin-host/plugin-namespace.ts
 //    保持一致 — 单一真理源；Worker bootstrap 是动态生成的代码字符串，
@@ -90,9 +96,12 @@ function createServiceProxies(serviceTokens) {
             var invokeId = globalThis.crypto.randomUUID();
             return new Promise(function(resolve, reject) {
               pendingCalls.set(invokeId, { resolve: resolve, reject: reject });
+              var invocationId = null;
+              try { invocationId = lessonInvocation.getStore() || null; } catch (e) { invocationId = null; }
               parentPort.postMessage({
                 type: 'invoke',
                 invokeId: invokeId,
+                invocationId: invocationId,
                 token: token,
                 method: String(method),
                 args: args

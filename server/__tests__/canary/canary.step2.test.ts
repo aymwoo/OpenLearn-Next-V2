@@ -31,6 +31,7 @@ import {
   IPointsDimensionRegistryToken,
   IPointsLedgerServiceToken,
   IClassRosterServiceToken,
+  ILessonOutlineServiceToken,
   IDatabaseToken,
   ISemesterGradeServiceToken,
   ILessonEngineServiceToken,
@@ -290,6 +291,9 @@ describe('金丝雀第 2 步：探针报告与 Token/require 扫描', () => {
         listClassStudents: vi.fn().mockResolvedValue([]),
         getStudent: vi.fn().mockResolvedValue(null),
       },
+      lessonOutline: {
+        getOutline: vi.fn().mockResolvedValue(null),
+      },
     };
     const basePairs: Array<[any, unknown]> = [
       [ICommandBusServiceToken, services.commandBus],
@@ -302,6 +306,7 @@ describe('金丝雀第 2 步：探针报告与 Token/require 扫描', () => {
       [IPointsDimensionRegistryToken, services.pointsDimension],
       [IPointsLedgerServiceToken, services.pointsLedger],
       [IClassRosterServiceToken, services.roster],
+      [ILessonOutlineServiceToken, services.lessonOutline],
       // 生产内核同样注册原生 db（金丝雀探针依赖）
       // [IDatabaseToken, db] —— db 创建后注册，见下
     ];
@@ -428,7 +433,7 @@ describe('金丝雀第 2 步：探针报告与 Token/require 扫描', () => {
   });
 
   it('2d. services 恰好 10 键且 pointsDimension 非空（本环境已注册）', () => {
-    expect(probes.get('2.2-services')?.detail).toMatch(/keys=10, pointsDimension=set/);
+    expect(probes.get('2.2-services')?.detail).toMatch(/keys=11, pointsDimension=set/);
   });
 
   it('2e. require 白名单全部可加载', () => {
