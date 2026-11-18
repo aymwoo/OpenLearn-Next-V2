@@ -4,7 +4,7 @@
  * 由 packages/plugin-sdk/generate-dts.mts 从 packages/core/ 源码抽取。
  * 手写契约请改 openlearn.d.ts —— 本文件会在 build 时被覆盖。
  *
- * 覆盖符号：274 个（入口导出但手写 d.ts 未声明的 274 项及其类型引用闭包）
+ * 覆盖符号：278 个（入口导出但手写 d.ts 未声明的 278 项及其类型引用闭包）
  */
 
 /** @see packages/core/analytics-engine/types.ts */
@@ -293,6 +293,17 @@ interface ClassroomActiveSegmentMainConfig {
     segmentType?: string;
     label: string;
     icon?: string;
+}
+
+/** @see packages/core/plugin-host/contribution-registry.ts */
+/** A contribution to the classroom.active_segment.student_main slot (学生端对称工作区). */
+interface ClassroomActiveSegmentStudentMainConfig {
+    id: string;
+    segmentType?: string;
+    label: string;
+    icon?: string;
+    /** true = 命中该环节时学生端主视图自动切到本工作区（替代原生内容面板） */
+    primary?: boolean;
 }
 
 /** @see packages/core/plugin-host/contribution-registry.ts */
@@ -1660,6 +1671,13 @@ interface RawAnalyticsMetrics {
     readonly timestamp: number;
 }
 
+/** @see packages/core/submission-adapter/types.ts */
+interface RegisterAdapterResult {
+    ok: boolean;
+    code?: 'INVALID_ADAPTER' | 'ADAPTER_EXISTS';
+    message?: string;
+}
+
 /** @see packages/core/classroom-runtime/types.ts */
 type ResourceType = 'image' | 'video' | 'audio' | 'pdf' | 'plugin' | 'ai';
 
@@ -2173,6 +2191,19 @@ interface StudentTrajectoryPoint {
     readonly score?: number;
 }
 
+/** @see packages/core/submission-adapter/types.ts */
+/**
+ * 提交适配器契约（设计 Q2/Q8 的"成绩采集"闭环）。
+ *
+ * 第三方教学模式（学案/Moodle）的提交不必写平台 courseware_attempts 表：
+ * 插件实现一个 SubmissionAdapter，把自有存储里的作答规范化成 NormalizedSubmission，
+ * 注册进 SubmissionRegistry。统一成绩面板经聚合器同时看到内置课件提交与插件提交。
+ */
+type SubmissionKind = 'assignment' | 'quiz' | 'artifact' | 'participation' | 'custom';
+
+/** @see packages/core/submission-adapter/types.ts */
+type SubmissionStatus = 'started' | 'submitted' | 'graded' | 'absent' | 'draft';
+
 /** @see packages/core/collaboration-engine/types.ts */
 interface SyncMessage<T = unknown> {
     readonly id: string;
@@ -2535,6 +2566,7 @@ export type {
   ClassBatchActionConfig,
   ClassTabConfig,
   ClassroomActiveSegmentMainConfig,
+  ClassroomActiveSegmentStudentMainConfig,
   ClassroomAgendaActionConfig,
   ClassroomAlertBannerConfig,
   ClassroomAttributionAwardConfig,
@@ -2665,6 +2697,7 @@ export type {
   QuickInsertItemConfig,
   QuizAnalyticsModel,
   RawAnalyticsMetrics,
+  RegisterAdapterResult,
   ResultType,
   RuntimeContextData,
   RuntimeEventEnvelope,
@@ -2711,6 +2744,8 @@ export type {
   StudentSegmentGateFallbackConfig,
   StudentStatus,
   StudentViewConfig,
+  SubmissionKind,
+  SubmissionStatus,
   SyncMessage,
   SyncType,
   TeacherPanelConfig,

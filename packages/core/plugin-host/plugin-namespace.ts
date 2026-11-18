@@ -59,7 +59,14 @@
  */
 const UUID_V7_PREFIX = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}\./i;
 
+/**
+ * 内核全局命令。插件前端的 invokeCommand 默认会加 `<manifest.id>.` 前缀，
+ * 这些命令注册在全局命名空间，不能被改名。新增前必须同步 worker bootstrap 拷贝。
+ */
+const KERNEL_GLOBAL_COMMANDS = new Set(['classroom.sendMessage']);
+
 export function resolvePluginCommandType(type: string, pluginId: string): string {
+  if (KERNEL_GLOBAL_COMMANDS.has(type)) return type;
   const prefix = pluginId + '.';
   if (type.startsWith(prefix)) return type;
   if (UUID_V7_PREFIX.test(type)) return type;

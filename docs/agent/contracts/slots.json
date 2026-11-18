@@ -19,6 +19,7 @@
     "class.batch.action",
     "class.tab",
     "classroom.active_segment.main",
+    "classroom.active_segment.student_main",
     "classroom.agenda.action",
     "classroom.alert.banner",
     "classroom.attribution.action",
@@ -146,5 +147,5 @@
     "anchor:whiteboard-toolbar:presentation",
     "anchor:whiteboard-toolbar:rollcall"
   ],
-  "total": 133
+  "total": 134
 }

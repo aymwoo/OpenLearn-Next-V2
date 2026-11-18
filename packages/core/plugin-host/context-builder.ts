@@ -42,6 +42,8 @@ import {
   IClassRosterServiceToken,
   IClassroomLifecycleServiceToken,
   IInteractionRuntimeServiceToken,
+  IClassroomMessageServiceToken,
+  ISubmissionRegistryToken,
   PLUGIN_RESOLVABLE_TOKEN_NAMES,
 } from '../di/interfaces.js';
 import type {
@@ -59,6 +61,7 @@ import type {
   PointsDimensionSpec,
   IClassroomLifecycleService,
   IInteractionRuntimeService,
+  IClassroomMessageService,
   ClassroomStageGuard,
   ClassroomLifecycleStage,
   QuickActivityDescriptor,
@@ -681,6 +684,91 @@ function wrapInteractionRuntimeService(
  * 两条路径（Token 对象 / 字符串名）**必须都走这里** —— 否则按名字解析的插件会绕过代理，
  * 回收拦截形同虚设。
  */
+/**
+ * 包装 IClassroomMessageService：拦截 registerChannel，使插件停用时按 owner
+ * 批量注销其 channel（与 wrapPointsDimensionRegistry 同构）。
+ * owner 由宿主注入为 pluginId，插件无法冒用他人 owner 注册。
+ */
+/**
+ * 包装 SubmissionRegistry：拦截 register，把 owner 注入为 pluginId（插件不可冒用），
+ * 并在 dispose 时 clearOwner 批量注销该插件注册的适配器。
+ */
+function wrapSubmissionRegistry(
+  registry: {
+    register: (a: unknown) => { ok: boolean; code?: string; message?: string };
+    unregister: (id: string, owner: string) => boolean;
+    clearOwner: (owner: string) => void;
+    list: () => ReadonlyArray<unknown>;
+  },
+  tracker: ResourceTracker,
+  pluginId: string,
+) {
+  return {
+    register: createSafeFunction((adapter: { descriptor: { id: string } }) => {
+      const result = registry.register({ ...adapter, descriptor: { ...adapter.descriptor, owner: pluginId } });
+      if (result.ok) {
+        tracker.track(pluginId, { dispose: () => registry.clearOwner(pluginId) });
+      }
+      return result;
+    }),
+    unregister: createSafeFunction((id: string) => registry.unregister(id, pluginId)),
+    list: createSafeFunction(() => registry.list()),
+  };
+}
+
+function wrapClassroomMessageService(
+  service: IClassroomMessageService,
+  tracker: ResourceTracker,
+  pluginId: string,
+): IClassroomMessageService {
+  const withOwner = service as IClassroomMessageService & {
+    registerChannel?: (d: {
+      name: string;
+      owner: string;
+      shared?: boolean;
+      rolesAllowed?: string[];
+      requiredPayloadFields?: string[];
+    }) => { ok: boolean; code?: string; message?: string };
+    clearOwner?: (owner: string) => void;
+    listChannels?: () => ReadonlyArray<{ name: string; owner: string }>;
+  };
+  return {
+    send: createSafeFunction((input: Parameters<IClassroomMessageService['send']>[0]) =>
+      service.send({
+        ...input,
+        senderPluginId: pluginId,
+        senderRole: 'plugin',
+        senderActorId: `plugin:${pluginId}`,
+      }),
+    ),
+    ack: createSafeFunction(() => {
+      throw new Error(
+        'IClassroomMessageService.ack 不向插件开放。收件人请 POST /api/classroomflowserver/messages/:id/ack',
+      );
+    }),
+    replay: createSafeFunction(() => {
+      throw new Error('IClassroomMessageService.replay 不向插件开放。请 GET /api/classroomflowserver/messages');
+    }),
+    registerChannel: createSafeFunction(
+      (d: { name: string; shared?: boolean; rolesAllowed?: string[]; requiredPayloadFields?: string[] }) => {
+        const result = withOwner.registerChannel?.({ ...d, owner: pluginId }) ?? {
+          ok: false,
+          message: 'registerChannel unavailable',
+        };
+        if (result.ok) {
+          tracker.track(pluginId, {
+            dispose: () => {
+              withOwner.clearOwner?.(pluginId);
+            },
+          });
+        }
+        return result;
+      },
+    ),
+    listChannels: createSafeFunction(() => withOwner.listChannels?.() ?? []),
+  } as IClassroomMessageService;
+}
+
 function wrapPluginRuntimeService<T>(
   raw: T,
   tokenName: string,
@@ -688,6 +776,12 @@ function wrapPluginRuntimeService<T>(
   pluginId: string,
   manifestId?: string,
 ): T {
+  if (tokenName === IClassroomMessageServiceToken.name) {
+    return wrapClassroomMessageService(raw as IClassroomMessageService, tracker, pluginId) as T;
+  }
+  if (tokenName === ISubmissionRegistryToken.name) {
+    return wrapSubmissionRegistry(raw as never, tracker, pluginId) as T;
+  }
   if (tokenName === IClassroomLifecycleServiceToken.name) {
     return wrapClassroomLifecycleService(raw as IClassroomLifecycleService, tracker, pluginId) as T;
   }

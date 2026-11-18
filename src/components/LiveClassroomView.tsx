@@ -408,6 +408,19 @@ export function LiveClassroomView({
   const [hasActiveSession, setHasActiveSession] = useState(false);
   /** 真实课件作答记录（用于成绩/完成度/行为标签派生） */
   const [attempts, setAttempts] = useState<any[]>([]);
+  // 第三方教学模式提交（提交适配器聚合），与课件提交并列展示
+  const [pluginSubmissions, setPluginSubmissions] = useState<
+    Array<{
+      id: string;
+      studentId: string;
+      studentName?: string | null;
+      source: { pluginId: string; adapterId: string; modeId?: string };
+      kind: string;
+      status: string;
+      score?: number | null;
+      submittedAt?: number | null;
+    }>
+  >([]);
   /** 课程/会话鉴权或资源缺失（401/403/404）后立即停止轮询并向教师展示清晰提示 */
   const [lessonAccessError, setLessonAccessError] = useState<{ status: number; endpoint: string } | null>(null);
   const notifiedAccessErrorKeyRef = useRef<string | null>(null);
@@ -759,6 +772,47 @@ export function LiveClassroomView({
   const segmentMainExtensions = host?.getExtensions('classroom.active_segment.main') || [];
   const hasSegmentMainExtension = segmentMainExtensions.length > 0;
   const currentActiveSegment = timelineSegments.find((s) => s.id === activeSegmentId);
+
+  // 最小授课壳：注入工作区控制器，让插件工作区复用宿主现成的流程状态与动作，
+  // 而不自建流程引擎。setActiveSegment 只需改 activeSegmentId —— 下方 effect
+  // （:1519-1543）已负责持久化 view-state 并通过 syncChannel 广播给全班。
+  const segmentMainFlowController = {
+    snapshot: {
+      lessonId: selectedLesson,
+      classId: liveClassSelectedClassId,
+      stage: classroomStage,
+      activeSegmentId,
+      segments: timelineSegments,
+      students,
+      onlineStudentIds,
+      attempts,
+    },
+    setActiveSegment: (segmentId: string) => setActiveSegmentId(segmentId),
+    advanceStage: (stage: string) => void handleStageChange(stage),
+    sendMessage: async (input: {
+      channel: string;
+      msgType: 'request' | 'response';
+      payload: unknown;
+      targetUserIds?: string[] | null;
+      ttlMs?: number | null;
+      messageId?: string;
+    }) => {
+      const res = await fetch('/api/classroomflowserver/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...input,
+          lessonId: selectedLesson,
+          classId: liveClassSelectedClassId,
+        }),
+      });
+      if (!res.ok) throw new Error(`sendMessage failed: HTTP ${res.status}`);
+      return res.json();
+    },
+    refresh: () => {
+      if (selectedLesson) fetchElements(selectedLesson);
+    },
+  };
   const [loadingAttempts, setLoadingAttempts] = useState(false);
   const [selectedAttempt, setSelectedAttempt] = useState<any | null>(null);
   const [rawPayload, setRawPayload] = useState<any | null>(null);
@@ -895,11 +949,49 @@ export function LiveClassroomView({
     }
   }, []);
 
+  const fetchPluginSubmissions = useCallback(async () => {
+    if (!selectedLesson) return;
+    try {
+      const params = new URLSearchParams({ lessonId: selectedLesson });
+      if (liveClassSelectedClassId) params.set('classId', liveClassSelectedClassId);
+      const res = await fetch(`/api/classroomflowserver/submissions?${params.toString()}`);
+      if (res.ok) {
+        const data = await res.json();
+        setPluginSubmissions(Array.isArray(data?.submissions) ? data.submissions : []);
+      }
+    } catch {
+      // 提交适配器未启用时保持空列表
+    }
+  }, [selectedLesson, liveClassSelectedClassId]);
+
+  const handleGradePluginSubmission = useCallback(
+    async (adapterId: string, submissionId: string, score: number) => {
+      try {
+        const res = await fetch(`/api/classroomflowserver/submissions/${encodeURIComponent(adapterId)}/grade`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            submissionId,
+            lessonId: selectedLesson,
+            classId: liveClassSelectedClassId,
+            score,
+          }),
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        fetchPluginSubmissions();
+      } catch (e) {
+        console.error('grade plugin submission failed', e);
+      }
+    },
+    [selectedLesson, liveClassSelectedClassId, fetchPluginSubmissions],
+  );
+
   useEffect(() => {
     if (middleTab === 'submissions') {
       fetchAttempts();
+      fetchPluginSubmissions();
     }
-  }, [middleTab]);
+  }, [middleTab, fetchPluginSubmissions]);
 
   useEffect(() => {
     // v0.6.1 审计：同一裸 `io()` 模式顺带修复 —— 该事件是全局广播
@@ -1502,6 +1594,25 @@ export function LiveClassroomView({
     syncChannelRef.current?.setLessonContext(selectedLesson, liveClassSelectedClassId);
     syncChannelRef.current?.broadcastChangeLesson(selectedLesson);
   }, [selectedLesson, liveClassSelectedClassId]);
+
+  // 最小授课壳：若当前环节命中一个声明 primary:true 的工作区扩展（如"学案模式"），
+  // 自动切到环节工作区 tab，使该模式真正接管课中主视图而非停留在白板。
+  // 未声明 primary 的扩展保持旧行为（教师手动点 tab）。
+  useEffect(() => {
+    if (!activeSegmentId || classroomStage !== 'IN_CLASS_TEACHING' || !host) return;
+    const seg = timelineSegments.find((s) => s.id === activeSegmentId) as { type?: string } | undefined;
+    const segmentType = seg?.type;
+    if (!segmentType) return;
+    // 从 host 现取，避免把 `|| []` 产生的新数组放进依赖（触发 exhaustive-deps 告警）
+    const exts = host.getExtensions('classroom.active_segment.main' as never) as unknown[];
+    const primary = exts.some((ext) => {
+      const e = ext as { targetType?: string; slotProps?: Record<string, unknown> };
+      const cfg = e.slotProps ?? {};
+      const declared = e.targetType ?? cfg.segmentType ?? cfg.targetType;
+      return cfg.primary === true && (declared === undefined || declared === segmentType);
+    });
+    if (primary) setMiddleTab('segment_main');
+  }, [activeSegmentId, classroomStage, timelineSegments, host]);
 
   useEffect(() => {
     lastPersistedSegmentRef.current = null;
@@ -2911,6 +3022,8 @@ export function LiveClassroomView({
                     handleViewRaw={handleViewRaw}
                     handlePromoteAttempt={handlePromoteAttempt}
                     handleMarkAbsent={handleMarkAbsent}
+                    pluginSubmissions={pluginSubmissions}
+                    onGradePluginSubmission={handleGradePluginSubmission}
                   />
                 ) : middleTab === 'top_performers' ? (
                   <div className="flex-grow flex-1 min-h-0 w-full relative rounded-xl overflow-y-auto border border-theme shadow-md bg-surface flex flex-col p-4">
@@ -2937,6 +3050,7 @@ export function LiveClassroomView({
                           lessonId: selectedLesson,
                           classId: liveClassSelectedClassId,
                           lang,
+                          flow: segmentMainFlowController,
                           onRefresh: () => fetchElements(selectedLesson),
                         }}
                       />

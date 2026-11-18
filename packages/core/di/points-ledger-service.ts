@@ -17,6 +17,22 @@ export class PointsLedgerService implements IPointsLedgerService {
     reason: string,
     pluginId?: string,
   ): Promise<PointLogItem> {
+    return this.addPointsSync(studentId, classId, dimensionId, deltaPoints, reason, pluginId);
+  }
+
+  /**
+   * 同步写入一条流水。供需要在**外部事务内**原子写入的调用方使用（如学分兑换扣减），
+   * 因为 addPoints 的 async 形态无法放进 better-sqlite3 的同步事务里。
+   * 写入契约与 addPoints 完全一致（含 pt_ id 前缀），不新增第三条写路径。
+   */
+  addPointsSync(
+    studentId: string,
+    classId: string,
+    dimensionId: string,
+    deltaPoints: number,
+    reason: string,
+    pluginId?: string,
+  ): PointLogItem {
     if (!studentId || !classId || !dimensionId) {
       throw new Error('studentId, classId, and dimensionId are required to log points');
     }

@@ -165,6 +165,19 @@ interface PluginContext {
 | `IClassRosterServiceToken`           | `IClassRosterService`           | `@openlearn/core:IClassRosterService`           |
 | `IFileStorageExtensionRegistryToken` | `IFileStorageExtensionRegistry` | `@openlearn/core:IFileStorageExtensionRegistry` |
 
+### J. ClassroomFlowServer / 通讯协议 / 提交适配器 Token
+
+| 导出 Token                      | 解析类型                   | 标识字符串                                  |
+| ------------------------------- | -------------------------- | ------------------------------------------- |
+| `ICreditAwardServiceToken`      | `ICreditAwardService`      | `@openlearn/core:ICreditAwardService`       |
+| `IRewardCatalogServiceToken`    | `IRewardCatalogReader`     | `@openlearn/core:IRewardCatalogService`     |
+| `ICreditRedemptionServiceToken` | `ICreditRedemptionService` | `@openlearn/core:ICreditRedemptionService`  |
+| `IClassroomMessageServiceToken` | `IClassroomMessageService` | `@openlearn/core:IClassroomMessageService`  |
+| `ISubmissionRegistryToken`      | `SubmissionRegistry`       | `@openlearn/submission-adapter:IRegistry`   |
+| `ISubmissionAggregatorToken`    | `SubmissionAggregator`     | `@openlearn/submission-adapter:IAggregator` |
+
+> 统一学分发放 / 奖励目录 / 兑换见 `/api/classroomflowserver/*`；通讯协议 `ctx.resolve(IClassroomMessageServiceToken)` 后经 `registerChannel({ name, shared?, rolesAllowed?, requiredPayloadFields? })` 注册消息频道（owner 由宿主按 pluginId 注入，插件不可自报），再用 `send()` / `ack()` / `replay()` 收发可靠消息。提交适配器经 `ctx.resolve(ISubmissionRegistryToken)` 的 `register(adapter)`（`descriptor.owner` 由宿主按 pluginId 注入）扩展成绩采集，把第三方教学模式的作答投影为 `NormalizedSubmission` 进入统一成绩面板。
+
 > `IFileStorageExtensionRegistryToken` 仅面向内核宿主与同进程受信任扩展（布局策略 / 存储后端 / 文件处理器）；第三方 `process` / `worker` 插件不跨 IPC 传递二进制流插槽，见[文件存储扩展设计](../architecture/file-storage-extension-design.md) §4。
 
 ---

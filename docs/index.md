@@ -283,6 +283,7 @@ reference/plugin-ui-extension-slots
 reference/plugin-database-api
 reference/platform-data-tables
 reference/activity-ecosystem
+reference/classroom-flow-server
 reference/capability-provider-framework
 reference/plugin-host-shared-deps
 reference/plugin-update-distribution

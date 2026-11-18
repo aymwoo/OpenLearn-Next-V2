@@ -163,6 +163,41 @@ describe('createRouteDispatcher', () => {
     });
   });
 
+  it('delivers a targeted classroom.message only to the recipient and the staff room', () => {
+    const { emitted, deps } = buildDeps();
+    createRouteDispatcher(
+      SOCKET_ROUTES,
+      deps,
+    )(
+      event('classroom.message', {
+        lessonId: 'L1',
+        classId: 'C1',
+        targetUserIds: ['stu-1'],
+        payload: { answer: 'secret' },
+      }),
+    );
+    expect(emitted[0]).toMatchObject({
+      scope: 'room',
+      rooms: [userRoom('stu-1'), PRESENCE_STAFF_ROOM],
+      event: 'classroom:message',
+    });
+    expect(emitted[0].rooms).not.toContain('L1');
+    expect(emitted[0].rooms).not.toContain('class-C1');
+  });
+
+  it('delivers a broadcast classroom.message to the lesson and class rooms', () => {
+    const { emitted, deps } = buildDeps();
+    createRouteDispatcher(
+      SOCKET_ROUTES,
+      deps,
+    )(event('classroom.message', { lessonId: 'L1', classId: 'C1', targetUserIds: [] }));
+    expect(emitted[0]).toMatchObject({
+      scope: 'room',
+      rooms: ['L1', 'class-C1'],
+      event: 'classroom:message',
+    });
+  });
+
   it('delivers student.progress_updated to the lesson + class + student user room', () => {
     const { emitted, deps } = buildDeps((sql) =>
       sql.includes('classroom_sessions') ? { class_id: 'C1', stage: 'IN_CLASS_TEACHING' } : undefined,

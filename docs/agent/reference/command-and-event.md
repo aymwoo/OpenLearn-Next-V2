@@ -530,18 +530,58 @@ export async function activate(ctx) {
 
 ---
 
+## 10. 通讯协议命令与事件（ClassroomFlowServer）
+
+`dev/classroom-flow` 引入的可靠消息体系统一走上面的命令/事件总线，不另造分发机制。完整设计见 [参考：ClassroomFlowServer 开发指南](../../reference/classroom-flow-server.md)。
+
+### 10.1 `classroom.sendMessage` 命令
+
+前端插件经 `ctx.invokeCommand('classroom.sendMessage', payload)` 发送可靠消息；后端由内置插件 `@openlearn/plugin-classroom-flow-server` 注册 handler + ActionDescriptor：
+
+| 属性                 | 取值                                                                                                                                                                                                     |
+| :------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `commandType`        | `classroom.sendMessage`（内核全局命名空间，不加 `manifest.id` 前缀）                                                                                                                                     |
+| `capabilityRequired` | `lesson:write`                                                                                                                                                                                           |
+| `exposeToAgent`      | `false`（传输命令，不进 AI 工具箱）                                                                                                                                                                      |
+| `inputSchema`        | 必填 `channel` / `msgType`(`request`\|`response`) / `payload`；可选 `lessonId` / `classId` / `targetUserIds` / `ttlMs` / `messageId`                                                                     |
+| 发送者身份           | 命令路径的 actor 为 `plugin:<id>`（沙箱命令由 `bindPluginCommand` 绑定；`ctx.invokeCommand` 对这条内核命令不加插件前缀）。HTTP `POST /api/classroomflowserver/messages` 用当前用户会话，供师生工作区调用 |
+| 定向投递             | `targetUserIds` 非空时只进收件人房间和教师房间；为空时进课节房间和班级房间                                                                                                                               |
+
+handler 调 `ClassroomMessageService.send()`：先过 channel 注册校验（归属 / `rolesAllowed` / `requiredPayloadFields`），再幂等落 `classroom_messages`，最后 `eventBus.publish` 一条 `classroom.message`。**channel 校验失败时 handler 抛错**，命令返回失败。
+
+### 10.2 新增事件一览
+
+| 事件 type           | source                | payload 要点                                                                               | 投递路由 / 消费者                                                                                                                            |
+| :------------------ | :-------------------- | :----------------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------- |
+| `classroom.message` | `plugin:<id>` 或角色  | `messageId` / `channel` / `msgType` / `lessonId` / `classId` / `targetUserIds` / `payload` | socket `classroom:message`：有 `targetUserIds` 时只投收件人 + 教师房间，否则投课节 + 班级房间。ACK 按收件人记在 `classroom_message_receipts` |
+| `points.awarded`    | 发放 source           | `studentId` / `classId` / `dimensionId` / `deltaPoints` / `pointLogId` / `source`          | 既有路由：获得者本人 + 教师房间（`classroom:points_awarded`）；由 `awardCredits` 门面 fire-and-forget 发布，失败进 `pending_side_effects`    |
+| `reward.redeemed`   | `classroomflowserver` | `redemptionId` / `studentId` / `rewardId` / `costPoints` / `balanceAfter`                  | 兑换事务成功后发布（待接入实时路由；当前可经事件总线订阅）                                                                                   |
+| `submission.graded` | 批改 source           | `adapterId` / `submissionId` / `studentId` / `score` / `historyId`                         | 提交适配器批改写回成功后发布（待接入实时路由）                                                                                               |
+
+> **事件去重口径（Q5/C）**：状态型事件（segment/stage/消息投递）按"设到目标值"语义天然幂等，不额外去重；通知型事件（积分/奖励弹窗）由前端按 `messageId` / `_meta.correlationId` 短窗去重。补投的历史消息**不重复校验 channel 归属**（合法性在 send 时刻已校验并随消息落库）。
+
+### 10.3 与 default-deny 的关系
+
+`classroom.sendMessage` 是**内核命令**，已注册 ActionDescriptor，因此通过 default-deny 拦截器（§4）。插件注册的 `channel` 不是命令、不单独过拦截器——它的归属/角色/格式校验在 `ClassroomMessageService.send()` 内完成，与 `capabilityRequired` 形成双保险。
+
+---
+
 ## 取证
 
-| 论断                                                                                                                                           | 来源                                                          |
-| :--------------------------------------------------------------------------------------------------------------------------------------------- | :------------------------------------------------------------ |
-| `ICommandBusService` / `IEventBusService` / `ICapabilityService` / `IProcessService` 等契约与 D-05/D-10/D-11/D-13                              | `packages/core/di/interfaces.ts`                              |
-| `PlatformCommand` / `CommandMetadata` / `CommandHandler` / `DEFAULT_QUIET_COMMANDS` / `hasHandler`（审计 R-3）/ `registerHandler` 重复即抛     | `packages/core/command-bus/index.ts`                          |
-| `bindPluginCommand` 覆写 actor 并删 `metadata.approved`；`pluginActorIdFor`                                                                    | `packages/core/command-bus/plugin-command.ts`                 |
-| `resolvePluginCommandType` / `stripPluginCommandPrefix` 及三处规则漂移的历史                                                                   | `packages/core/plugin-host/plugin-namespace.ts`               |
-| `wrapCommandBus`：`resolveType`、UUID 命名空间守卫、`execute` 裸名回退、`setInterceptor` 抛错、`createCommand` 清 approved                     | `packages/core/plugin-host/context-builder.ts`                |
-| `wrapEventBus`：source 改写、异常吞噬、WeakMap 反查                                                                                            | 同上                                                          |
-| default-deny 拦截器、403 + `COMMAND_NOT_REGISTERED` / `COMMAND_CAPABILITY_DENIED`、高危审批与 `pending_commands`、管理员判定（审计 C-3 / H-1） | `packages/core/kernel/index.ts`（`setInterceptor` 段）        |
-| `CapabilityGuard.check` 通配匹配、角色回退表、默认授予                                                                                         | `packages/core/capability/guard/capability-guard.ts`          |
-| 超时 2000ms / 深度 3 / 通配去重 / 同步启动按序收敛 / 50 订阅者告警 / `EventBusPort.subscribe` 返回取消函数                                     | `packages/core/event-bus/index.ts`                            |
-| `warnOnMissingActionDescriptor`（Issue #71）                                                                                                   | `packages/core/plugin-host/context-builder.ts`                |
-| 前缀四种位置语义表、`plugin-command-audit.mjs`、§3.3.4                                                                                         | `docs/tutorials/plugin-development-tutorial.md` §3.3.4–§3.3.5 |
+| 论断                                                                                                                                           | 来源                                                                                          |
+| :--------------------------------------------------------------------------------------------------------------------------------------------- | :-------------------------------------------------------------------------------------------- |
+| `ICommandBusService` / `IEventBusService` / `ICapabilityService` / `IProcessService` 等契约与 D-05/D-10/D-11/D-13                              | `packages/core/di/interfaces.ts`                                                              |
+| `PlatformCommand` / `CommandMetadata` / `CommandHandler` / `DEFAULT_QUIET_COMMANDS` / `hasHandler`（审计 R-3）/ `registerHandler` 重复即抛     | `packages/core/command-bus/index.ts`                                                          |
+| `bindPluginCommand` 覆写 actor 并删 `metadata.approved`；`pluginActorIdFor`                                                                    | `packages/core/command-bus/plugin-command.ts`                                                 |
+| `resolvePluginCommandType` / `stripPluginCommandPrefix` 及三处规则漂移的历史                                                                   | `packages/core/plugin-host/plugin-namespace.ts`                                               |
+| `wrapCommandBus`：`resolveType`、UUID 命名空间守卫、`execute` 裸名回退、`setInterceptor` 抛错、`createCommand` 清 approved                     | `packages/core/plugin-host/context-builder.ts`                                                |
+| `wrapEventBus`：source 改写、异常吞噬、WeakMap 反查                                                                                            | 同上                                                                                          |
+| default-deny 拦截器、403 + `COMMAND_NOT_REGISTERED` / `COMMAND_CAPABILITY_DENIED`、高危审批与 `pending_commands`、管理员判定（审计 C-3 / H-1） | `packages/core/kernel/index.ts`（`setInterceptor` 段）                                        |
+| `CapabilityGuard.check` 通配匹配、角色回退表、默认授予                                                                                         | `packages/core/capability/guard/capability-guard.ts`                                          |
+| 超时 2000ms / 深度 3 / 通配去重 / 同步启动按序收敛 / 50 订阅者告警 / `EventBusPort.subscribe` 返回取消函数                                     | `packages/core/event-bus/index.ts`                                                            |
+| `warnOnMissingActionDescriptor`（Issue #71）                                                                                                   | `packages/core/plugin-host/context-builder.ts`                                                |
+| 前缀四种位置语义表、`plugin-command-audit.mjs`、§3.3.4                                                                                         | `docs/tutorials/plugin-development-tutorial.md` §3.3.4–§3.3.5                                 |
+| `classroom.sendMessage` 命令注册、actor 派生 `senderPluginId`、channel 归属校验                                                                | `packages/plugins/classroom-flow-server.ts`                                                   |
+| `classroom.message` 的 seq/ACK/replay、channel 注册表、分级投递、失败入队                                                                      | `packages/core/di/classroom-message-service.ts`                                               |
+| `classroom.message → classroom:message` 的实时路由声明                                                                                         | `server/event-routing.ts`                                                                     |
+| 补偿队列 `pending_side_effects` 的入队与去重                                                                                                   | `packages/core/di/pending-side-effect-enqueuer.ts`、`migrations/060_pending_side_effects.sql` |

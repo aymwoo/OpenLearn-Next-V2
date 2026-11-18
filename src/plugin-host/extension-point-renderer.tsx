@@ -484,6 +484,23 @@ export function ExtensionPointRenderer({
     });
   }
 
+  // classroom.active_segment.main / .student_main —— 授课工作区按「当前环节类型」分发。
+  // 多个教学模式插件可各自贡献工作区：只有声明 targetType/segmentType 与当前
+  // segment.type 匹配的贡献才渲染；未声明者视为通用工作区（向后兼容旧插件）。
+  // 与 whiteboard.renderer 的 targetType 匹配同构，不新建分发机制；教师/学生双端对称。
+  if (slot === 'classroom.active_segment.main' || slot === 'classroom.active_segment.student_main') {
+    const seg = slotProps?.segment as { type?: string } | undefined;
+    const segmentType = seg?.type;
+    if (segmentType) {
+      extensions = extensions.filter((ext) => {
+        const cfg = (ext.slotProps ?? {}) as Record<string, unknown>;
+        const declared = (ext as { targetType?: string }).targetType ?? cfg.segmentType ?? cfg.targetType ?? undefined;
+        // 未声明 targetType 的扩展保持旧行为（对所有环节可见）
+        return declared === undefined || declared === null || declared === segmentType;
+      });
+    }
+  }
+
   if (extensions.length === 0) return null;
 
   const renderTabPanelContent = (activeExt: any, extraProps: Record<string, any>, fallbackText: string) => {

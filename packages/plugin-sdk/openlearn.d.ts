@@ -1157,6 +1157,111 @@ interface IClassroomCountdownService {
   addTime(lessonId: string, seconds: number): Promise<ClassroomCountdownDescriptor>;
 }
 
+/** 通讯协议可靠投递服务：插件经 ctx.resolve(IClassroomMessageServiceToken) 获取。 */
+interface IClassroomMessageService {
+  send(input: {
+    channel: string;
+    msgType: 'request' | 'response';
+    lessonId?: string | null;
+    classId?: string | null;
+    targetUserIds?: string[] | null;
+    senderActorId: string;
+    senderRole: string;
+    senderPluginId?: string | null;
+    correlationId?: string | null;
+    payload: unknown;
+    ttlMs?: number | null;
+    messageId?: string;
+  }): {
+    ok: boolean;
+    code?: string;
+    error?: string;
+    messageId?: string;
+    seq?: number;
+    duplicated?: boolean;
+  };
+  ack(messageId: string, userId: string): boolean;
+  replay(query: {
+    lessonId?: string | null;
+    classId?: string | null;
+    sinceSeq: number;
+    viewerId: string;
+    limit?: number;
+  }): Array<{
+    seq: number;
+    id: string;
+    channel: string;
+    msgType: string;
+    correlationId: string | null;
+    payload: unknown;
+    status: string;
+    createdAt: number;
+  }>;
+  /** 注册 channel —— owner 由宿主按 pluginId 注入，插件不可自报 */
+  registerChannel(desc: {
+    name: string;
+    shared?: boolean;
+    rolesAllowed?: string[];
+    requiredPayloadFields?: string[];
+  }): { ok: boolean; code?: string; message?: string };
+  listChannels(): ReadonlyArray<{ name: string; owner: string; shared?: boolean }>;
+}
+
+/** 统一学分发放服务（教师/管理员经门面或 ctx.resolve 调用） */
+interface ICreditAwardService {
+  award(input: {
+    studentId: string;
+    classId: string;
+    dimensionId: string;
+    deltaPoints: number;
+    source: string;
+    idempotencyKey: string;
+    reason: string;
+    actorId?: string | null;
+  }): {
+    ok: boolean;
+    code?: string;
+    message?: string;
+    pointLogId?: string;
+    awardId?: string;
+    deltaPoints?: number;
+    balanceAfter?: number;
+    idempotentHit?: boolean;
+  };
+}
+
+/** 学分兑换服务 */
+interface ICreditRedemptionService {
+  redeem(input: {
+    studentId: string;
+    classId: string;
+    rewardId: string;
+    costPoints?: number;
+    idempotencyKey: string;
+    actorId?: string | null;
+    role?: string | null;
+    reason?: string | null;
+    dimensionId?: string;
+  }): {
+    ok: boolean;
+    code?: string;
+    message?: string;
+    redemptionId?: string;
+    pointLogId?: string;
+    balanceBefore?: number;
+    balanceAfter?: number;
+    costPoints?: number;
+    idempotentHit?: boolean;
+  };
+  getBalance(studentId: string, classId: string, dimensionId?: string): number;
+}
+
+/** 奖励目录读取端口 */
+interface IRewardCatalogReader {
+  getById(id: string): unknown;
+  listAvailable(now?: number): unknown[];
+}
+
 // ── Token Constants ──────────────────────────────────────────────────────
 
 declare const ICommandBusServiceToken: Token<ICommandBusService>;
@@ -1217,6 +1322,84 @@ declare const IClassroomLifecycleServiceToken: Token<IClassroomLifecycleService>
 declare const IInteractionRuntimeServiceToken: Token<IInteractionRuntimeService>;
 declare const IClassroomCountdownServiceToken: Token<IClassroomCountdownService>;
 declare const IAssessmentGraderRegistryToken: Token<IAssessmentGraderRegistry>;
+declare const IClassroomMessageServiceToken: Token<IClassroomMessageService>;
+declare const ICreditAwardServiceToken: Token<ICreditAwardService>;
+declare const IRewardCatalogServiceToken: Token<IRewardCatalogReader>;
+declare const ICreditRedemptionServiceToken: Token<ICreditRedemptionService>;
+
+/** 提交适配器（第三方教学模式的成绩采集扩展点） */
+interface NormalizedSubmission {
+  id: string;
+  source: { pluginId: string; adapterId: string; externalId: string; modeId?: string };
+  lessonId: string;
+  classId: string;
+  segmentId?: string | null;
+  studentId: string;
+  studentName?: string | null;
+  kind: 'assignment' | 'quiz' | 'artifact' | 'participation' | 'custom';
+  status: 'started' | 'submitted' | 'graded' | 'absent' | 'draft';
+  startedAt?: number | null;
+  submittedAt?: number | null;
+  score?: number | null;
+  completion?: number | null;
+  rawRef?: string | null;
+  visibility?: 'teacher' | 'student' | 'anonymous';
+}
+interface SubmissionFilter {
+  lessonId?: string;
+  classId?: string;
+  studentId?: string;
+  kinds?: Array<'assignment' | 'quiz' | 'artifact' | 'participation' | 'custom'>;
+  since?: number;
+  limit?: number;
+}
+interface SubmissionAdapterDescriptor {
+  id: string;
+  owner: string;
+  kinds: Array<'assignment' | 'quiz' | 'artifact' | 'participation' | 'custom'>;
+  modeIds?: string[];
+  label?: string;
+}
+interface GradeWriteInputView {
+  assignmentId: string;
+  studentId: string;
+  score: number | null;
+  status?: string;
+  feedback?: string | null;
+  source: 'manual' | 'auto' | 'ai' | 'plugin' | 'system';
+  reason?: string | null;
+  overrideProtected?: boolean;
+}
+interface SubmissionAdapter {
+  readonly descriptor: SubmissionAdapterDescriptor;
+  listSubmissions(filter: SubmissionFilter): Promise<NormalizedSubmission[]> | NormalizedSubmission[];
+  getRaw?(submissionId: string): Promise<unknown> | unknown;
+  toGradeInput?(sub: NormalizedSubmission): GradeWriteInputView | null;
+}
+interface SubmissionRegistry {
+  register(adapter: SubmissionAdapter): { ok: boolean; code?: string; message?: string };
+  unregister(id: string, owner: string): boolean;
+  clearOwner(owner: string): void;
+  list(): ReadonlyArray<SubmissionAdapter>;
+}
+interface SubmissionAggregator {
+  list(
+    filter: SubmissionFilter,
+    modeId?: string,
+  ): Promise<{
+    submissions: NormalizedSubmission[];
+    errors: Array<{ adapterId: string; message: string }>;
+    total: number;
+  }>;
+  writeGrade(
+    adapterId: string,
+    submissionId: string,
+    filter: SubmissionFilter,
+    grade: { score: number; feedback?: string | null; overrideProtected?: boolean; reason?: string | null },
+  ): Promise<{ ok: boolean; reason?: string; historyId?: string }>;
+}
+declare const ISubmissionRegistryToken: Token<SubmissionRegistry>;
+declare const ISubmissionAggregatorToken: Token<SubmissionAggregator>;
 
 declare const IStageGuardServiceToken: Token<IStageGuardService>;
 
@@ -1515,6 +1698,17 @@ export type {
   IInteractionRuntimeService,
   ClassroomCountdownDescriptor,
   IClassroomCountdownService,
+  IClassroomMessageService,
+  ICreditAwardService,
+  IRewardCatalogReader,
+  ICreditRedemptionService,
+  NormalizedSubmission,
+  SubmissionFilter,
+  SubmissionAdapterDescriptor,
+  GradeWriteInputView,
+  SubmissionAdapter,
+  SubmissionRegistry,
+  SubmissionAggregator,
   StageGuardContext,
   StageGuard,
   IAssessmentQuestionTypeSummary,
@@ -1609,6 +1803,12 @@ export {
   IInteractionRuntimeServiceToken,
   IClassroomCountdownServiceToken,
   IAssessmentGraderRegistryToken,
+  IClassroomMessageServiceToken,
+  ICreditAwardServiceToken,
+  IRewardCatalogServiceToken,
+  ICreditRedemptionServiceToken,
+  ISubmissionRegistryToken,
+  ISubmissionAggregatorToken,
   IStageGuardServiceToken,
   IActivityRegistryToken,
   IAuthSessionBridgeToken,

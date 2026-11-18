@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useId, useState } from 'react';
 import { Search, RefreshCw, Trophy, Zap, Database, FileText, Eye, Check } from 'lucide-react';
 import { AccessibleTableRegion } from '../../components/AccessibleTableRegion';
 import { ExtensionPointRenderer } from '../../plugin-host/extension-point-renderer';
@@ -33,6 +33,18 @@ export interface LiveSubmissionsPanelProps {
   handleViewRaw: (attempt: any) => void;
   handlePromoteAttempt: (attemptId: string) => void;
   handleMarkAbsent: (studentId: string, coursewareId: string) => void;
+  /** 第三方教学模式经提交适配器贡献的规范化提交（与课件提交并列展示） */
+  pluginSubmissions?: Array<{
+    id: string;
+    studentId: string;
+    studentName?: string | null;
+    source: { pluginId: string; adapterId: string; modeId?: string };
+    kind: string;
+    status: string;
+    score?: number | null;
+    submittedAt?: number | null;
+  }>;
+  onGradePluginSubmission?: (adapterId: string, submissionId: string, score: number) => void;
 }
 
 export function LiveSubmissionsPanel({
@@ -58,9 +70,27 @@ export function LiveSubmissionsPanel({
   handleViewRaw,
   handlePromoteAttempt,
   handleMarkAbsent,
+  pluginSubmissions = [],
+  onGradePluginSubmission,
 }: LiveSubmissionsPanelProps) {
   return (
     <div className="flex-grow flex-1 min-h-0 w-full relative rounded-xl overflow-hidden border border-theme shadow-md bg-surface flex flex-col p-4">
+      {/* 第三方教学模式提交（经提交适配器聚合）——与课件提交并列展示 */}
+      {pluginSubmissions.length > 0 && (
+        <div
+          data-testid="plugin-submissions-section"
+          className="mb-4 border border-primary-theme/30 rounded-lg p-3 shrink-0"
+        >
+          <div className="text-xs font-bold text-primary-theme mb-2">
+            🧩 {lang === 'zh' ? '教学模式提交' : 'Teaching-mode submissions'} ({pluginSubmissions.length})
+          </div>
+          <div className="max-h-40 overflow-auto space-y-1">
+            {pluginSubmissions.map((s) => (
+              <PluginSubmissionRow key={s.id} submission={s} lang={lang} onGrade={onGradePluginSubmission} />
+            ))}
+          </div>
+        </div>
+      )}
       {/* Submissions list view */}
       <div className="flex justify-between items-center mb-4 gap-3 shrink-0">
         <div className="flex items-center gap-2">
@@ -442,6 +472,55 @@ export function LiveSubmissionsPanel({
           })()
         )}
       </div>
+    </div>
+  );
+}
+
+function PluginSubmissionRow({
+  submission,
+  lang,
+  onGrade,
+}: {
+  submission: NonNullable<LiveSubmissionsPanelProps['pluginSubmissions']>[number];
+  lang: 'zh' | 'en';
+  onGrade?: (adapterId: string, submissionId: string, score: number) => void;
+}) {
+  const scoreId = useId();
+  const [score, setScore] = useState('');
+  const parsed = Number(score);
+  const canGrade = onGrade && submission.score == null && Number.isFinite(parsed) && parsed >= 0 && parsed <= 100;
+  return (
+    <div className="flex items-center justify-between gap-2 text-xs py-1 px-2 bg-surface-secondary/50 rounded">
+      <span className="font-medium text-main">{submission.studentName || submission.studentId}</span>
+      <span className="text-muted truncate mx-2">
+        {submission.source.pluginId} · {submission.kind}
+      </span>
+      <span className="font-semibold text-main">{submission.score ?? '—'}</span>
+      {onGrade && submission.score == null && (
+        <>
+          <label htmlFor={scoreId} className="sr-only">
+            {lang === 'zh' ? '分数' : 'Score'}
+          </label>
+          <input
+            id={scoreId}
+            type="number"
+            min={0}
+            max={100}
+            inputMode="numeric"
+            value={score}
+            onChange={(event) => setScore(event.target.value)}
+            className="w-16 rounded border border-theme bg-surface px-1 py-0.5 text-main"
+          />
+          <button
+            type="button"
+            className="ml-2 px-2 py-0.5 rounded bg-primary-theme text-white text-2xs disabled:opacity-50"
+            disabled={!canGrade}
+            onClick={() => onGrade(submission.source.adapterId, submission.id, parsed)}
+          >
+            {lang === 'zh' ? '录入' : 'Grade'}
+          </button>
+        </>
+      )}
     </div>
   );
 }

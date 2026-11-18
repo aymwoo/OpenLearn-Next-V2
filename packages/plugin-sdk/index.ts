@@ -210,6 +210,7 @@ export type {
   TimetableImportSourceConfig,
   TimetableEntryActionConfig,
   ClassroomActiveSegmentMainConfig,
+  ClassroomActiveSegmentStudentMainConfig,
   StudentAcademicYearMetricCardConfig,
   EditorTimelineNodeBadgeConfig,
   StudentSegmentBadgeConfig,
@@ -504,6 +505,10 @@ export type {
   IInteractionRuntimeService,
   ClassroomCountdownDescriptor,
   IClassroomCountdownService,
+  IClassroomMessageService,
+  ICreditAwardService,
+  ICreditRedemptionService,
+  IRewardCatalogReader,
 } from '../core/di/interfaces.js';
 
 export {
@@ -511,7 +516,24 @@ export {
   IInteractionRuntimeServiceToken,
   IClassroomCountdownServiceToken,
   IAssessmentGraderRegistryToken,
+  IClassroomMessageServiceToken,
+  ICreditAwardServiceToken,
+  IRewardCatalogServiceToken,
+  ICreditRedemptionServiceToken,
 } from '../core/di/interfaces.js';
+
+// ── Submission Adapter（第三方教学模式的成绩采集扩展点）─────────────────
+export type {
+  NormalizedSubmission,
+  SubmissionFilter,
+  SubmissionAdapter,
+  SubmissionAdapterDescriptor,
+  SubmissionKind,
+  SubmissionStatus,
+  GradeWriteInputView,
+  RegisterAdapterResult,
+} from '../core/submission-adapter/index.js';
+export { ISubmissionRegistryToken, ISubmissionAggregatorToken } from '../core/submission-adapter/index.js';
 export type { INetworkProxyService } from '../core/di/interfaces.js';
 export { INetworkProxyServiceToken } from '../core/di/interfaces.js';
 

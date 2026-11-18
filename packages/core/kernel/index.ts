@@ -24,6 +24,7 @@ import { BuiltinPlugin } from '../../plugins/builtin.js';
 import { AiPlannerPlugin } from '../../plugins/ai-planner.js';
 import { AiSubmitInjectorPlugin } from '../../plugins/ai-submit-injector.js';
 import { AssignmentEvalPlugin } from '../../plugins/assignment-eval.js';
+import { ClassroomFlowServerPlugin } from '../../plugins/classroom-flow-server.js';
 import fs from 'fs';
 import crypto from 'node:crypto';
 
@@ -60,6 +61,10 @@ import {
   IAuthSessionBridgeToken,
   ICoursewareRuntimeScriptRegistryToken,
   IFileStorageExtensionRegistryToken,
+  ICreditAwardServiceToken,
+  IRewardCatalogServiceToken,
+  ICreditRedemptionServiceToken,
+  IClassroomMessageServiceToken,
 } from '../di/interfaces.js';
 import { StorageService } from '../di/storage-service.js';
 import { AIService } from '../di/ai-service.js';
@@ -67,6 +72,11 @@ import { SemesterGradeService } from '../di/semester-grade-service.js';
 import { ClassRosterService } from '../di/roster-service.js';
 import { PointsDimensionRegistry } from '../di/points-dimension-registry.js';
 import { PointsLedgerService } from '../di/points-ledger-service.js';
+import { RewardCatalogService } from '../di/reward-catalog-service.js';
+import { CreditRedemptionService } from '../di/credit-redemption-service.js';
+import { CreditAwardService } from '../di/credit-award-service.js';
+import { ClassroomMessageService } from '../di/classroom-message-service.js';
+import { DbSideEffectEnqueuer } from '../di/pending-side-effect-enqueuer.js';
 import { AuthSessionBridgeService } from '../di/auth-session-bridge-service.js';
 import { CoursewareRuntimeScriptRegistry } from '../di/courseware-runtime-script-registry.js';
 import { FileStorageExtensionRegistry } from '../di/file-storage-extension-registry.js';
@@ -76,6 +86,9 @@ import { WorkerManager } from '../worker-runtime/worker-manager.js';
 import { HotReloadController } from '../plugin-host/hot-reload.js';
 import { LessonRuntime, defaultStageGuardPipeline } from '../lesson-engine/index.js';
 import { assessmentGraderRegistry } from '../assessment/registry-service.js';
+import { SubmissionRegistry, SubmissionAggregator } from '../submission-adapter/index.js';
+import { ISubmissionRegistryToken, ISubmissionAggregatorToken } from '../submission-adapter/index.js';
+import { applyGradeChange } from '../db/assignment-grade-writer.js';
 import { ClassroomRuntimeKernel } from '../classroom-runtime/index.js';
 import { PresenceEngineKernel } from '../presence-engine/index.js';
 import { CollaborationEngineKernel } from '../collaboration-engine/index.js';
@@ -91,6 +104,7 @@ import { UnifiedExtensionRegistry } from '../plugin-host/unified-extension-regis
 import { PluginLifecycleManager } from '../plugin-host/plugin-lifecycle-manager.js';
 import { CapabilityRegistry } from '../ai-capability/registry/capability-registry.js';
 import path from 'path';
+import type { Database as BetterSqliteDatabase } from 'better-sqlite3';
 
 export class Kernel {
   public readonly eventBus: EventBus;
@@ -249,7 +263,36 @@ export class Kernel {
     this.serviceRegistry.register(ICapabilityRegistryToken, this.capabilityRegistry);
     this.serviceRegistry.register(ISemesterGradeServiceToken, new SemesterGradeService(this.db as any));
     this.serviceRegistry.register(IPointsDimensionRegistryToken, new PointsDimensionRegistry());
-    this.serviceRegistry.register(IPointsLedgerServiceToken, new PointsLedgerService(this.db as any));
+    // 内核 db 是 db/index.js 的包装句柄；这些服务只用到 prepare/run/transaction 子集。
+    const flowDb = this.db as unknown as BetterSqliteDatabase;
+    const flowLedger = new PointsLedgerService(flowDb);
+    this.serviceRegistry.register(IPointsLedgerServiceToken, flowLedger);
+
+    // ClassroomFlowServer：统一学分发放 / 奖励目录 / 兑换（Q6/Q7/Q8）。
+    // 三者共享同一个 PointsLedgerService 实例，保证单一写入口径。
+    const rewardCatalog = new RewardCatalogService(flowDb);
+    const sideEffectEnqueuer = new DbSideEffectEnqueuer(flowDb);
+    this.serviceRegistry.register(IRewardCatalogServiceToken, rewardCatalog);
+    this.serviceRegistry.register(
+      ICreditRedemptionServiceToken,
+      new CreditRedemptionService(flowDb, flowLedger, undefined, rewardCatalog, {
+        eventPublisher: this.eventBus,
+        sideEffectEnqueuer,
+      }),
+    );
+    this.serviceRegistry.register(
+      ICreditAwardServiceToken,
+      new CreditAwardService(flowDb, flowLedger, {
+        eventPublisher: this.eventBus,
+        sideEffectEnqueuer,
+      }),
+    );
+    // 通讯协议可靠投递：与发放共用事件总线与补偿入队器。
+    this.serviceRegistry.register(
+      IClassroomMessageServiceToken,
+      new ClassroomMessageService(flowDb, this.eventBus, sideEffectEnqueuer),
+    );
+
     // Issue #366：受管名册读取（插件禁止直查 classes / students / class_students 的替代通道）
     this.serviceRegistry.register(IClassRosterServiceToken, new ClassRosterService(this.db));
     this.serviceRegistry.register(ILessonEngineServiceToken, { getRuntime: async () => this.lessonRuntime } as any);
@@ -289,6 +332,25 @@ export class Kernel {
     // 测评题型注册表（Issue #100）：内置 5 种题型 + 插件题型共用同一实例。
     // 必须在这里注册而不是 server.ts —— canary 会断言 PLUGIN_RESOLVABLE_TOKENS 全部可解析。
     this.serviceRegistry.register(IAssessmentGraderRegistryToken, assessmentGraderRegistry as any);
+
+    // 提交适配器（成绩采集闭环）：官方课件与插件提交共用 NormalizedSubmission 契约。
+    // gradeWriter 端口绑定到内核 db，成绩写入仍走 grade-writer 唯一入口（守手动分保护）。
+    const submissionRegistry = new SubmissionRegistry();
+    const submissionAggregator = new SubmissionAggregator(submissionRegistry, {
+      applyGradeChange: (input) =>
+        applyGradeChange(this.db as any, {
+          assignmentId: input.assignmentId,
+          studentId: input.studentId,
+          score: input.score,
+          status: input.status,
+          feedback: input.feedback,
+          source: input.source,
+          reason: input.reason,
+          overrideProtected: input.overrideProtected,
+        }),
+    });
+    this.serviceRegistry.register(ISubmissionRegistryToken, submissionRegistry);
+    this.serviceRegistry.register(ISubmissionAggregatorToken, submissionAggregator);
 
     // Capability check interceptor
     this.commandBus.setInterceptor(async (command) => {
@@ -444,6 +506,12 @@ export class Kernel {
         mod: AssignmentEvalPlugin,
         name: 'Assignment Evaluation and Peer Review Plugin',
         critical: false,
+      },
+      {
+        id: '@openlearn/plugin-classroom-flow-server',
+        mod: ClassroomFlowServerPlugin,
+        name: 'Classroom Flow Server Plugin',
+        critical: true,
       },
     ];
 

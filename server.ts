@@ -28,6 +28,8 @@ import { Server } from 'socket.io';
 import { kernelContainer } from './packages/core/kernel/index.js';
 import { PLATFORM_VERSION } from './packages/core/version.js';
 import { IClassroomLifecycleServiceToken, IInteractionRuntimeServiceToken } from './packages/core/di/interfaces.js';
+import { IClassroomMessageServiceToken, type IClassroomMessageService } from './packages/core/di/interfaces.js';
+import { startSideEffectWorker } from './packages/core/di/side-effect-worker.js';
 import { ClassroomRuntimeService } from './server/services/classroom-runtime-service.js';
 import { ClassroomFeedService, attachClassroomFeedService } from './server/services/classroom-feed-service.js';
 import { bindAIContextRegistry } from './server/ai-context-registry.js';
@@ -448,9 +450,15 @@ async function startServer() {
 
   // P2: ai.context.provider & ai.agent.persona 已在迁移完成后绑定（此处保留注释锚点）
 
+  // 通讯协议补投：把可靠消息服务交给 presence 的 message-resume 处理器，
+  // 学生重连上报 lastSeq 后由服务端定向补投未确认消息（Q13=C）。
+  const classroomMessageService =
+    await kernelContainer.serviceRegistry.resolve<IClassroomMessageService>(IClassroomMessageServiceToken);
+
   setupPresence({
     io,
     eventBus: kernelContainer.eventBus,
+    messageService: classroomMessageService,
     // 学生 socket 加入所属班级房间，使课堂广播（白板最大化视图同步等）
     // 不再依赖学生停留在哪个视图（作业工作区会 leave-lesson）
     lookupStudentClassIds: (studentId: string) =>
@@ -496,6 +504,8 @@ async function startServer() {
       ).map((row) => row.lesson_id);
     },
   });
+
+  startSideEffectWorker(kernelContainer.db as unknown as import('better-sqlite3').Database, kernelContainer.eventBus);
 
   // ── 健康检查与指标端点 (存活 / 就绪 / Prometheus) ───────────────────
   const startTime = Date.now();

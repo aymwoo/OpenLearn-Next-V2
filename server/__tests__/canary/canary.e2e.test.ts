@@ -57,9 +57,24 @@ import {
   IPluginHostToken,
   INetworkProxyServiceToken,
   IFileStorageExtensionRegistryToken,
+  ICreditAwardServiceToken,
+  IRewardCatalogServiceToken,
+  ICreditRedemptionServiceToken,
+  IClassroomMessageServiceToken,
 } from '../../../packages/core/di/interfaces.js';
 import { FileStorageExtensionRegistry } from '../../../packages/core/di/file-storage-extension-registry.js';
 import { IActivityRegistryToken } from '../../../packages/activity-ecosystem/index.js';
+import {
+  ISubmissionRegistryToken,
+  ISubmissionAggregatorToken,
+  SubmissionRegistry,
+  SubmissionAggregator,
+} from '../../../packages/core/submission-adapter/index.js';
+import { PointsLedgerService } from '../../../packages/core/di/points-ledger-service.js';
+import { RewardCatalogService } from '../../../packages/core/di/reward-catalog-service.js';
+import { CreditRedemptionService } from '../../../packages/core/di/credit-redemption-service.js';
+import { CreditAwardService } from '../../../packages/core/di/credit-award-service.js';
+import { ClassroomMessageService } from '../../../packages/core/di/classroom-message-service.js';
 import { StageGuardPipeline } from '../../../packages/core/lesson-engine/stage-guard-pipeline.js';
 import { buildCanaryZip } from './canary.builder';
 import { approvePluginCapabilities } from '../../../packages/core/plugin-host/plugin-grants.js';
@@ -327,6 +342,24 @@ describe('金丝雀插件双模式全链路测试（步骤 3）', () => {
       [IAssessmentGraderRegistryToken, assessmentGraderRegistry],
       [INetworkProxyServiceToken, extra.networkProxy],
       [IFileStorageExtensionRegistryToken, new FileStorageExtensionRegistry()],
+      // ClassroomFlowServer 系列服务（与生产 kernel 启动一致）
+      [IRewardCatalogServiceToken, new RewardCatalogService(db as never)],
+      [ISubmissionRegistryToken, new SubmissionRegistry()],
+      [
+        ISubmissionAggregatorToken,
+        new SubmissionAggregator(new SubmissionRegistry(), { applyGradeChange: () => ({ ok: true }) }),
+      ],
+      [
+        ICreditRedemptionServiceToken,
+        new CreditRedemptionService(
+          db as never,
+          new PointsLedgerService(db as never),
+          undefined,
+          new RewardCatalogService(db as never),
+        ),
+      ],
+      [ICreditAwardServiceToken, new CreditAwardService(db as never, new PointsLedgerService(db as never))],
+      [IClassroomMessageServiceToken, new ClassroomMessageService(db as never)],
     ];
 
     pluginsDir = fs.mkdtempSync(path.resolve(__dirname, '.tmp-plugins-'));
