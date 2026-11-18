@@ -585,3 +585,140 @@ describe('ExtensionPointRenderer — unmarked lazy factory self-healing (R-1)', 
     expect(errorSpy.mock.calls.some((args) => String(args[0]).includes('UNMARKED lazy factory'))).toBe(false);
   });
 });
+
+describe('classroom.active_segment.main — 授课工作区按环节类型分发', () => {
+  interface WorkProps {
+    segment?: { id?: string; type?: string; title?: string };
+    flow?: { snapshot?: { stage?: string } };
+  }
+  const XUEAN = (props: WorkProps) => (
+    <div data-testid="xuean-work">
+      {props.segment?.title}/{props.flow?.snapshot?.stage}
+    </div>
+  );
+  const GENERIC = (props: WorkProps) => <div data-testid="generic-work">{props.segment?.title}</div>;
+  const Moodle = () => <div data-testid="moodle-work" />;
+  const FlowWork = (props: WorkProps) => <div data-testid="flow-work">{props.flow?.snapshot?.stage}</div>;
+
+  it('只渲染 targetType 与当前 segment.type 匹配的扩展', async () => {
+    usePluginHostStore.getState().registerExtensionPoint('classroom.active_segment.main', {
+      id: 'xuean',
+      label: '学案',
+      pluginId: 'ext-xuean',
+      targetType: 'xuean:task',
+      component: XUEAN,
+    });
+    usePluginHostStore.getState().registerExtensionPoint('classroom.active_segment.main', {
+      id: 'moodle',
+      label: 'Moodle',
+      pluginId: 'ext-moodle',
+      targetType: 'moodle:quiz',
+      component: Moodle,
+    });
+
+    renderWithHost(
+      <ExtensionPointRenderer
+        slot="classroom.active_segment.main"
+        slotProps={{ segment: { id: 's1', type: 'xuean:task', title: '研读' } }}
+      />,
+    );
+    expect(await screen.findByTestId('xuean-work')).toBeTruthy();
+    expect(screen.queryByTestId('moodle-work')).toBeNull();
+  });
+
+  it('未声明 targetType 的扩展对所有环节可见（向后兼容）', async () => {
+    usePluginHostStore.getState().registerExtensionPoint('classroom.active_segment.main', {
+      id: 'generic',
+      label: '通用',
+      pluginId: 'ext-generic',
+      component: GENERIC,
+    });
+    renderWithHost(
+      <ExtensionPointRenderer
+        slot="classroom.active_segment.main"
+        slotProps={{ segment: { id: 's1', type: 'anything' } }}
+      />,
+    );
+    expect(await screen.findByTestId('generic-work')).toBeTruthy();
+  });
+
+  it('透传 flow 控制器 slotProps 给工作区组件', async () => {
+    const flow = {
+      snapshot: { stage: 'IN_CLASS_TEACHING' },
+      setActiveSegment: () => {},
+      advanceStage: () => {},
+      sendMessage: async () => ({}),
+      refresh: () => {},
+    };
+    usePluginHostStore.getState().registerExtensionPoint('classroom.active_segment.main', {
+      id: 'xuean2',
+      label: '学案',
+      pluginId: 'ext-xuean',
+      targetType: 'xuean:task',
+      component: FlowWork,
+    });
+    renderWithHost(
+      <ExtensionPointRenderer
+        slot="classroom.active_segment.main"
+        slotProps={{ segment: { id: 's1', type: 'xuean:task' }, flow }}
+      />,
+    );
+    const el = await screen.findByTestId('flow-work');
+    expect(el.textContent).toContain('IN_CLASS_TEACHING');
+  });
+});
+
+describe('classroom.active_segment.student_main — 学生端对称工作区按环节类型分发', () => {
+  interface WorkProps {
+    segment?: { id?: string; type?: string; title?: string };
+    flow?: { snapshot?: { lessonId?: string | null } };
+  }
+  const XUEAN_STU = (props: WorkProps) => (
+    <div data-testid="xuean-student-work">
+      {props.segment?.type}/{props.flow?.snapshot?.lessonId ?? 'no-lesson'}
+    </div>
+  );
+  const MOODLE_STU = () => <div data-testid="moodle-student-work" />;
+
+  it('只渲染 targetType 与当前 segment.type 匹配的学生工作区', async () => {
+    usePluginHostStore.getState().registerExtensionPoint('classroom.active_segment.student_main', {
+      id: 'xuean-stu',
+      label: '学案学生端',
+      pluginId: 'ext-xuean',
+      targetType: 'xuean:task',
+      component: XUEAN_STU,
+    });
+    usePluginHostStore.getState().registerExtensionPoint('classroom.active_segment.student_main', {
+      id: 'moodle-stu',
+      label: 'Moodle 学生端',
+      pluginId: 'ext-moodle',
+      targetType: 'moodle:quiz',
+      component: MOODLE_STU,
+    });
+    renderWithHost(
+      <ExtensionPointRenderer
+        slot="classroom.active_segment.student_main"
+        slotProps={{ segment: { id: 's1', type: 'xuean:task' }, flow: { snapshot: { lessonId: 'les-1' } } }}
+      />,
+    );
+    expect(await screen.findByTestId('xuean-student-work')).toBeTruthy();
+    expect(screen.queryByTestId('moodle-student-work')).toBeNull();
+  });
+
+  it('未声明 targetType 的学生工作区对所有环节可见（向后兼容）', async () => {
+    const GenericStu = (props: WorkProps) => <div data-testid="generic-stu-work">{props.segment?.id}</div>;
+    usePluginHostStore.getState().registerExtensionPoint('classroom.active_segment.student_main', {
+      id: 'generic-stu',
+      label: '通用',
+      pluginId: 'ext-generic',
+      component: GenericStu,
+    });
+    renderWithHost(
+      <ExtensionPointRenderer
+        slot="classroom.active_segment.student_main"
+        slotProps={{ segment: { id: 's1', type: 'anything' } }}
+      />,
+    );
+    expect(await screen.findByTestId('generic-stu-work')).toBeTruthy();
+  });
+});
