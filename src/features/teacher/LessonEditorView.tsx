@@ -15,6 +15,8 @@ import { useWhiteboardAutoSave } from '../whiteboard/services/useWhiteboardAutoS
 import type { WhiteboardPageItem, WhiteboardDragState } from '../whiteboard/InteractiveWhiteboard';
 import { ExtensionPointRenderer } from '../../plugin-host/extension-point-renderer';
 import { useOptionalPluginHost } from '../../plugin-host/plugin-host-context';
+import { isModePacksEnabled } from '../classroom/mode-pack/flags';
+import { routePrepDrop } from '../classroom/mode-pack/prepDropRouter';
 
 export function LessonEditorView() {
   // C1-R3: 全部数据经 AppDataContext 取用（不再经 TeacherView props 透传）
@@ -166,6 +168,15 @@ export function LessonEditorView() {
         return true;
       }
       if (target.type === 'segment') {
+        if (isModePacksEnabled()) {
+          const seg = timelineSegments.find((s: { id: string }) => s.id === target.segmentId) as
+            { id: string; type?: string } | undefined;
+          const route = routePrepDrop({ segmentType: seg?.type, segmentId: target.segmentId });
+          // 跨包：落点是学案环节时不写白板 page_meta，交给学案存储（本切片仅拦截错误写入）
+          if (route.kind === 'xuean-activity') {
+            return true;
+          }
+        }
         void (async () => {
           await whiteboardRef.current?.moveElementToSegment?.(elementId, target.segmentId);
           if (selectedLesson) {
@@ -177,7 +188,7 @@ export function LessonEditorView() {
       }
       return false;
     },
-    [whiteboardRef, selectedLesson, flushAutoSave, fetchElements],
+    [whiteboardRef, selectedLesson, flushAutoSave, fetchElements, timelineSegments],
   );
 
   // 备课与教案设计器：向打开的学生端Tab实时广播课节与环节变化

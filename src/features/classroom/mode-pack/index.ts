@@ -12,3 +12,5 @@ export {
 export { XUEAN_MODE_PACK, XUEAN_MODE_PACK_ID, XUEAN_MODE_PACK_SEGMENT_TYPE } from './xueanPack';
 export { registerXueanModePack, unregisterXueanModePack } from './registerXueanModePack';
 export { XueanModeWorkspace, XueanTeacherModeWorkspace, XueanStudentModeWorkspace } from './XueanModeWorkspace';
+export { ModePackPrepShell } from './ModePackPrepShell';
+export { routePrepDrop, type PrepDropKind, type PrepDropRoute } from './prepDropRouter';

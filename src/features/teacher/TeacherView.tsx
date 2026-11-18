@@ -33,9 +33,13 @@ const AssessmentCenter = lazy(() =>
   import('../assessment/AssessmentCenter').then((m) => ({ default: m.AssessmentCenter })),
 );
 const XueanEditor = lazy(() => import('./xuean/XueanEditor').then((m) => ({ default: m.XueanEditor })));
+const ModePackPrepShell = lazy(() =>
+  import('../classroom/mode-pack/ModePackPrepShell').then((m) => ({ default: m.ModePackPrepShell })),
+);
 
 import { useOptionalAppData } from '../../context/AppDataContext';
 import { useThemeStore } from '../../store/themeStore';
+import { isModePacksEnabled } from '../classroom/mode-pack/flags';
 
 /**
  * TeacherView is the single routing wrapper for the entire `teacher` branch of App.tsx.
@@ -134,10 +138,14 @@ export function TeacherView(_props: TeacherViewProps = {}) {
 
           {teacherTab === 'dashboard' ? (
             <Dashboard />
-          ) : teacherTab === 'lesson_editor' ? (
-            <LessonEditorView />
-          ) : teacherTab === 'xuean_editor' ? (
-            <XueanEditor />
+          ) : teacherTab === 'lesson_editor' || teacherTab === 'xuean_editor' ? (
+            isModePacksEnabled() ? (
+              <ModePackPrepShell />
+            ) : teacherTab === 'lesson_editor' ? (
+              <LessonEditorView />
+            ) : (
+              <XueanEditor />
+            )
           ) : teacherTab === 'live_class' ? null : teacherTab === 'plugins' ? (
             <PluginView />
           ) : teacherTab === 'courses' ? (

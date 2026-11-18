@@ -13,6 +13,7 @@ export const WHITEBOARD_MODE_PACK: ModePackContribution = {
   labelEn: 'Interactive Whiteboard',
   segmentTypes: [DEFAULT_MODE_PACK_SEGMENT_TYPE],
   isDefault: true,
+  prepContributionId: 'prep-whiteboard',
   teacherWorkspaceId: 'mode-whiteboard-teacher',
   studentWorkspaceId: 'mode-whiteboard-student',
 };
