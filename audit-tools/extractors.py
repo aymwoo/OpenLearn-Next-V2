@@ -191,6 +191,7 @@ def extract_doc_facts(docs_root: Path, packages_root: Path) -> list[DocFact]:
         "learning-analytics-engine": "analytics-engine",
         # docs/reference/
         "activity-ecosystem": "activity-ecosystem",
+        "classroom-flow-server": "submission-adapter",  # 综合指南含提交适配器章节，覆盖该代码子系统
         "plugin-capability-matrix": "esm-loader",  # 描述 plugin 能力矩阵, 涉及 esm-loader
         # docs/lesson/ 与 docs/workspace/ —— 文件名与代码目录不同名，需显式登记，
         # 否则前缀匹配会漏掉这两个子系统（曾被误报为"有代码无文档"）。
