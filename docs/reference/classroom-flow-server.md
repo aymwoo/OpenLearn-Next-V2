@@ -44,6 +44,8 @@ Manifest 贡献键：`contributes['mode.pack']`（见 `@openlearn/plugin-sdk` �
 
 课中画布：宿主经 `WhiteboardHostBridgeProvider` 注入与旧中栏相同的 `LazyWhiteboard` props（含 `broadcastFullscreen` / `onFullscreenSync` / `activeSegmentId` / `onPagesStateChange`）。flag 开启时教师白板 tab 与双端 `active_segment.*` 工作区消费该桥；关闭时仍直挂 `LazyWhiteboard`。
 
+内置学案包 id：`@openlearn/mode-xuean`（认领精确类型 `xuean`，非 default）。flag 开启时注册 timeline 环节类型「学案学习」，教师 `active_segment.main` 挂 `ProgressPanel`，学生 `student_main` primary 挂 `StudentXueanView`。平行学生 `xuean` tab 暂留作 fallback；SubmissionAdapter / `xuean:study` 前缀分型后续再做。
+
 ---
 
 ## 2. 通讯协议（ClassroomMessage）
