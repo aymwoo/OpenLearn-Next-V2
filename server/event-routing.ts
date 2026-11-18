@@ -520,13 +520,18 @@ export const SOCKET_ROUTES: readonly SocketRoute[] = [
         classId?: string | null;
         targetUserIds?: string[] | null;
       };
+      const targets = Array.isArray(p.targetUserIds) ? p.targetUserIds.filter((id): id is string => Boolean(id)) : [];
+      // 定向消息只进收件人与教师房间。classroomEventRooms 会把课节房间一并并入，
+      // 用在这里会把作答载荷广播给同课节的其他学生。
+      if (targets.length > 0) {
+        return [...new Set([...targets.map((id) => userRoom(String(id))), PRESENCE_STAFF_ROOM])];
+      }
       const rooms = classroomEventRooms(p.lessonId, {
         classId: p.classId ?? undefined,
-        userIds: p.targetUserIds ?? undefined,
       });
       return rooms.length > 0 ? rooms : null;
     },
-    description: '通讯协议可靠消息 → 课节/班级房间 + 指定用户房间',
+    description: '通讯协议可靠消息 → 定向进收件人+教师房间；广播进课节+班级房间',
   },
 
   // ── 关于被删除的 spotlight 路由 ──────────────────────────────────────────

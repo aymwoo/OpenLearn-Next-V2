@@ -275,7 +275,10 @@ export class Kernel {
     this.serviceRegistry.register(IRewardCatalogServiceToken, rewardCatalog);
     this.serviceRegistry.register(
       ICreditRedemptionServiceToken,
-      new CreditRedemptionService(flowDb, flowLedger, undefined, rewardCatalog),
+      new CreditRedemptionService(flowDb, flowLedger, undefined, rewardCatalog, {
+        eventPublisher: this.eventBus,
+        sideEffectEnqueuer,
+      }),
     );
     this.serviceRegistry.register(
       ICreditAwardServiceToken,

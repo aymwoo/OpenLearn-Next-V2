@@ -30,7 +30,7 @@ export interface SendMessageInput {
 }
 
 export type SendFailureCode =
-  'CHANNEL_NOT_REGISTERED' | 'CHANNEL_OWNER_MISMATCH' | 'ROLE_NOT_ALLOWED' | 'PAYLOAD_INVALID';
+  'CHANNEL_NOT_REGISTERED' | 'CHANNEL_OWNER_MISMATCH' | 'ROLE_NOT_ALLOWED' | 'PAYLOAD_INVALID' | 'MESSAGE_ID_CONFLICT';
 
 export interface SendMessageResult {
   ok: boolean;
@@ -93,7 +93,13 @@ export interface MessageEventPublisher {
 
 /** 补偿入队端口（失败投递进 pending_side_effects） */
 export interface MessageSideEffectEnqueuer {
-  enqueue(effect: { op: 'emitEvent'; bizKey: string; payload: unknown; correlationId: string }): void | Promise<void>;
+  enqueue(effect: {
+    source: string;
+    op: 'emitEvent';
+    bizKey: string;
+    payload: unknown;
+    correlationId: string;
+  }): void | Promise<void>;
 }
 
 interface MessageRow {
@@ -187,49 +193,83 @@ export class ClassroomMessageService {
         now,
       );
 
+    if (info.changes === 0) {
+      const existing = this.db
+        .prepare('SELECT seq, channel, sender_actor_id, payload FROM classroom_messages WHERE id = ?')
+        .get(messageId) as { seq: number; channel: string; sender_actor_id: string; payload: string } | undefined;
+      if (
+        !existing ||
+        existing.channel !== input.channel ||
+        existing.sender_actor_id !== input.senderActorId ||
+        canonicalJson(this.safeParse(existing.payload)) !== canonicalJson(input.payload ?? {})
+      ) {
+        return { ok: false, code: 'MESSAGE_ID_CONFLICT', error: 'messageId 已被不同的消息占用' };
+      }
+      return { ok: true, messageId, seq: existing.seq, duplicated: true };
+    }
+
     const row = this.db.prepare('SELECT seq FROM classroom_messages WHERE id = ?').get(messageId) as { seq: number };
-    const duplicated = info.changes === 0;
-
-    if (!duplicated) this.publishEvent(messageId, input, now);
-
-    return { ok: true, messageId, seq: row.seq, duplicated };
+    this.publishEvent(messageId, input, now);
+    return { ok: true, messageId, seq: row.seq, duplicated: false };
   }
 
-  /** 客户端确认收到 */
-  ack(messageId: string): boolean {
-    const info = this.db
+  /**
+   * 收件人确认自己收到。回执按 (messageId, userId) 记录，不把整条消息标成已确认，
+   * 因此一个学生的 ACK 不会停掉其他收件人的补投。非收件人返回 false。
+   */
+  ack(messageId: string, userId: string): boolean {
+    if (!messageId || !userId) return false;
+    const row = this.db.prepare('SELECT * FROM classroom_messages WHERE id = ?').get(messageId) as
+      MessageRow | undefined;
+    if (!row || !this.canSee(row, userId)) return false;
+    this.db
       .prepare(
-        `UPDATE classroom_messages SET status = 'acked', acked_at = ?, updated_at = ?
-          WHERE id = ? AND status <> 'acked'`,
+        `INSERT OR IGNORE INTO classroom_message_receipts (message_id, user_id, acked_at)
+         VALUES (?, ?, ?)`,
       )
-      .run(Date.now(), Date.now(), messageId);
-    return info.changes > 0;
+      .run(messageId, userId, Date.now());
+    return true;
   }
 
-  /** 断线补投查询：严格按 seq 游标，过滤目标用户与过期消息 */
+  /** 断线补投查询：严格按 seq 游标，过滤目标用户、过期消息和该用户已确认的回执 */
   replay(query: ReplayQuery): ReplayedMessage[] {
     const limit = Math.min(Math.max(query.limit ?? 100, 1), 500);
+    const now = Date.now();
+    const pendingClause = `
+      AND status IN ('pending', 'delivered')
+      AND (expires_at IS NULL OR expires_at > ?)
+      AND NOT EXISTS (
+        SELECT 1 FROM classroom_message_receipts r
+        WHERE r.message_id = classroom_messages.id AND r.user_id = ?
+      )`;
     let rows: MessageRow[];
-    if (query.lessonId) {
+    if (query.lessonId && query.classId) {
+      rows = this.db
+        .prepare(
+          `SELECT * FROM classroom_messages
+            WHERE lesson_id = ? AND class_id = ? AND seq > ?
+              ${pendingClause}
+            ORDER BY seq ASC LIMIT ?`,
+        )
+        .all(query.lessonId, query.classId, query.sinceSeq, now, query.viewerId, limit) as MessageRow[];
+    } else if (query.lessonId) {
       rows = this.db
         .prepare(
           `SELECT * FROM classroom_messages
             WHERE lesson_id = ? AND seq > ?
-              AND status IN ('pending', 'delivered')
-              AND (expires_at IS NULL OR expires_at > ?)
+              ${pendingClause}
             ORDER BY seq ASC LIMIT ?`,
         )
-        .all(query.lessonId, query.sinceSeq, Date.now(), limit) as MessageRow[];
+        .all(query.lessonId, query.sinceSeq, now, query.viewerId, limit) as MessageRow[];
     } else if (query.classId) {
       rows = this.db
         .prepare(
           `SELECT * FROM classroom_messages
             WHERE class_id = ? AND seq > ?
-              AND status IN ('pending', 'delivered')
-              AND (expires_at IS NULL OR expires_at > ?)
+              ${pendingClause}
             ORDER BY seq ASC LIMIT ?`,
         )
-        .all(query.classId, query.sinceSeq, Date.now(), limit) as MessageRow[];
+        .all(query.classId, query.sinceSeq, now, query.viewerId, limit) as MessageRow[];
     } else {
       return [];
     }
@@ -264,12 +304,14 @@ export class ClassroomMessageService {
     if (!desc) {
       return { ok: false, code: 'CHANNEL_NOT_REGISTERED', error: `channel "${input.channel}" 未注册` };
     }
-    if (!desc.shared && input.senderPluginId && desc.owner !== input.senderPluginId) {
-      return {
-        ok: false,
-        code: 'CHANNEL_OWNER_MISMATCH',
-        error: `channel "${input.channel}" 属于 ${desc.owner}，发送者 ${input.senderPluginId} 无权使用`,
-      };
+    if (input.senderPluginId) {
+      if (!desc.shared && desc.owner !== input.senderPluginId) {
+        return {
+          ok: false,
+          code: 'CHANNEL_OWNER_MISMATCH',
+          error: `channel "${input.channel}" 属于 ${desc.owner}，发送者 ${input.senderPluginId} 无权使用`,
+        };
+      }
     }
     if (desc.rolesAllowed && desc.rolesAllowed.length > 0 && !desc.rolesAllowed.includes(input.senderRole)) {
       return { ok: false, code: 'ROLE_NOT_ALLOWED', error: `角色 ${input.senderRole} 不可发送到 ${input.channel}` };
@@ -323,6 +365,7 @@ export class ClassroomMessageService {
     void this.publisher.publish(event).catch(() => {
       if (this.enqueuer) {
         void this.enqueuer.enqueue({
+          source: 'classroom.message',
           op: 'emitEvent',
           bizKey: `classroom.message:${messageId}`,
           payload: event,
@@ -331,4 +374,17 @@ export class ClassroomMessageService {
       }
     });
   }
+}
+
+/** 比较载荷时忽略键顺序，避免同一对象的两次序列化被当成冲突。 */
+function canonicalJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map((item) => canonicalJson(item)).join(',')}]`;
+  if (value && typeof value === 'object') {
+    const record = value as Record<string, unknown>;
+    return `{${Object.keys(record)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${canonicalJson(record[key])}`)
+      .join(',')}}`;
+  }
+  return JSON.stringify(value ?? null);
 }

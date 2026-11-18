@@ -59,7 +59,16 @@ CREATE INDEX IF NOT EXISTS idx_cm_channel
 CREATE INDEX IF NOT EXISTS idx_cm_expiry
   ON classroom_messages(expires_at);
 
+-- 按收件人确认。一条广播被某个学生 ACK 后，其他未确认的收件人仍可补投。
+CREATE TABLE IF NOT EXISTS classroom_message_receipts (
+  message_id TEXT NOT NULL,
+  user_id TEXT NOT NULL,
+  acked_at INTEGER NOT NULL,
+  PRIMARY KEY (message_id, user_id)
+);
+
 -- DOWN
+DROP TABLE IF EXISTS classroom_message_receipts;
 DROP INDEX IF EXISTS idx_cm_expiry;
 DROP INDEX IF EXISTS idx_cm_channel;
 DROP INDEX IF EXISTS idx_cm_status;

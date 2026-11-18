@@ -111,13 +111,15 @@ describe('SubmissionAggregator', () => {
     const writer: GradeWriterPort = { applyGradeChange: vi.fn(() => ({ ok: true, historyId: 'h1' })) };
     const agg = new SubmissionAggregator(reg, writer);
 
-    const ok = await agg.writeGrade('a1', 'ext-xuean:sub-1', {});
+    const ok = await agg.writeGrade('a1', 'ext-xuean:sub-1', {}, { score: 90, overrideProtected: true });
     expect(ok.ok).toBe(true);
     expect(writer.applyGradeChange).toHaveBeenCalledWith(
-      expect.objectContaining({ studentId: 'stu-1', score: 85, source: 'plugin' }),
+      expect.objectContaining({ studentId: 'stu-1', score: 90, source: 'manual', overrideProtected: true }),
     );
 
-    expect((await agg.writeGrade('a1', 'missing', {})).reason).toBe('submission-not-found');
-    expect((await agg.writeGrade('nope', 'ext-x:sub-1', {})).reason).toBe('adapter-not-found-or-no-grade-mapping');
+    expect((await agg.writeGrade('a1', 'missing', {}, { score: 1 })).reason).toBe('submission-not-found');
+    expect((await agg.writeGrade('nope', 'ext-x:sub-1', {}, { score: 1 })).reason).toBe(
+      'adapter-not-found-or-no-grade-mapping',
+    );
   });
 });

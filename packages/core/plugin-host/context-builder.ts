@@ -733,9 +733,22 @@ function wrapClassroomMessageService(
     listChannels?: () => ReadonlyArray<{ name: string; owner: string }>;
   };
   return {
-    send: createSafeFunction((input: Parameters<IClassroomMessageService['send']>[0]) => service.send(input)),
-    ack: createSafeFunction((id: string) => service.ack(id)),
-    replay: createSafeFunction((query: Parameters<IClassroomMessageService['replay']>[0]) => service.replay(query)),
+    send: createSafeFunction((input: Parameters<IClassroomMessageService['send']>[0]) =>
+      service.send({
+        ...input,
+        senderPluginId: pluginId,
+        senderRole: 'plugin',
+        senderActorId: `plugin:${pluginId}`,
+      }),
+    ),
+    ack: createSafeFunction(() => {
+      throw new Error(
+        'IClassroomMessageService.ack 不向插件开放。收件人请 POST /api/classroomflowserver/messages/:id/ack',
+      );
+    }),
+    replay: createSafeFunction(() => {
+      throw new Error('IClassroomMessageService.replay 不向插件开放。请 GET /api/classroomflowserver/messages');
+    }),
     registerChannel: createSafeFunction(
       (d: { name: string; shared?: boolean; rolesAllowed?: string[]; requiredPayloadFields?: string[] }) => {
         const result = withOwner.registerChannel?.({ ...d, owner: pluginId }) ?? {

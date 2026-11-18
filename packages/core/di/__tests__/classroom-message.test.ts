@@ -39,6 +39,12 @@ describe('ClassroomMessageService — 可靠通道发送/ACK/补投', () => {
         created_at INTEGER NOT NULL,
         updated_at INTEGER NOT NULL
       );
+      CREATE TABLE classroom_message_receipts (
+        message_id TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        acked_at INTEGER NOT NULL,
+        PRIMARY KEY (message_id, user_id)
+      );
       CREATE INDEX idx_replay ON classroom_messages(lesson_id, seq);
     `);
     published = [];
@@ -92,14 +98,33 @@ describe('ClassroomMessageService — 可靠通道发送/ACK/补投', () => {
     expect(count).toBe(1);
   });
 
-  it('ack：置 acked 后不再进入补投查询', () => {
+  it('ack 只让确认者自己离开补投，其他收件人仍能拉到广播', () => {
     service.send({ ...base, messageId: 'm1' });
-    const before = service.replay({ lessonId: 'les-1', sinceSeq: 0, viewerId: 'stu-2' });
-    expect(before).toHaveLength(1);
+    expect(service.ack('m1', 'stu-1')).toBe(true);
+    expect(service.replay({ lessonId: 'les-1', sinceSeq: 0, viewerId: 'stu-1' })).toHaveLength(0);
+    expect(service.replay({ lessonId: 'les-1', sinceSeq: 0, viewerId: 'stu-2' })).toHaveLength(1);
+    expect(service.ack('m1', 'stu-2')).toBe(true);
+    expect(service.replay({ lessonId: 'les-1', sinceSeq: 0, viewerId: 'stu-2' })).toHaveLength(0);
+  });
 
-    expect(service.ack('m1')).toBe(true);
-    const after = service.replay({ lessonId: 'les-1', sinceSeq: 0, viewerId: 'stu-2' });
-    expect(after).toHaveLength(0);
+  it('非收件人不能确认定向消息', () => {
+    service.send({ ...base, messageId: 'm1', targetUserIds: ['stu-1'] });
+    expect(service.ack('m1', 'stu-2')).toBe(false);
+    expect(service.replay({ lessonId: 'les-1', sinceSeq: 0, viewerId: 'stu-1' })).toHaveLength(1);
+  });
+
+  it('同时给出课节和班级时，补投不串班', () => {
+    service.send({ ...base, messageId: 'm1', classId: 'cls-1' });
+    service.send({ ...base, messageId: 'm2', classId: 'cls-2' });
+    const replay = service.replay({ lessonId: 'les-1', classId: 'cls-1', sinceSeq: 0, viewerId: 'stu-2' });
+    expect(replay.map((m) => m.id)).toEqual(['m1']);
+  });
+
+  it('相同 messageId 但载荷不同视为冲突，不覆盖原消息', () => {
+    service.send({ ...base, messageId: 'm1', payload: { step: 1 } });
+    const conflict = service.send({ ...base, messageId: 'm1', payload: { step: 9 } });
+    expect(conflict.ok).toBe(false);
+    expect(conflict.code).toBe('MESSAGE_ID_CONFLICT');
   });
 
   it('补投按 seq 游标：只返回 sinceSeq 之后的消息', () => {
@@ -148,6 +173,12 @@ describe('ClassroomMessageService — channel 注册与归属校验（Q14=B）',
         status TEXT NOT NULL DEFAULT 'pending', attempts INTEGER NOT NULL DEFAULT 0,
         delivered_at INTEGER, acked_at INTEGER, expires_at INTEGER,
         created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+      );
+      CREATE TABLE classroom_message_receipts (
+        message_id TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        acked_at INTEGER NOT NULL,
+        PRIMARY KEY (message_id, user_id)
       );
     `);
     service = new ClassroomMessageService(db);

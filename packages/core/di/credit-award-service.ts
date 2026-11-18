@@ -65,7 +65,13 @@ export interface CreditEventPublisher {
 
 /** 副作用入队端口：事件发布失败时投递补偿队列（pending_side_effects）。 */
 export interface SideEffectEnqueuer {
-  enqueue(effect: { op: 'emitEvent'; bizKey: string; payload: unknown; correlationId: string }): void | Promise<void>;
+  enqueue(effect: {
+    source: string;
+    op: 'emitEvent';
+    bizKey: string;
+    payload: unknown;
+    correlationId: string;
+  }): void | Promise<void>;
 }
 
 interface AwardRow {
@@ -222,6 +228,7 @@ export class CreditAwardService {
     void this.eventPublisher.publish(event).catch(() => {
       if (this.enqueuer) {
         void this.enqueuer.enqueue({
+          source: 'points.awarded',
           op: 'emitEvent',
           bizKey: `points.awarded:${result.pointLogId}`,
           payload: event,

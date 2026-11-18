@@ -13,6 +13,7 @@ export class DbSideEffectEnqueuer implements SideEffectEnqueuer {
   constructor(private db: Database) {}
 
   enqueue(effect: {
+    source: string;
     op: 'emitEvent';
     bizKey: string;
     payload: unknown;
@@ -25,10 +26,11 @@ export class DbSideEffectEnqueuer implements SideEffectEnqueuer {
         `INSERT OR IGNORE INTO pending_side_effects (
            id, source, op, biz_key, payload, status, attempts, max_attempts,
            next_retry_at, origin_actor_id, correlation_id, created_at, updated_at
-         ) VALUES (?, 'credit_award', ?, ?, ?, 'pending', 0, 5, ?, ?, ?, ?, ?)`,
+         ) VALUES (?, ?, ?, ?, ?, 'pending', 0, 5, ?, ?, ?, ?, ?)`,
       )
       .run(
         `se_${uuidv7()}`,
+        effect.source,
         effect.op,
         effect.bizKey,
         JSON.stringify(effect.payload),

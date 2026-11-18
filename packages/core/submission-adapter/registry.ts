@@ -82,6 +82,9 @@ export class SubmissionAggregator {
       try {
         const items = await adapter.listSubmissions(filter);
         for (const item of items) {
+          if (filter.studentId && item.studentId !== filter.studentId) continue;
+          if (filter.classId && item.classId !== filter.classId) continue;
+          if (filter.lessonId && item.lessonId !== filter.lessonId) continue;
           if (seen.has(item.id)) continue; // (adapterId, externalId) 去重
           seen.add(item.id);
           submissions.push(item);
@@ -104,7 +107,7 @@ export class SubmissionAggregator {
     adapterId: string,
     submissionId: string,
     filter: SubmissionFilter,
-    _actorId?: string,
+    grade: { score: number; feedback?: string | null; overrideProtected?: boolean; reason?: string | null },
   ): Promise<{ ok: boolean; reason?: string; historyId?: string }> {
     const adapter = this.registry.list().find((a) => a.descriptor.id === adapterId);
     if (!adapter || !adapter.toGradeInput) {
@@ -113,9 +116,18 @@ export class SubmissionAggregator {
     const items = await adapter.listSubmissions(filter);
     const sub = items.find((s) => s.id === submissionId);
     if (!sub) return { ok: false, reason: 'submission-not-found' };
-    const input = adapter.toGradeInput(sub);
-    if (!input) return { ok: false, reason: 'not-gradeable' };
-    // 插件/自动写入默认不得越过手动分保护；overrideProtected 由调用方显式给出且已鉴权
-    return this.gradeWriter.applyGradeChange(input);
+    const mapped = adapter.toGradeInput(sub);
+    if (!mapped) return { ok: false, reason: 'not-gradeable' };
+    // 分数、评语和是否越过手动分保护以教师本次请求为准。适配器只提供作业与学生映射。
+    return this.gradeWriter.applyGradeChange({
+      assignmentId: mapped.assignmentId,
+      studentId: mapped.studentId,
+      score: grade.score,
+      status: mapped.status,
+      feedback: grade.feedback ?? null,
+      source: 'manual',
+      reason: grade.reason ?? mapped.reason ?? 'classroom-flow grade',
+      overrideProtected: grade.overrideProtected === true,
+    });
   }
 }

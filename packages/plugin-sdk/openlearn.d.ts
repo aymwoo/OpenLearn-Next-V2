@@ -1180,7 +1180,7 @@ interface IClassroomMessageService {
     seq?: number;
     duplicated?: boolean;
   };
-  ack(messageId: string): boolean;
+  ack(messageId: string, userId: string): boolean;
   replay(query: {
     lessonId?: string | null;
     classId?: string | null;
@@ -1395,7 +1395,7 @@ interface SubmissionAggregator {
     adapterId: string,
     submissionId: string,
     filter: SubmissionFilter,
-    actorId?: string,
+    grade: { score: number; feedback?: string | null; overrideProtected?: boolean; reason?: string | null },
   ): Promise<{ ok: boolean; reason?: string; historyId?: string }>;
 }
 declare const ISubmissionRegistryToken: Token<SubmissionRegistry>;

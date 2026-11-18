@@ -58,6 +58,12 @@ const cases: Case[] = [
     pluginId: '@my-scope/hello',
     expected: '@my-scope/hello.listUsers',
   },
+  {
+    name: 'kernel classroom.sendMessage stays global',
+    type: 'classroom.sendMessage',
+    pluginId: 'ext-xuean',
+    expected: 'classroom.sendMessage',
+  },
 ];
 
 describe('plugin-namespace', () => {

@@ -19,6 +19,7 @@ var pendingCalls = new Map();
 //    保持一致 — 单一真理源；Worker bootstrap 是动态生成的代码字符串，
 //    无法通过 import 共享模块，因此内联一份，必须与源文件同步修改） ──
 function resolvePluginCommandType(type, pluginId) {
+  if (type === 'classroom.sendMessage') return type;
   var prefix = pluginId + '.';
   if (type.indexOf(prefix) === 0) return type;
   // UUID v7 前缀 ⇒ 已是完全限定键。

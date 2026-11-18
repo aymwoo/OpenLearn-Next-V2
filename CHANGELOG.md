@@ -40,6 +40,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixes
 
+- **课堂流程基座的投递与授权**：定向 `classroom.message` 只进入收件人与教师房间；ACK 按收件人记录；学分发放、余额、消息和提交校验班级或课节归属；师生工作区经 `POST /api/classroomflowserver/messages` 发送，学生不再走仅教师可用的 `/api/commands`。补偿队列由 `SideEffectWorker` 重试，兑换成功发布 `reward.redeemed`，教师批改发布 `submission.graded`。未声明 `primary` 的学生工作区不再替换原生内容面板。
+
 - **学生端点击「全屏」按钮无反应（Gitee Issue IKVSIN）**：
   - **根因是 Tailwind v4 的类覆盖顺序，而非条件拦截**：旧实现里「默认态」与「右栏全屏态」产出的是**同一个 class 集合**（都是 `w-1/3 md:block hidden`），「右栏全屏」只是在其后**追加**了一个 `hidden` —— 追加并不能让 `md:block` 失效。Tailwind v4 生成的 CSS 在同一 `@layer utilities` 内，`.hidden { display:none }`（实测 L262）位置早于 `@media (min-width:48rem)` 内的 `.md\:block { display:block }`（实测 L271），同层同优先级下后者胜出 ⇒ **桌面端 `display:block` 覆盖 `display:none`**，被要求隐藏的左栏依然可见，视觉上就是「点了全屏没反应」。
   - **修复口径**：每个状态必须产出**唯一且完整**的显隐表达，两种意图不再共用同一个 class 集合 —— 「所有宽度都隐藏」用单一的 `hidden`（**不得**再带 `md:block`），「仅桌面端显示」用 `hidden md:block`（仓库既有写法，与 `StudentAssignmentQuestionPanel` 一致），「所有宽度都显示」不带任何 display 类。原先靠「先写 `md:block hidden` 再追加一个 `hidden`」的字符串拼接被移除。

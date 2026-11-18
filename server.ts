@@ -29,6 +29,7 @@ import { kernelContainer } from './packages/core/kernel/index.js';
 import { PLATFORM_VERSION } from './packages/core/version.js';
 import { IClassroomLifecycleServiceToken, IInteractionRuntimeServiceToken } from './packages/core/di/interfaces.js';
 import { IClassroomMessageServiceToken, type IClassroomMessageService } from './packages/core/di/interfaces.js';
+import { startSideEffectWorker } from './packages/core/di/side-effect-worker.js';
 import { ClassroomRuntimeService } from './server/services/classroom-runtime-service.js';
 import { ClassroomFeedService, attachClassroomFeedService } from './server/services/classroom-feed-service.js';
 import { bindAIContextRegistry } from './server/ai-context-registry.js';
@@ -503,6 +504,8 @@ async function startServer() {
       ).map((row) => row.lesson_id);
     },
   });
+
+  startSideEffectWorker(kernelContainer.db as unknown as import('better-sqlite3').Database, kernelContainer.eventBus);
 
   // ── 健康检查与指标端点 (存活 / 就绪 / Prometheus) ───────────────────
   const startTime = Date.now();

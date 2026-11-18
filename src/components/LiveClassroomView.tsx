@@ -797,16 +797,13 @@ export function LiveClassroomView({
       ttlMs?: number | null;
       messageId?: string;
     }) => {
-      const res = await fetch('/api/commands', {
+      const res = await fetch('/api/classroomflowserver/messages', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          commandType: 'classroom.sendMessage',
-          payload: {
-            ...input,
-            lessonId: selectedLesson,
-            classId: liveClassSelectedClassId,
-          },
+          ...input,
+          lessonId: selectedLesson,
+          classId: liveClassSelectedClassId,
         }),
       });
       if (!res.ok) throw new Error(`sendMessage failed: HTTP ${res.status}`);
@@ -968,12 +965,17 @@ export function LiveClassroomView({
   }, [selectedLesson, liveClassSelectedClassId]);
 
   const handleGradePluginSubmission = useCallback(
-    async (adapterId: string, submissionId: string) => {
+    async (adapterId: string, submissionId: string, score: number) => {
       try {
         const res = await fetch(`/api/classroomflowserver/submissions/${encodeURIComponent(adapterId)}/grade`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ submissionId, lessonId: selectedLesson, classId: liveClassSelectedClassId }),
+          body: JSON.stringify({
+            submissionId,
+            lessonId: selectedLesson,
+            classId: liveClassSelectedClassId,
+            score,
+          }),
         });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         fetchPluginSubmissions();

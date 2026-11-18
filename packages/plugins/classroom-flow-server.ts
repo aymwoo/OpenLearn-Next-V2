@@ -71,9 +71,12 @@ export const ClassroomFlowServerPlugin = {
       async execute(command) {
         const p = command.payload as Record<string, unknown>;
         const { senderPluginId, senderRole } = deriveSender(command.actorId);
+        if (p.msgType !== 'request' && p.msgType !== 'response') {
+          throw new Error('[classroom.sendMessage] msgType 只能是 request 或 response');
+        }
         const result = messageService.send({
           channel: String(p.channel ?? ''),
-          msgType: p.msgType === 'response' ? 'response' : 'request',
+          msgType: p.msgType,
           lessonId: (p.lessonId as string | null) ?? null,
           classId: (p.classId as string | null) ?? null,
           targetUserIds: (p.targetUserIds as string[] | null) ?? null,

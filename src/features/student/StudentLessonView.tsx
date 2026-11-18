@@ -96,6 +96,7 @@ export function StudentLessonView(props: StudentLessonViewProps) {
 
   // 班级 id（供授课工作区控制器与破冰逻辑共用）
   const [resolvedClassId, setResolvedClassId] = useState<string | null>(null);
+  const [sessionStage, setSessionStage] = useState('IN_CLASS_TEACHING');
   const activeSession = useStudentActiveSession((s) => s.activeSession);
   const effectiveClassId =
     resolvedClassId || (activeSession?.lessonId === selectedLesson ? activeSession.classId : null);
@@ -125,12 +126,30 @@ export function StudentLessonView(props: StudentLessonViewProps) {
     snapshot: {
       lessonId: selectedLesson,
       classId: effectiveClassId,
-      stage: 'IN_CLASS_TEACHING',
+      stage: sessionStage,
       activeSegmentId,
       segments: timelineSegments ?? [],
       students,
       onlineStudentIds: [],
       attempts: [],
+    },
+    setActiveSegment: async (segmentId: string) => {
+      if (!selectedLesson) throw new Error('sendMessage failed: no lesson');
+      const res = await fetch(`/api/classroom/sessions/${encodeURIComponent(selectedLesson)}/segment`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ activeSegmentId: segmentId }),
+      });
+      if (!res.ok) throw new Error(`setActiveSegment rejected: HTTP ${res.status}`);
+    },
+    advanceStage: async (stage: string) => {
+      if (!selectedLesson) throw new Error('advanceStage failed: no lesson');
+      const res = await fetch(`/api/classroom/sessions/${encodeURIComponent(selectedLesson)}/stage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ stage, classId: effectiveClassId }),
+      });
+      if (!res.ok) throw new Error(`advanceStage rejected: HTTP ${res.status}`);
     },
     sendMessage: async (input: {
       channel: string;
@@ -140,13 +159,10 @@ export function StudentLessonView(props: StudentLessonViewProps) {
       ttlMs?: number | null;
       messageId?: string;
     }) => {
-      const res = await fetch('/api/commands', {
+      const res = await fetch('/api/classroomflowserver/messages', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          commandType: 'classroom.sendMessage',
-          payload: { ...input, lessonId: selectedLesson, classId: effectiveClassId },
-        }),
+        body: JSON.stringify({ ...input, lessonId: selectedLesson, classId: effectiveClassId }),
       });
       if (!res.ok) throw new Error(`sendMessage failed: HTTP ${res.status}`);
       return res.json();
@@ -188,6 +204,8 @@ export function StudentLessonView(props: StudentLessonViewProps) {
         if (clsId && typeof clsId === 'string') {
           setResolvedClassId(clsId);
         }
+        const stage = json?.session?.stage;
+        if (typeof stage === 'string' && stage) setSessionStage(stage);
         if (typeof id === 'string' && id && id !== activeSegmentId) {
           setActiveSegmentId(id);
         }
@@ -204,6 +222,29 @@ export function StudentLessonView(props: StudentLessonViewProps) {
       window.clearInterval(timer);
     };
   }, [selectedLesson, activeSegmentId, setActiveSegmentId]);
+
+  const workspace =
+    (primaryStudentWorkspace || matchingStudentMain.length > 0) && activeSegmentId && activeSegment ? (
+      <div
+        data-testid="classroom-active-segment-student-main-container"
+        className={
+          primaryStudentWorkspace
+            ? 'flex-1 min-h-0 bg-surface border border-theme rounded-xl p-4 shadow-sm text-main overflow-auto'
+            : 'shrink-0 bg-surface border border-theme rounded-xl p-4 shadow-sm text-main overflow-auto'
+        }
+      >
+        <ExtensionPointRenderer
+          slot="classroom.active_segment.student_main"
+          slotProps={{
+            segment: activeSegment,
+            lessonId: selectedLesson,
+            classId: effectiveClassId,
+            lang,
+            flow: studentFlowController,
+          }}
+        />
+      </div>
+    ) : null;
 
   return (
     <div className="flex flex-col h-full space-y-4">
@@ -222,76 +263,63 @@ export function StudentLessonView(props: StudentLessonViewProps) {
       />
       <StudentCheckinPanel lessonId={selectedLesson} lang={lang} addToast={addToast} />
       <SegmentGateBanner access={segmentAccess} lang={lang} />
-      {/* 学生端授课工作区：primary 命中时替代原生内容面板（学案/Moodle 不用白板），
-          否则在原生视图上方渲染为叠加工作区（sw 插件自决显隐）。 */}
-      {(primaryStudentWorkspace || studentMainExts.length > 0) && activeSegmentId && activeSegment ? (
-        <div
-          data-testid="classroom-active-segment-student-main-container"
-          className="flex-1 min-h-0 bg-surface border border-theme rounded-xl p-4 shadow-sm text-main overflow-auto"
-        >
-          <ExtensionPointRenderer
-            slot="classroom.active_segment.student_main"
-            slotProps={{
-              segment: activeSegment,
-              lessonId: selectedLesson,
-              classId: effectiveClassId,
-              lang,
-              flow: studentFlowController,
-            }}
-          />
-        </div>
+      {primaryStudentWorkspace && workspace ? (
+        workspace
       ) : (
-        <div className="flex-1 flex gap-6 min-h-0 bg-surface border border-theme rounded-xl p-4 shadow-sm text-main">
-          <StudentLessonContentPanel
-            students={students}
-            activeStudentId={activeStudentId}
-            isStudentLocked={isStudentLocked}
-            studentFullscreenPanel={studentFullscreenPanel}
-            setStudentFullscreenPanel={setStudentFullscreenPanel}
-            timelineSegments={timelineSegments}
-            lang={lang}
-            activeSegmentId={activeSegmentId}
-            setActiveSegmentId={setActiveSegmentId}
-            localProgressPercent={localProgressPercent}
-            setLocalProgressPercent={setLocalProgressPercent}
-            updateStudentProgress={updateStudentProgress}
-            selectedLesson={selectedLesson}
-            lessons={lessons}
-            isStudentLessonContentCollapsed={isStudentLessonContentCollapsed}
-            addToast={addToast}
-            segmentAccess={segmentAccess}
-          />
-          <StudentLessonInteractionPanel
-            isStudentLocked={isStudentLocked}
-            isNavigationLocked={isNavigationLocked}
-            isInteractionLocked={isInteractionLocked}
-            lockMode={lockMode}
-            studentLessonTab={studentLessonTab}
-            setStudentLessonTab={setStudentLessonTab}
-            isStudentLessonContentCollapsed={isStudentLessonContentCollapsed}
-            setIsStudentLessonContentCollapsed={setIsStudentLessonContentCollapsed}
-            lang={lang}
-            studentFullscreenPanel={studentFullscreenPanel}
-            setStudentFullscreenPanel={setStudentFullscreenPanel}
-            selectedLesson={selectedLesson}
-            elements={elements}
-            activeRole={activeRole}
-            activeSegmentId={activeSegmentId}
-            contentSegmentId={contentSegmentId}
-            blockSegmentContent={blockSegmentContent}
-            setActiveSegmentId={setActiveSegmentId}
-            fetchElements={fetchElements}
-            currentVfsParent={currentVfsParent}
-            setCurrentVfsParent={setCurrentVfsParent}
-            vfsNodes={vfsNodes}
-            studentSelectedCourseware={studentSelectedCourseware}
-            setStudentSelectedCourseware={setStudentSelectedCourseware}
-            activeStudentId={activeStudentId}
-            studentName={students.find((s) => s.id === activeStudentId)?.name ?? null}
-            classId={effectiveClassId}
-            addToast={addToast}
-          />
-        </div>
+        <>
+          {workspace}
+          <div className="flex-1 flex gap-6 min-h-0 bg-surface border border-theme rounded-xl p-4 shadow-sm text-main">
+            <StudentLessonContentPanel
+              students={students}
+              activeStudentId={activeStudentId}
+              isStudentLocked={isStudentLocked}
+              studentFullscreenPanel={studentFullscreenPanel}
+              setStudentFullscreenPanel={setStudentFullscreenPanel}
+              timelineSegments={timelineSegments}
+              lang={lang}
+              activeSegmentId={activeSegmentId}
+              setActiveSegmentId={setActiveSegmentId}
+              localProgressPercent={localProgressPercent}
+              setLocalProgressPercent={setLocalProgressPercent}
+              updateStudentProgress={updateStudentProgress}
+              selectedLesson={selectedLesson}
+              lessons={lessons}
+              isStudentLessonContentCollapsed={isStudentLessonContentCollapsed}
+              addToast={addToast}
+              segmentAccess={segmentAccess}
+            />
+            <StudentLessonInteractionPanel
+              isStudentLocked={isStudentLocked}
+              isNavigationLocked={isNavigationLocked}
+              isInteractionLocked={isInteractionLocked}
+              lockMode={lockMode}
+              studentLessonTab={studentLessonTab}
+              setStudentLessonTab={setStudentLessonTab}
+              isStudentLessonContentCollapsed={isStudentLessonContentCollapsed}
+              setIsStudentLessonContentCollapsed={setIsStudentLessonContentCollapsed}
+              lang={lang}
+              studentFullscreenPanel={studentFullscreenPanel}
+              setStudentFullscreenPanel={setStudentFullscreenPanel}
+              selectedLesson={selectedLesson}
+              elements={elements}
+              activeRole={activeRole}
+              activeSegmentId={activeSegmentId}
+              contentSegmentId={contentSegmentId}
+              blockSegmentContent={blockSegmentContent}
+              setActiveSegmentId={setActiveSegmentId}
+              fetchElements={fetchElements}
+              currentVfsParent={currentVfsParent}
+              setCurrentVfsParent={setCurrentVfsParent}
+              vfsNodes={vfsNodes}
+              studentSelectedCourseware={studentSelectedCourseware}
+              setStudentSelectedCourseware={setStudentSelectedCourseware}
+              activeStudentId={activeStudentId}
+              studentName={students.find((s) => s.id === activeStudentId)?.name ?? null}
+              classId={effectiveClassId}
+              addToast={addToast}
+            />
+          </div>
+        </>
       )}
 
       {/* 随堂个人笔记增强挂件扩展 */}

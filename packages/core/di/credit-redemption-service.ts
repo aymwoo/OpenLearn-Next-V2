@@ -18,6 +18,7 @@ import type { Database } from 'better-sqlite3';
 import { v7 as uuidv7 } from 'uuid';
 import { PointsLedgerService } from './points-ledger-service.js';
 import { RewardCatalogService, type ResolveFailureCode } from './reward-catalog-service.js';
+import type { CreditEventPublisher, SideEffectEnqueuer } from './credit-award-service.js';
 
 /** 兑换扣减使用的默认学分维度；可被构造参数覆盖。 */
 export const DEFAULT_REDEEM_DIMENSION = 'reward_credit';
@@ -75,17 +76,22 @@ export class CreditRedemptionService {
   private ledger: PointsLedgerService;
   private catalog?: RewardCatalogService;
   private defaultDimension: string;
+  private eventPublisher?: CreditEventPublisher;
+  private enqueuer?: SideEffectEnqueuer;
 
   constructor(
     db: Database,
     ledger: PointsLedgerService,
     defaultDimension = DEFAULT_REDEEM_DIMENSION,
     catalog?: RewardCatalogService,
+    deps?: { eventPublisher?: CreditEventPublisher; sideEffectEnqueuer?: SideEffectEnqueuer },
   ) {
     this.db = db;
     this.ledger = ledger;
     this.defaultDimension = defaultDimension;
     this.catalog = catalog;
+    this.eventPublisher = deps?.eventPublisher;
+    this.enqueuer = deps?.sideEffectEnqueuer;
   }
 
   /**
@@ -214,7 +220,35 @@ export class CreditRedemptionService {
       };
     });
 
-    return tx();
+    const result = tx();
+    if (!result.ok || result.idempotentHit || !this.eventPublisher) return result;
+
+    const event = {
+      id: result.redemptionId!,
+      type: 'reward.redeemed',
+      source: 'classroomflowserver',
+      payload: {
+        redemptionId: result.redemptionId,
+        studentId: input.studentId,
+        classId: input.classId,
+        rewardId: input.rewardId,
+        costPoints: result.costPoints,
+        balanceAfter: result.balanceAfter,
+      },
+      timestamp: now,
+    };
+    void this.eventPublisher.publish(event).catch(() => {
+      if (this.enqueuer) {
+        void this.enqueuer.enqueue({
+          source: 'reward.redeemed',
+          op: 'emitEvent',
+          bizKey: `reward.redeemed:${result.redemptionId}`,
+          payload: event,
+          correlationId: result.redemptionId!,
+        });
+      }
+    });
+    return result;
   }
 
   /** 查询某学生当前可用余额（供门面 credits/summary 复用） */

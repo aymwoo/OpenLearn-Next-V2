@@ -2,8 +2,9 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, cleanup } from '@testing-library/react';
 import { Suspense } from 'react';
 import type { StudentType, Lesson } from '../../../types/app';
-import { StudentLessonView } from '../StudentLessonView';
-import type { StudentLessonViewProps } from '../StudentLessonView';
+import { StudentLessonView, type StudentLessonViewProps } from '../StudentLessonView';
+import { PluginHostProvider } from '../../../plugin-host/plugin-host-context';
+import type { FrontendPluginHost } from '../../../plugin-host/plugin-host';
 
 const allProps: StudentLessonViewProps = {
   students: [{ id: 's1', name: 'Alice', locked_lesson_id: null }] as unknown as StudentType[],
@@ -56,6 +57,33 @@ describe('StudentLessonView', () => {
       <Suspense fallback={null}>
         <StudentLessonView {...allProps} />
       </Suspense>,
+    );
+    expect(screen.getByText('Interactive Whiteboard')).toBeTruthy();
+  });
+
+  it('keeps the native lesson panel when a non-primary student workspace is registered', () => {
+    const host = {
+      getExtensions: (slot: string) =>
+        slot === 'classroom.active_segment.student_main'
+          ? [
+              {
+                id: 'xuean',
+                pluginId: 'ext-xuean',
+                targetType: 'xuean:task',
+                slotProps: {},
+                component: () => null,
+              },
+            ]
+          : [],
+    } as unknown as FrontendPluginHost;
+    render(
+      <PluginHostProvider host={host}>
+        <StudentLessonView
+          {...allProps}
+          activeSegmentId="seg-wb"
+          timelineSegments={[{ id: 'seg-wb', type: 'whiteboard', title: '板书' }]}
+        />
+      </PluginHostProvider>,
     );
     expect(screen.getByText('Interactive Whiteboard')).toBeTruthy();
   });

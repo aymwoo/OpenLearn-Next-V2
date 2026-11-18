@@ -28,7 +28,7 @@ function makeMockApp(): { app: Express; routes: RegisteredRoute[] } {
 }
 
 describe('ClassroomFlowServer 路由注册契约', () => {
-  it('注册全部 11 个端点，且每个都带 ≥2 个中间件（认证/范围 + handler）', () => {
+  it('注册全部 12 个端点，且每个都带 ≥2 个中间件（认证/范围 + handler）', () => {
     const { app, routes } = makeMockApp();
     registerClassroomFlowServerRoutes(app);
 
@@ -41,6 +41,7 @@ describe('ClassroomFlowServer 路由注册契约', () => {
       'POST /api/classroomflowserver/redeem',
       'GET /api/classroomflowserver/credits/summary',
       'GET /api/classroomflowserver/messages',
+      'POST /api/classroomflowserver/messages',
       'POST /api/classroomflowserver/messages/:id/ack',
       'GET /api/classroomflowserver/submissions',
       'POST /api/classroomflowserver/submissions/:adapterId/grade',

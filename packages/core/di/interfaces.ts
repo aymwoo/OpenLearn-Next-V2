@@ -729,7 +729,7 @@ export interface IClassroomMessageService {
     seq?: number;
     duplicated?: boolean;
   };
-  ack(messageId: string): boolean;
+  ack(messageId: string, userId: string): boolean;
   replay(query: {
     lessonId?: string | null;
     classId?: string | null;
