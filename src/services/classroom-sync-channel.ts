@@ -36,7 +36,7 @@ export type ClassroomSyncMessage =
   | { type: 'TEACHER_CHANGE_SEGMENT'; payload: { segmentId: string | null; lessonId?: string | null } }
   | {
       type: 'TEACHER_CHANGE_TAB';
-      payload: { tab: 'whiteboard' | 'courseware' | 'assignment'; lessonId?: string | null };
+      payload: { tab: 'whiteboard' | 'courseware' | 'assignment' | 'xuean'; lessonId?: string | null };
     }
   | { type: 'TEACHER_LOCK_CLASS'; payload: { locked: boolean; lessonId?: string | null; classId?: string | null } }
   | { type: 'TEACHER_PICK_STUDENT'; payload: { studentId: string; studentName: string } }
@@ -206,7 +206,7 @@ export class ClassroomSyncChannel {
     }
   }
 
-  public broadcastChangeTab(tab: 'whiteboard' | 'courseware' | 'assignment'): void {
+  public broadcastChangeTab(tab: 'whiteboard' | 'courseware' | 'assignment' | 'xuean'): void {
     this.postMessage({ type: 'TEACHER_CHANGE_TAB', payload: { tab, lessonId: this.lessonId } });
     const socket = getOptionalSocket();
     if (socket && this.lessonId) {
