@@ -2,7 +2,7 @@
  * 验证 migration 062_xuean_lesson_pkg_and_courses：
  * - 5 张新表存在且结构正确
  * - lessons 新增可空 course_id
- * - 基于 000–056 的既有数据库零迁移（lessons.course_id 全 NULL）
+ * - 基于 000–061 的既有数据库零迁移（lessons.course_id 全 NULL；含 classroom-flow 057–061）
  * - activity_progress / lesson_activities / lesson_activity_blocks 的字段与 issue IKVO15 建议模型对齐
  */
 import path from 'node:path';

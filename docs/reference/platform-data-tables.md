@@ -143,9 +143,9 @@
 | `progress_mode`             | TEXT    | **已废弃**。仅当环节没有自己的 `gates` 且不是第一环时，`gated` 仍作兼容回退            |
 | `progress_conditions`       | TEXT    | **已废弃**。已知字段会映射为内置环节条件，新课请写在 `timeline.gates`                  |
 | `created_at` / `updated_at` | INTEGER | 时间戳                                                                                 |
-| `course_id`                 | TEXT    | **可空**。所属课程 ID（迁移 `057` 起，IKVO15 课程层）。NULL = 独立课时，不属于任何课程 |
+| `course_id`                 | TEXT    | **可空**。所属课程 ID（迁移 `062` 起，IKVO15 课程层）。NULL = 独立课时，不属于任何课程 |
 
-### `lesson_activities`（迁移 `057`，IKVO15 学案式课时包）
+### `lesson_activities`（迁移 `062`，IKVO15 学案式课时包）
 
 课节下的活动序列（与 `timeline` 环节并列，活动完成不自动推进课堂门禁）。
 
@@ -167,7 +167,7 @@
 | `due_at`                    | INTEGER | 截止时间（epoch ms，NULL = 无截止）                                                      |
 | `created_at` / `updated_at` | INTEGER | 时间戳                                                                                   |
 
-### `lesson_activity_blocks`（迁移 `057`，IKVO15 学案首页）
+### `lesson_activity_blocks`（迁移 `062`，IKVO15 学案首页）
 
 学案首页的半结构化内容块。
 
@@ -180,7 +180,7 @@
 | `order_index`               | INTEGER | 顺序                                                                                       |
 | `created_at` / `updated_at` | INTEGER | 时间戳                                                                                     |
 
-### `activity_progress`（迁移 `057` + `058` + `059` + `060`，IKVO15 活动级进度）
+### `activity_progress`（迁移 `062` + `063` + `064` + `065`，IKVO15 活动级进度）
 
 学生在单个活动上的进度。主键 `(activity_id, student_id)`。
 
@@ -194,12 +194,12 @@
 | `score`            | REAL    | 教师批阅得分                                                    |
 | `graded_at`        | INTEGER | 批阅时间                                                        |
 | `last_activity_at` | INTEGER | 最后活跃时间                                                    |
-| `submission_json`  | TEXT    | 学生提交内容（string 或 {type, content, url} JSON，迁移 `058`） |
-| `nudged_at`        | INTEGER | 教师最后催办时间（迁移 `059`）                                  |
-| `nudge_count`      | INTEGER | 催办次数（迁移 `059`，默认 0）                                  |
-| `self_eval_json`   | TEXT    | 学生自评内容 {score, comment} JSON（迁移 `060`）                |
+| `submission_json`  | TEXT    | 学生提交内容（string 或 {type, content, url} JSON，迁移 `063`） |
+| `nudged_at`        | INTEGER | 教师最后催办时间（迁移 `064`）                                  |
+| `nudge_count`      | INTEGER | 催办次数（迁移 `064`，默认 0）                                  |
+| `self_eval_json`   | TEXT    | 学生自评内容 {score, comment} JSON（迁移 `065`）                |
 
-### `courses` / `course_enrollments`（迁移 `057`，IKVO15 课程层，P2 激活）
+### `courses` / `course_enrollments`（迁移 `062`，IKVO15 课程层，P2 激活）
 
 长周期课程承载。`courses`: `id` / `title` / `description` / `owner_user_id` / `term` / `visibility` / `thumbnail` / `created_at` / `updated_at`。`course_enrollments`: `course_id` + `student_id` 复合主键，`class_id`（可选）。`lessons.course_id` 可空关联。
 
