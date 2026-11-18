@@ -4,7 +4,7 @@
  * 由 packages/plugin-sdk/generate-dts.mts 从 packages/core/ 源码抽取。
  * 手写契约请改 openlearn.d.ts —— 本文件会在 build 时被覆盖。
  *
- * 覆盖符号：283 个（入口导出但手写 d.ts 未声明的 283 项及其类型引用闭包）
+ * 覆盖符号：284 个（入口导出但手写 d.ts 未声明的 284 项及其类型引用闭包）
  */
 
 /** @see packages/core/analytics-engine/types.ts */
@@ -1122,6 +1122,12 @@ interface ModePackContribution {
     adapterIds?: string[];
     /** ClassroomMessage channel 名列表（可选） */
     channels?: string[];
+    /**
+     * 课中侧栏大纲贡献（P4）。
+     * 宿主按当前环节类型决议后渲染；白板包通常贡献页面列表，学案包贡献活动列表。
+     * 不替代 timeline；仅替换/补充「环节抽屉内大纲体」。
+     */
+    outlineContributionId?: string;
 }
 
 /** @see packages/core/plugin-host/contribution-registry.ts */
@@ -2523,6 +2529,8 @@ declare function computeSha256(input: Buffer | string): {
 /** @see packages/core/db/index.ts */
 declare const db: any; // 初始化器非字面量，未收敛
 
+declare function extensionCoversSegmentType(declared: string | null | undefined, segmentType: string | null | undefined): boolean;
+
 declare function extractEmbeddedSignature(zipPathOrBuffer: string | Buffer): Promise<EmbeddedSignatureResult | null>;
 
 declare function hasCapability(caps: readonly string[], name: string): boolean;
@@ -2812,6 +2820,7 @@ export {
   KNOWN_CAPABILITIES,
   ServiceScope,
   assertValidManifestCapabilities,
+  extensionCoversSegmentType,
   isKnownCapability,
   modePackCoversSegmentType,
   normalizeSegmentType,

@@ -116,8 +116,10 @@ export function StudentLessonInteractionPanel(props: StudentLessonInteractionPan
 
   const boardSegmentId = contentSegmentId || activeSegmentId;
   const hideSegmentBody = blockSegmentContent;
-  // Mode Pack 开启时学案走 active_segment.student_main primary；平行 tab 仅作 flag 关闭时的 fallback。
-  const showParallelXueanTab = !isModePacksEnabled();
+  // Mode Pack 开启时学案走 active_segment.student_main primary；平行 tab 默认隐藏。
+  // 调试入口：`window.__OPENLEARN_DEBUG_XUEAN_TAB__ = true` 可临时恢复平行 tab。
+  const showParallelXueanTab =
+    !isModePacksEnabled() || (typeof window !== 'undefined' && window.__OPENLEARN_DEBUG_XUEAN_TAB__ === true);
 
   const tabButtonClass = (tab: 'whiteboard' | 'courseware' | 'assignment' | 'xuean') =>
     `px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${

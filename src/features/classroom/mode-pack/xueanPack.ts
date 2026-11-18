@@ -15,6 +15,7 @@ export const XUEAN_MODE_PACK: ModePackContribution = {
   segmentTypes: [XUEAN_MODE_PACK_SEGMENT_TYPE],
   isDefault: false,
   prepContributionId: 'prep-xuean',
+  outlineContributionId: 'outline-xuean-activities',
   teacherWorkspaceId: 'mode-xuean-teacher',
   studentWorkspaceId: 'mode-xuean-student',
   adapterIds: ['xuean-adapter'],

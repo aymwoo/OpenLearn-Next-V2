@@ -14,6 +14,7 @@ export const WHITEBOARD_MODE_PACK: ModePackContribution = {
   segmentTypes: [DEFAULT_MODE_PACK_SEGMENT_TYPE],
   isDefault: true,
   prepContributionId: 'prep-whiteboard',
+  outlineContributionId: 'outline-whiteboard-pages',
   teacherWorkspaceId: 'mode-whiteboard-teacher',
   studentWorkspaceId: 'mode-whiteboard-student',
 };

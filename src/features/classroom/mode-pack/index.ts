@@ -14,3 +14,4 @@ export { registerXueanModePack, unregisterXueanModePack } from './registerXueanM
 export { XueanModeWorkspace, XueanTeacherModeWorkspace, XueanStudentModeWorkspace } from './XueanModeWorkspace';
 export { ModePackPrepShell } from './ModePackPrepShell';
 export { routePrepDrop, type PrepDropKind, type PrepDropRoute } from './prepDropRouter';
+export { resolveOutlineContribution, type OutlineKind } from './outlineContribution';

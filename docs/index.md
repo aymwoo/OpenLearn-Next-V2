@@ -175,6 +175,7 @@ administrator-guide/demo-data
 tutorials/plugin-development-tutorial
 tutorials/plugin-frontend-guide
 tutorials/plugin-courseware-extensions
+tutorials/mode-pack-third-party
 ```
 
 ```{toctree}

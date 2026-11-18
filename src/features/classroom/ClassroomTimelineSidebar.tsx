@@ -14,6 +14,8 @@ import {
 } from 'lucide-react';
 import { ExtensionPointRenderer } from '../../plugin-host/extension-point-renderer';
 import type { WhiteboardPageItem } from '../whiteboard/InteractiveWhiteboard';
+import { isModePacksEnabled } from './mode-pack/flags';
+import { resolveOutlineContribution } from './mode-pack/outlineContribution';
 
 export interface TimelineSegmentItem {
   id: string;
@@ -268,86 +270,116 @@ export function ClassroomTimelineSidebar({
                     </div>
                   </div>
 
-                  {/* 抽屉展开内容 Body：白板页面大纲与插件动作扩展 */}
+                  {/* 抽屉展开内容 Body：Mode Pack 大纲贡献（白板页 / 学案活动）与插件动作扩展 */}
                   {isOpen && (
                     <div className="px-2 pb-2 pt-1 border-t border-theme/40 flex flex-col gap-1.5 bg-surface-secondary/20">
-                      {/* 白板页面大纲 */}
-                      <div className="flex flex-col gap-1">
-                        <div className="flex items-center justify-between text-[11px] text-muted px-0.5 font-bold">
-                          <span>{lang === 'zh' ? '白板页面大纲' : 'Whiteboard Outline'}</span>
-                          <button
-                            type="button"
-                            onClick={onAddPage}
-                            className="text-primary-ink hover:underline font-bold flex items-center gap-0.5 cursor-pointer text-[10px]"
-                            title={lang === 'zh' ? '在此环节新建页面' : 'Add page to segment'}
-                          >
-                            <Plus size={10} />
-                            <span>{lang === 'zh' ? '加页' : 'Add Page'}</span>
-                          </button>
-                        </div>
-
-                        {segPages.length > 0 ? (
-                          segPages.map(({ page: p, globalIdx }) => {
-                            const isPageActive = globalIdx === currentWhiteboardPage;
-                            const pageElementsCount = elements.filter((el) => {
-                              try {
-                                const d = JSON.parse(el.data);
-                                return (d.page ?? 0) === globalIdx;
-                              } catch {
-                                return false;
-                              }
-                            }).length;
-
-                            return (
-                              <div
-                                key={p.id || globalIdx}
-                                onClick={() => onSelectPage(globalIdx, seg.id)}
-                                className={`flex items-center justify-between px-2 py-1.5 rounded-lg text-xs transition-all cursor-pointer ${
-                                  isPageActive
-                                    ? 'bg-primary-solid text-white font-semibold shadow-2xs'
-                                    : 'bg-surface hover:bg-surface-secondary text-main border border-theme/40'
-                                }`}
-                                title={
-                                  lang === 'zh'
-                                    ? `切换至 P${globalIdx + 1} ${p.title || ''}`
-                                    : `Switch to P${globalIdx + 1}`
-                                }
-                              >
-                                <div className="flex items-center gap-1.5 truncate min-w-0 flex-1">
-                                  <span
-                                    className={`text-[10px] px-1.5 py-0.2 rounded font-mono font-bold shrink-0 ${
-                                      isPageActive ? 'bg-white/20 text-white' : 'bg-surface-secondary text-muted'
-                                    }`}
-                                  >
-                                    P{globalIdx + 1}
-                                  </span>
-                                  <span className="truncate tracking-tight font-medium">
-                                    {p.title || `${lang === 'zh' ? '页面' : 'Page'} ${globalIdx + 1}`}
-                                  </span>
-                                </div>
-                                <div className="flex items-center gap-1 shrink-0">
-                                  <span
-                                    className={`text-[10px] px-1 py-0.2 rounded font-mono ${
-                                      isPageActive ? 'bg-white/20 text-white' : 'text-muted'
-                                    }`}
-                                  >
-                                    {pageElementsCount} {lang === 'zh' ? '组件' : 'items'}
-                                  </span>
-                                  {isPageActive && (
-                                    <span className="text-[9px] font-bold px-1 py-0.2 rounded bg-white/25 text-white">
-                                      {lang === 'zh' ? '当前' : 'Active'}
-                                    </span>
-                                  )}
-                                </div>
+                      {(() => {
+                        const outline = isModePacksEnabled()
+                          ? resolveOutlineContribution({
+                              segmentType: typeof seg.type === 'string' ? seg.type : null,
+                            })
+                          : { kind: 'whiteboard-pages' as const, outlineContributionId: 'outline-whiteboard-pages' };
+                        if (outline.kind === 'xuean-activities') {
+                          return (
+                            <div
+                              data-testid="mode-pack-outline-xuean"
+                              data-outline-id={outline.outlineContributionId}
+                              className="flex flex-col gap-1"
+                            >
+                              <div className="flex items-center justify-between text-[11px] text-muted px-0.5 font-bold">
+                                <span>{lang === 'zh' ? '学案活动大纲' : 'Xuean Activities'}</span>
                               </div>
-                            );
-                          })
-                        ) : (
-                          <div className="text-[11px] text-muted italic px-2 py-1.5 text-center bg-surface/50 rounded-lg border border-dashed border-theme/50">
-                            {lang === 'zh' ? '本环节暂无独立页面' : 'No pages for this segment'}
+                              <div className="text-[11px] text-muted italic px-2 py-1.5 text-center bg-surface/50 rounded-lg border border-dashed border-theme/50">
+                                {lang === 'zh'
+                                  ? '本环节活动列表由学案 Mode Pack 提供（见备课面 / ProgressPanel）'
+                                  : 'Activities are provided by the Xuean Mode Pack (prep / ProgressPanel).'}
+                              </div>
+                            </div>
+                          );
+                        }
+                        return (
+                          <div
+                            data-testid="mode-pack-outline-whiteboard"
+                            data-outline-id={outline.outlineContributionId}
+                            className="flex flex-col gap-1"
+                          >
+                            <div className="flex items-center justify-between text-[11px] text-muted px-0.5 font-bold">
+                              <span>{lang === 'zh' ? '白板页面大纲' : 'Whiteboard Outline'}</span>
+                              <button
+                                type="button"
+                                onClick={onAddPage}
+                                className="text-primary-ink hover:underline font-bold flex items-center gap-0.5 cursor-pointer text-[10px]"
+                                title={lang === 'zh' ? '在此环节新建页面' : 'Add page to segment'}
+                              >
+                                <Plus size={10} />
+                                <span>{lang === 'zh' ? '加页' : 'Add Page'}</span>
+                              </button>
+                            </div>
+
+                            {segPages.length > 0 ? (
+                              segPages.map(({ page: p, globalIdx }) => {
+                                const isPageActive = globalIdx === currentWhiteboardPage;
+                                const pageElementsCount = elements.filter((el) => {
+                                  try {
+                                    const d = JSON.parse(el.data);
+                                    return (d.page ?? 0) === globalIdx;
+                                  } catch {
+                                    return false;
+                                  }
+                                }).length;
+
+                                return (
+                                  <div
+                                    key={p.id || globalIdx}
+                                    onClick={() => onSelectPage(globalIdx, seg.id)}
+                                    className={`flex items-center justify-between px-2 py-1.5 rounded-lg text-xs transition-all cursor-pointer ${
+                                      isPageActive
+                                        ? 'bg-primary-solid text-white font-semibold shadow-2xs'
+                                        : 'bg-surface hover:bg-surface-secondary text-main border border-theme/40'
+                                    }`}
+                                    title={
+                                      lang === 'zh'
+                                        ? `切换至 P${globalIdx + 1} ${p.title || ''}`
+                                        : `Switch to P${globalIdx + 1}`
+                                    }
+                                  >
+                                    <div className="flex items-center gap-1.5 truncate min-w-0 flex-1">
+                                      <span
+                                        className={`text-[10px] px-1.5 py-0.2 rounded font-mono font-bold shrink-0 ${
+                                          isPageActive ? 'bg-white/20 text-white' : 'bg-surface-secondary text-muted'
+                                        }`}
+                                      >
+                                        P{globalIdx + 1}
+                                      </span>
+                                      <span className="truncate tracking-tight font-medium">
+                                        {p.title || `${lang === 'zh' ? '页面' : 'Page'} ${globalIdx + 1}`}
+                                      </span>
+                                    </div>
+                                    <div className="flex items-center gap-1 shrink-0">
+                                      <span
+                                        className={`text-[10px] px-1 py-0.2 rounded font-mono ${
+                                          isPageActive ? 'bg-white/20 text-white' : 'text-muted'
+                                        }`}
+                                      >
+                                        {pageElementsCount} {lang === 'zh' ? '组件' : 'items'}
+                                      </span>
+                                      {isPageActive && (
+                                        <span className="text-[9px] font-bold px-1 py-0.2 rounded bg-white/25 text-white">
+                                          {lang === 'zh' ? '当前' : 'Active'}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                );
+                              })
+                            ) : (
+                              <div className="text-[11px] text-muted italic px-2 py-1.5 text-center bg-surface/50 rounded-lg border border-dashed border-theme/50">
+                                {lang === 'zh' ? '本环节暂无独立页面' : 'No pages for this segment'}
+                              </div>
+                            )}
                           </div>
-                        )}
-                      </div>
+                        );
+                      })()}
 
                       {/* 环节步骤卡片动作扩展 */}
                       <ExtensionPointRenderer

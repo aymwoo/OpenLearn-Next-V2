@@ -34,6 +34,12 @@ export interface ModePackContribution {
   adapterIds?: string[];
   /** ClassroomMessage channel 名列表（可选） */
   channels?: string[];
+  /**
+   * 课中侧栏大纲贡献（P4）。
+   * 宿主按当前环节类型决议后渲染；白板包通常贡献页面列表，学案包贡献活动列表。
+   * 不替代 timeline；仅替换/补充「环节抽屉内大纲体」。
+   */
+  outlineContributionId?: string;
 }
 
 /**
