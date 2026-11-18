@@ -31,6 +31,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - 新增布局约定文档 `docs/workspace/student-home-layout.md` 并接入文档目录。
   - follow-up：`assessments` ↔ `progress-trends` 默认尺寸改为 `half + half`，左右对称对齐；`WeeklyProgressTrendChart` 新增 `compact` prop 让嵌入 DashboardWidgetCard 时去掉内层重复卡片外壳与独立 header，消除双层卡片和高度断层。
 
+- **第三方教学模式基座：通讯协议 / 学分体系 / 成绩采集 / 双端工作区（dev/classroom-flow，Gitee PR #15）**：
+  - **通讯协议**：新增 `ClassroomMessage` 可靠消息服务与 `classroom.sendMessage` 命令（`lesson:write`、非 Agent 工具），按 `type` 分级投递 —— `event`/`state` 走 EventBus→Socket.IO 实时通道，`request` 落 `classroom_messages` 表（seq 单调游标 + ACK + 目标用户过滤）。断线补投双路径：服务端 `message-resume` 推送 + 客户端 `GET /api/classroomflowserver/messages` 拉取，事件投递失败进 `pending_side_effects` 补偿队列。插件经 `ctx.resolve(IClassroomMessageServiceToken)` 的 `registerChannel({ name, shared?, rolesAllowed?, requiredPayloadFields? })` 注册消息频道（owner 由宿主按 pluginId 注入，防冒用）。
+  - **学分体系**：统一发放 `awardCredits`（来源白名单 + 幂等 + 班级归属）、奖励目录（价格/库存/资格/有效期）、兑换事务（事务内扣学分 + 扣库存，杜绝超卖/超支）、`credit_awards` / `reward_redemptions` 幂等表；均经 `/api/classroomflowserver/*` 门面暴露。
+  - **成绩采集**：新增 `SubmissionAdapter` 契约 + 注册表 + 聚合器，第三方教学模式把自有作答投影为 `NormalizedSubmission` 进入统一成绩面板，教师面板内批改经 `grade-writer` 唯一入口写回（守手动分保护）；配套 `GET /submissions` 与 `POST /submissions/:adapterId/grade` 端点。
+  - **双端授课工作区**：新增对称槽 `classroom.active_segment.main` / `classroom.active_segment.student_main`，按 `segment.type`（targetType）路由，未声明者对所有环节可见（向后兼容）；注入 `ClassroomFlowController`（快照 + `setActiveSegment`/`advanceStage`/`sendMessage`/`refresh`），`primary: true` 工作区命中时自动接管主视图 —— 第三方插件据此实现「不用白板」的 Moodle / 学案式教学。
+  - 5 个迁移（057–061）、SDK Token 与类型导出、6 个内核服务、命令与事件文档、新开发指南 `docs/reference/classroom-flow-server.md`；全量测试 688 文件 / 5645 用例通过。
+
 ### Fixes
 
 - **学生端点击「全屏」按钮无反应（Gitee Issue IKVSIN）**：
