@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" fill="none">
+  <defs>
+    <radialGradient id="inkGlow" cx="0" cy="0" r="1" gradientTransform="translate(150 110) rotate(45) scale(360)" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1E3A5F" stop-opacity="0.10" />
+      <stop offset="1" stop-color="#1E3A5F" stop-opacity="0" />
+    </radialGradient>
+    <radialGradient id="goldGlow" cx="0" cy="0" r="1" gradientTransform="translate(680 500) rotate(45) scale(380)" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#C9A227" stop-opacity="0.08" />
+      <stop offset="1" stop-color="#C9A227" stop-opacity="0" />
+    </radialGradient>
+  </defs>
+  <rect width="800" height="600" fill="url(#inkGlow)" />
+  <rect width="800" height="600" fill="url(#goldGlow)" />
+</svg>

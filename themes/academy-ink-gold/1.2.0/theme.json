@@ -1,0 +1,102 @@
+{
+  "schemaVersion": 1,
+  "id": "academy-ink-gold",
+  "name": "Academy Ink & Gold",
+  "version": "1.2.0",
+  "description": "墨蓝金·学术典藏 —— 深海军蓝与香槟金的高端定制主题，v1.2.0：顶栏导航改为真正的横向单排（修正分组纵向堆叠），含登录顶横幅、学生端底栏卡片流与全部件深度视觉重设计。支持明暗双模式与本地 SVG 徽标背景。",
+  "author": "Wu Xiangfeng (aymwoo)",
+  "defaultMode": "auto",
+  "compatibility": {
+    "minPlatformVersion": "0.7.0",
+    "maxPlatformVersion": "1.99.0"
+  },
+  "tokens": {
+    "--color-primary": "#1e3a5f",
+    "--primary-solid": "#1e3a5f",
+    "--primary-hover": "#162c49",
+    "--primary-ink": "#1e3a5f",
+    "--color-accent": "#c9a227"
+  },
+  "modes": {
+    "light": {
+      "tokens": {
+        "--color-primary": "#1e3a5f",
+        "--primary-solid": "#1e3a5f",
+        "--primary-hover": "#162c49",
+        "--primary-ink": "#1e3a5f",
+        "--color-accent": "#b4891f",
+        "--bg-app": "#f4f1ea",
+        "--bg-surface": "#ffffff",
+        "--bg-surface-secondary": "#ece7dc",
+        "--bg-surface-elevated": "#ffffff",
+        "--text-main": "#1a2233",
+        "--text-muted": "#55607a",
+        "--text-subtle": "#8b93a7",
+        "--border-theme": "#e2dccd",
+        "--border-theme-subtle": "#eee9dd"
+      }
+    },
+    "dark": {
+      "tokens": {
+        "--color-primary": "#d4af37",
+        "--primary-solid": "#b8962f",
+        "--primary-hover": "#e6c25b",
+        "--primary-ink": "#f0d982",
+        "--color-accent": "#d4af37",
+        "--bg-app": "#0b1120",
+        "--bg-surface": "#121b2e",
+        "--bg-surface-secondary": "#1b2740",
+        "--bg-surface-elevated": "#16223a",
+        "--text-main": "#f5f3ee",
+        "--text-muted": "#aab4c8",
+        "--text-subtle": "#74809a",
+        "--border-theme": "#263350",
+        "--border-theme-subtle": "#1c2740"
+      }
+    }
+  },
+  "typography": {
+    "fontSans": "'Plus Jakarta Sans', 'Noto Sans SC', system-ui, -apple-system, sans-serif",
+    "fontDisplay": "'Georgia', 'Noto Serif SC', serif",
+    "fontMono": "'JetBrains Mono', ui-monospace, monospace",
+    "baseScale": 1,
+    "fontFaces": []
+  },
+  "appearance": {
+    "borderRadius": "rounded",
+    "cardStyle": "elevated",
+    "density": "comfortable",
+    "accentPattern": "gradient",
+    "backgroundImage": "assets/backdrop.svg"
+  },
+  "layouts": {
+    "login": {
+      "arrangement": "top-banner",
+      "order": ["brand", "auth-form", "seed-hint"],
+      "cardPosition": "center"
+    },
+    "teacher": {
+      "navPosition": "top",
+      "contentMaxWidth": "wide"
+    },
+    "student": {
+      "headerPosition": "bottom",
+      "order": ["status-banner", "main-content", "quick-tools"],
+      "cardColumns": 3
+    },
+    "admin": {
+      "navStyle": "tabs",
+      "sectionOrder": ["overview", "themes", "site-settings", "users", "diagnostics"]
+    }
+  },
+  "stylesFile": "styles.css",
+  "previewImage": "assets/emblem.svg",
+  "changelog": "1.2.0：修复顶栏导航仍纵向堆叠的问题——分组标题 w-full → 行内标签、分组项 flex-col → 横向单排（data-nav-position=top 作用域内），顶栏 nowrap + 横向滚动。1.1.0 大改版：教师端导航移至顶部横栏（navPosition=top），登录页改为顶横幅（top-banner），学生端状态栏下移（headerPosition=bottom）+ 三列卡片；styles.css 用 data-* 钩子对顶栏、页签、按钮、输入框、卡片、状态条、导航项做墨蓝金深度视觉重设计。1.0.0 初始发布：墨蓝金学术典藏配色、明暗双模式、自绘院徽与背景纹理。",
+  "settingsCapabilities": {
+    "accentColor": true,
+    "borderRadius": true,
+    "density": true,
+    "fontScale": true,
+    "mode": true
+  }
+}

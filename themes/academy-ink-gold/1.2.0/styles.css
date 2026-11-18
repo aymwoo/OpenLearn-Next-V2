@@ -1,0 +1,275 @@
+/* ==========================================================================
+   Academy Ink & Gold — v1.2.0 深度视觉重设计
+   所有选择器都限定在 [data-theme='academy-ink-gold'] 作用域内。
+   仅使用平台暴露的稳定 data-* 钩子；无脚本、无外链、无外部样式表引入。
+   金色强调色来自 --color-accent（light/dark 均已声明）。
+   ========================================================================== */
+
+/* ── 通用：应用画布与标题字体 ───────────────────────────────────────────── */
+[data-theme='academy-ink-gold'] [data-theme-bg-canvas] {
+  background-image:
+    linear-gradient(
+      160deg,
+      transparent 0%,
+      transparent 70%,
+      color-mix(in srgb, var(--color-accent) 6%, transparent) 100%
+    ),
+    url('assets/backdrop.svg');
+  background-size: cover;
+  background-position: center;
+}
+
+[data-theme='academy-ink-gold'] h1,
+[data-theme='academy-ink-gold'] h2,
+[data-theme='academy-ink-gold'] [data-login-region='brand'] .font-display {
+  font-family: var(--ol-font-display, 'Georgia', 'Noto Serif SC', serif);
+  letter-spacing: 0.01em;
+}
+
+/* ── 顶部横栏导航（teacher.navPosition = top）───────────────────────────── */
+[data-theme='academy-ink-gold'] [data-nav-position='top'] {
+  background: linear-gradient(180deg, var(--bg-surface-elevated) 0%, var(--bg-surface) 100%);
+  border-bottom: 2px solid var(--color-accent);
+  box-shadow: 0 6px 20px -10px color-mix(in srgb, var(--color-primary) 45%, transparent);
+  min-height: 56px;
+  flex-wrap: nowrap !important;
+  overflow-x: auto;
+}
+
+/* 关键修正：平台把每个分组的导航项容器设成 flex-col，
+   导致即便 navPosition=top，各组仍纵向堆叠。这里覆盖为真正的横向单排。 */
+
+/* 1) 分组项容器（groups 容器的直接子 div，内含导航按钮）：纵向 → 横向 */
+[data-theme='academy-ink-gold'] [data-nav-position='top'] > div:nth-child(2) > div:has(button) {
+  flex-direction: row !important;
+  flex-wrap: nowrap !important;
+  align-items: center;
+  gap: 0.35rem;
+  flex-shrink: 0;
+}
+
+/* 2) groups 容器本身：禁止换行，允许横向滚动 */
+[data-theme='academy-ink-gold'] [data-nav-position='top'] > div:nth-child(2) {
+  flex-wrap: nowrap !important;
+  overflow-x: auto;
+}
+
+/* 3) 分组间的细分隔（纵向 1px 高）在顶栏改成竖向分隔线 */
+[data-theme='academy-ink-gold'] [data-nav-position='top'] > div:nth-child(2) > div.h-px {
+  width: 1px !important;
+  height: 1.75rem !important;
+  margin: 0 0.5rem !important;
+  align-self: center;
+  flex-shrink: 0;
+}
+
+/* 4) 顶栏下强制显示导航项文字标签（折叠态 hidden 的 span 也显示） */
+[data-theme='academy-ink-gold'] [data-nav-position='top'] button[id^='nav_btn_'] > span {
+  display: inline !important;
+}
+
+/* 5) 每个导航项按钮：横向 inline、不换行、内边距收紧 */
+[data-theme='academy-ink-gold'] [data-nav-position='top'] button[id^='nav_btn_'] {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  padding-left: 0.6rem !important;
+  padding-right: 0.6rem !important;
+}
+
+/* 6) 导航项外层 div.group：取消 flex-1 拉伸，按内容宽度 */
+[data-theme='academy-ink-gold'] [data-nav-position='top'] > div:nth-child(2) div.group {
+  flex: 0 0 auto !important;
+}
+
+[data-theme='academy-ink-gold'] [data-nav-position='top'] > div:first-child {
+  border-right: 1px solid var(--border-theme-subtle);
+  padding-inline: 1rem;
+}
+
+[data-theme='academy-ink-gold'] [data-nav-position='top'] > div:first-child span {
+  color: var(--color-accent);
+  font-weight: 800;
+  letter-spacing: 0.16em;
+}
+
+[data-theme='academy-ink-gold'] [data-nav-position='top'] button {
+  border-radius: 9999px;
+  transition:
+    background-color 150ms ease,
+    color 150ms ease,
+    box-shadow 150ms ease;
+}
+
+[data-theme='academy-ink-gold'] [data-nav-position='top'] button:hover {
+  background: color-mix(in srgb, var(--color-accent) 16%, transparent);
+  color: var(--color-accent);
+}
+
+/* 分组标题：顶栏下弱化为细分隔 + 小字标签 */
+[data-theme='academy-ink-gold'] [data-nav-position='top'] button[data-testid^='nav_group_'] {
+  background: transparent;
+  border: 0;
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-subtle);
+  padding: 0.25rem 0.6rem;
+  margin-top: 0;
+}
+
+/* 顶栏里"今日课程"小部件收起为紧凑条，避免撑高横栏 */
+[data-theme='academy-ink-gold'] [data-nav-position='top'] #today_schedule_sidebar_panel {
+  margin: 0 0.5rem;
+  padding: 0.35rem 0.65rem;
+  background: color-mix(in srgb, var(--color-accent) 10%, var(--bg-surface));
+  border-color: color-mix(in srgb, var(--color-accent) 35%, transparent);
+  border-radius: 0.75rem;
+}
+
+/* 折叠/展开按钮 */
+[data-theme='academy-ink-gold'] [data-nav-position='top'] button[aria-label] {
+  border: 1px solid var(--border-theme-subtle);
+}
+
+/* ── 登录页顶横幅（login.arrangement = top-banner）──────────────────────── */
+[data-theme='academy-ink-gold'] [data-login-arrangement='top-banner'] [data-login-region='brand'] h1,
+[data-theme='academy-ink-gold'] [data-login-arrangement='top-banner'] [data-login-region='brand'] [class*='text-3xl'],
+[data-theme='academy-ink-gold'] [data-login-arrangement='top-banner'] [data-login-region='brand'] [class*='text-4xl'] {
+  color: var(--color-primary);
+  font-family: var(--ol-font-display, 'Georgia', 'Noto Serif SC', serif);
+  font-size: clamp(1.8rem, 4vw, 2.8rem);
+}
+
+[data-theme='academy-ink-gold'] [data-login-region='brand'] [data-theme-control='badge'] {
+  display: inline-block;
+  border: 1px solid var(--color-accent);
+  color: var(--color-accent);
+  border-radius: 9999px;
+  padding: 0.2rem 0.8rem;
+  font-size: 0.75rem;
+  letter-spacing: 0.1em;
+  background: color-mix(in srgb, var(--color-accent) 8%, transparent);
+}
+
+[data-theme='academy-ink-gold'] [data-login-region='seed-hint'] {
+  border-left: 3px solid var(--color-accent);
+  padding-left: 0.75rem;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+/* ── 卡片：[data-theme-surface='card'] ─────────────────────────────────── */
+[data-theme='academy-ink-gold'] [data-theme-surface='card'] {
+  border: 1px solid var(--border-theme);
+  border-top: 2px solid var(--color-accent);
+  border-radius: 0.875rem;
+  box-shadow: 0 10px 28px -14px color-mix(in srgb, var(--color-primary) 40%, transparent);
+  background: var(--bg-surface);
+}
+
+/* ── 控件：input / tab / submit / badge ────────────────────────────────── */
+[data-theme='academy-ink-gold'] [data-theme-control='input'] {
+  border: 1px solid var(--border-theme);
+  border-radius: 0.625rem;
+  background: var(--bg-surface-elevated);
+  color: var(--text-main);
+  padding: 0.6rem 0.8rem;
+  transition:
+    border-color 150ms ease,
+    box-shadow 150ms ease;
+}
+
+[data-theme='academy-ink-gold'] [data-theme-control='input']:focus {
+  outline: none;
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 22%, transparent);
+}
+
+[data-theme='academy-ink-gold'] [data-theme-control='tab'] {
+  border-radius: 9999px;
+  border: 1px solid transparent;
+  color: var(--text-muted);
+  transition: all 150ms ease;
+}
+
+[data-theme='academy-ink-gold'] [data-theme-control='tab']:hover {
+  color: var(--color-accent);
+  background: color-mix(in srgb, var(--color-accent) 10%, transparent);
+}
+
+[data-theme='academy-ink-gold'] [data-theme-control='tab'][aria-selected='true'] {
+  color: #fff;
+  background: linear-gradient(135deg, var(--color-primary), var(--color-accent));
+  border-color: var(--color-accent);
+  box-shadow: 0 4px 12px -4px color-mix(in srgb, var(--color-primary) 50%, transparent);
+}
+
+[data-theme='academy-ink-gold'] [data-theme-control='submit'] {
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-accent) 140%);
+  color: #fff;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  border: 1px solid var(--color-accent);
+  border-radius: 0.625rem;
+  box-shadow: 0 6px 18px -8px color-mix(in srgb, var(--color-primary) 60%, transparent);
+  transition:
+    filter 150ms ease,
+    transform 150ms ease;
+}
+
+[data-theme='academy-ink-gold'] [data-theme-control='submit']:hover {
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+}
+
+[data-theme='academy-ink-gold'] [data-theme-control]:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+/* ── 学生端：状态栏下移 + 三列卡片（student.headerPosition = bottom）───── */
+[data-theme='academy-ink-gold'] [data-student-header-position='bottom'] {
+  gap: 1rem;
+}
+
+[data-theme='academy-ink-gold'] [data-student-header-position='bottom'] [data-theme-surface='card'] {
+  border-top-color: var(--color-accent);
+  background: linear-gradient(180deg, var(--bg-surface) 0%, var(--bg-surface-secondary) 100%);
+}
+
+[data-theme='academy-ink-gold'] [data-student-card-columns='3'] [data-theme-surface='card'] {
+  transition:
+    transform 160ms ease,
+    box-shadow 160ms ease;
+}
+
+[data-theme='academy-ink-gold'] [data-student-card-columns='3'] [data-theme-surface='card']:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 32px -14px color-mix(in srgb, var(--color-primary) 50%, transparent);
+}
+
+/* ── 管理后台：页签式导航（admin.navStyle = tabs）──────────────────────── */
+[data-theme='academy-ink-gold'] [data-admin-nav-style='tabs'] [data-theme-surface='card'] {
+  border-top-width: 3px;
+}
+
+[data-theme='academy-ink-gold'] [data-admin-nav-style='tabs'] button {
+  border-radius: 0.5rem 0.5rem 0 0;
+  border-bottom: 2px solid transparent;
+  color: var(--text-muted);
+}
+
+[data-theme='academy-ink-gold'] [data-admin-nav-style='tabs'] button:hover {
+  color: var(--color-accent);
+  border-bottom-color: color-mix(in srgb, var(--color-accent) 50%, transparent);
+}
+
+/* ── 减少动态效果偏好 ─────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  [data-theme='academy-ink-gold'] *,
+  [data-theme='academy-ink-gold'] *::before,
+  [data-theme='academy-ink-gold'] *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}
