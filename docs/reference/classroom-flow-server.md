@@ -42,6 +42,8 @@ Manifest 贡献键：`contributes['mode.pack']`（见 `@openlearn/plugin-sdk` �
 
 内置白板包 id：`@openlearn/mode-whiteboard`（`isDefault: true`，认领 `whiteboard`）。
 
+课中画布：宿主经 `WhiteboardHostBridgeProvider` 注入与旧中栏相同的 `LazyWhiteboard` props（含 `broadcastFullscreen` / `onFullscreenSync` / `activeSegmentId` / `onPagesStateChange`）。flag 开启时教师白板 tab 与双端 `active_segment.*` 工作区消费该桥；关闭时仍直挂 `LazyWhiteboard`。
+
 ---
 
 ## 2. 通讯协议（ClassroomMessage）
