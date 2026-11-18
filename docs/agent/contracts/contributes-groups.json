@@ -131,7 +131,5 @@
     "teacher.cockpit.widget",
     "timeline.segments"
   ],
-  "b_not_in_extension_slot": [
-    "workspace.view"
-  ]
+  "b_not_in_extension_slot": ["workspace.view"]
 }
