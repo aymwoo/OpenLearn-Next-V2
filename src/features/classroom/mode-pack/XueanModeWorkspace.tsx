@@ -1,8 +1,9 @@
 /**
- * 学案 Mode Pack 课中工作区（P2 首切片）。
+ * 学案 Mode Pack 课中工作区（P2）。
  *
  * 教师端包装 ProgressPanel（进度/批阅）；学生端包装 StudentXueanView。
- * 作答仍走既有 lesson-activities API；SubmissionAdapter 迁入留待后续。
+ * 作答真值仍写 lesson-activities / activity_progress；成功后经 flow.sendMessage
+ * 通知 `xuean:task` 通道。成绩面板经 xuean-adapter 投影聚合。
  */
 import type { ClassroomActiveSegmentMainSlotProps } from '../../../plugin-host/types';
 import { ProgressPanel } from '../../teacher/xuean/ProgressPanel';
@@ -11,7 +12,7 @@ import { StudentXueanView } from '../../student/xuean/StudentXueanView';
 export type XueanModeWorkspaceRole = 'teacher' | 'student';
 
 export function XueanModeWorkspace(props: ClassroomActiveSegmentMainSlotProps & { role?: XueanModeWorkspaceRole }) {
-  const { segment, lessonId, role = 'teacher' } = props;
+  const { segment, lessonId, classId, flow, role = 'teacher' } = props;
   const title = segment.title || segment.id;
   const segmentType = typeof segment.type === 'string' ? segment.type : 'xuean';
   const effectiveLessonId = lessonId || '';
@@ -32,7 +33,27 @@ export function XueanModeWorkspace(props: ClassroomActiveSegmentMainSlotProps & 
       <div className="min-h-0 flex-1">
         {role === 'student' ? (
           effectiveLessonId ? (
-            <StudentXueanView lessonId={effectiveLessonId} lessonTitle={title} />
+            <StudentXueanView
+              lessonId={effectiveLessonId}
+              lessonTitle={title}
+              onActivityProgressReported={(info) => {
+                void flow
+                  .sendMessage({
+                    channel: 'xuean:task',
+                    msgType: 'request',
+                    payload: {
+                      activityId: info.activityId,
+                      status: info.status,
+                      segmentId: segment.id,
+                      lessonId: effectiveLessonId,
+                      classId: classId ?? null,
+                    },
+                  })
+                  .catch(() => {
+                    /* 通道通知失败不阻断已写入的进度 */
+                  });
+              }}
+            />
           ) : (
             <p className="text-xs text-muted p-3">缺少课节 id，无法加载学案。</p>
           )

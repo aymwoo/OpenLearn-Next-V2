@@ -16,4 +16,6 @@ export const XUEAN_MODE_PACK: ModePackContribution = {
   isDefault: false,
   teacherWorkspaceId: 'mode-xuean-teacher',
   studentWorkspaceId: 'mode-xuean-student',
+  adapterIds: ['xuean-adapter'],
+  channels: ['xuean:task'],
 };

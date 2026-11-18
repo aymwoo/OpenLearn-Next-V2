@@ -44,7 +44,15 @@ Manifest 贡献键：`contributes['mode.pack']`（见 `@openlearn/plugin-sdk` �
 
 课中画布：宿主经 `WhiteboardHostBridgeProvider` 注入与旧中栏相同的 `LazyWhiteboard` props（含 `broadcastFullscreen` / `onFullscreenSync` / `activeSegmentId` / `onPagesStateChange`）。flag 开启时教师白板 tab 与双端 `active_segment.*` 工作区消费该桥；关闭时仍直挂 `LazyWhiteboard`。
 
-内置学案包 id：`@openlearn/mode-xuean`（认领精确类型 `xuean`，非 default）。flag 开启时注册 timeline 环节类型「学案学习」，教师 `active_segment.main` 挂 `ProgressPanel`，学生 `student_main` primary 挂 `StudentXueanView`。平行学生 `xuean` tab 暂留作 fallback；SubmissionAdapter / `xuean:study` 前缀分型后续再做。
+内置学案包 id：`@openlearn/mode-xuean`（认领前缀 `xuean`，非 default）。flag 开启时：
+
+- timeline 注册 `xuean` 与 `xuean:preview|study|drill`；扩展点 `targetType` 经 `extensionCoversSegmentType` 做前缀匹配（与 Mode Pack 契约一致）。
+- 教师 `active_segment.main` → `ProgressPanel`；学生 `student_main` primary → `StudentXueanView`；隐藏学生平行「学案」tab。
+- 服务端注册共享通道 `xuean:task` 与 SubmissionAdapter `xuean-adapter`（只读投影 `activity_progress` 进统一成绩面板；`modeId=xuean`）。
+- 作答真值仍写 `POST /api/activities/:id/progress`；工作区在写库成功后 `flow.sendMessage({ channel: 'xuean:task' })` 通知。
+- **不变式**：环节门禁仍由 lesson-engine 裁决；学案自报进度**不会**自动放行 timeline。
+
+flag 关闭时行为与既有平行 tab / 无适配器路径一致。
 
 ---
 

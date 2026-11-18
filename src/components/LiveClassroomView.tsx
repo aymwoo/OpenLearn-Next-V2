@@ -44,7 +44,7 @@ import type { WhiteboardPageItem, WhiteboardHandle } from '../features/whiteboar
 import { TeacherAssignmentGradePanel } from './TeacherAssignmentGradePanel';
 import { TopPerformersWidget } from '../features/teacher/TopPerformersWidget';
 import { resolvePluginCommandType } from '../../packages/core/plugin-host/plugin-namespace';
-import { normalizeSegmentType } from '../../packages/core/plugin-host/mode-pack';
+import { extensionCoversSegmentType, normalizeSegmentType } from '../../packages/core/plugin-host/mode-pack';
 import { ExtensionPointRenderer } from '../plugin-host/extension-point-renderer';
 import { useOptionalPluginHost } from '../plugin-host/plugin-host-context';
 import {
@@ -981,6 +981,12 @@ export function LiveClassroomView({
     try {
       const params = new URLSearchParams({ lessonId: selectedLesson });
       if (liveClassSelectedClassId) params.set('classId', liveClassSelectedClassId);
+      // Mode Pack 开启且当前环节为学案时，按 modeId 收窄到学案适配器投影
+      if (isModePacksEnabled()) {
+        const seg = timelineSegments.find((s) => s.id === activeSegmentId) as { type?: string } | undefined;
+        const t = normalizeSegmentType(seg?.type);
+        if (t === 'xuean' || t.startsWith('xuean:')) params.set('modeId', 'xuean');
+      }
       const res = await fetch(`/api/classroomflowserver/submissions?${params.toString()}`);
       if (res.ok) {
         const data = await res.json();
@@ -989,7 +995,7 @@ export function LiveClassroomView({
     } catch {
       // 提交适配器未启用时保持空列表
     }
-  }, [selectedLesson, liveClassSelectedClassId]);
+  }, [selectedLesson, liveClassSelectedClassId, activeSegmentId, timelineSegments]);
 
   const handleGradePluginSubmission = useCallback(
     async (adapterId: string, submissionId: string, score: number) => {
@@ -1628,7 +1634,7 @@ export function LiveClassroomView({
   useEffect(() => {
     if (!activeSegmentId || classroomStage !== 'IN_CLASS_TEACHING' || !host) return;
     const seg = timelineSegments.find((s) => s.id === activeSegmentId) as { type?: string } | undefined;
-    const segmentType = seg?.type;
+    const segmentType = isModePacksEnabled() ? normalizeSegmentType(seg?.type) : seg?.type;
     if (!segmentType) return;
     // 从 host 现取，避免把 `|| []` 产生的新数组放进依赖（触发 exhaustive-deps 告警）
     const exts = host.getExtensions('classroom.active_segment.main' as never) as unknown[];
@@ -1636,7 +1642,13 @@ export function LiveClassroomView({
       const e = ext as { targetType?: string; slotProps?: Record<string, unknown> };
       const cfg = e.slotProps ?? {};
       const declared = e.targetType ?? cfg.segmentType ?? cfg.targetType;
-      return cfg.primary === true && (declared === undefined || declared === segmentType);
+      return (
+        cfg.primary === true &&
+        extensionCoversSegmentType(
+          typeof declared === 'string' ? declared : declared == null ? null : String(declared),
+          segmentType,
+        )
+      );
     });
     if (primary) setMiddleTab('segment_main');
   }, [activeSegmentId, classroomStage, timelineSegments, host]);

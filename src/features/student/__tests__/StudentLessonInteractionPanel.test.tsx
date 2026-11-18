@@ -2,6 +2,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, cleanup } from '@testing-library/react';
 import { Suspense } from 'react';
 import { StudentLessonInteractionPanel } from '../StudentLessonInteractionPanel';
+import { setModePacksEnabledForTests } from '../../classroom/mode-pack';
 
 // 捕获传给白板的 props，用于断言只读跟随模式是否下传
 const whiteboardProps: Record<string, unknown>[] = [];
@@ -16,6 +17,7 @@ afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
   whiteboardProps.length = 0;
+  setModePacksEnabledForTests(null);
 });
 
 function makeProps(overrides: Record<string, unknown> = {}) {
@@ -113,6 +115,26 @@ describe('StudentLessonInteractionPanel', () => {
       </Suspense>,
     );
     expect(whiteboardProps.at(-1)?.readOnly).toBe(false);
+  });
+
+  it('Mode Pack flag 关闭时展示平行学案 tab', () => {
+    setModePacksEnabledForTests(false);
+    render(
+      <Suspense fallback={null}>
+        <StudentLessonInteractionPanel {...makeProps()} />
+      </Suspense>,
+    );
+    expect(screen.getByTestId('student-parallel-xuean-tab')).toBeTruthy();
+  });
+
+  it('Mode Pack flag 开启时隐藏平行学案 tab（由 student_main primary 接管）', () => {
+    setModePacksEnabledForTests(true);
+    render(
+      <Suspense fallback={null}>
+        <StudentLessonInteractionPanel {...makeProps()} />
+      </Suspense>,
+    );
+    expect(screen.queryByTestId('student-parallel-xuean-tab')).toBeNull();
   });
 
   describe('Issue #110: answer lock (navigation mode)', () => {

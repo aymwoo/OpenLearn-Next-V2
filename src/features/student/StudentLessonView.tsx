@@ -11,7 +11,7 @@ import { StudentIcebreakerModal } from './StudentIcebreakerModal';
 import { useStudentActiveSession } from './useStudentActiveSession';
 import type { StudentFullscreenPanel } from './studentFullscreenLayout';
 import { useOptionalPluginHost } from '../../plugin-host/plugin-host-context';
-import { normalizeSegmentType } from '../../../packages/core/plugin-host/mode-pack';
+import { extensionCoversSegmentType, normalizeSegmentType } from '../../../packages/core/plugin-host/mode-pack';
 import {
   isModePacksEnabled,
   registerWhiteboardModePack,
@@ -124,7 +124,10 @@ export function StudentLessonView(props: StudentLessonViewProps) {
     ? studentMainExts.filter((ext) => {
         const e = ext as { targetType?: string; slotProps?: Record<string, unknown> };
         const declared = e.targetType ?? e.slotProps?.segmentType ?? e.slotProps?.targetType;
-        return declared === undefined || declared === segmentType;
+        return extensionCoversSegmentType(
+          typeof declared === 'string' ? declared : declared == null ? null : String(declared),
+          segmentType,
+        );
       })
     : [];
   // primary 工作区命中时替代原生内容面板，实现学生端"不用白板"接管

@@ -12,13 +12,19 @@ import {
   ICommandBusServiceToken,
   IActionRegistryServiceToken,
   IClassroomMessageServiceToken,
+  IDatabaseToken,
+  ISubmissionRegistryToken,
   type ICommandBusService,
   type IActionRegistryService,
   type IClassroomMessageService,
+  type SqliteDatabase,
 } from '../core/di/interfaces.js';
+import type { SubmissionRegistry } from '../core/submission-adapter/registry.js';
+import { createXueanSubmissionAdapter, XUEAN_SUBMISSION_ADAPTER_ID } from '../core/submission-adapter/xuean-adapter.js';
 import type { PluginContext } from '@openlearn/plugin-sdk';
 
 const COMMAND_TYPE = 'classroom.sendMessage';
+const XUEAN_CHANNEL = 'xuean:task';
 
 /** 从 actorId 派生 senderPluginId 与 senderRole（actorId 由宿主注入，不可伪造） */
 function deriveSender(actorId: string): { senderPluginId: string | null; senderRole: string } {
@@ -35,7 +41,11 @@ export const ClassroomFlowServerPlugin = {
     name: 'Classroom Flow Server Plugin',
     version: '1.0.0',
     main: 'index.js',
-    requires: ['@openlearn/core:ICommandBusService@^1.0.0'],
+    requires: [
+      '@openlearn/core:ICommandBusService@^1.0.0',
+      '@openlearn/core:IDatabase@^1.0.0',
+      '@openlearn/submission-adapter:IRegistry@^1.0.0',
+    ],
     capabilitiesProposed: ['lesson:write'],
   },
 
@@ -43,6 +53,24 @@ export const ClassroomFlowServerPlugin = {
     const commandBus = (await ctx.resolve(ICommandBusServiceToken)) as ICommandBusService;
     const actionRegistry = (await ctx.resolve(IActionRegistryServiceToken)) as IActionRegistryService;
     const messageService = (await ctx.resolve(IClassroomMessageServiceToken)) as IClassroomMessageService;
+    const db = (await ctx.resolve(IDatabaseToken)) as SqliteDatabase;
+    const submissionRegistry = (await ctx.resolve(ISubmissionRegistryToken)) as SubmissionRegistry;
+
+    // 学案可靠消息通道（学生作答通知 / 教师催交等）；真值仍写 activity_progress。
+    messageService.registerChannel({
+      name: XUEAN_CHANNEL,
+      shared: true,
+      rolesAllowed: ['teacher', 'student', 'administrator'],
+      requiredPayloadFields: ['activityId'],
+    });
+
+    // 统一成绩面板投影：activity_progress → NormalizedSubmission（modeId=xuean）
+    const adapterResult = submissionRegistry.register(createXueanSubmissionAdapter(db));
+    if (!adapterResult.ok && adapterResult.code !== 'ADAPTER_EXISTS') {
+      ctx.log?.warn?.(`[classroom-flow-server] xuean adapter register failed: ${adapterResult.message}`);
+    } else {
+      ctx.log?.info?.(`[classroom-flow-server] registered ${XUEAN_SUBMISSION_ADAPTER_ID}`);
+    }
 
     await actionRegistry.register({
       id: 'classroom-send-message',
