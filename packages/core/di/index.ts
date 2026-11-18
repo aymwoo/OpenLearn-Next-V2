@@ -68,6 +68,35 @@ export {
 
 export { StorageService } from './storage-service.js';
 export { AIService } from './ai-service.js';
+export { CreditRedemptionService, DEFAULT_REDEEM_DIMENSION } from './credit-redemption-service.js';
+export type { RedeemCreditInput, RedeemResult, RedeemFailureCode } from './credit-redemption-service.js';
+export { ClassroomMessageService } from './classroom-message-service.js';
+export type {
+  SendMessageInput,
+  SendMessageResult,
+  ReplayedMessage,
+  ReplayQuery,
+  MessageEventPublisher,
+  MessageSideEffectEnqueuer,
+} from './classroom-message-service.js';
+export { DbSideEffectEnqueuer } from './pending-side-effect-enqueuer.js';
+export { CreditAwardService, BUILTIN_AWARD_SOURCES } from './credit-award-service.js';
+export type {
+  AwardCreditInput,
+  AwardResult,
+  AwardFailureCode,
+  CreditEventPublisher,
+  SideEffectEnqueuer,
+} from './credit-award-service.js';
+export { RewardCatalogService } from './reward-catalog-service.js';
+export type {
+  RewardItem,
+  RewardEligibility,
+  CreateRewardInput,
+  ResolveResult,
+  ResolveFailureCode,
+  ResolveContext,
+} from './reward-catalog-service.js';
 export { CoursewareRuntimeScriptRegistry } from './courseware-runtime-script-registry.js';
 export { FileStorageExtensionRegistry } from './file-storage-extension-registry.js';
 export * from './ai-provider-resolver.js';

@@ -50,6 +50,26 @@ export interface PresenceDeps {
    * 缺省不传时不自动加入课节房间，保持向后兼容。
    */
   lookupTeacherLessonIds?: (userId: string) => string[];
+  /**
+   * 通讯协议补投服务（Q13=C）：学生重连上报 lastSeq 后，服务端查未确认消息
+   * 定向补投到该 socket。缺省不传时不注册 resume 处理器，保持向后兼容。
+   */
+  messageService?: {
+    replay(query: {
+      lessonId?: string | null;
+      classId?: string | null;
+      sinceSeq: number;
+      viewerId: string;
+      limit?: number;
+    }): Array<{
+      seq: number;
+      id: string;
+      channel: string;
+      msgType: string;
+      correlationId: string | null;
+      payload: unknown;
+    }>;
+  };
 }
 
 /** 班级房间名。与课节房间（直接用 lessonId）互不冲突。 */
@@ -236,6 +256,7 @@ export function setupPresence({
   lookupLessonClassId,
   lookupTeacherClassIds,
   lookupTeacherLessonIds,
+  messageService,
 }: PresenceDeps): void {
   // In-memory status maps
   const onlineStudents = new Map<string, { socketId: string; name: string }>();
@@ -736,6 +757,44 @@ export function setupPresence({
     });
 
     // 教师端课堂控制信令总线（透传至课节房间内所有远程学生端）
+    // ── 通讯协议补投（Q13=C 的服务端推送路径）────────────────────────────
+    // 学生重连后上报 lastSeq（+ lessonId/classId），服务端按 seq 游标查未确认
+    // 消息，定向 emit 到本 socket（不进房间，避免重复推送给其他在线成员）。
+    // viewerId 由会话派生，禁止客户端伪造他人身份读取定向消息。
+    socket.on(
+      'message-resume',
+      (data: { lessonId?: string; classId?: string; lastSeq?: number }, ack?: (r: unknown) => void) => {
+        if (!messageService || !data) {
+          ack?.({ ok: false, error: 'resume unavailable' });
+          return;
+        }
+        const viewerId = session?.userId ? String(session.userId) : registeredStudentId;
+        if (!viewerId) {
+          ack?.({ ok: false, error: 'unauthenticated' });
+          return;
+        }
+        const sinceSeq = Number.isFinite(data.lastSeq) ? Number(data.lastSeq) : 0;
+        try {
+          const pending = messageService.replay({
+            lessonId: data.lessonId ?? null,
+            classId: data.classId ?? null,
+            sinceSeq,
+            viewerId,
+          });
+          for (const msg of pending) {
+            socket.emit('classroom:message', {
+              ...msg,
+              _meta: { correlationId: msg.correlationId ?? msg.id, type: 'classroom.message' },
+            });
+          }
+          ack?.({ ok: true, count: pending.length, lastSeq: pending.at(-1)?.seq ?? sinceSeq });
+        } catch (err) {
+          plog.warn({ err }, '[Presence] message-resume failed');
+          ack?.({ ok: false, error: 'replay failed' });
+        }
+      },
+    );
+
     socket.on('teacher-sync-message', (data: { lessonId: string; message: any }) => {
       if (session && !isTeacherOrAdmin) return;
       if (!data?.lessonId || !data.message) return;
