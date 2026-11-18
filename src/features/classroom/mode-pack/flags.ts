@@ -11,6 +11,8 @@
 declare global {
   interface Window {
     __OPENLEARN_MODE_PACKS__?: boolean;
+    /** P4：Mode Pack 开启时临时恢复学生平行学案 tab（调试） */
+    __OPENLEARN_DEBUG_XUEAN_TAB__?: boolean;
   }
 }
 

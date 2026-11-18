@@ -32,6 +32,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - Mode Pack 声明 `prepContributionId`；flag 开时 `ModePackPrepShell` 按 `segment.type` 决议白板/学案备课面，TeacherView 不再硬编码双壳主路径。
   - 侧栏学案入口并入「备课」；Timeline 新建默认 `whiteboard`；白板包注册 timeline 类型。
   - `routePrepDrop`：跨包拖放按环节类型路由（白板 → page_meta；学案 → 活动存储约定）；activities 与 timeline 不并表。
+- **Mode Pack P4：削壳与清理**（Issue #555）：
+  - `LiveClassroomView` 编排壳 ≤ ~1.5k LOC；抽出 MiddleWorkspace / StudentMonitor / HeaderBar / StageRouter 与可测 hooks。
+  - `mapTeacherMiddleTabToStudentTab` 统一广播映射；`outlineContributionId` 驱动侧栏大纲（白板页 / 学案活动）。
+  - 学生平行学案 tab：flag 开默认隐藏，调试入口 `__OPENLEARN_DEBUG_XUEAN_TAB__`。
+  - 新增第三方 Mode Pack 接入指南 `docs/tutorials/mode-pack-third-party.md`。
 
 ### Docs
 

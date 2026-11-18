@@ -66,6 +66,13 @@ flag 开启时：
 
 flag 关闭 = 旧双编辑器路径，零行为变化。
 
+### 1.1.2 削壳与大纲贡献（P4）
+
+- 教师中栏 → 学生 tab 广播映射统一为 `mapTeacherMiddleTabToStudentTab()`（删除重复内联映射）。
+- Mode Pack 声明 `outlineContributionId`；课中侧栏按环节类型渲染白板页大纲或学案活动大纲。
+- flag 开时学生平行「学案」tab 默认隐藏；调试可设 `window.__OPENLEARN_DEBUG_XUEAN_TAB__ = true`。
+- `LiveClassroomView` 编排壳目标 ≤ ~1.5k LOC（逻辑外移到 hooks / 子组件）；第三方接入见 [mode-pack-third-party.md](../tutorials/mode-pack-third-party.md)。
+
 ---
 
 ## 2. 通讯协议（ClassroomMessage）
