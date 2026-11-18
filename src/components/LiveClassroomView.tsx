@@ -51,6 +51,9 @@ import {
   isModePacksEnabled,
   registerWhiteboardModePack,
   unregisterWhiteboardModePack,
+  WhiteboardHostBridgeProvider,
+  WhiteboardModeWorkspace,
+  type WhiteboardHostBridgeValue,
 } from '../features/classroom/mode-pack';
 import { ClassroomSyncChannel, CLASSROOM_SYNC_CHANNEL_NAME } from '../services/classroom-sync-channel';
 import { getOptionalSocket, onSocketInstance } from '../services/socket-service';
@@ -2081,6 +2084,50 @@ export function LiveClassroomView({
     [selectedLesson, addToast, lang, liveClassSelectedClassId, activeSegmentId, onOpenCoursewareHub, fetchElements],
   );
 
+  // Mode Pack 画布桥：flag 开时 WhiteboardModeWorkspace / segment_main 共用同一 LazyWhiteboard 契约。
+  const teacherWhiteboardBridge = useMemo<WhiteboardHostBridgeValue>(
+    () => ({
+      whiteboardRef,
+      canvasProps: {
+        lessonId: selectedLesson,
+        classId: liveClassSelectedClassId,
+        userRole: 'teacher',
+        initialPage: restoredCurrentPage,
+        isEditMode: false,
+        broadcastFullscreen: true,
+        fullscreenBroadcastClassId: liveClassSelectedClassId,
+        onFullscreenSync: handleFullscreenSync,
+        elements,
+        activeSegmentId,
+        onSegmentSync: handleSegmentSync,
+        classroomTools,
+        onExecuteTool: handleExecuteTool,
+        hidePageBar: true,
+        onPagesStateChange: handleWhiteboardPagesStateChange,
+        onElementAdd: handleElementAdd,
+        onElementUpdate: handleElementUpdate,
+        onElementDelete: handleElementDelete,
+        onRefresh: handleWhiteboardRefresh,
+      },
+    }),
+    [
+      selectedLesson,
+      liveClassSelectedClassId,
+      restoredCurrentPage,
+      handleFullscreenSync,
+      elements,
+      activeSegmentId,
+      handleSegmentSync,
+      classroomTools,
+      handleExecuteTool,
+      handleWhiteboardPagesStateChange,
+      handleElementAdd,
+      handleElementUpdate,
+      handleElementDelete,
+      handleWhiteboardRefresh,
+    ],
+  );
+
   const handleRandomPick = () => {
     if (students.length === 0 || isDrawing) return;
 
@@ -2989,30 +3036,50 @@ export function LiveClassroomView({
                         </button>
                       </div>
                     )}
-                    {/* Whiteboard canvas wrapper */}
+                    {/* Whiteboard canvas wrapper — flag 开时走 Mode Pack 工作区，契约与旧路径一致 */}
                     <div className="flex-grow flex-1 min-h-0 w-full relative rounded-xl overflow-hidden border border-theme shadow-md bg-surface flex flex-col">
-                      <LazyWhiteboard
-                        ref={whiteboardRef}
-                        lessonId={selectedLesson}
-                        classId={liveClassSelectedClassId}
-                        userRole={'teacher'}
-                        initialPage={restoredCurrentPage}
-                        isEditMode={false}
-                        broadcastFullscreen
-                        fullscreenBroadcastClassId={liveClassSelectedClassId}
-                        onFullscreenSync={handleFullscreenSync}
-                        elements={elements}
-                        activeSegmentId={activeSegmentId}
-                        onSegmentSync={handleSegmentSync}
-                        classroomTools={classroomTools}
-                        onExecuteTool={handleExecuteTool}
-                        hidePageBar={true}
-                        onPagesStateChange={handleWhiteboardPagesStateChange}
-                        onElementAdd={handleElementAdd}
-                        onElementUpdate={handleElementUpdate}
-                        onElementDelete={handleElementDelete}
-                        onRefresh={handleWhiteboardRefresh}
-                      />
+                      {isModePacksEnabled() ? (
+                        <WhiteboardHostBridgeProvider value={teacherWhiteboardBridge}>
+                          <WhiteboardModeWorkspace
+                            segment={
+                              currentActiveSegment
+                                ? {
+                                    ...currentActiveSegment,
+                                    type: normalizeSegmentType((currentActiveSegment as { type?: string }).type),
+                                  }
+                                : { id: 'whiteboard-default', type: 'whiteboard', title: 'Whiteboard' }
+                            }
+                            lessonId={selectedLesson}
+                            classId={liveClassSelectedClassId}
+                            lang={lang}
+                            flow={segmentMainFlowController}
+                            onRefresh={handleWhiteboardRefresh}
+                          />
+                        </WhiteboardHostBridgeProvider>
+                      ) : (
+                        <LazyWhiteboard
+                          ref={whiteboardRef}
+                          lessonId={selectedLesson}
+                          classId={liveClassSelectedClassId}
+                          userRole={'teacher'}
+                          initialPage={restoredCurrentPage}
+                          isEditMode={false}
+                          broadcastFullscreen
+                          fullscreenBroadcastClassId={liveClassSelectedClassId}
+                          onFullscreenSync={handleFullscreenSync}
+                          elements={elements}
+                          activeSegmentId={activeSegmentId}
+                          onSegmentSync={handleSegmentSync}
+                          classroomTools={classroomTools}
+                          onExecuteTool={handleExecuteTool}
+                          hidePageBar={true}
+                          onPagesStateChange={handleWhiteboardPagesStateChange}
+                          onElementAdd={handleElementAdd}
+                          onElementUpdate={handleElementUpdate}
+                          onElementDelete={handleElementDelete}
+                          onRefresh={handleWhiteboardRefresh}
+                        />
+                      )}
                     </div>
                   </>
                 ) : middleTab === 'submissions' ? (
@@ -3060,22 +3127,24 @@ export function LiveClassroomView({
                     className="flex-grow flex-1 min-h-0 w-full relative rounded-xl overflow-hidden border border-theme shadow-md bg-surface flex flex-col p-4"
                   >
                     {currentActiveSegment ? (
-                      <ExtensionPointRenderer
-                        slot="classroom.active_segment.main"
-                        slotProps={{
-                          segment: isModePacksEnabled()
-                            ? {
-                                ...currentActiveSegment,
-                                type: normalizeSegmentType((currentActiveSegment as { type?: string }).type),
-                              }
-                            : currentActiveSegment,
-                          lessonId: selectedLesson,
-                          classId: liveClassSelectedClassId,
-                          lang,
-                          flow: segmentMainFlowController,
-                          onRefresh: () => fetchElements(selectedLesson),
-                        }}
-                      />
+                      <WhiteboardHostBridgeProvider value={isModePacksEnabled() ? teacherWhiteboardBridge : null}>
+                        <ExtensionPointRenderer
+                          slot="classroom.active_segment.main"
+                          slotProps={{
+                            segment: isModePacksEnabled()
+                              ? {
+                                  ...currentActiveSegment,
+                                  type: normalizeSegmentType((currentActiveSegment as { type?: string }).type),
+                                }
+                              : currentActiveSegment,
+                            lessonId: selectedLesson,
+                            classId: liveClassSelectedClassId,
+                            lang,
+                            flow: segmentMainFlowController,
+                            onRefresh: () => fetchElements(selectedLesson),
+                          }}
+                        />
+                      </WhiteboardHostBridgeProvider>
                     ) : (
                       <div className="flex-1 flex flex-col items-center justify-center text-muted text-sm space-y-2">
                         <p>{lang === 'zh' ? '当前没有正在进行的教学环节。' : 'No active lesson segment currently.'}</p>

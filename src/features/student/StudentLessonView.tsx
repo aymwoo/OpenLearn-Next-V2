@@ -1,4 +1,4 @@
-import { useState, useEffect, type Dispatch, type SetStateAction } from 'react';
+import { useState, useEffect, useMemo, type Dispatch, type SetStateAction } from 'react';
 import type { StudentType, Lesson } from '../../types/app';
 import { StudentCheckinPanel } from './StudentCheckinPanel';
 import { StudentLessonHeader } from './StudentLessonHeader';
@@ -12,7 +12,13 @@ import { useStudentActiveSession } from './useStudentActiveSession';
 import type { StudentFullscreenPanel } from './studentFullscreenLayout';
 import { useOptionalPluginHost } from '../../plugin-host/plugin-host-context';
 import { normalizeSegmentType } from '../../../packages/core/plugin-host/mode-pack';
-import { isModePacksEnabled, registerWhiteboardModePack, unregisterWhiteboardModePack } from '../classroom/mode-pack';
+import {
+  isModePacksEnabled,
+  registerWhiteboardModePack,
+  unregisterWhiteboardModePack,
+  WhiteboardHostBridgeProvider,
+  type WhiteboardHostBridgeValue,
+} from '../classroom/mode-pack';
 
 export interface StudentLessonViewProps {
   students: StudentType[];
@@ -135,6 +141,67 @@ export function StudentLessonView(props: StudentLessonViewProps) {
     return undefined;
   }, [studentHost]);
 
+  const interactionLocked = isInteractionLocked ?? (lockMode === 'navigation' ? false : isStudentLocked);
+  const boardSegmentId = contentSegmentId || activeSegmentId;
+  const studentName = students.find((s) => s.id === activeStudentId)?.name ?? null;
+
+  // 与 StudentLessonInteractionPanel 白板 tab 同一 props 契约，供 Mode Pack primary 工作区挂载。
+  const studentWhiteboardBridge = useMemo<WhiteboardHostBridgeValue>(
+    () => ({
+      canvasProps: {
+        lessonId: selectedLesson,
+        classId: effectiveClassId ?? null,
+        studentId: activeStudentId,
+        studentName,
+        elements,
+        userRole: activeRole,
+        readOnly: interactionLocked,
+        followRemoteFullscreen: true,
+        activeSegmentId: boardSegmentId,
+        onSegmentSync: (segId: string) => {
+          if (contentSegmentId !== undefined && contentSegmentId !== activeSegmentId) return;
+          setActiveSegmentId(segId);
+        },
+        onElementUpdate: async () => {
+          /* readonly or sync */
+        },
+        onElementDelete: async (elementId: string) => {
+          if (interactionLocked) return;
+          if (!selectedLesson) return;
+          await fetch(`/api/lessons/${selectedLesson}/whiteboard/${elementId}`, { method: 'DELETE' });
+          fetchElements(selectedLesson);
+        },
+        onClearBoard: async () => {
+          if (interactionLocked) return;
+          if (!selectedLesson) return;
+          await fetch(`/api/lessons/${selectedLesson}/whiteboard`, { method: 'DELETE' });
+          fetchElements(selectedLesson);
+        },
+        onElementAdd: async () => {
+          /* readonly or sync */
+        },
+        onRefresh: () => {
+          if (!selectedLesson) return;
+          fetchElements(selectedLesson);
+        },
+      },
+    }),
+    [
+      selectedLesson,
+      effectiveClassId,
+      activeStudentId,
+      studentName,
+      elements,
+      activeRole,
+      interactionLocked,
+      boardSegmentId,
+      contentSegmentId,
+      activeSegmentId,
+      setActiveSegmentId,
+      fetchElements,
+    ],
+  );
+
   const studentFlowController = {
     snapshot: {
       lessonId: selectedLesson,
@@ -242,22 +309,26 @@ export function StudentLessonView(props: StudentLessonViewProps) {
         data-testid="classroom-active-segment-student-main-container"
         className={
           primaryStudentWorkspace
-            ? 'flex-1 min-h-0 bg-surface border border-theme rounded-xl p-4 shadow-sm text-main overflow-auto'
+            ? segmentType === 'whiteboard'
+              ? 'flex flex-1 min-h-0 flex-col overflow-hidden bg-surface border border-theme rounded-xl shadow-sm text-main'
+              : 'flex-1 min-h-0 bg-surface border border-theme rounded-xl p-4 shadow-sm text-main overflow-auto'
             : 'shrink-0 bg-surface border border-theme rounded-xl p-4 shadow-sm text-main overflow-auto'
         }
       >
-        <ExtensionPointRenderer
-          slot="classroom.active_segment.student_main"
-          slotProps={{
-            segment: isModePacksEnabled()
-              ? { ...activeSegment, type: normalizeSegmentType(activeSegment.type) }
-              : activeSegment,
-            lessonId: selectedLesson,
-            classId: effectiveClassId,
-            lang,
-            flow: studentFlowController,
-          }}
-        />
+        <WhiteboardHostBridgeProvider value={isModePacksEnabled() ? studentWhiteboardBridge : null}>
+          <ExtensionPointRenderer
+            slot="classroom.active_segment.student_main"
+            slotProps={{
+              segment: isModePacksEnabled()
+                ? { ...activeSegment, type: normalizeSegmentType(activeSegment.type) }
+                : activeSegment,
+              lessonId: selectedLesson,
+              classId: effectiveClassId,
+              lang,
+              flow: studentFlowController,
+            }}
+          />
+        </WhiteboardHostBridgeProvider>
       </div>
     ) : null;
 
@@ -329,7 +400,7 @@ export function StudentLessonView(props: StudentLessonViewProps) {
               studentSelectedCourseware={studentSelectedCourseware}
               setStudentSelectedCourseware={setStudentSelectedCourseware}
               activeStudentId={activeStudentId}
-              studentName={students.find((s) => s.id === activeStudentId)?.name ?? null}
+              studentName={studentName}
               classId={effectiveClassId}
               addToast={addToast}
             />
