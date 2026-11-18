@@ -178,6 +178,7 @@ export type ExtensionSlot =
   | 'student.academic_year.metric_card'
   // ── 课堂主工作区接管与课表导入 ──
   | 'classroom.active_segment.main'
+  | 'classroom.active_segment.student_main'
   | 'timetable.import.source'
   | 'timetable.entry.action'
   // ── 全局壳层后台任务 ──
@@ -381,7 +382,8 @@ export type AnyExtensionSlot = ExtensionSlot | AnchorSlot | (string & {});
 | `student.segment.badge`              | `src/features/student/StudentLessonContentPanel.tsx`                                                                                    | `{ segment, idx, isActive, isLocked, studentId, lessonId, lang }`                                                              |
 | `student.segment.gate_fallback`      | `src/features/student/StudentLessonInteractionPanel.tsx`                                                                                | `{ lessonId, activeSegmentId, studentId, contentSegmentId, lang }`                                                             |
 | `student.academic_year.metric_card`  | `src/features/student/StudentAcademicYearComparison.tsx`                                                                                | `{ studentId, comparisonData, selectedYears, lang }`                                                                           |
-| `classroom.active_segment.main`      | `src/components/LiveClassroomView.tsx`（活跃环节主工作区，含兜底分支）                                                                  | `{ segment, lessonId, classId, lang, onRefresh }`                                                                              |
+| `classroom.active_segment.main`      | `src/components/LiveClassroomView.tsx`（活跃环节主工作区，含兜底分支）                                                                  | `{ segment, lessonId, classId, lang, onRefresh, flow }`                                                                        |
+| `classroom.active_segment.student_main` | `src/features/student/StudentLessonView.tsx`（学生端对称工作区，按 segment.type 路由）                                             | `{ segment, lessonId, classId, lang, flow }`                                                                                   |
 | `timetable.import.source`            | `src/components/timetable/sub-views/TimetableOcrView.tsx`                                                                               | `{ lang, onImportEntries }`                                                                                                    |
 | `timetable.entry.action`             | `src/components/timetable/sub-views/TimetableCalendarView.tsx`（周历卡片 + 列表行两处）                                                 | `{ schedule, lang, onEdit }`                                                                                                   |
 | `header.async_task.item`             | `src/components/AppHeader.tsx`                                                                                                          | `{ lang, activeRole, teacherTab, setTeacherTab }`                                                                              |
@@ -1320,7 +1322,9 @@ export default function SandboxConfig({ segmentType, segment, readOnly, onPatch 
 
 ### 12.5 课堂主工作区接管与课表导入
 
-**`classroom.active_segment.main`** 是本页**最需要谨慎**的槽位：它渲染在活跃教学环节的**主工作区容器**内（`LiveClassroomView` 的 `classroom-active-segment-main-container`），与该容器的内置内容**并列**，不是替换。props `{ segment, lessonId, classId, lang, onRefresh }`。适用于「环节本身就是插件」的形态（探究仿真、代码竞技）。
+**`classroom.active_segment.main`** 是本页**最需要谨慎**的槽位：它渲染在活跃教学环节的**主工作区容器**内（`LiveClassroomView` 的 `classroom-active-segment-main-container`），与该容器的内置内容**并列**，不是替换。props `{ segment, lessonId, classId, lang, onRefresh, flow }`。适用于「环节本身就是插件」的形态（探究仿真、代码竞技）。
+
+**`classroom.active_segment.student_main`** 是它的**学生端对称槽**：渲染在 `StudentLessonView` 的主内容区。两槽都按 `segment.type` 分发——注册扩展时声明 `targetType`（或在 `slotProps.segmentType`）与环节类型匹配才渲染；未声明者对 All 环节可见（向后兼容）。注入的 `flow` 是 `ClassroomFlowController`（`snapshot` 只读快照 + `setActiveSegment`/`advanceStage`/`sendMessage`/`refresh` 动作），插件复用它驱动流程而不自建引擎。若扩展声明 `primary: true`，命中该环节时主视图自动切到工作区（教师端）/替代原生内容面板（学生端），实现「不用白板」的教学模式接管。
 
 > 不要把主工作区做成 `h-screen` 全屏——容器是受限高度的 `flex-grow` 区域。需要全屏就用 `ctx.ui.registerFullscreenRenderer`（§5）。
 

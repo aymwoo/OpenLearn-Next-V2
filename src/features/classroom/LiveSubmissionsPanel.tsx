@@ -33,6 +33,18 @@ export interface LiveSubmissionsPanelProps {
   handleViewRaw: (attempt: any) => void;
   handlePromoteAttempt: (attemptId: string) => void;
   handleMarkAbsent: (studentId: string, coursewareId: string) => void;
+  /** 第三方教学模式经提交适配器贡献的规范化提交（与课件提交并列展示） */
+  pluginSubmissions?: Array<{
+    id: string;
+    studentId: string;
+    studentName?: string | null;
+    source: { pluginId: string; adapterId: string; modeId?: string };
+    kind: string;
+    status: string;
+    score?: number | null;
+    submittedAt?: number | null;
+  }>;
+  onGradePluginSubmission?: (adapterId: string, submissionId: string) => void;
 }
 
 export function LiveSubmissionsPanel({
@@ -58,9 +70,45 @@ export function LiveSubmissionsPanel({
   handleViewRaw,
   handlePromoteAttempt,
   handleMarkAbsent,
+  pluginSubmissions = [],
+  onGradePluginSubmission,
 }: LiveSubmissionsPanelProps) {
   return (
     <div className="flex-grow flex-1 min-h-0 w-full relative rounded-xl overflow-hidden border border-theme shadow-md bg-surface flex flex-col p-4">
+      {/* 第三方教学模式提交（经提交适配器聚合）——与课件提交并列展示 */}
+      {pluginSubmissions.length > 0 && (
+        <div
+          data-testid="plugin-submissions-section"
+          className="mb-4 border border-primary-theme/30 rounded-lg p-3 shrink-0"
+        >
+          <div className="text-xs font-bold text-primary-theme mb-2">
+            🧩 {lang === 'zh' ? '教学模式提交' : 'Teaching-mode submissions'} ({pluginSubmissions.length})
+          </div>
+          <div className="max-h-40 overflow-auto space-y-1">
+            {pluginSubmissions.map((s) => (
+              <div
+                key={s.id}
+                className="flex items-center justify-between text-xs py-1 px-2 bg-surface-secondary/50 rounded"
+              >
+                <span className="font-medium text-main">{s.studentName || s.studentId}</span>
+                <span className="text-muted truncate mx-2">
+                  {s.source.pluginId} · {s.kind}
+                </span>
+                <span className="font-semibold text-main">{s.score ?? '—'}</span>
+                {onGradePluginSubmission && s.score == null && (
+                  <button
+                    type="button"
+                    className="ml-2 px-2 py-0.5 rounded bg-primary-theme text-white text-2xs"
+                    onClick={() => onGradePluginSubmission(s.source.adapterId, s.id)}
+                  >
+                    {lang === 'zh' ? '录入' : 'Grade'}
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
       {/* Submissions list view */}
       <div className="flex justify-between items-center mb-4 gap-3 shrink-0">
         <div className="flex items-center gap-2">

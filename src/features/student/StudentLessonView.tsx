@@ -10,6 +10,7 @@ import { useSegmentAccess } from './useSegmentAccess';
 import { StudentIcebreakerModal } from './StudentIcebreakerModal';
 import { useStudentActiveSession } from './useStudentActiveSession';
 import type { StudentFullscreenPanel } from './studentFullscreenLayout';
+import { useOptionalPluginHost } from '../../plugin-host/plugin-host-context';
 
 export interface StudentLessonViewProps {
   students: StudentType[];
@@ -93,12 +94,70 @@ export function StudentLessonView(props: StudentLessonViewProps) {
       ? segmentAccess.visibleSegmentId
       : activeSegmentId;
 
-  // Issue #131: 学生端破冰心情打卡状态
-  const [icebreakerOpen, setIcebreakerOpen] = useState(false);
+  // 班级 id（供授课工作区控制器与破冰逻辑共用）
   const [resolvedClassId, setResolvedClassId] = useState<string | null>(null);
   const activeSession = useStudentActiveSession((s) => s.activeSession);
   const effectiveClassId =
     resolvedClassId || (activeSession?.lessonId === selectedLesson ? activeSession.classId : null);
+
+  // ── 最小授课壳（学生端对称工作区）────────────────────────────────────
+  // 学生不自建流程引擎：用宿主现成的 activeSegmentId/timelineSegments 快照 +
+  // 命令总线的 sendMessage 动作，驱动学案/Moodle 学生视图。
+  const studentHost = useOptionalPluginHost();
+  const activeSegment = (timelineSegments as Array<{ id: string; type?: string }> | undefined)?.find(
+    (s) => s.id === activeSegmentId,
+  );
+  const segmentType = activeSegment?.type;
+  const studentMainExts = studentHost?.getExtensions('classroom.active_segment.student_main' as never) ?? [];
+  const matchingStudentMain = segmentType
+    ? studentMainExts.filter((ext) => {
+        const e = ext as { targetType?: string; slotProps?: Record<string, unknown> };
+        const declared = e.targetType ?? e.slotProps?.segmentType ?? e.slotProps?.targetType;
+        return declared === undefined || declared === segmentType;
+      })
+    : [];
+  // primary 工作区命中时替代原生内容面板，实现学生端"不用白板"接管
+  const primaryStudentWorkspace = matchingStudentMain.some(
+    (ext) => (ext as { slotProps?: Record<string, unknown> }).slotProps?.primary === true,
+  );
+
+  const studentFlowController = {
+    snapshot: {
+      lessonId: selectedLesson,
+      classId: effectiveClassId,
+      stage: 'IN_CLASS_TEACHING',
+      activeSegmentId,
+      segments: timelineSegments ?? [],
+      students,
+      onlineStudentIds: [],
+      attempts: [],
+    },
+    sendMessage: async (input: {
+      channel: string;
+      msgType: 'request' | 'response';
+      payload: unknown;
+      targetUserIds?: string[] | null;
+      ttlMs?: number | null;
+      messageId?: string;
+    }) => {
+      const res = await fetch('/api/commands', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          commandType: 'classroom.sendMessage',
+          payload: { ...input, lessonId: selectedLesson, classId: effectiveClassId },
+        }),
+      });
+      if (!res.ok) throw new Error(`sendMessage failed: HTTP ${res.status}`);
+      return res.json();
+    },
+    refresh: () => {
+      if (selectedLesson) fetchElements(selectedLesson);
+    },
+  };
+
+  // Issue #131: 学生端破冰心情打卡状态
+  const [icebreakerOpen, setIcebreakerOpen] = useState(false);
 
   useEffect(() => {
     if (!effectiveClassId || !selectedLesson) return;
@@ -163,57 +222,77 @@ export function StudentLessonView(props: StudentLessonViewProps) {
       />
       <StudentCheckinPanel lessonId={selectedLesson} lang={lang} addToast={addToast} />
       <SegmentGateBanner access={segmentAccess} lang={lang} />
-      <div className="flex-1 flex gap-6 min-h-0 bg-surface border border-theme rounded-xl p-4 shadow-sm text-main">
-        <StudentLessonContentPanel
-          students={students}
-          activeStudentId={activeStudentId}
-          isStudentLocked={isStudentLocked}
-          studentFullscreenPanel={studentFullscreenPanel}
-          setStudentFullscreenPanel={setStudentFullscreenPanel}
-          timelineSegments={timelineSegments}
-          lang={lang}
-          activeSegmentId={activeSegmentId}
-          setActiveSegmentId={setActiveSegmentId}
-          localProgressPercent={localProgressPercent}
-          setLocalProgressPercent={setLocalProgressPercent}
-          updateStudentProgress={updateStudentProgress}
-          selectedLesson={selectedLesson}
-          lessons={lessons}
-          isStudentLessonContentCollapsed={isStudentLessonContentCollapsed}
-          addToast={addToast}
-          segmentAccess={segmentAccess}
-        />
-        <StudentLessonInteractionPanel
-          isStudentLocked={isStudentLocked}
-          isNavigationLocked={isNavigationLocked}
-          isInteractionLocked={isInteractionLocked}
-          lockMode={lockMode}
-          studentLessonTab={studentLessonTab}
-          setStudentLessonTab={setStudentLessonTab}
-          isStudentLessonContentCollapsed={isStudentLessonContentCollapsed}
-          setIsStudentLessonContentCollapsed={setIsStudentLessonContentCollapsed}
-          lang={lang}
-          studentFullscreenPanel={studentFullscreenPanel}
-          setStudentFullscreenPanel={setStudentFullscreenPanel}
-          selectedLesson={selectedLesson}
-          elements={elements}
-          activeRole={activeRole}
-          activeSegmentId={activeSegmentId}
-          contentSegmentId={contentSegmentId}
-          blockSegmentContent={blockSegmentContent}
-          setActiveSegmentId={setActiveSegmentId}
-          fetchElements={fetchElements}
-          currentVfsParent={currentVfsParent}
-          setCurrentVfsParent={setCurrentVfsParent}
-          vfsNodes={vfsNodes}
-          studentSelectedCourseware={studentSelectedCourseware}
-          setStudentSelectedCourseware={setStudentSelectedCourseware}
-          activeStudentId={activeStudentId}
-          studentName={students.find((s) => s.id === activeStudentId)?.name ?? null}
-          classId={effectiveClassId}
-          addToast={addToast}
-        />
-      </div>
+      {/* 学生端授课工作区：primary 命中时替代原生内容面板（学案/Moodle 不用白板），
+          否则在原生视图上方渲染为叠加工作区（sw 插件自决显隐）。 */}
+      {(primaryStudentWorkspace || studentMainExts.length > 0) && activeSegmentId && activeSegment ? (
+        <div
+          data-testid="classroom-active-segment-student-main-container"
+          className="flex-1 min-h-0 bg-surface border border-theme rounded-xl p-4 shadow-sm text-main overflow-auto"
+        >
+          <ExtensionPointRenderer
+            slot="classroom.active_segment.student_main"
+            slotProps={{
+              segment: activeSegment,
+              lessonId: selectedLesson,
+              classId: effectiveClassId,
+              lang,
+              flow: studentFlowController,
+            }}
+          />
+        </div>
+      ) : (
+        <div className="flex-1 flex gap-6 min-h-0 bg-surface border border-theme rounded-xl p-4 shadow-sm text-main">
+          <StudentLessonContentPanel
+            students={students}
+            activeStudentId={activeStudentId}
+            isStudentLocked={isStudentLocked}
+            studentFullscreenPanel={studentFullscreenPanel}
+            setStudentFullscreenPanel={setStudentFullscreenPanel}
+            timelineSegments={timelineSegments}
+            lang={lang}
+            activeSegmentId={activeSegmentId}
+            setActiveSegmentId={setActiveSegmentId}
+            localProgressPercent={localProgressPercent}
+            setLocalProgressPercent={setLocalProgressPercent}
+            updateStudentProgress={updateStudentProgress}
+            selectedLesson={selectedLesson}
+            lessons={lessons}
+            isStudentLessonContentCollapsed={isStudentLessonContentCollapsed}
+            addToast={addToast}
+            segmentAccess={segmentAccess}
+          />
+          <StudentLessonInteractionPanel
+            isStudentLocked={isStudentLocked}
+            isNavigationLocked={isNavigationLocked}
+            isInteractionLocked={isInteractionLocked}
+            lockMode={lockMode}
+            studentLessonTab={studentLessonTab}
+            setStudentLessonTab={setStudentLessonTab}
+            isStudentLessonContentCollapsed={isStudentLessonContentCollapsed}
+            setIsStudentLessonContentCollapsed={setIsStudentLessonContentCollapsed}
+            lang={lang}
+            studentFullscreenPanel={studentFullscreenPanel}
+            setStudentFullscreenPanel={setStudentFullscreenPanel}
+            selectedLesson={selectedLesson}
+            elements={elements}
+            activeRole={activeRole}
+            activeSegmentId={activeSegmentId}
+            contentSegmentId={contentSegmentId}
+            blockSegmentContent={blockSegmentContent}
+            setActiveSegmentId={setActiveSegmentId}
+            fetchElements={fetchElements}
+            currentVfsParent={currentVfsParent}
+            setCurrentVfsParent={setCurrentVfsParent}
+            vfsNodes={vfsNodes}
+            studentSelectedCourseware={studentSelectedCourseware}
+            setStudentSelectedCourseware={setStudentSelectedCourseware}
+            activeStudentId={activeStudentId}
+            studentName={students.find((s) => s.id === activeStudentId)?.name ?? null}
+            classId={effectiveClassId}
+            addToast={addToast}
+          />
+        </div>
+      )}
 
       {/* 随堂个人笔记增强挂件扩展 */}
       <ExtensionPointRenderer

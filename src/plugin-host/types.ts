@@ -248,6 +248,7 @@ export type ExtensionSlot =
   | 'timetable.entry.action' // 排课卡片动作扩展（如一键备课、调课申请等）
   // ── 课堂教学环节主工作区接管槽位 ──
   | 'classroom.active_segment.main' // 当前活跃教学环节主工作区自定义接管面板（探究仿真实验、代码竞技等）
+  | 'classroom.active_segment.student_main' // 学生端对称的活跃环节主工作区接管（与教师端按 segment.type 路由，学案/Moodle 学生视图）
   // ── 学生端学业对比扩展槽位 ──
   | 'student.academic_year.metric_card' // 学生端多学年综合学业对比自定义指标卡扩展
   // ── 环节节点与学生端徽标微扩展槽位 ──
@@ -1020,4 +1021,50 @@ export interface PeerReviewShowcaseWidgetSlotProps {
   isAnonymous?: boolean;
   lang?: string;
   dispatcher?: IHostActionDispatcher;
+}
+
+// ── 授课工作区控制器（classroom.active_segment.main 槽位注入）──────────────
+// 插件工作区组件通过 slotProps.flow 拿到：只读快照 + 流程动作 + 消息发送。
+// 这是"最小授课壳"的核心：插件不自建流程引擎，复用 LiveClassroomView 的现成状态与动作。
+
+/** 工作区可读的课堂快照（由宿主注入，实时值） */
+export interface ClassroomFlowSnapshot {
+  lessonId: string | null;
+  classId: string | null;
+  stage: string;
+  activeSegmentId: string | null;
+  segments: Array<{ id: string; title?: string; type?: string; [key: string]: unknown }>;
+  students: Array<{ id: string; name?: string; [key: string]: unknown }>;
+  onlineStudentIds: string[];
+  attempts: unknown[];
+}
+
+/** 工作区可调用的流程动作（委托给宿主现成实现，非插件自建） */
+export interface ClassroomFlowController {
+  snapshot: ClassroomFlowSnapshot;
+  /** 推进到指定环节（走宿主 setActiveSegmentId + 持久化 + 广播） */
+  setActiveSegment(segmentId: string): void;
+  /** 切换课堂阶段（课前/课中/课后） */
+  advanceStage(stage: string): void;
+  /** 发送通讯协议可靠消息（走 classroom.sendMessage 命令） */
+  sendMessage(input: {
+    channel: string;
+    msgType: 'request' | 'response';
+    payload: unknown;
+    targetUserIds?: string[] | null;
+    ttlMs?: number | null;
+    messageId?: string;
+  }): Promise<unknown>;
+  /** 刷新课件/提交数据 */
+  refresh(): void;
+}
+
+/** Props passed to classroom.active_segment.main extensions */
+export interface ClassroomActiveSegmentMainSlotProps {
+  segment: { id: string; title?: string; type?: string; [key: string]: unknown };
+  lessonId: string | null;
+  classId: string | null;
+  lang?: string;
+  flow: ClassroomFlowController;
+  onRefresh?: () => void;
 }
