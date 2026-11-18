@@ -10,6 +10,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Features
+
+- **ClassroomFlow Mode Pack 契约（P0）与白板包骨架（P1 起）**（Issues #546 / #547）：
+  - 新增 `ModePackContribution` / `normalizeSegmentType` / `resolveModePackForSegment`（`packages/core/plugin-host/mode-pack.ts`），并经 `@openlearn/plugin-sdk` 导出；manifest 贡献键 `mode.pack`。
+  - 明确 `teachingModeId`（风格标签）与 Mode Pack（交付引擎）正交；缺省 `segment.type` 归一为 `whiteboard`。
+  - 灰度开关默认关闭（`VITE_OPENLEARN_MODE_PACKS` / `window.__OPENLEARN_MODE_PACKS__`）；关闭时课中行为与既有白板中栏一致。
+  - 内置 `@openlearn/mode-whiteboard` 工作区注册骨架（flag 开启时挂到 `classroom.active_segment.*`）；画布挂载与全屏同步契约留待 P1 续。
+
 ### Docs
 
 - **仓库平台模型切换为 Gitee 单平台**：Gitee 成为本仓库 **Issue / PR / 分支 / 合并 的唯一入口**，GitHub 仓库降级为归档副本（其 Actions 仍跑自动化 CI，但不参与协作流程）。

@@ -11,6 +11,8 @@ import { StudentIcebreakerModal } from './StudentIcebreakerModal';
 import { useStudentActiveSession } from './useStudentActiveSession';
 import type { StudentFullscreenPanel } from './studentFullscreenLayout';
 import { useOptionalPluginHost } from '../../plugin-host/plugin-host-context';
+import { normalizeSegmentType } from '../../../packages/core/plugin-host/mode-pack';
+import { isModePacksEnabled, registerWhiteboardModePack, unregisterWhiteboardModePack } from '../classroom/mode-pack';
 
 export interface StudentLessonViewProps {
   students: StudentType[];
@@ -108,7 +110,7 @@ export function StudentLessonView(props: StudentLessonViewProps) {
   const activeSegment = (timelineSegments as Array<{ id: string; type?: string }> | undefined)?.find(
     (s) => s.id === activeSegmentId,
   );
-  const segmentType = activeSegment?.type;
+  const segmentType = isModePacksEnabled() ? normalizeSegmentType(activeSegment?.type) : activeSegment?.type;
   const studentMainExts = studentHost?.getExtensions('classroom.active_segment.student_main' as never) ?? [];
   const matchingStudentMain = segmentType
     ? studentMainExts.filter((ext) => {
@@ -121,6 +123,17 @@ export function StudentLessonView(props: StudentLessonViewProps) {
   const primaryStudentWorkspace = matchingStudentMain.some(
     (ext) => (ext as { slotProps?: Record<string, unknown> }).slotProps?.primary === true,
   );
+
+  // Mode Pack 灰度：学生端独立会话也需注册白板包（与教师 LiveClassroom 对称）。
+  useEffect(() => {
+    if (!studentHost) return;
+    if (isModePacksEnabled()) {
+      registerWhiteboardModePack();
+      return () => unregisterWhiteboardModePack();
+    }
+    unregisterWhiteboardModePack();
+    return undefined;
+  }, [studentHost]);
 
   const studentFlowController = {
     snapshot: {
@@ -236,7 +249,9 @@ export function StudentLessonView(props: StudentLessonViewProps) {
         <ExtensionPointRenderer
           slot="classroom.active_segment.student_main"
           slotProps={{
-            segment: activeSegment,
+            segment: isModePacksEnabled()
+              ? { ...activeSegment, type: normalizeSegmentType(activeSegment.type) }
+              : activeSegment,
             lessonId: selectedLesson,
             classId: effectiveClassId,
             lang,

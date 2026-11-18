@@ -73,7 +73,8 @@
     "teacher.panel",
     "student.fullscreen",
     "global.setting",
-    "nav.user_menu"
+    "nav.user_menu",
+    "mode.pack"
   ],
   "b_loose_keys": [
     "header.action",

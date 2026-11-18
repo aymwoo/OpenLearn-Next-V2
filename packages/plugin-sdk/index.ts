@@ -222,6 +222,16 @@ export type {
 
 export type { Manifest, ManifestV3 } from '../core/esm-loader/manifest-schema.js';
 
+// ── Mode Pack（交付引擎；与门户 teachingModeId 正交）────────────────────
+
+export type { ModePackContribution } from '../core/plugin-host/mode-pack.js';
+export {
+  DEFAULT_MODE_PACK_SEGMENT_TYPE,
+  normalizeSegmentType,
+  modePackCoversSegmentType,
+  resolveModePackForSegment,
+} from '../core/plugin-host/mode-pack.js';
+
 // ── DI / Tokens ─────────────────────────────────────────────────────────
 
 // V3.2: Token class export for plugin DI provide/consume

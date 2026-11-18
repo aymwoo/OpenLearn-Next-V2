@@ -22,6 +22,28 @@
 
 ---
 
+## 1.1 Mode Pack（交付引擎）契约
+
+> **Issue #546 / #547**：白板与学案将迁入 ClassroomFlow 时，统一以 Mode Pack 声明交付引擎。
+
+| 概念             | 是什么                       | 是否驱动课中工作区          |
+| ---------------- | ---------------------------- | --------------------------- |
+| `teachingModeId` | 门户风格标签（讲授/探究/…）  | **否**                      |
+| Mode Pack        | 白板 / 学案 / 第三方交付引擎 | **是**（按 `segment.type`） |
+
+Manifest 贡献键：`contributes['mode.pack']`（见 `@openlearn/plugin-sdk` 的 `ModePackContribution`）。
+
+宿主灰度开关（默认关，零行为变化）：
+
+- 构建期：`VITE_OPENLEARN_MODE_PACKS=1`
+- 运行时调试：`window.__OPENLEARN_MODE_PACKS__ = true`
+
+启用后宿主必须先调用 `normalizeSegmentType()`（空 type → `whiteboard`），再按 `segment.type` 匹配 Mode Pack / `classroom.active_segment.*`。
+
+内置白板包 id：`@openlearn/mode-whiteboard`（`isDefault: true`，认领 `whiteboard`）。
+
+---
+
 ## 2. 通讯协议（ClassroomMessage）
 
 ### 2.1 核心概念

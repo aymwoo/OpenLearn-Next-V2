@@ -543,6 +543,20 @@ const navUserMenuSchema = z.object({
   commandType: z.string().optional(),
 });
 
+/** Mode Pack（交付引擎）声明：与门户 teachingModeId 风格标签正交。 */
+const modePackSchema = z.object({
+  id: z.string().min(1),
+  label: z.string().min(1),
+  labelEn: z.string().optional(),
+  segmentTypes: z.array(z.string().min(1)).min(1),
+  isDefault: z.boolean().optional(),
+  prepContributionId: z.string().optional(),
+  teacherWorkspaceId: z.string().optional(),
+  studentWorkspaceId: z.string().optional(),
+  adapterIds: z.array(z.string().min(1)).optional(),
+  channels: z.array(z.string().min(1)).optional(),
+});
+
 /**
  * 前端专属 / 演进中的 slot。
  *
@@ -738,6 +752,7 @@ const contributesSchema = z
     'student.fullscreen': z.array(studentFullscreenSchema).optional(),
     'global.setting': z.array(globalSettingSchema).optional(),
     'nav.user_menu': z.array(navUserMenuSchema).optional(),
+    'mode.pack': z.array(modePackSchema).optional(),
     // 前端专属/演进 slot：宽松兜底（结构性错误仍会被拒）
     ...frontendSlotsShape,
     // v0.2.6: 锚点槽位（anchor:*）为开放命名空间，由宿主公布锚点 id。
