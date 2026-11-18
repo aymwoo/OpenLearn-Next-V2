@@ -12,6 +12,7 @@ import {
   FileText,
 } from 'lucide-react';
 import type { WhiteboardPageItem } from '../InteractiveWhiteboard';
+import { isPageVisibleInSegment } from '../utils/pagination-utils';
 import { isPlainEnterSubmit } from '../../../utils/keyboard';
 import { ExtensionPointRenderer } from '../../../plugin-host/extension-point-renderer';
 
@@ -59,7 +60,7 @@ export const WhiteboardPageBar: React.FC<WhiteboardPageBarProps> = ({
   const visiblePages = useMemo(() => {
     return pages
       .map((p, globalIdx) => ({ page: p, globalIdx }))
-      .filter(({ page }) => !activeSegmentId || !page.segmentId || page.segmentId === activeSegmentId);
+      .filter(({ page }) => isPageVisibleInSegment(page, activeSegmentId));
   }, [pages, activeSegmentId]);
 
   const currentVisibleIdx = visiblePages.findIndex(({ globalIdx }) => globalIdx === currentPage);

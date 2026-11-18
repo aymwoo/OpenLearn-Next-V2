@@ -247,6 +247,8 @@ export interface WhiteboardPageItem {
   title: string;
   order: number;
   segmentId?: string | null;
+  /** 共享页（无 segmentId）在这些环节的大纲中隐藏。见 pagination-utils.isPageVisibleInSegment。 */
+  excludedSegmentIds?: string[];
 }
 
 export const DEFAULT_WHITEBOARD_PAGES: WhiteboardPageItem[] = [

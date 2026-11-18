@@ -10,6 +10,9 @@ import {
   belongsToPage,
   filterCurrentPageElements,
   getSegmentVisiblePages,
+  isPageVisibleInSegment,
+  planDeleteSegmentPage,
+  selectElementsOnPage,
 } from '../utils/pagination-utils';
 
 describe('Interactive Whiteboard Pagination System', () => {
@@ -194,6 +197,16 @@ describe('Interactive Whiteboard Pagination System', () => {
       expect(emptySegPages.map((p) => p.id)).toEqual(['page-global']);
     });
 
+    it('hides a shared page only from segments listed in excludedSegmentIds', () => {
+      const pages: WhiteboardPageItem[] = [
+        ...multiSegmentPages,
+        { id: 'page-shared', title: '共享页', order: 5, excludedSegmentIds: ['seg-explore'] },
+      ];
+      expect(getSegmentVisiblePages(pages, 'seg-explore').map((p) => p.id)).not.toContain('page-shared');
+      expect(getSegmentVisiblePages(pages, 'seg-intro').map((p) => p.id)).toContain('page-shared');
+      expect(isPageVisibleInSegment(pages[pages.length - 1], 'seg-explore')).toBe(false);
+    });
+
     it('finds initial segment page index correctly to prevent first-frame hopping', () => {
       const exploreIdx = multiSegmentPages.findIndex((p) => p.segmentId === 'seg-explore');
       expect(exploreIdx).toBe(1);
@@ -203,6 +216,86 @@ describe('Interactive Whiteboard Pagination System', () => {
 
       const summaryIdx = multiSegmentPages.findIndex((p) => p.segmentId === 'seg-summary');
       expect(summaryIdx).toBe(3);
+    });
+  });
+
+  describe('planDeleteSegmentPage (Issue #557 删除只作用于当前环节)', () => {
+    const sharedPages: WhiteboardPageItem[] = [
+      { id: 'page-n0', title: '第 1 页', order: 0 },
+      { id: 'page-n1', title: '第 2 页', order: 1 },
+    ];
+    const sharedElements: WhiteboardElementLike[] = [
+      { id: 'a-p1', type: 'text', data: JSON.stringify({ page: 1, segmentId: 'seg-a', text: 'A' }) },
+      { id: 'b-p1', type: 'text', data: JSON.stringify({ page: 1, segmentId: 'seg-b', text: 'B' }) },
+      { id: 'b-by-id', type: 'quiz', data: JSON.stringify({ page: 1, pageId: 'page-n1', segmentId: 'seg-b' }) },
+      { id: 'shared-p1', type: 'pen', data: JSON.stringify({ page: 1, color: '#000' }) },
+      { id: 'meta', type: 'page_meta', data: JSON.stringify({ pages: sharedPages }) },
+    ];
+
+    it('deleting page N in segment A keeps segment B outline pages and content', () => {
+      const plan = planDeleteSegmentPage(sharedPages, 1, 'seg-a');
+      expect(plan.action).toBe('exclude');
+      expect(plan.nextPages.map((p) => p.id)).toEqual(['page-n0', 'page-n1']);
+      expect(plan.nextPages[1].excludedSegmentIds).toEqual(['seg-a']);
+
+      expect(getSegmentVisiblePages(plan.nextPages, 'seg-a').map((p) => p.id)).toEqual(['page-n0']);
+      expect(getSegmentVisiblePages(plan.nextPages, 'seg-b').map((p) => p.id)).toEqual(['page-n0', 'page-n1']);
+
+      const removed = selectElementsOnPage(sharedElements, plan.targetPage!, 1, {
+        activeSegmentId: 'seg-a',
+        mode: 'exclude',
+      }).map((el) => el.id);
+      expect(removed).toEqual(['a-p1']);
+      expect(removed).not.toContain('b-p1');
+      expect(removed).not.toContain('b-by-id');
+      expect(removed).not.toContain('shared-p1');
+    });
+
+    it('does not remove segment B pages when deleting a segment-owned page in segment A', () => {
+      const pages: WhiteboardPageItem[] = [
+        { id: 'a-0', title: 'A 第 1 页', order: 0, segmentId: 'seg-a' },
+        { id: 'a-1', title: 'A 第 2 页', order: 1, segmentId: 'seg-a' },
+        { id: 'b-0', title: 'B 第 1 页', order: 2, segmentId: 'seg-b' },
+        { id: 'b-1', title: 'B 第 2 页', order: 3, segmentId: 'seg-b' },
+      ];
+      const elements: WhiteboardElementLike[] = [
+        { id: 'a-body', type: 'text', data: JSON.stringify({ page: 0, pageId: 'a-0', segmentId: 'seg-a' }) },
+        { id: 'b-same-index', type: 'text', data: JSON.stringify({ page: 0, pageId: 'b-0', segmentId: 'seg-b' }) },
+        { id: 'b-page-number', type: 'quiz', data: JSON.stringify({ page: 0, segmentId: 'seg-b' }) },
+      ];
+
+      const plan = planDeleteSegmentPage(pages, 0, 'seg-a');
+      expect(plan.action).toBe('remove');
+      expect(plan.nextPages.map((p) => p.id)).toEqual(['a-1', 'b-0', 'b-1']);
+      expect(getSegmentVisiblePages(plan.nextPages, 'seg-b').map((p) => p.id)).toEqual(['b-0', 'b-1']);
+
+      const removed = selectElementsOnPage(elements, plan.targetPage!, 0, {
+        activeSegmentId: 'seg-a',
+        mode: 'remove',
+      }).map((el) => el.id);
+      expect(removed).toEqual(['a-body']);
+    });
+
+    it('refuses to delete a page bound to another segment', () => {
+      const pages: WhiteboardPageItem[] = [
+        { id: 'b-0', title: 'B', order: 0, segmentId: 'seg-b' },
+        { id: 'a-0', title: 'A', order: 1, segmentId: 'seg-a' },
+      ];
+      const plan = planDeleteSegmentPage(pages, 0, 'seg-a');
+      expect(plan.action).toBe('refuse');
+      expect(plan.reason).toBe('other-segment');
+      expect(plan.nextPages.map((p) => p.id)).toEqual(['b-0', 'a-0']);
+    });
+
+    it('hides an excluded shared page from the current segment canvas only', () => {
+      const pages: WhiteboardPageItem[] = [
+        { id: 'page-n1', title: '第 2 页', order: 0, excludedSegmentIds: ['seg-a'] },
+      ];
+      const elements: WhiteboardElementLike[] = [
+        { id: 'b-p1', type: 'text', data: JSON.stringify({ page: 0, segmentId: 'seg-b', text: 'B' }) },
+      ];
+      expect(filterCurrentPageElements(elements, 0, pages, 'seg-a')).toEqual([]);
+      expect(filterCurrentPageElements(elements, 0, pages, 'seg-b').map((el) => el.id)).toEqual(['b-p1']);
     });
   });
 });

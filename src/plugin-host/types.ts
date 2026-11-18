@@ -727,7 +727,13 @@ export interface WhiteboardContextMenuSlotProps {
 
 /** Props passed to whiteboard.pagebar.action extensions */
 export interface WhiteboardPagebarActionSlotProps {
-  pages: Array<{ id: string; title: string; order: number; segmentId?: string | null }>;
+  pages: Array<{
+    id: string;
+    title: string;
+    order: number;
+    segmentId?: string | null;
+    excludedSegmentIds?: string[];
+  }>;
   currentPage: number;
   activeSegmentId?: string | null;
   onSwitchPage: (idx: number) => void;
@@ -736,7 +742,13 @@ export interface WhiteboardPagebarActionSlotProps {
 
 /** Props passed to whiteboard.page_drawer.action extensions */
 export interface WhiteboardPageDrawerActionSlotProps {
-  pages: Array<{ id: string; title: string; order: number; segmentId?: string | null }>;
+  pages: Array<{
+    id: string;
+    title: string;
+    order: number;
+    segmentId?: string | null;
+    excludedSegmentIds?: string[];
+  }>;
   currentPage: number;
   activeSegmentId?: string | null;
   onCloseDrawer: () => void;

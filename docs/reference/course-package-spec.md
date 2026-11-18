@@ -144,6 +144,18 @@
 `hello-world` `html-applet` `code-sandbox` `math-graph` `presentation` `plugin` `page_meta`；
 以及按命名约定放行的插件元素：包含 `/`、或以 `plugin:` / `plugin-` / `ext-` 开头。
 
+`page_meta.data.pages[]` 的页面身份：
+
+| 字段                 | 类型     | 说明                                                                                                     |
+| -------------------- | -------- | -------------------------------------------------------------------------------------------------------- |
+| `id`                 | string   | 页面稳定 id。删除、复制和元素归属以它为准，不以全局下标为准                                              |
+| `title`              | string   | 大纲标题                                                                                                 |
+| `order`              | number   | 列表顺序                                                                                                 |
+| `segmentId`          | string   | 可选。有值时该页只属于这一环节                                                                           |
+| `excludedSegmentIds` | string[] | 可选。共享页（没有 `segmentId`）从这些环节的大纲中隐藏。在某一环节删除共享页时只追加当前环节，不删除记录 |
+
+在某一教学环节里删除页面时：已绑定该环节的页只从 `pages` 中移除这一条，并只清理属于该页且属于该环节的元素；没有 `segmentId` 的共享页不从数组里摘掉（避免其它环节的同序号页跟着消失），而是把当前环节写入 `excludedSegmentIds`，并只删除 `segmentId` 等于当前环节的元素。
+
 ---
 
 ## 3. 附件占位符 `${asset:<id>}`

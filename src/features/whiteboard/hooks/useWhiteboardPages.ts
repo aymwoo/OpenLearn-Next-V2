@@ -7,6 +7,9 @@ import {
   renamePageItem,
   duplicatePageItem,
   movePageItem,
+  planDeleteSegmentPage,
+  selectElementsOnPage,
+  isPageVisibleInSegment,
   type WhiteboardPageItem,
   DEFAULT_WHITEBOARD_PAGES,
 } from '../utils/pagination-utils';
@@ -256,18 +259,10 @@ export function useWhiteboardPages<T extends WhiteboardElementLike>({
       setCurrentPage(newIndex);
       savePagesConfig(newPages);
 
-      const pageElements = safeElements.filter(
-        (el) =>
-          el.type !== 'page_meta' &&
-          (() => {
-            try {
-              const d = JSON.parse(el.data);
-              return (d.page ?? 0) === idx || d.pageId === targetPage.id;
-            } catch {
-              return idx === 0;
-            }
-          })(),
-      );
+      const pageElements = selectElementsOnPage(safeElements, targetPage, idx, {
+        activeSegmentId,
+        mode: 'remove',
+      });
 
       pageElements.forEach((el) => {
         try {
@@ -286,39 +281,38 @@ export function useWhiteboardPages<T extends WhiteboardElementLike>({
         }
       });
     },
-    [pages, savePagesConfig, safeElements, onElementAdd],
+    [pages, activeSegmentId, savePagesConfig, safeElements, onElementAdd],
   );
 
   const handleDeletePage = useCallback(
     (idx: number) => {
-      if (pages.length <= 1) {
-        setDialog({ title: '无法删除', message: '至少需要保留一个白板页面！', type: 'alert', onConfirm: () => {} });
+      const plan = planDeleteSegmentPage(pages, idx, activeSegmentId);
+      if (plan.action === 'refuse') {
+        if (plan.reason === 'last-page') {
+          setDialog({ title: '无法删除', message: '至少需要保留一个白板页面！', type: 'alert', onConfirm: () => {} });
+        }
         return;
       }
 
-      const pageToDelete = pages[idx];
-      const pageElements = safeElements.filter(
-        (el) =>
-          el.type !== 'page_meta' &&
-          (() => {
-            try {
-              const d = JSON.parse(el.data);
-              return (d.page ?? 0) === idx || d.pageId === pageToDelete.id;
-            } catch {
-              return idx === 0;
-            }
-          })(),
-      );
+      const pageToDelete = plan.targetPage;
+      if (!pageToDelete) return;
+      const pageElements = selectElementsOnPage(safeElements, pageToDelete, plan.targetIndex, {
+        activeSegmentId,
+        mode: plan.action,
+      });
 
       const performDelete = () => {
         if (onElementDelete) {
           pageElements.forEach((el) => onElementDelete(el.id));
         }
-        const nextPages = pages.filter((_, i) => i !== idx).map((p, i) => ({ ...p, order: i }));
-        setPages(nextPages);
-        const nextCurrentPage = Math.min(currentPage, nextPages.length - 1);
-        setCurrentPage(nextCurrentPage);
-        savePagesConfig(nextPages);
+        setPages(plan.nextPages);
+        if (plan.action === 'remove') {
+          setCurrentPage(Math.min(currentPage, Math.max(plan.nextPages.length - 1, 0)));
+        } else if (currentPage === plan.targetIndex) {
+          const fallback = plan.nextPages.findIndex((page) => isPageVisibleInSegment(page, activeSegmentId));
+          if (fallback !== -1) setCurrentPage(fallback);
+        }
+        savePagesConfig(plan.nextPages);
       };
 
       if (pageElements.length > 0) {
@@ -332,7 +326,7 @@ export function useWhiteboardPages<T extends WhiteboardElementLike>({
         performDelete();
       }
     },
-    [pages, safeElements, onElementDelete, currentPage, savePagesConfig, setDialog],
+    [pages, activeSegmentId, safeElements, onElementDelete, currentPage, savePagesConfig, setDialog],
   );
 
   const handleMovePage = useCallback(

@@ -179,6 +179,23 @@ describe('LessonEditor Drag To Outline & Timeline (Auto-expand & Drop Targeting)
       expect(screen.queryByText('P1 · 课前导入')).toBeNull();
       expect(screen.getByText('P1 · 课堂探究')).toBeDefined();
     });
+
+    it('hides a shared page excluded from the active segment (Issue #557)', () => {
+      const pages = [
+        { id: 'page-keep', title: '保留页', order: 0 },
+        { id: 'page-drop', title: '仅当前环节删除', order: 1, excludedSegmentIds: ['seg-a'] },
+      ];
+      const { rerender } = render(
+        <LessonPalette lang="zh" onActivate={vi.fn()} pages={pages} currentPage={0} activeSegmentId="seg-a" />,
+      );
+      expect(screen.getByText('页面大纲 (1)')).toBeDefined();
+      expect(screen.queryByText('仅当前环节删除')).toBeNull();
+      expect(screen.getByText('保留页')).toBeDefined();
+
+      rerender(<LessonPalette lang="zh" onActivate={vi.fn()} pages={pages} currentPage={1} activeSegmentId="seg-b" />);
+      expect(screen.getByText('页面大纲 (2)')).toBeDefined();
+      expect(screen.getByText('仅当前环节删除')).toBeDefined();
+    });
   });
 
   describe('TimelineRail - Segment hover auto-expand & drop targeting', () => {

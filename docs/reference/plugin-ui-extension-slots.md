@@ -1025,7 +1025,13 @@ async function activate(ctx) {
 
 ```typescript
 export interface WhiteboardPagebarActionSlotProps {
-  pages: Array<{ id: string; title: string; order: number; segmentId?: string | null }>;
+  pages: Array<{
+    id: string;
+    title: string;
+    order: number;
+    segmentId?: string | null;
+    excludedSegmentIds?: string[];
+  }>;
   currentPage: number;
   activeSegmentId?: string | null;
   onSwitchPage: (idx: number) => void;
@@ -1033,7 +1039,13 @@ export interface WhiteboardPagebarActionSlotProps {
 }
 
 export interface WhiteboardPageDrawerActionSlotProps {
-  pages: Array<{ id: string; title: string; order: number; segmentId?: string | null }>;
+  pages: Array<{
+    id: string;
+    title: string;
+    order: number;
+    segmentId?: string | null;
+    excludedSegmentIds?: string[];
+  }>;
   currentPage: number;
   activeSegmentId?: string | null;
   onCloseDrawer: () => void;

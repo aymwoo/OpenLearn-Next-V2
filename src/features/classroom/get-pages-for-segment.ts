@@ -5,6 +5,7 @@ export type OutlinePageLike = {
   id?: string;
   title?: string;
   segmentId?: string | null;
+  excludedSegmentIds?: readonly string[] | null;
 };
 
 export type OutlineSegmentLike = {
@@ -27,27 +28,27 @@ export function getPagesForSegment<T extends OutlinePageLike>(
     .filter(({ page }) => page.segmentId === seg.id);
 
   if (explicitMatches.length > 0) {
-    return explicitMatches;
+    return explicitMatches.filter(({ page }) => !page.excludedSegmentIds?.includes(seg.id));
   }
 
   const hasAnySegmentBinding = whiteboardPages.some((p) => Boolean(p.segmentId));
   if (!hasAnySegmentBinding) {
     if (whiteboardPages.length === 0) return [];
-    if (whiteboardPages.length === timelineSegments.length) {
+    if (whiteboardPages.length === timelineSegments.length || whiteboardPages.length < timelineSegments.length) {
       const p = whiteboardPages[segIdx];
-      return p ? [{ page: p, globalIdx: segIdx }] : [];
-    }
-    if (whiteboardPages.length < timelineSegments.length) {
-      const p = whiteboardPages[segIdx];
-      return p ? [{ page: p, globalIdx: segIdx }] : [];
+      if (!p || p.excludedSegmentIds?.includes(seg.id)) return [];
+      return [{ page: p, globalIdx: segIdx }];
     }
     const perSeg = Math.ceil(whiteboardPages.length / (timelineSegments.length || 1));
     const start = segIdx * perSeg;
     const end = Math.min(start + perSeg, whiteboardPages.length);
-    return whiteboardPages.slice(start, end).map((p, offset) => ({
-      page: p,
-      globalIdx: start + offset,
-    }));
+    return whiteboardPages
+      .slice(start, end)
+      .map((p, offset) => ({
+        page: p,
+        globalIdx: start + offset,
+      }))
+      .filter(({ page }) => !page.excludedSegmentIds?.includes(seg.id));
   }
 
   return [];
