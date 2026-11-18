@@ -22,6 +22,7 @@ import { ExtensionPointRenderer } from '../../../plugin-host/extension-point-ren
 import { QuickInsertMenu, globalQuickInsertRegistry } from '../../quick-insert/quick-insert-menu';
 import { registerBuiltinQuickInsertItems } from '../../quick-insert/builtin-items';
 import type { WhiteboardPageItem, WhiteboardDragState } from '../../whiteboard/InteractiveWhiteboard';
+import { isPageVisibleInSegment } from '../../whiteboard/utils/pagination-utils';
 import { isPlainEnterSubmit } from '../../../utils/keyboard';
 
 export interface LessonPaletteProps {
@@ -64,7 +65,7 @@ export function LessonPalette({
     if (!pages) return [];
     return pages
       .map((p, globalIdx) => ({ page: p, globalIdx }))
-      .filter(({ page }) => !activeSegmentId || !page.segmentId || page.segmentId === activeSegmentId);
+      .filter(({ page }) => isPageVisibleInSegment(page, activeSegmentId));
   }, [pages, activeSegmentId]);
 
   const toggleCollapse = () => {

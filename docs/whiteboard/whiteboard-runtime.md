@@ -108,6 +108,18 @@ fullscreenRendererRegistry.register(type, (props) => <JSX />, pluginId);
 
 > **画布现代 Web 能力契约**：插件卡片容器外层统一挂载 `.wb-widget-container`（`container-type: inline-size`），视口容器暴露 `data-wb-readonly`、`data-wb-layout` 与 `--wb-readonly` / `--wb-layout` / `--wb-density` 令牌，并在页码切换与平铺切换时通过作用域过渡（`runScopedTransition`）与全屏态 `inert` 保证交互隔离；工具栏「互动工具」面板优先使用原生 `popover="auto"` + CSS Anchor Positioning 并自动降级至 portal。详细信息见 [plugin-ui-extension-slots.md](../reference/plugin-ui-extension-slots.md)。
 
+### 分页身份与按环节删除
+
+页面列表存在唯一的 `page_meta` 元素里（`data.pages`）。每一页的身份是 `id`，可选 `segmentId` 把它绑到一个教学环节。没有 `segmentId` 的页是共享页，备课大纲（`LessonPalette` / `WhiteboardPageBar` 经 `isPageVisibleInSegment`）会在每个环节里都列出来。
+
+删除走 `planDeleteSegmentPage`（`src/features/whiteboard/utils/pagination-utils.ts`），不按「第 N 页」这个全局下标去删所有环节：
+
+- 当前环节自己的页：只移除这一条，并用 `selectElementsOnPage` 清理属于该 `id`（或没有 `pageId` 时才回退到该下标）且 `segmentId` 不是其它环节的元素。
+- 共享页：不从 `pages` 里 splice（splice 会让后面的页改下标，其它环节大纲里的对应页会一起消失）。只把当前环节写入 `excludedSegmentIds`，并只删除 `segmentId` 等于当前环节的元素。其它环节的大纲和内容保持不变。
+- 下标落到其它环节已绑定的页上时拒绝删除。
+
+课程包字段见 [course-package-spec.md](../reference/course-package-spec.md) 的 `page_meta.data.pages[]`。
+
 ## 白板事件槽 (`WhiteboardEventSlot`)
 
 **文件**：`src/features/whiteboard/events/`

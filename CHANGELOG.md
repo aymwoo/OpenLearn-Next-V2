@@ -68,6 +68,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixes
 
+- **按环节删除白板页，不再误删其它环节的同序号页（Issue #557）**：备课大纲按 `activeSegmentId` 展示，但删除仍按共享 `page_meta` 的全局下标摘页，并按 `data.page === N` 清理元素。多环节课里各环节内容经常共用同一个页码，删掉环节 A 的第 N 页会让环节 B 的大纲和内容一起消失。现在删除以页面 `id` 为身份：本环节专属页只移除那一条；没有 `segmentId` 的共享页只对当前环节写入 `excludedSegmentIds`，并只删除该环节自己的元素。
+
 - **课堂流程基座的投递与授权**：定向 `classroom.message` 只进入收件人与教师房间；ACK 按收件人记录；学分发放、余额、消息和提交校验班级或课节归属；师生工作区经 `POST /api/classroomflowserver/messages` 发送，学生不再走仅教师可用的 `/api/commands`。补偿队列由 `SideEffectWorker` 重试，兑换成功发布 `reward.redeemed`，教师批改发布 `submission.graded`。未声明 `primary` 的学生工作区不再替换原生内容面板。
 
 - **学生端点击「全屏」按钮无反应（Gitee Issue IKVSIN）**：
