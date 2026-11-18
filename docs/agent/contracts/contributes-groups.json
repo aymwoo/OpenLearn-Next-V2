@@ -121,14 +121,17 @@
     "assessment.attempt.toolbar",
     "assessment.stats.card"
   ],
-  "a_total": 72,
+  "a_total": 73,
   "b_total": 43,
   "a_not_in_extension_slot": [
     "ai.persona.provider",
     "locales",
+    "mode.pack",
     "palette.items",
     "teacher.cockpit.widget",
     "timeline.segments"
   ],
-  "b_not_in_extension_slot": ["workspace.view"]
+  "b_not_in_extension_slot": [
+    "workspace.view"
+  ]
 }
