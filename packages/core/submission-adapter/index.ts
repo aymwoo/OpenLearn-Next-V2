@@ -6,4 +6,5 @@
  */
 export * from './types.js';
 export * from './registry.js';
+export { createXueanSubmissionAdapter, XUEAN_SUBMISSION_ADAPTER_ID, type XueanAdapterDb } from './xuean-adapter.js';
 export { ISubmissionRegistryToken, ISubmissionAggregatorToken } from '../di/interfaces.js';

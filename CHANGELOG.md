@@ -23,6 +23,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - **Mode Pack P2 首切片：学案包**（Issue #550）：
   - 内置 `@openlearn/mode-xuean`（`segmentTypes: ['xuean']`）；flag 开启时注册双端 primary 工作区并贡献 timeline 环节类型。
   - 教师工作区包装 `ProgressPanel`，学生工作区包装 `StudentXueanView`；作答仍走 lesson-activities（SubmissionAdapter 后续）。
+- **Mode Pack P2 续（Issue #550）**：
+  - 隐藏学生平行「学案」tab（flag 开时由 `student_main` primary 接管；关闭路径不变）。
+  - 扩展点 / 宿主匹配升级为 `extensionCoversSegmentType` 前缀规则；注册 `xuean:preview|study|drill` 子类型。
+  - `classroom-flow-server` 注册 `xuean:task` 通道与 `xuean-adapter`（`activity_progress` → 统一成绩面板投影）；学生工作区进度写库后发可靠消息通知。
+  - 门禁仍由 lesson-engine 裁决；学案自报进度不自动放行。
 
 ### Docs
 

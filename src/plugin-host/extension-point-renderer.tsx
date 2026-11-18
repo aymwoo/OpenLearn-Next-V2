@@ -32,6 +32,7 @@ import {
 } from './extension-breaker';
 import type { ExtensionSlot } from './types';
 import { matchesDeclaredExtension } from '../../packages/core/assignment/file-preview-policy.js';
+import { extensionCoversSegmentType } from '../../packages/core/plugin-host/mode-pack';
 import { NullExtensionComponent } from './plugin-host';
 import { PluginSandboxIframeView } from '../components/PluginSandboxIframeView';
 import { frontendApi } from '../services/frontend-api';
@@ -492,11 +493,14 @@ export function ExtensionPointRenderer({
     const seg = slotProps?.segment as { type?: string } | undefined;
     const segmentType = seg?.type;
     if (segmentType) {
+      // 与 Mode Pack 前缀约定对齐：声明 `xuean` 可覆盖 `xuean:study`
       extensions = extensions.filter((ext) => {
         const cfg = (ext.slotProps ?? {}) as Record<string, unknown>;
         const declared = (ext as { targetType?: string }).targetType ?? cfg.segmentType ?? cfg.targetType ?? undefined;
-        // 未声明 targetType 的扩展保持旧行为（对所有环节可见）
-        return declared === undefined || declared === null || declared === segmentType;
+        return extensionCoversSegmentType(
+          typeof declared === 'string' ? declared : declared == null ? null : String(declared),
+          segmentType,
+        );
       });
     }
   }

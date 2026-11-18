@@ -6,6 +6,7 @@ import { LazyCourseware } from '../../components/LazyCourseware';
 import { StudentAssignmentEvalPanel } from '../../components/StudentAssignmentEvalPanel';
 import { ExtensionPointRenderer } from '../../plugin-host/extension-point-renderer';
 import { resolveInteractionPanelClass, type StudentFullscreenPanel } from './studentFullscreenLayout';
+import { isModePacksEnabled } from '../classroom/mode-pack';
 
 const LazyStudentXueanView = lazy(() =>
   import('./xuean/StudentXueanView').then((m) => ({ default: m.StudentXueanView })),
@@ -115,6 +116,8 @@ export function StudentLessonInteractionPanel(props: StudentLessonInteractionPan
 
   const boardSegmentId = contentSegmentId || activeSegmentId;
   const hideSegmentBody = blockSegmentContent;
+  // Mode Pack 开启时学案走 active_segment.student_main primary；平行 tab 仅作 flag 关闭时的 fallback。
+  const showParallelXueanTab = !isModePacksEnabled();
 
   const tabButtonClass = (tab: 'whiteboard' | 'courseware' | 'assignment' | 'xuean') =>
     `px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
@@ -173,14 +176,18 @@ export function StudentLessonInteractionPanel(props: StudentLessonInteractionPan
           <button onClick={() => handleTabChange('assignment')} className={tabButtonClass('assignment')}>
             {lang === 'zh' ? '作业提交与互评' : 'Assignments & Peer Reviews'}
           </button>
-          <button
-            onClick={() => handleTabChange('xuean')}
-            className={tabButtonClass('xuean')}
-            title={lang === 'zh' ? '学案式课时包' : 'Xuean Lesson Package'}
-          >
-            <BookOpenCheck size={12} className="inline -mt-0.5 mr-1" />
-            {lang === 'zh' ? '学案' : 'Xuean'}
-          </button>
+          {showParallelXueanTab && (
+            <button
+              type="button"
+              data-testid="student-parallel-xuean-tab"
+              onClick={() => handleTabChange('xuean')}
+              className={tabButtonClass('xuean')}
+              title={lang === 'zh' ? '学案式课时包' : 'Xuean Lesson Package'}
+            >
+              <BookOpenCheck size={12} className="inline -mt-0.5 mr-1" />
+              {lang === 'zh' ? '学案' : 'Xuean'}
+            </button>
+          )}
         </div>
 
         <div className="flex items-center gap-2">

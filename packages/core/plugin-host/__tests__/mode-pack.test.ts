@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_MODE_PACK_SEGMENT_TYPE,
+  extensionCoversSegmentType,
   modePackCoversSegmentType,
   normalizeSegmentType,
   resolveModePackForSegment,
@@ -33,6 +34,12 @@ describe('Mode Pack 契约（P0）', () => {
     expect(modePackCoversSegmentType(xuean, 'xuean')).toBe(true);
     expect(modePackCoversSegmentType(xuean, 'xuean:study')).toBe(true);
     expect(modePackCoversSegmentType(xuean, 'whiteboard')).toBe(false);
+  });
+
+  it('extensionCoversSegmentType：未声明 → 全覆盖；前缀覆盖子类型', () => {
+    expect(extensionCoversSegmentType(undefined, 'xuean:drill')).toBe(true);
+    expect(extensionCoversSegmentType('xuean', 'xuean:preview')).toBe(true);
+    expect(extensionCoversSegmentType('whiteboard', 'xuean:study')).toBe(false);
   });
 
   it('resolveModePackForSegment：精确包优先，否则 isDefault', () => {

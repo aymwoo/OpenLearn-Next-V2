@@ -27,15 +27,26 @@ describe('ClassroomFlowServerPlugin — classroom.sendMessage 命令', () => {
         handlers[type] = h;
       }),
     };
-    const messageService = { send: vi.fn(() => ({ ok: true, messageId: 'm1', seq: 1 })) };
+    const messageService = {
+      send: vi.fn(() => ({ ok: true, messageId: 'm1', seq: 1 })),
+      registerChannel: vi.fn(() => ({ ok: true })),
+    };
+    const submissionRegistry = { register: vi.fn(() => ({ ok: true })) };
+    const db = { prepare: vi.fn() };
     const ctx = makeCtx({
       '@openlearn/core:ICommandBusService': commandBus,
       '@openlearn/core:IActionRegistryService': actionRegistry,
       '@openlearn/core:IClassroomMessageService': messageService,
+      '@openlearn/core:IDatabase': db,
+      '@openlearn/submission-adapter:IRegistry': submissionRegistry,
     });
 
     await ClassroomFlowServerPlugin.activate(ctx);
 
+    expect(messageService.registerChannel).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'xuean:task', shared: true }),
+    );
+    expect(submissionRegistry.register).toHaveBeenCalled();
     expect(registered).toHaveLength(1);
     expect(registered[0].commandType).toBe('classroom.sendMessage');
     expect(registered[0].capabilityRequired).toBe('lesson:write');
@@ -59,7 +70,9 @@ describe('ClassroomFlowServerPlugin — classroom.sendMessage 命令', () => {
     const ctx = makeCtx({
       '@openlearn/core:ICommandBusService': commandBus,
       '@openlearn/core:IActionRegistryService': actionRegistry,
-      '@openlearn/core:IClassroomMessageService': { send },
+      '@openlearn/core:IClassroomMessageService': { send, registerChannel: vi.fn(() => ({ ok: true })) },
+      '@openlearn/core:IDatabase': { prepare: vi.fn() },
+      '@openlearn/submission-adapter:IRegistry': { register: vi.fn(() => ({ ok: true })) },
     });
     await ClassroomFlowServerPlugin.activate(ctx);
     const handler = handlers['classroom.sendMessage'];

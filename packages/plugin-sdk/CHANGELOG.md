@@ -11,9 +11,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Features
 
-- **Mode Pack 契约导出（平台 Issues #546 / #547）**：
-  - 新增 `ModePackContribution` 类型与 `DEFAULT_MODE_PACK_SEGMENT_TYPE` / `normalizeSegmentType` / `modePackCoversSegmentType` / `resolveModePackForSegment` 助手；manifest 贡献键 `mode.pack`。
-  - 与门户 `teachingModeId` 正交：Mode Pack 按 `segment.type` 路由交付引擎。
+- **Mode Pack 契约导出（平台 Issues #546 / #547 / #550）**：
+  - 新增 `ModePackContribution` 类型与 `DEFAULT_MODE_PACK_SEGMENT_TYPE` / `normalizeSegmentType` / `extensionCoversSegmentType` / `modePackCoversSegmentType` / `resolveModePackForSegment` 助手；manifest 贡献键 `mode.pack`。
+  - 与门户 `teachingModeId` 正交：Mode Pack 按 `segment.type` 路由交付引擎；扩展点 `targetType` 与包声明共用前缀覆盖规则。
 
 - **文件存储三插槽扩展接口与 DI Token 导出（平台 Issue #504）**：
   - 在 `packages/plugin-sdk/index.ts` 与 `packages/plugin-sdk/openlearn.d.ts` 新增导出 `IFileStorageExtensionRegistryToken` 及 `IFileStorageExtensionRegistry`、`FileStorageBackend`、`FileStorageBackendCapabilities`、`FileProcessor`、`FileProcessorContext`、`FileProcessorResult`、`FileProcessorStage`、`FileLayoutTokenResolver`、`FileAssetContext`、`FilePurpose`、`FileAccessScope` 等类型（面向内核宿主与同进程可信扩展；`process` 模式隔离插件不跨 IPC 传递字节流）。

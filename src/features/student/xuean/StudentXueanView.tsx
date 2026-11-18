@@ -75,9 +75,11 @@ const STATUS_LABELS: Record<Progress['status'], { text: string; cls: string }> =
 interface Props {
   lessonId: string;
   lessonTitle?: string;
+  /** Mode Pack 工作区可选：进度写库成功后通知（如 ClassroomMessage xuean:task） */
+  onActivityProgressReported?: (info: { activityId: string; status: string }) => void;
 }
 
-export function StudentXueanView({ lessonId, lessonTitle }: Props) {
+export function StudentXueanView({ lessonId, lessonTitle, onActivityProgressReported }: Props) {
   const [data, setData] = useState<XueanData | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -154,6 +156,7 @@ export function StudentXueanView({ lessonId, lessonTitle }: Props) {
                   activity={a}
                   progress={data.progressByActivity[a.id]}
                   onProgressUpdated={refresh}
+                  onActivityProgressReported={onActivityProgressReported}
                 />
               ))}
             </div>
@@ -238,11 +241,13 @@ function ActivityItem({
   activity,
   progress,
   onProgressUpdated,
+  onActivityProgressReported,
 }: {
   index: number;
   activity: Activity;
   progress?: Progress;
   onProgressUpdated: () => void;
+  onActivityProgressReported?: (info: { activityId: string; status: string }) => void;
 }) {
   const [saving, setSaving] = useState(false);
   const [showSubmitModal, setShowSubmitModal] = useState(false);
@@ -254,7 +259,10 @@ function ActivityItem({
     setSaving(true);
     const res = await postActivityProgress(activity.id, { status: newStatus });
     setSaving(false);
-    if (res.ok) onProgressUpdated();
+    if (res.ok) {
+      onProgressUpdated();
+      onActivityProgressReported?.({ activityId: activity.id, status: newStatus });
+    }
   };
 
   const activityTypeLabel = ACTIVITY_TYPE_LABELS[activity.type] ?? activity.type;
@@ -386,6 +394,7 @@ function ActivityItem({
             setSaving(true);
             const res = await postActivityProgress(activity.id, { status: 'submitted', submission, selfEval });
             setSaving(false);
+            if (res.ok) onActivityProgressReported?.({ activityId: activity.id, status: 'submitted' });
             return res.ok;
           }}
         />

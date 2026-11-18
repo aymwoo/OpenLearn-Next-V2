@@ -228,6 +228,7 @@ export type { ModePackContribution } from '../core/plugin-host/mode-pack.js';
 export {
   DEFAULT_MODE_PACK_SEGMENT_TYPE,
   normalizeSegmentType,
+  extensionCoversSegmentType,
   modePackCoversSegmentType,
   resolveModePackForSegment,
 } from '../core/plugin-host/mode-pack.js';

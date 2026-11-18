@@ -10,7 +10,7 @@ afterEach(() => {
 });
 
 describe('registerXueanModePack', () => {
-  it('注册双端扩展点、primary 与 xuean 环节类型', () => {
+  it('注册双端扩展点、primary、xuean 与子类型环节', () => {
     registerXueanModePack();
     const host = usePluginHostStore.getState();
     const teacher = host.getExtensions('classroom.active_segment.main');
@@ -20,7 +20,11 @@ describe('registerXueanModePack', () => {
     const teacherExt = teacher.find((e) => e.id === XUEAN_MODE_PACK.teacherWorkspaceId)!;
     expect(teacherExt.targetType).toBe(XUEAN_MODE_PACK_SEGMENT_TYPE);
     expect(teacherExt.slotProps?.primary).toBe(true);
-    expect(getAllSegmentTypes().some((t) => t.id === XUEAN_MODE_PACK_SEGMENT_TYPE)).toBe(true);
+    const types = getAllSegmentTypes().map((t) => t.id);
+    expect(types).toContain(XUEAN_MODE_PACK_SEGMENT_TYPE);
+    expect(types).toContain('xuean:preview');
+    expect(types).toContain('xuean:study');
+    expect(types).toContain('xuean:drill');
   });
 
   it('卸载后扩展点与环节类型消失', () => {

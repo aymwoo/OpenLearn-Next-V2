@@ -48,12 +48,27 @@ export function normalizeSegmentType(type: string | null | undefined): string {
   return DEFAULT_MODE_PACK_SEGMENT_TYPE;
 }
 
+/**
+ * 扩展点 / Mode Pack 共用的环节类型覆盖规则：
+ * - 精确相等
+ * - 或声明前缀（`xuean` 覆盖 `xuean:study`）
+ */
+export function extensionCoversSegmentType(
+  declared: string | null | undefined,
+  segmentType: string | null | undefined,
+): boolean {
+  if (declared === undefined || declared === null) return true;
+  const want = normalizeSegmentType(segmentType);
+  const have = String(declared).trim();
+  if (!have) return true;
+  return want === have || want.startsWith(`${have}:`);
+}
+
 /** 某 Mode Pack 是否覆盖该（已归一化的）环节类型 */
 export function modePackCoversSegmentType(pack: ModePackContribution, segmentType: string): boolean {
   const normalized = normalizeSegmentType(segmentType);
   if (pack.segmentTypes.includes(normalized)) return true;
-  // 前缀约定：声明 `xuean` 可覆盖 `xuean:study`
-  return pack.segmentTypes.some((declared) => normalized === declared || normalized.startsWith(`${declared}:`));
+  return pack.segmentTypes.some((declared) => extensionCoversSegmentType(declared, normalized));
 }
 
 /**
