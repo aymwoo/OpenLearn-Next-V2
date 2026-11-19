@@ -264,8 +264,12 @@ delete(key: string): Promise<void>;
 ```typescript
 generateText(prompt: string, options?: { systemInstruction?: string; temperature?: number }): Promise<string>;
 
-// 5 个可选成员（非 `?` 之外的实现方需自行判空；未实现时为 undefined）
-// 其中 registerAIContextProvider / registerAIPersona 均需 manifest 声明并获批 `ai:persona` 能力（fail-closed）
+// 6 个可选成员（非 `?` 之外的实现方需自行判空；未实现时为 undefined）
+// listProviders 需 `ai:invoke`（与 generateText 同级）。返回值与 GET /api/ai-providers 的列表项同形，
+// 但永不包含 api_key（包括掩码片段）。无参数；可见范围由宿主绑定的当前用户决定，插件不能传入 userId。
+// 这不是 ActivityRegistry.listProviders()。
+// registerAIContextProvider / registerAIPersona 均需 manifest 声明并获批 `ai:persona` 能力（fail-closed）
+listProviders?(): Promise<AIProviderSummary[]>;
 registerAIContextProvider?(id: string, fn: (lessonId: string | null) => string | null): void;
 unregisterAIContextProvider?(id: string): void;
 registerAIPersona?(persona: AIPersonaDefinition): void;

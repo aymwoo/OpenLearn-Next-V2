@@ -75,11 +75,13 @@ if (!ai) return; // optional 依赖不可用
 const text = await ai.generateText('把这段讲义变成 5 道选择题', { systemInstruction });
 ```
 
-`generateText` 需 `ai:invoke` 能力（`CAP_AI_INVOKE`）。
+`generateText` 与 `listProviders` 都需 `ai:invoke` 能力（`CAP_AI_INVOKE`）。
+`listProviders()` 只返回元数据，不含 `api_key`。
 
-### 3.2 5 个可选方法必须判存在性
+### 3.2 可选方法必须判存在性
 
 ```ts
+listProviders?(): Promise<AIProviderSummary[]>;
 registerAIPersona?(persona): void;
 listAIPersonas?(): AIPersonaDefinition[];
 unregisterAIPersona?(id): void;

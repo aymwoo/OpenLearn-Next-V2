@@ -267,11 +267,12 @@ export function checkMethodPolicy(input: MethodPolicyInput): string | null {
     return null;
   }
 
-  // ── 后端：IAIService —— 驱动 AI 生成 / 注册 Persona 与上下文需 capability ──
+  // ── 后端：IAIService —— 驱动 AI 生成 / 枚举提供商 / 注册 Persona 与上下文需 capability ──
   if (tokens.aiService && token === tokens.aiService) {
-    if (method === 'generateText' || method === 'chat' || method === 'complete') {
-      return hasCapability(caps, CAP_AI_INVOKE)
-        ? null
+    if (method === 'generateText' || method === 'chat' || method === 'complete' || method === 'listProviders') {
+      if (hasCapability(caps, CAP_AI_INVOKE)) return null;
+      return method === 'listProviders'
+        ? `枚举 AI 提供商（listProviders）需要 manifest 声明 '${CAP_AI_INVOKE}' 能力`
         : `调用 AI 生成（${method}）需要 manifest 声明 '${CAP_AI_INVOKE}' 能力`;
     }
     if (method === 'registerAIPersona' || method === 'registerAIContextProvider') {

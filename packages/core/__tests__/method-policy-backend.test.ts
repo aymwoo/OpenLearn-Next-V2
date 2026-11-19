@@ -66,6 +66,13 @@ describe('B-5 · 共享 method-policy（后端视角）', () => {
       expect(policy(CORE.aiService, 'generateText')).toContain('ai:invoke');
       expect(policy(CORE.aiService, 'generateText', ['ai:invoke'])).toBeNull();
     });
+
+    it('listProviders 与 generateText 同级，需 ai:invoke', () => {
+      expect(policy(CORE.aiService, 'listProviders')).toContain('ai:invoke');
+      expect(policy(CORE.aiService, 'listProviders')).toContain('listProviders');
+      expect(policy(CORE.aiService, 'listProviders', ['ai:invoke'])).toBeNull();
+      expect(policy(CORE.aiService, 'listProviders', ['ai:persona'])).toContain('ai:invoke');
+    });
   });
 
   describe('IActionRegistryService', () => {
