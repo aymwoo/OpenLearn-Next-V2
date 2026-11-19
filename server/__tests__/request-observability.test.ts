@@ -149,17 +149,13 @@ describe('请求观测', () => {
   });
 
   describe('访问日志配置与分级判定辅助函数', () => {
-    it('resolveHttpAccessLogMode 正确解析配置与 LOG_LEVEL 回退', () => {
+    it('resolveHttpAccessLogMode 只解析显式模式，未传入时为 errors', () => {
       expect(resolveHttpAccessLogMode('off')).toBe('off');
       expect(resolveHttpAccessLogMode('errors')).toBe('errors');
       expect(resolveHttpAccessLogMode('all')).toBe('all');
       expect(resolveHttpAccessLogMode('  ALL  ')).toBe('all');
-      // 未设置时，若 LOG_LEVEL 为 debug / trace 则自动设为 all
-      expect(resolveHttpAccessLogMode(undefined, 'debug')).toBe('all');
-      expect(resolveHttpAccessLogMode(undefined, 'trace')).toBe('all');
-      // 默认回退为 errors
-      expect(resolveHttpAccessLogMode(undefined, 'info')).toBe('errors');
-      expect(resolveHttpAccessLogMode(undefined, undefined)).toBe('errors');
+      expect(resolveHttpAccessLogMode(undefined)).toBe('errors');
+      expect(resolveHttpAccessLogMode(null)).toBe('errors');
     });
 
     it('resolveSlowRequestThresholdMs 正确解析慢请求阈值', () => {
@@ -260,8 +256,8 @@ describe('请求观测', () => {
       expect(serverErrorCall).toBeDefined();
       expect((serverErrorCall?.[0] as any)?.status).toBe(500);
 
-      // 4. 耗时超过 HTTP_SLOW_MS 阈值的慢请求触发 logger.warn
-      process.env.HTTP_SLOW_MS = '50';
+      // 4. 设置里的慢请求阈值（不是环境变量）让 60ms 请求记为 warn
+      setRuntimePolicies(kernelContainer.db, { httpSlowMs: 50 });
       await fetch(`${base}/api/slow`);
       const slowCall = warnSpy.mock.calls.find(
         (call) => call[1] === 'http.request' && (call[0] as any)?.path === '/api/slow',
@@ -290,6 +286,7 @@ describe('请求观测', () => {
       const base = await listen(app);
 
       process.env.HTTP_SLOW_MS = '1';
+      process.env.HTTP_ACCESS_LOG = 'all';
       await fetch(`${base}/.vite-cache/deps/react.js`);
 
       const hit = [...warnSpy.mock.calls, ...infoSpy.mock.calls, ...debugSpy.mock.calls].find(
@@ -303,8 +300,9 @@ describe('请求观测', () => {
       debugSpy.mockRestore();
     });
 
-    it('设 HTTP_ACCESS_LOG=all 时，正常成功请求记录为 debug 日志', async () => {
+    it('设置访问日志为 all 时，正常成功请求会记录；环境变量 all 本身无效', async () => {
       process.env.HTTP_ACCESS_LOG = 'all';
+      setRuntimePolicies(kernelContainer.db, { httpAccessLogMode: 'all' });
       const debugSpy = vi.spyOn(logger, 'debug');
       const infoSpy = vi.spyOn(logger, 'info');
 
@@ -326,8 +324,8 @@ describe('请求观测', () => {
       infoSpy.mockRestore();
     });
 
-    it('设 HTTP_ACCESS_LOG=off 时，不记录任何 http.request 访问日志', async () => {
-      process.env.HTTP_ACCESS_LOG = 'off';
+    it('设置访问日志为 off 时，不记录任何 http.request 访问日志', async () => {
+      setRuntimePolicies(kernelContainer.db, { httpAccessLogMode: 'off' });
       const errorSpy = vi.spyOn(logger, 'error');
       const warnSpy = vi.spyOn(logger, 'warn');
 

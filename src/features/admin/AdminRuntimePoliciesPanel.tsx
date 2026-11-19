@@ -3,14 +3,12 @@ import { AlertTriangle, Check, Loader2, RefreshCw, Shield, Settings } from 'luci
 
 type Lang = 'zh' | 'en';
 type Mode = 'off' | 'errors' | 'all';
-type Source = 'database' | 'env' | 'default';
+type Source = 'database' | 'default';
 
 interface HookTelemetryView {
   enabled: boolean;
   storedValue: boolean | null;
   configSource: Source;
-  hasEnvFallback: boolean;
-  envVar: string;
   effect: string;
 }
 
@@ -18,16 +16,12 @@ interface HttpAccessLogView {
   mode: Mode;
   storedMode: Mode | null;
   modeSource: Source;
-  hasModeEnvFallback: boolean;
   ignorePrefixes: string[];
   storedIgnore: string | null;
   ignoreSource: Source;
   slowMs: number;
   storedSlowMs: number | null;
   slowSource: Source;
-  envVar: string;
-  ignoreEnvVar: string;
-  slowEnvVar: string;
   effect: string;
 }
 
@@ -35,8 +29,23 @@ interface AllowUnsignedView {
   allowByDefault: boolean;
   storedValue: boolean | null;
   configSource: Source;
-  hasEnvFallback: boolean;
-  envVar: string;
+  effect: string;
+}
+
+interface ModePackView {
+  enabled: boolean;
+  storedValue: boolean | null;
+  configSource: Source;
+  showXueanTab: boolean;
+  storedShowXueanTab: boolean | null;
+  showXueanTabSource: Source;
+  effect: string;
+}
+
+interface CommunityInstallView {
+  enabled: boolean;
+  storedValue: boolean | null;
+  configSource: Source;
   effect: string;
 }
 
@@ -44,6 +53,14 @@ interface PoliciesPayload {
   hookTelemetry: HookTelemetryView;
   httpAccessLog: HttpAccessLogView;
   allowUnsigned: AllowUnsignedView;
+  modePacks: ModePackView;
+  communityInstall: CommunityInstallView;
+}
+
+interface RetiredFeatureEnv {
+  key: string;
+  setting: string;
+  historicalDefault: string;
 }
 
 interface ReservedEnv {
@@ -52,9 +69,8 @@ interface ReservedEnv {
 }
 
 const SOURCE_LABEL: Record<Source, { zh: string; en: string }> = {
-  database: { zh: '管理员界面配置（覆盖环境变量）', en: 'Admin UI setting (overrides env)' },
-  env: { zh: '环境变量回退（未在界面显式配置）', en: 'Environment fallback (no explicit UI value)' },
-  default: { zh: '历史默认（未在界面或环境变量中显式配置）', en: 'Historical default (not set in UI or env)' },
+  database: { zh: '管理员已在设置中配置', en: 'Saved in Settings' },
+  default: { zh: '历史默认（设置里尚未配置）', en: 'Historical default (not set in Settings)' },
 };
 
 function sourceText(source: Source, zh: boolean): string {
@@ -69,20 +85,32 @@ export function AdminRuntimePoliciesPanel({ lang }: { lang: Lang }) {
   const [notice, setNotice] = useState<string | null>(null);
   const [policies, setPolicies] = useState<PoliciesPayload | null>(null);
   const [reserved, setReserved] = useState<ReservedEnv[]>([]);
+  const [retired, setRetired] = useState<RetiredFeatureEnv[]>([]);
   const [hookEnabled, setHookEnabled] = useState(true);
   const [logMode, setLogMode] = useState<Mode>('errors');
   const [logIgnore, setLogIgnore] = useState('');
   const [slowMs, setSlowMs] = useState(1000);
   const [allowUnsigned, setAllowUnsigned] = useState(true);
+  const [modePacksEnabled, setModePacksEnabled] = useState(false);
+  const [showXueanTab, setShowXueanTab] = useState(false);
+  const [communityInstall, setCommunityInstall] = useState(true);
 
-  const applyPayload = (body: { policies: PoliciesPayload; reservedEnvBoundaries?: ReservedEnv[] }) => {
+  const applyPayload = (body: {
+    policies: PoliciesPayload;
+    reservedEnvBoundaries?: ReservedEnv[];
+    retiredFeatureEnv?: RetiredFeatureEnv[];
+  }) => {
     setPolicies(body.policies);
     setReserved(body.reservedEnvBoundaries ?? []);
+    setRetired(body.retiredFeatureEnv ?? []);
     setHookEnabled(body.policies.hookTelemetry.enabled);
     setLogMode(body.policies.httpAccessLog.mode);
     setLogIgnore(body.policies.httpAccessLog.ignorePrefixes.join(','));
     setSlowMs(body.policies.httpAccessLog.slowMs);
     setAllowUnsigned(body.policies.allowUnsigned.allowByDefault);
+    setModePacksEnabled(body.policies.modePacks.enabled);
+    setShowXueanTab(body.policies.modePacks.showXueanTab);
+    setCommunityInstall(body.policies.communityInstall.enabled);
   };
 
   const load = useCallback(async () => {
@@ -95,6 +123,7 @@ export function AdminRuntimePoliciesPanel({ lang }: { lang: Lang }) {
         error?: string;
         policies?: PoliciesPayload;
         reservedEnvBoundaries?: ReservedEnv[];
+        retiredFeatureEnv?: RetiredFeatureEnv[];
       } | null;
       if (!res.ok || !body?.policies) {
         throw new Error(
@@ -105,7 +134,11 @@ export function AdminRuntimePoliciesPanel({ lang }: { lang: Lang }) {
             : body?.error || (zh ? '加载运行时策略失败' : 'Failed to load runtime policies'),
         );
       }
-      applyPayload({ policies: body.policies, reservedEnvBoundaries: body.reservedEnvBoundaries });
+      applyPayload({
+        policies: body.policies,
+        reservedEnvBoundaries: body.reservedEnvBoundaries,
+        retiredFeatureEnv: body.retiredFeatureEnv,
+      });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -132,13 +165,21 @@ export function AdminRuntimePoliciesPanel({ lang }: { lang: Lang }) {
         error?: string;
         policies?: PoliciesPayload;
         reservedEnvBoundaries?: ReservedEnv[];
+        retiredFeatureEnv?: RetiredFeatureEnv[];
       } | null;
       if (!res.ok || !body?.policies) {
         throw new Error(body?.error || (zh ? '保存运行时策略失败' : 'Failed to save runtime policies'));
       }
-      applyPayload({ policies: body.policies, reservedEnvBoundaries: body.reservedEnvBoundaries });
+      applyPayload({
+        policies: body.policies,
+        reservedEnvBoundaries: body.reservedEnvBoundaries,
+        retiredFeatureEnv: body.retiredFeatureEnv,
+      });
+      window.dispatchEvent(new Event('openlearn:feature-flags-changed'));
       setNotice(
-        zh ? '已保存，按各策略说明立即或在后续请求中生效。' : 'Saved. See each policy for when it takes effect.',
+        zh
+          ? '已保存。后续请求立即生效，无需重启。已打开的页面会在重新获得焦点或刷新后读取 Mode Pack。'
+          : 'Saved. Later requests pick this up without a restart. Open pages read Mode Pack on focus or refresh.',
       );
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -147,14 +188,7 @@ export function AdminRuntimePoliciesPanel({ lang }: { lang: Lang }) {
     }
   };
 
-  const resetLabel = (hasEnv: boolean) =>
-    hasEnv
-      ? zh
-        ? '清除界面覆盖，回退到环境变量'
-        : 'Clear UI override and fall back to env'
-      : zh
-        ? '清除界面覆盖，回退到默认'
-        : 'Clear UI override and fall back to default';
+  const resetLabel = zh ? '清除设置，恢复历史默认' : 'Clear setting and restore the historical default';
 
   return (
     <div className="mt-6 bg-white border border-gray-200 rounded-xl shadow-3xs overflow-hidden max-w-3xl">
@@ -166,8 +200,8 @@ export function AdminRuntimePoliciesPanel({ lang }: { lang: Lang }) {
           </h3>
           <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">
             {zh
-              ? '统一配置课件网络遥测、HTTP 访问日志与未签名本地插件策略。优先级为界面显式值（含显式关闭）> 未配置时环境变量回退 > 历史默认。保存不会改写真实 .env。此项不会把认证绕过或关闭沙箱做成普通按钮。'
-              : 'Configure courseware hook telemetry, HTTP access logs, and unsigned local plugin policy. Explicit UI values (including explicit off) beat env fallback, then historical defaults. Saving does not rewrite the real .env. Auth-bypass and sandbox-off stay out of ordinary toggles.'}
+              ? '功能开关以这里的设置为准，不再读取环境变量。未配置时保持原先的默认：Mode Pack 关闭，社区安装与课件遥测开启，访问日志为 errors，未签名本地插件默认放行。保存不会改写 .env，也不需要重启。认证绕过、SQL 守卫和沙箱仍不做成普通按钮。'
+              : 'Settings are the only feature switches. Environment variables no longer turn features on or off. Unset values keep the previous defaults: Mode Pack off, community install and telemetry on, access logs at errors, unsigned local plugins allowed. Saving does not rewrite .env and does not need a restart. Auth bypass, SQL guard, and the sandbox stay out of ordinary toggles.'}
           </p>
         </div>
         <button
@@ -236,7 +270,7 @@ export function AdminRuntimePoliciesPanel({ lang }: { lang: Lang }) {
                   onClick={() => void save({}, 'hookTelemetryEnabled')}
                   className="text-xs font-semibold text-indigo-700 hover:text-indigo-900 cursor-pointer"
                 >
-                  {resetLabel(policies.hookTelemetry.hasEnvFallback)}
+                  {resetLabel}
                 </button>
               )}
             </section>
@@ -326,11 +360,7 @@ export function AdminRuntimePoliciesPanel({ lang }: { lang: Lang }) {
                     }
                     className="text-xs font-semibold text-indigo-700 cursor-pointer"
                   >
-                    {resetLabel(
-                      policies.httpAccessLog.hasModeEnvFallback ||
-                        policies.httpAccessLog.ignoreSource === 'env' ||
-                        policies.httpAccessLog.slowSource === 'env',
-                    )}
+                    {resetLabel}
                   </button>
                 )}
               </div>
@@ -380,11 +410,169 @@ export function AdminRuntimePoliciesPanel({ lang }: { lang: Lang }) {
                   onClick={() => void save({}, 'allowUnsignedByDefault')}
                   className="text-xs font-semibold text-indigo-700 cursor-pointer"
                 >
-                  {resetLabel(policies.allowUnsigned.hasEnvFallback)}
+                  {resetLabel}
+                </button>
+              )}
+            </section>
+
+            <section
+              className="space-y-2 border border-gray-100 rounded-lg p-4"
+              data-testid="runtime-policy-mode-packs"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h4 className="text-sm font-semibold text-gray-800">{zh ? 'Mode Pack' : 'Mode Pack'}</h4>
+                  <p className="text-xs text-gray-500 leading-relaxed mt-1">
+                    {zh
+                      ? '开启后课中使用 Mode Pack 工作区。默认关闭，关闭时行为与既有白板中栏一致。保存后无需重启；已打开的页面在重新获得焦点或刷新后切换。'
+                      : 'Turns on Mode Pack workspaces. Off by default, which keeps the existing whiteboard column. No restart is required; open pages pick it up on focus or refresh.'}
+                  </p>
+                  <p className="text-xs text-gray-600 mt-1">
+                    {zh
+                      ? `有效状态：${modePacksEnabled ? '已开启' : '已关闭'}`
+                      : `Effective: ${modePacksEnabled ? 'on' : 'off'}`}
+                    {` · ${sourceText(policies.modePacks.configSource, zh)}`}
+                  </p>
+                  <p className="text-xs text-gray-400 mt-1">{policies.modePacks.effect}</p>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={modePacksEnabled}
+                  aria-label={zh ? 'Mode Pack' : 'Mode Pack'}
+                  disabled={saving}
+                  onClick={() => void save({ modePacksEnabled: !modePacksEnabled })}
+                  className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full ${modePacksEnabled ? 'bg-indigo-600' : 'bg-gray-300'} ${saving ? 'opacity-60' : 'cursor-pointer'}`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white ${modePacksEnabled ? 'translate-x-6' : 'translate-x-1'}`}
+                  />
+                </button>
+              </div>
+              {policies.modePacks.storedValue !== null && (
+                <button
+                  type="button"
+                  disabled={saving}
+                  onClick={() => void save({}, 'modePacksEnabled')}
+                  className="text-xs font-semibold text-indigo-700 cursor-pointer"
+                >
+                  {resetLabel}
+                </button>
+              )}
+              <div className="flex items-start justify-between gap-3 border-t border-gray-100 pt-3">
+                <div>
+                  <h4 className="text-sm font-semibold text-gray-800">
+                    {zh ? '显示学生平行学案页' : 'Show the parallel student lesson tab'}
+                  </h4>
+                  <p className="text-xs text-gray-500 leading-relaxed mt-1">
+                    {zh
+                      ? '仅在 Mode Pack 开启时生效。默认隐藏，由学案工作区接管。Mode Pack 关闭时平行学案页仍会显示。'
+                      : 'Applies only while Mode Pack is on. Hidden by default so the lesson workspace takes over. The parallel tab still shows when Mode Pack is off.'}
+                  </p>
+                  <p className="text-xs text-gray-600 mt-1">
+                    {zh
+                      ? `有效状态：${showXueanTab ? '显示' : '隐藏'}`
+                      : `Effective: ${showXueanTab ? 'shown' : 'hidden'}`}
+                    {` · ${sourceText(policies.modePacks.showXueanTabSource, zh)}`}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={showXueanTab}
+                  aria-label={zh ? '显示学生平行学案页' : 'Show the parallel student lesson tab'}
+                  disabled={saving}
+                  onClick={() => void save({ modePackShowXueanTab: !showXueanTab })}
+                  className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full ${showXueanTab ? 'bg-indigo-600' : 'bg-gray-300'} ${saving ? 'opacity-60' : 'cursor-pointer'}`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white ${showXueanTab ? 'translate-x-6' : 'translate-x-1'}`}
+                  />
+                </button>
+              </div>
+              {policies.modePacks.storedShowXueanTab !== null && (
+                <button
+                  type="button"
+                  disabled={saving}
+                  onClick={() => void save({}, 'modePackShowXueanTab')}
+                  className="text-xs font-semibold text-indigo-700 cursor-pointer"
+                >
+                  {resetLabel}
+                </button>
+              )}
+            </section>
+
+            <section
+              className="space-y-2 border border-gray-100 rounded-lg p-4"
+              data-testid="runtime-policy-community-install"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h4 className="text-sm font-semibold text-gray-800">
+                    {zh ? '允许从社区注册表安装' : 'Allow install from the community registry'}
+                  </h4>
+                  <p className="text-xs text-gray-500 leading-relaxed mt-1">
+                    {zh
+                      ? '默认开启。关闭后，从社区注册表安装、带下载地址的更新，以及社区直传都会被拒绝。保存后立即生效。插件中心「社区」页使用同一条设置。此开关不能绕过权限或网络校验。'
+                      : 'On by default. When off, registry installs, URL updates, and community uploads are rejected. Takes effect immediately. The Plugin Center community page writes the same setting. This does not bypass permissions or network checks.'}
+                  </p>
+                  <p className="text-xs text-gray-600 mt-1">
+                    {zh
+                      ? `有效状态：${communityInstall ? '已开启' : '已关闭'}`
+                      : `Effective: ${communityInstall ? 'on' : 'off'}`}
+                    {` · ${sourceText(policies.communityInstall.configSource, zh)}`}
+                  </p>
+                  <p className="text-xs text-gray-400 mt-1">{policies.communityInstall.effect}</p>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={communityInstall}
+                  aria-label={zh ? '允许从社区注册表安装' : 'Allow install from the community registry'}
+                  disabled={saving}
+                  onClick={() => void save({ communityInstallEnabled: !communityInstall })}
+                  className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full ${communityInstall ? 'bg-indigo-600' : 'bg-gray-300'} ${saving ? 'opacity-60' : 'cursor-pointer'}`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white ${communityInstall ? 'translate-x-6' : 'translate-x-1'}`}
+                  />
+                </button>
+              </div>
+              {policies.communityInstall.storedValue !== null && (
+                <button
+                  type="button"
+                  disabled={saving}
+                  onClick={() => void save({}, 'communityInstallEnabled')}
+                  className="text-xs font-semibold text-indigo-700 cursor-pointer"
+                >
+                  {resetLabel}
                 </button>
               )}
             </section>
           </>
+        )}
+
+        {retired.length > 0 && (
+          <section className="space-y-2 border border-gray-100 rounded-lg p-4" data-testid="runtime-policy-retired-env">
+            <h4 className="text-sm font-semibold text-gray-800">
+              {zh ? '已不再读取的功能开关' : 'Feature switches that are no longer read'}
+            </h4>
+            <p className="text-xs text-gray-500">
+              {zh
+                ? '下列环境变量和调试旗标不再打开或关闭功能。请使用上面的设置。未配置时使用列出的历史默认。'
+                : 'These environment variables and debug flags no longer turn features on or off. Use the settings above. Unset values use the listed historical default.'}
+            </p>
+            <ul className="text-xs text-gray-600 space-y-1.5">
+              {retired.map((item) => (
+                <li key={item.key}>
+                  <code className="font-mono text-gray-800">{item.key}</code>
+                  {zh
+                    ? ` — 对应「${item.setting}」，未配置时默认${item.historicalDefault}`
+                    : ` — ${item.setting}; unset default: ${item.historicalDefault}`}
+                </li>
+              ))}
+            </ul>
+          </section>
         )}
 
         {reserved.length > 0 && (

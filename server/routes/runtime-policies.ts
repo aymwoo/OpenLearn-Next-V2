@@ -4,12 +4,8 @@ import { requireScopedAuth } from '../middleware/data-scope.js';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
 import { recordSecurityAudit } from '../../packages/core/observability/audit-log.js';
 import { sendSafeError } from '../utils/error-handler.js';
+import { resolveCommunityInstallConfig, setStoredCommunityInstallEnabled } from '../services/community-attest.js';
 import {
-  ALLOW_UNSIGNED_ENV,
-  HOOK_TELEMETRY_ENV,
-  HTTP_ACCESS_LOG_ENV,
-  HTTP_ACCESS_LOG_IGNORE_ENV,
-  HTTP_SLOW_MS_ENV,
   RuntimePolicyError,
   resolveHookTelemetryPolicy,
   resolveRuntimePolicies,
@@ -43,40 +39,71 @@ export const RESERVED_ENV_BOUNDARIES: { key: string; reason: string }[] = [
   },
 ];
 
-function serializePolicies(snapshot: RuntimePoliciesSnapshot) {
+/** 曾经用来开关产品功能、现已停止读取的变量。只作说明，响应里不含当前值。 */
+export const RETIRED_FEATURE_ENV: { key: string; setting: string; historicalDefault: string }[] = [
+  {
+    key: 'VITE_OPENLEARN_MODE_PACKS / window.__OPENLEARN_MODE_PACKS__',
+    setting: 'Mode Pack',
+    historicalDefault: '关闭',
+  },
+  {
+    key: 'window.__OPENLEARN_DEBUG_XUEAN_TAB__',
+    setting: 'Mode Pack 开启时显示学生平行学案页',
+    historicalDefault: '隐藏',
+  },
+  { key: 'OPENLEARN_COMMUNITY_INSTALL', setting: '允许从社区注册表安装', historicalDefault: '开启' },
+  { key: 'BRIDGE_HOOK_TELEMETRY', setting: '课件网络遥测总闸', historicalDefault: '开启' },
+  { key: 'HTTP_ACCESS_LOG', setting: 'HTTP 访问日志模式', historicalDefault: 'errors' },
+  { key: 'HTTP_ACCESS_LOG_IGNORE', setting: 'HTTP 访问日志忽略前缀', historicalDefault: '空' },
+  { key: 'HTTP_SLOW_MS', setting: '慢请求阈值', historicalDefault: '1000 毫秒' },
+  { key: 'OPENLEARN_ALLOW_UNSIGNED', setting: '未签名本地插件默认放行', historicalDefault: '放行' },
+];
+
+function serializePolicies(snapshot: RuntimePoliciesSnapshot, db: Parameters<typeof resolveCommunityInstallConfig>[0]) {
+  const community = resolveCommunityInstallConfig(db);
   return {
     hookTelemetry: {
       enabled: snapshot.hookTelemetry.enabled,
       storedValue: snapshot.hookTelemetry.storedValue,
       configSource: snapshot.hookTelemetry.configSource,
-      hasEnvFallback: snapshot.hookTelemetry.hasEnvFallback,
-      envVar: HOOK_TELEMETRY_ENV,
-      effect: '新打开的课件会立即按此值注入；已打开的课件在宿主同步策略后停止后续网络遥测上报。关闭不会影响成绩提交。',
+      effect:
+        '新打开的课件会立即按此值注入；已打开的课件在宿主同步策略后停止后续网络遥测上报。关闭不会影响成绩提交。无需重启。',
     },
     httpAccessLog: {
       mode: snapshot.httpAccessLog.mode,
       storedMode: snapshot.httpAccessLog.storedMode,
       modeSource: snapshot.httpAccessLog.modeSource,
-      hasModeEnvFallback: snapshot.httpAccessLog.hasModeEnvFallback,
       ignorePrefixes: snapshot.httpAccessLog.ignorePrefixes,
       storedIgnore: snapshot.httpAccessLog.storedIgnore,
       ignoreSource: snapshot.httpAccessLog.ignoreSource,
       slowMs: snapshot.httpAccessLog.slowMs,
       storedSlowMs: snapshot.httpAccessLog.storedSlowMs,
       slowSource: snapshot.httpAccessLog.slowSource,
-      envVar: HTTP_ACCESS_LOG_ENV,
-      ignoreEnvVar: HTTP_ACCESS_LOG_IGNORE_ENV,
-      slowEnvVar: HTTP_SLOW_MS_ENV,
       effect: '访问日志中间件按每次请求读取生效值，保存后对后续请求立即生效，无需重启。不影响安全审计与指标统计。',
     },
     allowUnsigned: {
       allowByDefault: snapshot.allowUnsigned.allowByDefault,
       storedValue: snapshot.allowUnsigned.storedValue,
       configSource: snapshot.allowUnsigned.configSource,
-      hasEnvFallback: snapshot.allowUnsigned.hasEnvFallback,
-      envVar: ALLOW_UNSIGNED_ENV,
       effect:
-        '立即对后续本地 ZIP 安装与更新生效。即使允许默认放行，也不是全信任或允许内联执行；签名错误、公钥、网络限制、权限与沙箱不会被绕过。收紧后须在每次上传时显式确认。',
+        '立即对后续本地 ZIP 安装与更新生效，无需重启。即使允许默认放行，也不是全信任或允许内联执行；签名错误、公钥、网络限制、权限与沙箱不会被绕过。收紧后须在每次上传时显式确认。',
+    },
+    modePacks: {
+      enabled: snapshot.modePacks.enabled,
+      storedValue: snapshot.modePacks.storedValue,
+      configSource: snapshot.modePacks.configSource,
+      showXueanTab: snapshot.modePacks.showXueanTab,
+      storedShowXueanTab: snapshot.modePacks.storedShowXueanTab,
+      showXueanTabSource: snapshot.modePacks.showXueanTabSource,
+      effect:
+        '保存后无需重启。已打开的页面在重新获得焦点或刷新后切换 Mode Pack。未配置时默认关闭，课中行为与既有白板中栏一致。',
+    },
+    communityInstall: {
+      enabled: community.enabled,
+      storedValue: community.storedValue,
+      configSource: community.configSource,
+      effect:
+        '保存后立即对社区安装、URL 更新和社区直传生效，无需重启。未配置时默认开启。不能绕过注册表地址、权限或网络校验。',
     },
   };
 }
@@ -94,13 +121,26 @@ export function registerRuntimePolicyRoutes(ctx: ServerContext) {
     }
   });
 
+  app.get('/api/feature-flags', (_req, res) => {
+    try {
+      const modePacks = resolveRuntimePolicies(kernelContainer.db).modePacks;
+      res.json({
+        modePacksEnabled: modePacks.enabled,
+        modePackShowXueanTab: modePacks.showXueanTab,
+      });
+    } catch {
+      res.json({ modePacksEnabled: false, modePackShowXueanTab: false });
+    }
+  });
+
   app.get('/api/admin/runtime-policies', requireAuth('administrator'), (_req, res) => {
     try {
       const snapshot = resolveRuntimePolicies(kernelContainer.db);
       res.json({
         success: true,
-        policies: serializePolicies(snapshot),
+        policies: serializePolicies(snapshot, kernelContainer.db),
         reservedEnvBoundaries: RESERVED_ENV_BOUNDARIES,
+        retiredFeatureEnv: RETIRED_FEATURE_ENV,
       });
     } catch (e: any) {
       sendSafeError(res, e);
@@ -110,13 +150,34 @@ export function registerRuntimePolicyRoutes(ctx: ServerContext) {
   app.put('/api/admin/runtime-policies', requireAuth('administrator'), (req, res) => {
     try {
       const body = req.body || {};
-      const snapshot = setRuntimePolicies(kernelContainer.db, {
+      const runtimePatch = {
         hookTelemetryEnabled: body.hookTelemetryEnabled,
         httpAccessLogMode: body.httpAccessLogMode,
         httpAccessLogIgnore: body.httpAccessLogIgnore,
         httpSlowMs: body.httpSlowMs,
         allowUnsignedByDefault: body.allowUnsignedByDefault,
-      });
+        modePacksEnabled: body.modePacksEnabled,
+        modePackShowXueanTab: body.modePackShowXueanTab,
+      };
+      const hasRuntimePatch = Object.values(runtimePatch).some((value) => value !== undefined);
+      const hasCommunityPatch = Object.prototype.hasOwnProperty.call(body, 'communityInstallEnabled');
+      if (!hasRuntimePatch && !hasCommunityPatch) {
+        return res.status(400).json({ success: false, error: '缺少要更新的运行时策略字段' });
+      }
+      if (
+        hasCommunityPatch &&
+        body.communityInstallEnabled !== null &&
+        typeof body.communityInstallEnabled !== 'boolean'
+      ) {
+        return res.status(400).json({ success: false, error: 'communityInstallEnabled 必须是布尔值或 null' });
+      }
+
+      const snapshot = hasRuntimePatch
+        ? setRuntimePolicies(kernelContainer.db, runtimePatch)
+        : resolveRuntimePolicies(kernelContainer.db);
+      const community = hasCommunityPatch
+        ? setStoredCommunityInstallEnabled(kernelContainer.db, body.communityInstallEnabled)
+        : resolveCommunityInstallConfig(kernelContainer.db);
       recordSecurityAudit('runtime_policy.updated', {
         actorId: getActorId(req),
         hookTelemetry: snapshot.hookTelemetry.enabled,
@@ -124,11 +185,16 @@ export function registerRuntimePolicyRoutes(ctx: ServerContext) {
         httpAccessLogMode: snapshot.httpAccessLog.mode,
         allowUnsignedByDefault: snapshot.allowUnsigned.allowByDefault,
         allowUnsignedSource: snapshot.allowUnsigned.configSource,
+        modePacksEnabled: snapshot.modePacks.enabled,
+        modePackShowXueanTab: snapshot.modePacks.showXueanTab,
+        communityInstallEnabled: community.enabled,
+        communityInstallSource: community.configSource,
       });
       res.json({
         success: true,
-        policies: serializePolicies(snapshot),
+        policies: serializePolicies(snapshot, kernelContainer.db),
         reservedEnvBoundaries: RESERVED_ENV_BOUNDARIES,
+        retiredFeatureEnv: RETIRED_FEATURE_ENV,
       });
     } catch (e: any) {
       if (e instanceof RuntimePolicyError) {

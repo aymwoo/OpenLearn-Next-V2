@@ -1,40 +1,108 @@
 /**
- * Mode Pack 灰度开关（P0）。
+ * Mode Pack 与学生平行学案页的运行时开关。
  *
- * 默认关闭 → 宿主走既有白板中栏 / 学生平行 tab，行为与 main 一致。
- * 开启方式（任一即可）：
- *   - 构建期：`VITE_OPENLEARN_MODE_PACKS=1`
- *   - 运行时：`window.__OPENLEARN_MODE_PACKS__ = true`（调试）
- *   - 单测：`setModePacksEnabledForTests(true)`
+ * 设置是唯一来源（`GET /api/feature-flags`，由管理员在「站点信息设置 → 运行时策略」写入）。
+ * 未拉到设置、或设置未配置时：Mode Pack 关闭，平行学案页隐藏（与原先未设置构建期/调试旗标时一致）。
+ * 单测用 `setModePacksEnabledForTests` / `setModePackShowXueanTabForTests` 覆盖。
  */
+import { useSyncExternalStore } from 'react';
 
-declare global {
-  interface Window {
-    __OPENLEARN_MODE_PACKS__?: boolean;
-    /** P4：Mode Pack 开启时临时恢复学生平行学案 tab（调试） */
-    __OPENLEARN_DEBUG_XUEAN_TAB__?: boolean;
-  }
+export interface ClientFeatureFlags {
+  modePacksEnabled: boolean;
+  modePackShowXueanTab: boolean;
 }
 
-let testOverride: boolean | null = null;
+const DEFAULT_FLAGS: ClientFeatureFlags = {
+  modePacksEnabled: false,
+  modePackShowXueanTab: false,
+};
 
-/** 仅测试使用：覆盖开关；传 null 清除。 */
+let current: ClientFeatureFlags = { ...DEFAULT_FLAGS };
+let revision = 0;
+let modePackTestOverride: boolean | null = null;
+let xueanTabTestOverride: boolean | null = null;
+const listeners = new Set<() => void>();
+
+function emit(): void {
+  revision += 1;
+  listeners.forEach((listener) => listener());
+}
+
+export function subscribeClientFeatureFlags(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
+
+export function getClientFeatureFlagVersion(): number {
+  return revision;
+}
+
+/** 仅测试使用：覆盖 Mode Pack；传 null 清除。 */
 export function setModePacksEnabledForTests(value: boolean | null): void {
-  testOverride = value;
+  modePackTestOverride = value;
+  emit();
+}
+
+/** 仅测试使用：覆盖「Mode Pack 开启时显示平行学案页」；传 null 清除。 */
+export function setModePackShowXueanTabForTests(value: boolean | null): void {
+  xueanTabTestOverride = value;
+  emit();
+}
+
+export function resetClientFeatureFlagsForTests(): void {
+  current = { ...DEFAULT_FLAGS };
+  modePackTestOverride = null;
+  xueanTabTestOverride = null;
+  emit();
 }
 
 export function isModePacksEnabled(): boolean {
-  if (testOverride !== null) return testOverride;
+  if (modePackTestOverride !== null) return modePackTestOverride;
+  return current.modePacksEnabled;
+}
 
-  if (typeof window !== 'undefined' && typeof window.__OPENLEARN_MODE_PACKS__ === 'boolean') {
-    return window.__OPENLEARN_MODE_PACKS__;
+export function isModePackShowXueanTab(): boolean {
+  if (xueanTabTestOverride !== null) return xueanTabTestOverride;
+  return current.modePackShowXueanTab;
+}
+
+export function applyClientFeatureFlags(flags: Partial<ClientFeatureFlags>): void {
+  const next: ClientFeatureFlags = {
+    modePacksEnabled: flags.modePacksEnabled === true,
+    modePackShowXueanTab: flags.modePackShowXueanTab === true,
+  };
+  if (
+    next.modePacksEnabled === current.modePacksEnabled &&
+    next.modePackShowXueanTab === current.modePackShowXueanTab
+  ) {
+    return;
   }
+  current = next;
+  emit();
+}
 
+export async function refreshClientFeatureFlags(): Promise<void> {
+  if (typeof fetch !== 'function') return;
   try {
-    const env = (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env;
-    const raw = env?.VITE_OPENLEARN_MODE_PACKS;
-    return raw === '1' || raw === 'true';
+    const res = await fetch('/api/feature-flags');
+    if (!res?.ok) return;
+    const body = (await res.json()) as Partial<ClientFeatureFlags> | null;
+    if (!body || typeof body !== 'object') return;
+    applyClientFeatureFlags({
+      modePacksEnabled: body.modePacksEnabled === true,
+      modePackShowXueanTab: body.modePackShowXueanTab === true,
+    });
   } catch {
-    return false;
+    // 保留上一次成功值；首次失败维持默认关闭。
   }
+}
+
+export function useModePacksEnabled(): boolean {
+  useSyncExternalStore(subscribeClientFeatureFlags, getClientFeatureFlagVersion, getClientFeatureFlagVersion);
+  return isModePacksEnabled();
+}
+
+export function useModePackShowXueanTab(): boolean {
+  useSyncExternalStore(subscribeClientFeatureFlags, getClientFeatureFlagVersion, getClientFeatureFlagVersion);
+  return isModePackShowXueanTab();
 }

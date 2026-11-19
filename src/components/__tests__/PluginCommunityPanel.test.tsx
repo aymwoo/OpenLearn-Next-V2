@@ -435,7 +435,8 @@ describe('PluginCommunityPanel', () => {
     });
 
     it('surfaces the server error when 403 carries a specific error code such as COMMUNITY_INSTALL_DISABLED', async () => {
-      const disabledMsg = '社区安装已被关闭。请由管理员在插件中心「社区」页开启「允许从社区注册表安装」。';
+      const disabledMsg =
+        '社区安装已被关闭。请由管理员在「站点信息设置 → 运行时策略」或插件中心「社区」页开启「允许从社区注册表安装」。';
       const { fetcher } = makeFetcher([
         (url) => (url.startsWith('/api/plugins/community') ? json(registryBody()) : undefined),
         (url) =>
@@ -454,13 +455,13 @@ describe('PluginCommunityPanel', () => {
     });
 
     it('handles 403 code distinction properly during browser upload fallback', async () => {
-      const disabledMsg = '社区安装已被关闭。请由管理员在插件中心「社区」页开启「允许从社区注册表安装」。';
+      const disabledMsg =
+        '社区安装已被关闭。请由管理员在「站点信息设置 → 运行时策略」或插件中心「社区」页开启「允许从社区注册表安装」。';
       const { fetcher } = makeFetcher([
         (url) => (url.startsWith('/api/plugins/community') ? json(registryBody()) : undefined),
         (url) =>
           url === '/api/plugins/install-from-url' ? json({ success: false, fallbackToClient: true }, 502) : undefined,
-        (url) =>
-          url.endsWith('.zip') ? new Response(new Blob([new Uint8Array([1, 2, 3])]), { status: 200 }) : undefined,
+        (url) => (url.endsWith('.zip') ? new Response(new Uint8Array([1, 2, 3]), { status: 200 }) : undefined),
         (url) =>
           url === '/api/plugins/upload-zip-raw'
             ? json({ success: false, code: 'COMMUNITY_INSTALL_DISABLED', error: disabledMsg }, 403)
@@ -481,8 +482,7 @@ describe('PluginCommunityPanel', () => {
         (url) => (url.startsWith('/api/plugins/community') ? json(registryBody()) : undefined),
         (url) =>
           url === '/api/plugins/install-from-url' ? json({ success: false, fallbackToClient: true }, 502) : undefined,
-        (url) =>
-          url.endsWith('.zip') ? new Response(new Blob([new Uint8Array([1, 2, 3])]), { status: 200 }) : undefined,
+        (url) => (url.endsWith('.zip') ? new Response(new Uint8Array([1, 2, 3]), { status: 200 }) : undefined),
         (url) => (url === '/api/plugins/upload-zip-raw' ? json({ success: false }, 403) : undefined),
       ]);
 

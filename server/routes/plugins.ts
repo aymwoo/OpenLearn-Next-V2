@@ -55,7 +55,6 @@ import {
 import JSZip from 'jszip';
 import {
   COMMUNITY_INSTALL_DISABLED_MESSAGE,
-  COMMUNITY_INSTALL_ENV,
   communityPublicKeys,
   hashMatches,
   resolveCommunityInstallConfig,
@@ -329,7 +328,7 @@ async function assertCommunityZipAttestation(
   }
 
   // 没有签名，且未声明社区安装。
-  // 生效值：界面显式策略 > OPENLEARN_ALLOW_UNSIGNED=0/false 收紧 > 历史默认放行。
+  // 生效值只来自「站点信息设置 → 运行时策略」。未配置时历史默认放行。
   // 默认放行时审计仍记 unverified_local_acknowledged；收紧后必须逐次传 x-allow-unsigned: true。
   // 此策略不能绕过上方已签名/社区包的签名错误、公钥、网络或沙箱校验。
   const allowUnsignedByPolicy = resolveAllowUnsignedPolicy(kernelContainer.db).allowByDefault;
@@ -763,7 +762,6 @@ export function registerPluginsRoutes(ctx: ServerContext) {
         installEnabled: install.enabled,
         installConfigSource: isAdmin ? install.configSource : null,
         storedInstallEnabled: isAdmin ? install.storedValue : null,
-        hasInstallEnvFallback: isAdmin ? install.hasEnvFallback : null,
         publicKeysConfigured: isAdmin ? install.publicKeysConfigured : null,
         ...result,
         plugins: enrichedPlugins,
@@ -823,7 +821,6 @@ export function registerPluginsRoutes(ctx: ServerContext) {
       res.json({
         success: true,
         envVar: COMMUNITY_REGISTRY_ENV,
-        installEnvVar: COMMUNITY_INSTALL_ENV,
         configSource: registryUpdated.configSource,
         databaseUrl: registryUpdated.databaseUrl,
         activeUrl: registryUpdated.activeUrl,
@@ -832,7 +829,6 @@ export function registerPluginsRoutes(ctx: ServerContext) {
         installEnabled: installUpdated.enabled,
         installConfigSource: installUpdated.configSource,
         storedInstallEnabled: installUpdated.storedValue,
-        hasInstallEnvFallback: installUpdated.hasEnvFallback,
         publicKeysConfigured: installUpdated.publicKeysConfigured,
       });
     } catch (e: any) {

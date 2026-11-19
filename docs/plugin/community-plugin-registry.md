@@ -177,7 +177,7 @@ npx @openlearn/plugin-sdk sign --key publisher-private.pem --publisher "Alice De
 - 非空地址必须通过出站安全校验（`isSafeExternalUrl`），否则返回 HTTP 400。
 - `installEnabled` 必须是布尔值或 `null`。
 - 保存成功后，注册表地址变更会清空注册表内存缓存；安装开关保存后立即对后续安装门禁生效，无需重启。响应包含更新后的 `configSource`（`database` / `env` / `none`）、`databaseUrl`、`activeUrl`、`hasEnvFallback`，以及 `installEnabled`、`installConfigSource`、`storedInstallEnabled`、`hasInstallEnvFallback`、`publicKeysConfigured`。
-- 生效优先级：界面显式 1/0（含显式关闭）> 未配置时环境变量 `OPENLEARN_COMMUNITY_INSTALL=1` > 默认关闭。此开关不能绕过签名公钥、权限或网络校验。
+- 开关只来自设置（「站点信息设置 → 运行时策略」或插件中心「社区」页，同一条记录）。未配置时默认开启。环境变量不再控制此开关。此开关不能绕过权限或网络校验。
 
 ### `POST /api/plugins/install-from-url`
 
@@ -200,7 +200,7 @@ npx @openlearn/plugin-sdk sign --key publisher-private.pem --publisher "Alice De
 
 1. 校验 `downloadUrl` 通过出站安全校验、`expectedId` 符合插件 id 规范；
 2. 要求 `acknowledgeRisk === true`，否则 400 且不下载；
-3. 要求社区安装生效值已开启（界面显式开启，或未配置时 `OPENLEARN_COMMUNITY_INSTALL=1`），否则 403，`code` 为 `COMMUNITY_INSTALL_DISABLED`；
+3. 要求社区安装生效值已开启（设置显式开启，或未配置时的默认开启），否则 403，`code` 为 `COMMUNITY_INSTALL_DISABLED`；
 4. 要求请求体同时带 `integrity` 与 `signature`，否则 400，`code` 为 `COMMUNITY_ATTESTATION_REQUIRED`，此时不下载；
 5. 服务端下载 ZIP。下载失败返回 HTTP 400 + `fallbackToClient: true`。下载成功后按 `OPENLEARN_COMMUNITY_PUBKEY` 验签，失败则删除临时包；
 6. 若 `expectedId` 对应的插件已在本机安装 ⇒ 走 `updateFromZip`（`allowDowngrade` 默认 `false`）；否则走 `installFromZip`，按受信策略落执行模式并在默认开启 `autoActivate` 时激活插件；

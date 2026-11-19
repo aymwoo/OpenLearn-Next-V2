@@ -78,14 +78,14 @@ HTTP 入口不在这个目录里：
 - 该 ID 放进 `requestLogContext`，同一条异步调用链里的 `recordSecurityAudit` 可以读到它，不必改命令载荷。
 - 响应结束时 `recordHttpResponse(status)`，并在判定需要记录时写一条 `http.request`。字段只有 `requestId`、`userId`、`method`、`path`、`status`、`durationMs`。不写查询串，不写请求体。
 - `userId` 来自已挂上的会话，否则从会话 cookie 解析；没有则是 `anonymous`。截断到 64 字符。
-- **静默白名单 (`isQuietRequest`)**：公共入口（`/`、`/index.html`、`/favicon.ico`、`/robots.txt`）、探活（`/health`、`/health/ready`）以及开发环境 Vite 内部资源（`/@vite/`、`/src/`、`/.vite-cache/` 等）在状态码小于 400 时不写 `http.request`。它们仍然计入 §4 的状态类计数。`/metrics` 不在静默名单里。可通过环境变量 `HTTP_ACCESS_LOG_IGNORE` 或管理后台「运行时策略」配置额外的逗号分隔前缀名单（如 `/api/vfs,/api/classroom/sessions/`）以静默特定高频接口。中间件按每次请求读取生效值。
-- **访问日志分级与降噪 (`HTTP_ACCESS_LOG`，可被管理后台「运行时策略」覆盖；未配置时回退本环境变量，再回退 `LOG_LEVEL=debug|trace` → `all`)**：
-  - 默认模式 `HTTP_ACCESS_LOG=errors`（未配置且 `LOG_LEVEL` 不是 `debug`/`trace` 时）：正常的成功请求（`< 400` 且未超出慢请求阈值）默认静默，彻底消除前端轮询刷屏；
+- **静默白名单 (`isQuietRequest`)**：公共入口（`/`、`/index.html`、`/favicon.ico`、`/robots.txt`）、探活（`/health`、`/health/ready`）以及开发环境 Vite 内部资源（`/@vite/`、`/src/`、`/.vite-cache/` 等）在状态码小于 400 时不写 `http.request`。它们仍然计入 §4 的状态类计数。`/metrics` 不在静默名单里。管理员在「站点信息设置 → 运行时策略」配置额外的逗号分隔前缀名单（如 `/api/vfs,/api/classroom/sessions/`）以静默特定高频接口。中间件按每次请求读取设置。
+- **访问日志分级与降噪**（管理后台「运行时策略」；未配置时默认 `errors`。环境变量和 `LOG_LEVEL` 不再改变此模式）：
+  - 默认模式 `errors`：正常的成功请求（`< 400` 且未超出慢请求阈值）默认静默，彻底消除前端轮询刷屏；
   - `status >= 500` 时以 `error` 级别输出；
-  - `status >= 400` 或耗时 `durationMs >= HTTP_SLOW_MS`（默认 1000ms）时以 `warn` 级别输出；
-  - 排障模式 `HTTP_ACCESS_LOG=all`（或显式设置 `LOG_LEVEL=debug`）：成功请求降为 `debug` 级别输出；
-  - 关闭模式 `HTTP_ACCESS_LOG=off`：完全不写 `http.request` 日志。
-- **解耦保证**：指标计数（§4）、403/429 安全审计与 5xx 错误捕获不受 `HTTP_ACCESS_LOG` 开关影响。
+  - `status >= 400` 或耗时达到慢请求阈值（默认 1000ms，可在同一设置里修改）时以 `warn` 级别输出；
+  - 排障模式 `all`：成功请求降为 `debug` 级别输出（进程日志级别不是 debug 时提升为 info）；
+  - 关闭模式 `off`：完全不写 `http.request` 日志。
+- **解耦保证**：指标计数（§4）、403/429 安全审计与 5xx 错误捕获不受访问日志模式影响。
 
 状态码 403（路径不是 `/api/auth/login`）写审计事件 `auth.forbidden`。状态码 429 写 `rate_limit.triggered`。状态码大于等于 500，且 `sendSafeError` 尚未标记 `errorCaptured` 时，再记一条 `source: http` 的错误上报。
 

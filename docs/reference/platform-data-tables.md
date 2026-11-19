@@ -433,7 +433,7 @@ AI 助手对话记忆。`id` / `conv_key` / `role` / `content` / `created_at`。
 
 ### `site_settings`
 
-站点设置。`id` / `site_name` / `slogan` / `logo_url` / `community_registry_url`（迁移 051，未配置时回落 `PLUGIN_COMMUNITY_REGISTRY_URL`） / `community_install_enabled`（迁移 052：`NULL` 表示未配置并回落 `OPENLEARN_COMMUNITY_INSTALL`，`0` 为显式关闭，`1` 为显式开启） / `bridge_hook_telemetry`、`http_access_log_mode`、`http_access_log_ignore`、`http_slow_ms`、`allow_unsigned_plugins`（迁移 053：均为 `NULL` 表示未配置并回落对应环境变量；管理员在「站点信息设置 → 运行时策略」配置。`http_access_log_mode` 取值 `off`/`errors`/`all`，不是布尔）。
+站点设置。`id` / `site_name` / `slogan` / `logo_url` / `community_registry_url`（迁移 051，未配置时回落 `PLUGIN_COMMUNITY_REGISTRY_URL`） / `community_install_enabled`（迁移 052：`NULL` 表示未配置并默认开启，`0` 为显式关闭，`1` 为显式开启；环境变量不再控制） / `bridge_hook_telemetry`、`http_access_log_mode`、`http_access_log_ignore`、`http_slow_ms`、`allow_unsigned_plugins`（迁移 053：均为 `NULL` 表示未配置并使用历史默认；管理员在「站点信息设置 → 运行时策略」配置。`http_access_log_mode` 取值 `off`/`errors`/`all`，不是布尔） / `mode_packs_enabled`、`mode_pack_show_xuean_tab`（迁移 068：`NULL` 表示未配置，两者默认关闭）。
 
 ### `system_resources`
 
@@ -535,12 +535,14 @@ MFE 远端登记。MFE 执行边界已移除，表保留作历史数据兼容。
 
 <!-- AUTO-GENERATED:table-inventory BEGIN -->
 
-共 **91** 张表（迁移 56 个，金样生成于 2026-11-15T07:17:47.233Z）。列清单为列名（类型与约束见迁移 SQL）：
+共 **104** 张表（迁移 69 个，金样生成于 2026-11-19T12:48:14.437Z）。列清单为列名（类型与约束见迁移 SQL）：
 
 - `_academic_year_backfill`: backfilled_at, id
 - `_class_passcode_encryption`: id, note
 - `_lesson_think_cleanup`: id, note
 - `_migrations`: applied_at, checksum, name
+- `activity_peer_reviews`: activity_id, comment, created_at, id, reviewee_id, reviewer_id, score
+- `activity_progress`: activity_id, graded_at, last_activity_at, nudge_count, nudged_at, progress_percent, score, self_eval_json, status, student_id, submission_json, verified
 - `agent_conversations`: content, conv_key, created_at, id, role
 - `ai_persona_governance`: description_en, description_zh, enabled, persona_id, preferred_provider_id
 - `ai_personas`: base_policy, created_at, default_for_role_json, icon, id, instruction_en, instruction_zh, max_turns, mode, name_en, name_zh, plugin_id, source, tool_policy_json, updated_at, visibility_json
@@ -563,6 +565,8 @@ MFE 远端登记。MFE 执行边界已移除，表保留作历史数据兼容。
 - `classroom_danmaku`: created_at, id, lesson_id, sender_id, sender_name, session_id, text, top_percent, type, voice_duration_seconds
 - `classroom_exit_tickets`: challenge_answer, core_answer, created_at, feedback, id, is_correct, lesson_id, puzzled_concept, rating, session_id, student_id, student_name, tier_level
 - `classroom_feed`: actor_id, actor_name, class_id, created_at, id, lesson_id, message, session_id, source, type
+- `classroom_message_receipts`: acked_at, message_id, user_id
+- `classroom_messages`: acked_at, attempts, channel, class_id, correlation_id, created_at, delivered_at, expires_at, id, lesson_id, msg_type, payload, sender_actor_id, sender_plugin_id, sender_role, seq, status, target_user_ids, updated_at
 - `classroom_pacing_signals`: created_at, id, segment_id, session_id, signal_type, student_id
 - `classroom_peer_badges`: badge_key, created_at, id, lesson_id, receiver_id, receiver_name, sender_id, sender_name, session_id
 - `classroom_peer_nominations`: created_at, honor_key, id, lesson_id, nominated_student_id, nominated_student_name, nominator_id, session_id
@@ -574,9 +578,12 @@ MFE 远端登记。MFE 执行边界已移除，表保留作历史数据兼容。
 - `classroom_sessions`: academic_year, checkin_code, class_id, created_at, current_segment_id, ended_at, focus_mode, id, lesson_id, settings_json, stage, started_at, teacher_id, teaching_mode_id
 - `client_sessions`: expires_at, id, session_data, updated_at
 - `computer_labs`: cols, created_at, id, room_number, rows
+- `course_enrollments`: class_id, course_id, enrolled_at, student_id
+- `courses`: created_at, description, id, owner_user_id, term, thumbnail, title, updated_at, visibility
 - `courseware`: created_at, entry, id, name, type, uuid
 - `courseware_attempt`: courseware_id, finished_at, id, started_at, status, student_id
 - `courseware_score_config`: auto_record_enabled, auto_record_min_completion, auto_record_strategy, courseware_id, courseware_name, lesson_id, raw_full_score, score_fields, score_policy, target_full_score, updated_at, weight_percentage
+- `credit_awards`: actor_id, class_id, created_at, delta_points, dimension_id, id, idempotency_key, point_log_id, reason, source, student_id
 - `demo_data_registry`: created_at, entity_id, entity_type
 - `events`: correlationId, id, lesson_id, payload, source, timestamp, type
 - `exam_scores`: academic_year, exam_id, notes, recorded_at, score, student_id
@@ -585,12 +592,16 @@ MFE 远端登记。MFE 执行边界已移除，表保留作历史数据兼容。
 - `file_assets`: access_scope, author_id, blob_id, course_id, created_at, deleted_at, id, lesson_id, metadata_json, mime, original_name, purpose
 - `file_blobs`: backend_id, created_at, id, ref_count, sha256, size_bytes, storage_key
 - `icebreaker_checkins`: checkin_date, class_id, created_at, id, lesson_id, mood, scope_key, student_id, updated_at
+- `lesson_activities`: config_json, created_at, due_at, group_mode, id, lesson_id, order_index, peer_review, release_at, required, rubric_json, submission_type, title, type, updated_at, visible
+- `lesson_activity_blocks`: block_type, content_json, created_at, id, lesson_id, order_index, updated_at
 - `lesson_checkins`: checked_in_at, lesson_id, student_id
+- `lesson_discussions`: activity_id, author_id, content, created_at, id, parent_id, updated_at
 - `lesson_preset_polls`: correct_option, created_at, id, lesson_id, options_json, question_type, sort_order, title, updated_at
 - `lesson_quiz_submissions`: answer, element_id, id, is_correct, lesson_id, score, student_id, student_name, submitted_at, time_spent_ms
-- `lessons`: content, created_at, creator_id, id, progress_conditions, progress_mode, source_package_hash, source_package_id, source_package_key, timeline, title, updated_at
+- `lessons`: content, course_id, created_at, creator_id, id, progress_conditions, progress_mode, source_package_hash, source_package_id, source_package_key, timeline, title, updated_at
 - `mfe_remotes`: created_at, entry, meta, name, updated_at
 - `pending_commands`: actor_id, command_type, created_at, id, payload
+- `pending_side_effects`: attempts, biz_key, correlation_id, created_at, id, last_error, max_attempts, next_retry_at, op, origin_actor_id, payload, resolved_at, source, status, updated_at
 - `plugin_assignment_files`: asset_id, assignment_id, deleted_at, id, mime, original_name, sha256, size, stored_path, student_id, submission_id, uploaded_at, version_id
 - `plugin_assignments`: allow_late, allow_link, allow_text, allowed_ext, class_id, created_at, created_by, description, due_at, element_id, id, instructions, lesson_id, max_file_size, max_files, peer_review_count, peer_review_due_at, peer_review_mode, peer_weight, status, teacher_weight, title, updated_at
 - `plugin_capability_grants`: approved_at, capability, plugin_key
@@ -607,10 +618,12 @@ MFE 远端登记。MFE 执行边界已移除，表保留作历史数据兼容。
 - `plugins`: created_at, execution_mode, file_path, id, loader_version, manifest, name, source_code, status, updated_at, version, zip_package
 - `processes`: created_at, id, logs, name, payload, plugin_id, state, status, task_type, updated_at
 - `question_bank_items`: answer_key_json, config_json, created_at, difficulty, id, owner_id, stem, tags_json, type, updated_at, visibility
+- `reward_catalog`: available_from, available_until, color, cost_points, created_at, description, eligibility_json, icon, id, name, name_en, redeemed_count, sort_order, status, stock, updated_at
+- `reward_redemptions`: actor_id, balance_after, balance_before, class_id, cost_points, created_at, id, idempotency_key, point_log_id, reason, reward_id, reward_name, status, student_id
 - `schedules`: academic_year, class_id, created_at, id, lesson_id, notes, scheduled_date, status, time_slot
 - `segment_gate_overrides`: actor_id, created_at, lesson_id, reason, segment_id, student_id
 - `segment_visits`: entered_at, id, left_at, lesson_id, segment_id, student_id
-- `site_settings`: academic_start_month, allow_unsigned_plugins, bridge_hook_telemetry, community_install_enabled, community_registry_url, current_academic_year, default_theme_id, file_storage_config, http_access_log_ignore, http_access_log_mode, http_slow_ms, id, logo_url, logout_clear_site_data, site_name, slogan, upload_max_file_mb
+- `site_settings`: academic_start_month, allow_public_student_lookup, allow_unsigned_plugins, bridge_hook_telemetry, community_install_enabled, community_registry_url, current_academic_year, default_theme_id, file_storage_config, http_access_log_ignore, http_access_log_mode, http_slow_ms, id, logo_url, logout_clear_site_data, mode_pack_show_xuean_tab, mode_packs_enabled, site_name, slogan, upload_max_file_mb
 - `student_lesson_progress`: academic_year, assigned_at, completed, completed_segments, lesson_id, progress_percent, student_id, verified, verified_progress_percent
 - `student_point_logs`: class_id, created_at, delta_points, dimension_id, id, plugin_id, reason, student_id
 - `student_read_notifications`: created_at, notification_id, student_id
