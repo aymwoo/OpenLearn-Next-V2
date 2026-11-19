@@ -1,10 +1,11 @@
 import { useState, useEffect, useMemo, type Dispatch, type SetStateAction } from 'react';
 import type { StudentType, Lesson } from '../../types/app';
-import { StudentCheckinPanel } from './StudentCheckinPanel';
 import { StudentLessonHeader } from './StudentLessonHeader';
-import { StudentLessonContentPanel } from './StudentLessonContentPanel';
-import { StudentLessonInteractionPanel } from './StudentLessonInteractionPanel';
 import { ExtensionPointRenderer } from '../../plugin-host/extension-point-renderer';
+import { resolveStudentClassroomMode } from './mode-classroom/resolveStudentClassroomMode';
+import { guardStudentFlow } from './mode-classroom/studentFlowGuard';
+import { WhiteboardStudentClassroom } from './mode-classroom/WhiteboardStudentClassroom';
+import { XueanStudentClassroom } from './mode-classroom/XueanStudentClassroom';
 import { SegmentGateBanner } from './SegmentGateBanner';
 import { useSegmentAccess } from './useSegmentAccess';
 import { StudentIcebreakerModal } from './StudentIcebreakerModal';
@@ -73,27 +74,13 @@ export function StudentLessonView(props: StudentLessonViewProps) {
     setSelectedLesson,
     lessons,
     selectedLesson,
-    studentFullscreenPanel,
-    setStudentFullscreenPanel,
     timelineSegments,
     lang,
     activeSegmentId,
     setActiveSegmentId,
-    localProgressPercent,
-    setLocalProgressPercent,
-    updateStudentProgress,
-    isStudentLessonContentCollapsed,
-    setIsStudentLessonContentCollapsed,
-    studentLessonTab,
-    setStudentLessonTab,
     elements,
     activeRole,
     fetchElements,
-    currentVfsParent,
-    setCurrentVfsParent,
-    vfsNodes,
-    studentSelectedCourseware,
-    setStudentSelectedCourseware,
     addToast,
   } = props;
   const segmentAccess = useSegmentAccess(selectedLesson, activeSegmentId);
@@ -115,7 +102,7 @@ export function StudentLessonView(props: StudentLessonViewProps) {
   // 学生不自建流程引擎：用宿主现成的 activeSegmentId/timelineSegments 快照 +
   // 命令总线的 sendMessage 动作，驱动学案/Moodle 学生视图。
   const studentHost = useOptionalPluginHost();
-  const activeSegment = (timelineSegments as Array<{ id: string; type?: string }> | undefined)?.find(
+  const activeSegment = (timelineSegments as Array<{ id: string; type?: string; title?: string }> | undefined)?.find(
     (s) => s.id === activeSegmentId,
   );
   const segmentType = isModePacksEnabled() ? normalizeSegmentType(activeSegment?.type) : activeSegment?.type;
@@ -212,7 +199,7 @@ export function StudentLessonView(props: StudentLessonViewProps) {
     ],
   );
 
-  const studentFlowController = {
+  const studentFlowController = guardStudentFlow({
     snapshot: {
       lessonId: selectedLesson,
       classId: effectiveClassId,
@@ -223,23 +210,11 @@ export function StudentLessonView(props: StudentLessonViewProps) {
       onlineStudentIds: [],
       attempts: [],
     },
-    setActiveSegment: async (segmentId: string) => {
-      if (!selectedLesson) throw new Error('sendMessage failed: no lesson');
-      const res = await fetch(`/api/classroom/sessions/${encodeURIComponent(selectedLesson)}/segment`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ activeSegmentId: segmentId }),
-      });
-      if (!res.ok) throw new Error(`setActiveSegment rejected: HTTP ${res.status}`);
+    setActiveSegment() {
+      /* guardStudentFlow 会替换；这里不再请求全班环节接口 */
     },
-    advanceStage: async (stage: string) => {
-      if (!selectedLesson) throw new Error('advanceStage failed: no lesson');
-      const res = await fetch(`/api/classroom/sessions/${encodeURIComponent(selectedLesson)}/stage`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ stage, classId: effectiveClassId }),
-      });
-      if (!res.ok) throw new Error(`advanceStage rejected: HTTP ${res.status}`);
+    advanceStage() {
+      /* guardStudentFlow 会替换；这里不再请求全班阶段接口 */
     },
     sendMessage: async (input: {
       channel: string;
@@ -260,7 +235,7 @@ export function StudentLessonView(props: StudentLessonViewProps) {
     refresh: () => {
       if (selectedLesson) fetchElements(selectedLesson);
     },
-  };
+  });
 
   // Issue #131: 学生端破冰心情打卡状态
   const [icebreakerOpen, setIcebreakerOpen] = useState(false);
@@ -313,25 +288,23 @@ export function StudentLessonView(props: StudentLessonViewProps) {
     };
   }, [selectedLesson, activeSegmentId, setActiveSegmentId]);
 
+  const segmentForWorkspace = activeSegment
+    ? {
+        ...activeSegment,
+        type: isModePacksEnabled() ? normalizeSegmentType(activeSegment.type) : activeSegment.type,
+      }
+    : null;
   const workspace =
-    (primaryStudentWorkspace || matchingStudentMain.length > 0) && activeSegmentId && activeSegment ? (
+    segmentForWorkspace && activeSegmentId ? (
       <div
         data-testid="classroom-active-segment-student-main-container"
-        className={
-          primaryStudentWorkspace
-            ? segmentType === 'whiteboard'
-              ? 'flex flex-1 min-h-0 flex-col overflow-hidden bg-surface border border-theme rounded-xl shadow-sm text-main'
-              : 'flex-1 min-h-0 bg-surface border border-theme rounded-xl p-4 shadow-sm text-main overflow-auto'
-            : 'shrink-0 bg-surface border border-theme rounded-xl p-4 shadow-sm text-main overflow-auto'
-        }
+        className="flex min-h-0 flex-1 flex-col overflow-hidden text-main"
       >
         <WhiteboardHostBridgeProvider value={isModePacksEnabled() ? studentWhiteboardBridge : null}>
           <ExtensionPointRenderer
             slot="classroom.active_segment.student_main"
             slotProps={{
-              segment: isModePacksEnabled()
-                ? { ...activeSegment, type: normalizeSegmentType(activeSegment.type) }
-                : activeSegment,
+              segment: segmentForWorkspace,
               lessonId: selectedLesson,
               classId: effectiveClassId,
               lang,
@@ -342,8 +315,21 @@ export function StudentLessonView(props: StudentLessonViewProps) {
       </div>
     ) : null;
 
+  const lesson = lessons.find((item) => item.id === selectedLesson);
+  const classroomMode = resolveStudentClassroomMode(lesson?.delivery_mode);
+  const lessonTitle = lesson?.title || (lang === 'zh' ? '课堂' : 'Class');
+  const segmentTitle = segmentForWorkspace?.title?.trim() || '';
+  const topic = segmentTitle || lessonTitle;
+  const shellProps = {
+    props,
+    topic,
+    lessonTitle,
+    classId: effectiveClassId,
+    segmentAccess,
+  };
+
   return (
-    <div className="flex flex-col h-full space-y-4">
+    <div className="flex h-full min-h-0 flex-col gap-3">
       <StudentLessonHeader
         students={students}
         activeStudentId={activeStudentId}
@@ -355,89 +341,27 @@ export function StudentLessonView(props: StudentLessonViewProps) {
         selectedLesson={selectedLesson}
         addToast={addToast}
         lang={lang}
+        showTitle={false}
         onOpenIcebreaker={() => setIcebreakerOpen(true)}
       />
-      <StudentCheckinPanel lessonId={selectedLesson} lang={lang} addToast={addToast} />
       <SegmentGateBanner access={segmentAccess} lang={lang} />
-      {primaryStudentWorkspace && workspace ? (
-        workspace
+      {classroomMode === 'xuean' ? (
+        <XueanStudentClassroom
+          {...shellProps}
+          flow={studentFlowController}
+          blockSegmentContent={blockSegmentContent}
+          segment={segmentForWorkspace ?? { id: selectedLesson || 'xuean', type: 'xuean', title: topic }}
+        />
       ) : (
-        <>
-          {workspace}
-          <div className="flex-1 flex gap-6 min-h-0 bg-surface border border-theme rounded-xl p-4 shadow-sm text-main">
-            <StudentLessonContentPanel
-              students={students}
-              activeStudentId={activeStudentId}
-              isStudentLocked={isStudentLocked}
-              studentFullscreenPanel={studentFullscreenPanel}
-              setStudentFullscreenPanel={setStudentFullscreenPanel}
-              timelineSegments={timelineSegments}
-              lang={lang}
-              activeSegmentId={activeSegmentId}
-              setActiveSegmentId={setActiveSegmentId}
-              localProgressPercent={localProgressPercent}
-              setLocalProgressPercent={setLocalProgressPercent}
-              updateStudentProgress={updateStudentProgress}
-              selectedLesson={selectedLesson}
-              lessons={lessons}
-              isStudentLessonContentCollapsed={isStudentLessonContentCollapsed}
-              addToast={addToast}
-              segmentAccess={segmentAccess}
-            />
-            <StudentLessonInteractionPanel
-              isStudentLocked={isStudentLocked}
-              isNavigationLocked={isNavigationLocked}
-              isInteractionLocked={isInteractionLocked}
-              lockMode={lockMode}
-              studentLessonTab={studentLessonTab}
-              setStudentLessonTab={setStudentLessonTab}
-              isStudentLessonContentCollapsed={isStudentLessonContentCollapsed}
-              setIsStudentLessonContentCollapsed={setIsStudentLessonContentCollapsed}
-              lang={lang}
-              studentFullscreenPanel={studentFullscreenPanel}
-              setStudentFullscreenPanel={setStudentFullscreenPanel}
-              selectedLesson={selectedLesson}
-              elements={elements}
-              activeRole={activeRole}
-              activeSegmentId={activeSegmentId}
-              contentSegmentId={contentSegmentId}
-              blockSegmentContent={blockSegmentContent}
-              setActiveSegmentId={setActiveSegmentId}
-              fetchElements={fetchElements}
-              currentVfsParent={currentVfsParent}
-              setCurrentVfsParent={setCurrentVfsParent}
-              vfsNodes={vfsNodes}
-              studentSelectedCourseware={studentSelectedCourseware}
-              setStudentSelectedCourseware={setStudentSelectedCourseware}
-              activeStudentId={activeStudentId}
-              studentName={studentName}
-              classId={effectiveClassId}
-              addToast={addToast}
-            />
-          </div>
-        </>
+        <WhiteboardStudentClassroom
+          {...shellProps}
+          contentSegmentId={contentSegmentId}
+          blockSegmentContent={blockSegmentContent}
+          studentName={studentName}
+          primarySurface={primaryStudentWorkspace ? workspace : null}
+          extraSurface={!primaryStudentWorkspace && matchingStudentMain.length > 0 ? workspace : null}
+        />
       )}
-
-      {/* 随堂个人笔记增强挂件扩展 */}
-      <ExtensionPointRenderer
-        slot="student.lesson.notes_addon"
-        slotProps={{
-          lessonId: selectedLesson,
-          studentId: activeStudentId,
-          activeSegmentId,
-          lang,
-        }}
-      />
-
-      {/* 随堂学生工具箱扩展（科学计算器 / 发音词典 / 元素周期表等） */}
-      <ExtensionPointRenderer
-        slot="student.lesson.toolbox"
-        slotProps={{
-          lessonId: selectedLesson,
-          studentId: activeStudentId,
-          lang,
-        }}
-      />
 
       {/* Issue #131: 学生端课前破冰心情打卡弹窗 */}
       <StudentIcebreakerModal

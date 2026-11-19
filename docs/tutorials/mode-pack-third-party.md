@@ -60,8 +60,10 @@ host.registerExtensionPoint('classroom.active_segment.student_main', {
 1. Segment gates 由 lesson-engine 裁决；包内自报进度不得自动放行。
 2. 白板全屏同步 / `ClassroomSyncChannel` 行为保持。
 3. 成绩写回只经 grade-writer。
-4. 学生不能本地改全班 `activeSegment` / stage。
-5. 旧课无 `segment.type` → 视为白板包。
+4. 学生不能本地改全班 `activeSegment` / stage。学生页上的 `flow.setActiveSegment` / `advanceStage` 会直接拒绝，不发全班请求。
+5. 旧课无 `segment.type` → 视为白板包。没有 `delivery_mode` 的旧课，学生进课后也进白板页。
+
+学生进课后的页面按课节 `delivery_mode` 分开：白板课主面是画布，学案课主面是学案学生工作区。大纲、课件、作业、签到等在可关闭的侧栏里。详见 [classroom-flow-server.md](../reference/classroom-flow-server.md) §1.1.3。
 
 ## 6. 验收自检
 

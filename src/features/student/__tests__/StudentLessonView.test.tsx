@@ -52,16 +52,18 @@ describe('StudentLessonView', () => {
     expect(screen.getByText('Back to Dashboard')).toBeTruthy();
   });
 
-  it('renders the interactive whiteboard tab label from StudentLessonInteractionPanel', () => {
+  it('renders the whiteboard classroom instead of the old tab bar', () => {
     render(
       <Suspense fallback={null}>
         <StudentLessonView {...allProps} />
       </Suspense>,
     );
-    expect(screen.getByText('Interactive Whiteboard')).toBeTruthy();
+    expect(screen.getByTestId('student-whiteboard-classroom')).toBeTruthy();
+    expect(screen.getByTestId('student-learning-topic').textContent).toBe('Math');
+    expect(screen.queryByText('Interactive Whiteboard')).toBeNull();
   });
 
-  it('keeps the native lesson panel when a non-primary student workspace is registered', () => {
+  it('keeps the native whiteboard canvas when a non-primary student workspace is registered', () => {
     const host = {
       getExtensions: (slot: string) =>
         slot === 'classroom.active_segment.student_main'
@@ -85,6 +87,7 @@ describe('StudentLessonView', () => {
         />
       </PluginHostProvider>,
     );
-    expect(screen.getByText('Interactive Whiteboard')).toBeTruthy();
+    expect(screen.getByTestId('student-whiteboard-classroom')).toBeTruthy();
+    expect(screen.queryByText('Interactive Whiteboard')).toBeNull();
   });
 });

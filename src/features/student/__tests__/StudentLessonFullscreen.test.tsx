@@ -23,10 +23,12 @@
  *   · 仅桌面端显示 → `hidden md:block`（与 `StudentAssignmentQuestionPanel` 同款写法）
  *   · 全宽度显示   → 不带任何 display 类
  *
- * 本文件在**组件层**复核这套语义，并按窄屏 / 桌面端两个宽度分别断言。
+ * 双栏 class 契约仍由 `studentFullscreenLayout.test.ts` 锁定。
+ * 学生进课后不再默认并排两栏：主学习面必须始终挂上，不能再带
+ * 「hidden + md:block」那组会在桌面端互相覆盖的类。大纲只在侧栏打开时出现。
  */
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { render, screen, cleanup } from '@testing-library/react';
+import { render, screen, cleanup, fireEvent } from '@testing-library/react';
 import { Suspense } from 'react';
 import type { StudentType, Lesson } from '../../../types/app';
 import { StudentLessonView } from '../StudentLessonView';
@@ -75,114 +77,35 @@ function makeProps(overrides: Partial<StudentLessonViewProps> = {}): StudentLess
   };
 }
 
-/** 取出双栏容器下的两个栏：[Lesson Content 栏, 交互区栏]。 */
-function getPanels(props: Partial<StudentLessonViewProps> = {}): HTMLElement[] {
-  const { unmount } = render(
-    <Suspense fallback={null}>
-      <StudentLessonView {...makeProps(props)} />
-    </Suspense>,
-  );
-  const content = screen.getByTestId('student-lesson-content-panel');
-  const interaction = screen.getByTestId('student-lesson-interaction-panel');
-  // 立即卸载：避免同一用例内多次渲染时 getByTestId 命中多个节点
-  unmount();
-  return [content, interaction];
-}
-
-function classes(el: Element): string[] {
-  return el.className.split(/\s+/);
-}
-
-/**
- * 复刻 Tailwind v4 的实际级联（实测），分别判定两个宽度下的可见性。
- *
- * `.hidden { display:none }` 在同 `@layer utilities` 内早于
- * `@media (min-width:48rem) { .md\:block { display:block } }`，
- * 故桌面端 `md:block` 胜出；窄屏只有 `.hidden` 生效。
- */
-function visibility(el: Element): { narrow: boolean; desktop: boolean } {
-  const cls = classes(el);
-  const hasHidden = cls.includes('hidden');
-  const hasMdBlock = cls.includes('md:block');
-  return {
-    narrow: hasHidden,
-    desktop: hasMdBlock ? false : hasHidden,
-  };
-}
-
-describe('Issue IKVSIN：学生端「全屏」按钮的显隐语义', () => {
-  it('右栏点「全屏」时，Lesson Content 栏在桌面端必须被隐藏', () => {
-    const [contentPanel] = getPanels({ studentFullscreenPanel: 'right' });
-    expect(visibility(contentPanel).desktop).toBe(true);
+describe('学生白板页主学习面不被全屏类覆盖', () => {
+  it('默认主画布不带 hidden 与 md:block 的冲突组合', () => {
+    render(
+      <Suspense fallback={null}>
+        <StudentLessonView {...makeProps()} />
+      </Suspense>,
+    );
+    const panel = screen.getByTestId('student-lesson-interaction-panel');
+    const cls = panel.className.split(/\s+/);
+    expect(panel.getAttribute('data-chrome')).toBe('surface');
+    expect(cls.includes('hidden') && cls.includes('md:block')).toBe(false);
+    expect(screen.getByTestId('lazy-whiteboard')).toBeTruthy();
+    expect(screen.queryByTestId('student-lesson-content-panel')).toBeNull();
   });
 
-  it('右栏点「全屏」时，Lesson Content 栏在窄屏也必须被隐藏', () => {
-    const [contentPanel] = getPanels({ studentFullscreenPanel: 'right' });
-    expect(visibility(contentPanel).narrow).toBe(true);
-  });
+  it('大纲侧栏打开时内容区不用 md:block，关掉后画布还在', () => {
+    render(
+      <Suspense fallback={null}>
+        <StudentLessonView {...makeProps()} />
+      </Suspense>,
+    );
+    fireEvent.click(screen.getByTestId('student-tool-outline'));
+    const content = screen.getByTestId('student-lesson-content-panel');
+    expect(content.className.split(/\s+/)).not.toContain('md:block');
+    expect(screen.getByTestId('student-learning-topic').isConnected).toBe(true);
 
-  it('左栏点「全屏」时，交互区在桌面端必须被隐藏', () => {
-    const [, interactionPanel] = getPanels({ studentFullscreenPanel: 'left' });
-    expect(visibility(interactionPanel).desktop).toBe(true);
-  });
-
-  it('「全宽度隐藏」的栏不得携带 md:block（IKVSIN 核心回归点）', () => {
-    // 右栏全屏 ⇒ 内容栏「所有宽度都隐藏」
-    const [contentWhenRight] = getPanels({ studentFullscreenPanel: 'right' });
-    expect(classes(contentWhenRight)).toContain('hidden');
-    expect(classes(contentWhenRight)).not.toContain('md:block');
-
-    // 折叠态 ⇒ 内容栏「所有宽度都隐藏」
-    const [contentWhenCollapsed] = getPanels({
-      studentFullscreenPanel: 'none',
-      isStudentLessonContentCollapsed: true,
-    });
-    expect(classes(contentWhenCollapsed)).toContain('hidden');
-    expect(classes(contentWhenCollapsed)).not.toContain('md:block');
-
-    // 左栏全屏 ⇒ 交互区「所有宽度都隐藏」
-    const [, interactionWhenLeft] = getPanels({ studentFullscreenPanel: 'left' });
-    expect(classes(interactionWhenLeft)).toContain('hidden');
-    expect(classes(interactionWhenLeft)).not.toContain('md:block');
-  });
-
-  it('默认态（panel=none）且课程内容展开时，左栏桌面端可见、窄屏隐藏', () => {
-    const [contentPanel] = getPanels({ studentFullscreenPanel: 'none', isStudentLessonContentCollapsed: false });
-    expect(visibility(contentPanel).desktop).toBe(false);
-    expect(visibility(contentPanel).narrow).toBe(true);
-  });
-
-  it('课程内容折叠态（collapsed=true）时，左栏在桌面端被隐藏', () => {
-    const [contentPanel] = getPanels({ studentFullscreenPanel: 'none', isStudentLessonContentCollapsed: true });
-    expect(visibility(contentPanel).desktop).toBe(true);
-  });
-
-  it('左栏全屏（panel=left）时左栏占满宽度', () => {
-    const [contentPanel] = getPanels({ studentFullscreenPanel: 'left' });
-    expect(classes(contentPanel)).toContain('w-full');
-  });
-
-  it('右栏全屏（panel=right）时交互区占满宽度', () => {
-    const [, interactionPanel] = getPanels({ studentFullscreenPanel: 'right' });
-    expect(classes(interactionPanel)).toContain('w-full');
-  });
-
-  it('任何状态下都不会出现「两个栏同时隐藏」的空白页', () => {
-    for (const state of ['none', 'left', 'right'] as const) {
-      for (const collapsed of [false, true]) {
-        const [contentPanel, interactionPanel] = getPanels({
-          studentFullscreenPanel: state,
-          isStudentLessonContentCollapsed: collapsed,
-        });
-        const content = visibility(contentPanel);
-        const interaction = visibility(interactionPanel);
-        expect(content.desktop && interaction.desktop, `state=${state} collapsed=${collapsed} 桌面端两栏同时隐藏`).toBe(
-          false,
-        );
-        expect(content.narrow && interaction.narrow, `state=${state} collapsed=${collapsed} 窄屏两栏同时隐藏`).toBe(
-          false,
-        );
-      }
-    }
+    fireEvent.click(screen.getByTestId('student-tool-drawer-close'));
+    expect(screen.queryByTestId('student-lesson-content-panel')).toBeNull();
+    expect(screen.getByTestId('lazy-whiteboard').isConnected).toBe(true);
+    expect(screen.getByTestId('student-learning-topic').isConnected).toBe(true);
   });
 });

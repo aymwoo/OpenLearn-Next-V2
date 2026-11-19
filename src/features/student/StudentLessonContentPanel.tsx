@@ -25,6 +25,8 @@ export interface StudentLessonContentPanelProps {
   isStudentLessonContentCollapsed?: boolean;
   addToast?: (title: string, description: string, type: string) => void;
   segmentAccess?: SegmentAccessState;
+  /** split：与交互区并排。drawer：放进可关闭侧栏，始终占满侧栏宽度。 */
+  embed?: 'split' | 'drawer';
 }
 
 export function StudentLessonContentPanel(props: StudentLessonContentPanelProps) {
@@ -45,6 +47,7 @@ export function StudentLessonContentPanel(props: StudentLessonContentPanelProps)
     isStudentLessonContentCollapsed,
     addToast,
     segmentAccess,
+    embed = 'split',
   } = props;
 
   // 全班共用教师推进的环节。学生点其他环节只提示跟随，不改自己的指针。
@@ -56,30 +59,36 @@ export function StudentLessonContentPanel(props: StudentLessonContentPanelProps)
   return (
     <div
       data-testid="student-lesson-content-panel"
-      className={`${resolveContentPanelClass(studentFullscreenPanel, isStudentLessonContentCollapsed)} border-gray-100 pr-4 overflow-y-auto transition-all duration-300`}
+      className={
+        embed === 'drawer'
+          ? 'w-full min-h-0 overflow-y-auto'
+          : `${resolveContentPanelClass(studentFullscreenPanel, isStudentLessonContentCollapsed)} border-gray-100 pr-4 overflow-y-auto transition-all duration-300`
+      }
     >
       <div className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-4 flex items-center justify-between pointer-events-auto shrink-0 select-none border-b border-gray-100 pb-2">
         <span className="flex items-center gap-1">
           <BookOpen size={14} className="text-indigo-500" /> Lesson Content (课程内容)
         </span>
-        <button
-          data-testid="student-content-fullscreen-toggle"
-          onClick={() => setStudentFullscreenPanel((p) => (p === 'left' ? 'none' : 'left'))}
-          className="p-1 hover:bg-gray-100 text-subtle hover:text-main rounded transition-colors cursor-pointer flex items-center gap-1"
-          title={studentFullscreenPanel === 'left' ? '退出全屏' : '全屏'}
-        >
-          {studentFullscreenPanel === 'left' ? (
-            <>
-              <Minimize2 size={13} />
-              <span className="text-xs font-medium">退出全屏</span>
-            </>
-          ) : (
-            <>
-              <Maximize2 size={13} />
-              <span className="text-xs font-medium">全屏</span>
-            </>
-          )}
-        </button>
+        {embed === 'split' ? (
+          <button
+            data-testid="student-content-fullscreen-toggle"
+            onClick={() => setStudentFullscreenPanel((p) => (p === 'left' ? 'none' : 'left'))}
+            className="p-1 hover:bg-gray-100 text-subtle hover:text-main rounded transition-colors cursor-pointer flex items-center gap-1"
+            title={studentFullscreenPanel === 'left' ? '退出全屏' : '全屏'}
+          >
+            {studentFullscreenPanel === 'left' ? (
+              <>
+                <Minimize2 size={13} />
+                <span className="text-xs font-medium">退出全屏</span>
+              </>
+            ) : (
+              <>
+                <Maximize2 size={13} />
+                <span className="text-xs font-medium">全屏</span>
+              </>
+            )}
+          </button>
+        ) : null}
       </div>
       <div className="prose prose-sm prose-indigo max-w-none">
         {/* Timeline Segments (Only when student is unlocked) */}

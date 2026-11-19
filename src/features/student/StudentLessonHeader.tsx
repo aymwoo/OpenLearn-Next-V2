@@ -18,6 +18,8 @@ export interface StudentLessonHeaderProps {
   addToast?: (title: string, description: string, type: string) => void;
   /** Issue #131: 打开课前心情打卡弹窗 */
   onOpenIcebreaker?: () => void;
+  /** 课堂页把课题放到主学习区的标题上，顶栏不再重复。 */
+  showTitle?: boolean;
 }
 
 export function StudentLessonHeader(props: StudentLessonHeaderProps) {
@@ -33,6 +35,7 @@ export function StudentLessonHeader(props: StudentLessonHeaderProps) {
     lang = 'zh',
     addToast,
     onOpenIcebreaker,
+    showTitle = true,
   } = props;
 
   // Issue #109: 课堂仍在进行时，离开课堂给一条「可随时返回」的提示
@@ -109,9 +112,11 @@ export function StudentLessonHeader(props: StudentLessonHeaderProps) {
             <span>{lang === 'zh' ? '心情打卡' : 'Mood Check-in'}</span>
           </button>
         )}
-        <h2 className="text-xl font-bold text-gray-800 dark:text-gray-100">
-          {lessons.find((l) => l.id === selectedLesson)?.title}
-        </h2>
+        {showTitle ? (
+          <h2 className="text-xl font-bold text-gray-800 dark:text-gray-100">
+            {lessons.find((l) => l.id === selectedLesson)?.title}
+          </h2>
+        ) : null}
       </div>
     </div>
   );
