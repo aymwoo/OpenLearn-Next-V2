@@ -129,7 +129,8 @@ describe('LiveClassroomView - Student Pop-up & Sync', () => {
     expect(screen.queryByText('👨‍🏫 教师模式')).toBeNull();
     expect(screen.queryByText('🎓 学生模式')).toBeNull();
 
-    // New independent tab button should exist
+    // New independent tab button should exist inside 更多
+    fireEvent.click(screen.getByTestId('teacher-whiteboard-more'));
     const tabButton = screen.getByRole('button', { name: /学生视角预览 \(独立Tab\)/ });
     expect(tabButton).toBeTruthy();
   });
@@ -147,6 +148,7 @@ describe('LiveClassroomView - Student Pop-up & Sync', () => {
       </AppDataProvider>,
     );
 
+    fireEvent.click(screen.getByTestId('teacher-whiteboard-more'));
     const tabButton = screen.getByRole('button', { name: /学生视角预览 \(独立Tab\)/ });
     fireEvent.click(tabButton);
 
@@ -217,6 +219,7 @@ describe('LiveClassroomView - Student Pop-up & Sync', () => {
       </AppDataProvider>,
     );
 
+    fireEvent.click(screen.getByTestId('teacher-whiteboard-more'));
     const tabButton = screen.getByRole('button', { name: /学生视角预览 \(独立Tab\)/ });
     fireEvent.click(tabButton);
 
@@ -405,8 +408,7 @@ describe('LiveClassroomView - Student Pop-up & Sync', () => {
       </AppDataProvider>,
     );
 
-    // Topbar title is "🔴 在线课堂"
-    expect(screen.getByText('🔴 在线课堂')).toBeTruthy();
+    expect(screen.getByTestId('teacher-learning-topic').textContent).toContain('物理探究实验课');
     expect(screen.queryByText(/智能授课工作流控制中心/)).toBeNull();
 
     // Read-only class badge
@@ -537,7 +539,7 @@ describe('LiveClassroomView - Student Pop-up & Sync', () => {
 
     // 教师显式「继续上课」后才进授课视图
     fireEvent.click(screen.getByRole('button', { name: /继续上课/ }));
-    expect(await screen.findByText('🔴 在线课堂')).toBeTruthy();
+    expect(await screen.findByTestId('teacher-learning-topic')).toBeTruthy();
     expect(screen.queryByTestId('in-progress-session-list')).toBeNull();
     appStore.setState({ liveClassSelectedClassId: null });
   });
@@ -624,7 +626,7 @@ describe('LiveClassroomView - Student Pop-up & Sync', () => {
     // 第一次进入：先看到会话列表
     expect(await screen.findByTestId('in-progress-session-list')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: /继续上课/ }));
-    expect(await screen.findByText('🔴 在线课堂')).toBeTruthy();
+    expect(await screen.findByTestId('teacher-learning-topic')).toBeTruthy();
 
     // 模拟刷新 / 切标签页回来：卸载后用同样的 props 重新挂载
     first.unmount();
@@ -634,9 +636,29 @@ describe('LiveClassroomView - Student Pop-up & Sync', () => {
       </AppDataProvider>,
     );
 
-    expect(await screen.findByText('🔴 在线课堂')).toBeTruthy();
+    expect(await screen.findByTestId('teacher-learning-topic')).toBeTruthy();
     expect(screen.queryByTestId('in-progress-session-list')).toBeNull();
     appStore.setState({ liveClassSelectedClassId: null });
+  });
+
+  it('白板课默认不把次要按钮钉在主界面，打开后面板仍能到达', async () => {
+    render(
+      <AppDataProvider value={defaultProps as any}>
+        <LiveClassroomView initialPortalOpen={false} />
+      </AppDataProvider>,
+    );
+
+    expect(screen.getByTestId('teacher-learning-topic')).toBeTruthy();
+    expect(screen.getByRole('button', { name: /全班专注/ })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: '返回门户' })).toBeNull();
+    expect(screen.queryByRole('button', { name: '课堂异常告警中心' })).toBeNull();
+    expect(screen.queryByText('极速投票')).toBeNull();
+    expect(screen.queryByText('学生提交数据')).toBeNull();
+
+    fireEvent.click(screen.getByTestId('teacher-whiteboard-more'));
+    expect(screen.getByRole('button', { name: '返回门户' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: '课堂异常告警中心' })).toBeTruthy();
+    expect(screen.getByTestId('teacher-learning-topic').isConnected).toBe(true);
   });
 
   it('returns to the entry portal where an in-progress class cannot be changed', async () => {
@@ -676,6 +698,7 @@ describe('LiveClassroomView - Student Pop-up & Sync', () => {
       </AppDataProvider>,
     );
 
+    fireEvent.click(screen.getByTestId('teacher-whiteboard-more'));
     fireEvent.click(screen.getByRole('button', { name: '返回门户' }));
     expect(await screen.findByTestId('portal-class-lock-hint')).toBeTruthy();
     const other = screen.getByRole('button', { name: /高二2班/ });
@@ -706,6 +729,7 @@ describe('LiveClassroomView - Student Pop-up & Sync', () => {
       </AppDataProvider>,
     );
 
+    fireEvent.click(screen.getByTestId('teacher-whiteboard-more'));
     const selectEl = screen.getByRole('combobox');
     const switchBtn = screen.getByRole('button', { name: /切换/ });
 

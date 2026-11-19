@@ -16,6 +16,8 @@ export type Lesson = {
   enrollment_count?: number;
   creator_id?: string | null;
   creator_name?: string | null;
+  /** 课程交付模式。空值是升级前的旧课，按白板处理。 */
+  delivery_mode?: string | null;
 };
 
 export type TimelineSegment = {

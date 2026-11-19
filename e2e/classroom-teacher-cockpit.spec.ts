@@ -157,7 +157,7 @@ test.describe('教师端中控与白板多环节操控 E2E 测试 (Phase 2)', ()
 
       // 验证课中授课界面与中控导航挂载
       await expect(page.locator('#classroom-interactive-cockpit')).toBeVisible({ timeout: 15_000 });
-      await expect(page.getByTestId('classroom-stage-stepper')).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByTestId('teacher-current-stage')).toBeVisible({ timeout: 15_000 });
 
       // =========================================================================
       // 5. 测试教学步骤时间轴切换（环节 1 -> 环节 2）
@@ -211,6 +211,7 @@ test.describe('教师端中控与白板多环节操控 E2E 测试 (Phase 2)', ()
 
       // 恢复左侧边栏
       await expandLeftBtn.click();
+      await page.getByTestId('teacher-whiteboard-tools').click();
       await expect(page.getByTestId('classroom-stage-stepper')).toBeVisible();
 
       // 截图存盘：白板大纲与时间轴操控完成

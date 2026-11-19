@@ -33,11 +33,16 @@
 
 Manifest 贡献键：`contributes['mode.pack']`（见 `@openlearn/plugin-sdk` 的 `ModePackContribution`）。
 
-宿主灰度开关（默认关，零行为变化）：
+宿主灰度开关（默认关，只影响**没有学案交付模式**的课）：
 
 管理员在「站点信息设置 → 运行时策略」打开 Mode Pack。未配置时关闭。构建期变量和 `window` 调试旗标不再控制此开关。已打开的页面在重新获得焦点或刷新后生效，不需要重启进程。
 
-启用后宿主必须先调用 `normalizeSegmentType()`（空 type → `whiteboard`），再按 `segment.type` 匹配 Mode Pack / `classroom.active_segment.*`。
+课程交付模式写在课节 `lessons.delivery_mode`（`whiteboard` 或 `xuean`）。它不是门户 `teachingModeId`。
+
+- 未写入或 `whiteboard`：按白板。全局开关关闭时仍走既有白板中栏；开关打开时才进入白板 Mode Pack。
+- `xuean`：建课走学案向导（预习 / 研读 / 练习），上课注册并使用 `@openlearn/mode-xuean`。不需要再打开全局 Mode Pack 开关。
+
+启用 Mode Pack 路径后，宿主必须先调用 `normalizeSegmentType()`（空 type → `whiteboard`），再按 `segment.type` 匹配 Mode Pack / `classroom.active_segment.*`。学案课的环节类型使用 `xuean` 前缀。
 
 内置白板包 id：`@openlearn/mode-whiteboard`（`isDefault: true`，认领 `whiteboard`）。
 
@@ -71,6 +76,40 @@ flag 关闭 = 旧双编辑器路径，零行为变化。
 - Mode Pack 声明 `outlineContributionId`；课中侧栏按环节类型渲染白板页大纲或学案活动大纲。
 - flag 开时学生平行「学案」tab 默认隐藏；同一设置页可打开「显示学生平行学案页」。
 - `LiveClassroomView` 编排壳目标 ≤ ~1.5k LOC（逻辑外移到 hooks / 子组件）；第三方接入见 [mode-pack-third-party.md](../tutorials/mode-pack-third-party.md)。
+
+### 1.1.3 学生进课后的两套页面
+
+学生从看板进入课节后，`StudentLessonView` 读取该课 `lessons.delivery_mode`，用 `resolveStudentClassroomMode()` 选页面。未写入、空值或其他非 `xuean` 的值都进白板页。
+
+两套页面不是同一套双栏换皮：
+
+| 对比       | 白板页 `student-whiteboard-classroom`                                                        | 学案页 `student-xuean-classroom`                                                              |
+| ---------- | -------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| 怎么进来   | 交付模式为白板，或旧课没有该字段                                                             | 交付模式为 `xuean`                                                                            |
+| 主学习面   | 整幅白板画布（`@openlearn/mode-whiteboard` 的 primary 工作区命中时用它，否则直接挂现有画布） | 居中的学案正文（`@openlearn/mode-xuean` 的 `XueanStudentModeWorkspace` / `StudentXueanView`） |
+| 课题       | 页面主标题。有当前环节标题时用环节名，否则用课节名                                           | 同上，读的是学案正文而不是画布                                                                |
+| 侧栏工具   | 底部一排：大纲、课件、作业、签到、工具                                                       | 左侧竖排：环节、签到、笔记                                                                    |
+| 没有的东西 | 不再把大纲和画布并排占满首屏                                                                 | 没有白板标签栏，也不把画布当作主面                                                            |
+
+侧栏是页面内的 `<aside>`，用 `hidden` 关掉，不用模态对话框，所以关掉之后课题和主学习面仍可操作。点当前已打开的工具或侧栏里的「关闭」都会收起。大纲和环节列表只提示「请跟随课堂」，不改全班当前环节。
+
+学生页上的 `flow.setActiveSegment` / `flow.advanceStage` 在本地直接拒绝，不向全班环节或阶段接口发请求。本地指针只跟随课堂会话轮询（教师推进后的 `current_segment_id`）。环节门禁仍由 lesson-engine 决定。
+
+### 1.1.4 白板课堂的默认界面
+
+白板课（含没有 `delivery_mode` 的旧课）的教师端和学生端默认只留课题和画布。学案课的教师顶栏保持原来的一排按钮。
+
+教师端默认能看到：课节标题、班级、计时、全班专注 / 答题锁定、当前阶段。进行中的投票和抢答也留在这条上，方便当场结束。
+
+收进面板、点开才出现：
+
+| 入口             | 里面有什么                                                                                                                 |
+| ---------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| 顶栏「更多」     | 返回门户、会话档案、课中设置、切换课节、编辑、学生预览，以及告警、学情、协作、投屏、互评、家校通知、宏、硬件和插件快捷动作 |
+| 「课堂工具」     | 阶段切换、极速投票、抢答、通票、大屏展台、随机抽问、积分榜、节奏晴雨表                                                     |
+| 中栏「课堂面板」 | 演示白板、学生提交、作业成绩、随堂测验榜、环节工作区、完成授课                                                             |
+
+学生白板页默认只有画布、课题和一个「工具」按钮。大纲、课件、作业、签到、笔记都在这个菜单里，选中后打开侧栏，关掉侧栏画布还在。全屏同步仍走原来的 `ClassroomSyncChannel`，学生不能改全班环节或阶段。
 
 ---
 
@@ -262,7 +301,7 @@ interface ClassroomFlowController {
 }
 ```
 
-`primary: true` 且环节类型命中时，学生端用工作区替换原生内容面板。未声明 `primary` 的扩展叠在原生面板之上，不拿走白板和课件。学生端 `setActiveSegment` / `advanceStage` 调用既有的教师接口；学生会话会被拒绝，不会在本地改全班指针。`snapshot.stage` 来自当前课堂会话。
+`primary: true` 且环节类型命中时，白板课的学生主画布改用该工作区。未声明 `primary` 的扩展放在「工具」侧栏里，不盖住画布。学案课的主学习面固定是学案学生工作区。学生端 `setActiveSegment` / `advanceStage` 在页面内直接拒绝，不发全班环节或阶段请求，也不改本地指针；指针对齐只来自课堂会话轮询。`snapshot.stage` 来自当前课堂会话。
 
 ### 5.3 示例流程（学案模式）
 

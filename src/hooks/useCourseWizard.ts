@@ -1,12 +1,50 @@
 import { useState } from 'react';
+import {
+  resolveCourseDeliveryMode,
+  xueanActivityTypeForSegment,
+  type CourseDeliveryMode,
+} from '../../packages/core/plugin-host/course-delivery-mode';
 
 export interface DefaultWizardSegment {
   id: string;
   title: string;
-  type: 'intro' | 'lecture' | 'practice' | 'summary';
+  type: string;
   duration: string;
   color: string;
   notes: string;
+}
+
+export function getDefaultXueanTimeline(
+  lang: 'zh' | 'en',
+  idPrefix: 'seg-w' | 'seg-preset-' = 'seg-w',
+): DefaultWizardSegment[] {
+  const zh = lang === 'zh';
+  return [
+    {
+      id: `${idPrefix}1`,
+      title: zh ? '预习导读' : 'Preview reading',
+      type: 'xuean:preview',
+      duration: '8m',
+      color: 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100',
+      notes: zh ? '学生先读材料，标出不懂的地方' : 'Students read ahead and mark questions',
+    },
+    {
+      id: `${idPrefix}2`,
+      title: zh ? '学案研读' : 'Guided study',
+      type: 'xuean',
+      duration: '20m',
+      color: 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100',
+      notes: zh ? '按学案步骤完成任务并提交' : 'Work through the study guide and submit',
+    },
+    {
+      id: `${idPrefix}3`,
+      title: zh ? '巩固练习' : 'Practice',
+      type: 'xuean:drill',
+      duration: '12m',
+      color: 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100',
+      notes: zh ? '用练习检验是否读懂' : 'Check understanding with practice',
+    },
+  ];
 }
 
 export function getDefaultWizardTimeline(
@@ -68,7 +106,14 @@ export function useCourseWizard(options: UseCourseWizardOptions) {
   const [wizardCourseDescription, setWizardCourseDescription] = useState('');
   const [wizardCourseContent, setWizardCourseContent] = useState('');
   const [wizardCourseTimeline, setWizardCourseTimeline] = useState<any[]>(() => getDefaultWizardTimeline(lang));
+  const [wizardDeliveryMode, setWizardDeliveryModeState] = useState<CourseDeliveryMode>('whiteboard');
   const [wizardIsSubmitting, setWizardIsSubmitting] = useState(false);
+
+  const setWizardDeliveryMode = (mode: CourseDeliveryMode) => {
+    const next = resolveCourseDeliveryMode(mode);
+    setWizardDeliveryModeState(next);
+    setWizardCourseTimeline(next === 'xuean' ? getDefaultXueanTimeline(lang) : getDefaultWizardTimeline(lang));
+  };
   const [wizardIsGeneratingOutline, setWizardIsGeneratingOutline] = useState(false);
 
   /**
@@ -148,6 +193,7 @@ export function useCourseWizard(options: UseCourseWizardOptions) {
         body: JSON.stringify({
           title: wizardCourseTitle,
           content: displayContent,
+          deliveryMode: wizardDeliveryMode,
         }),
       });
 
@@ -160,11 +206,23 @@ export function useCourseWizard(options: UseCourseWizardOptions) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ timeline: wizardCourseTimeline }),
           });
+          if (wizardDeliveryMode === 'xuean') {
+            for (const segment of wizardCourseTimeline) {
+              await fetch(`/api/lessons/${newLessonId}/activities`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  type: xueanActivityTypeForSegment(segment?.type),
+                  title: segment?.title || (lang === 'zh' ? '学案活动' : 'Study activity'),
+                }),
+              });
+            }
+          }
         }
         await fetchLessons();
         if (newLessonId) {
           setSelectedLesson(newLessonId);
-          setTeacherTab('lesson_editor');
+          setTeacherTab(wizardDeliveryMode === 'xuean' ? 'xuean_editor' : 'lesson_editor');
         }
         addToast(
           lang === 'zh' ? '⭐ 课程发布成功' : '⭐ Course Deployed Successfully',
@@ -179,6 +237,7 @@ export function useCourseWizard(options: UseCourseWizardOptions) {
         setWizardCourseDescription('');
         setWizardCourseContent('');
         setWizardCourseTimeline(getDefaultWizardTimeline(lang));
+        setWizardDeliveryModeState('whiteboard');
         setWizardStep(1);
       } else {
         addToast('Error', 'SQLite save failed', 'warning');
@@ -206,6 +265,8 @@ export function useCourseWizard(options: UseCourseWizardOptions) {
     setWizardCourseContent,
     wizardCourseTimeline,
     setWizardCourseTimeline,
+    wizardDeliveryMode,
+    setWizardDeliveryMode,
     wizardIsSubmitting,
     setWizardIsSubmitting,
     wizardIsGeneratingOutline,

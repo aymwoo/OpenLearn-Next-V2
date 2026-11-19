@@ -22,6 +22,7 @@ import { useAppComposer } from './hooks/useAppComposer';
 import {
   getClientFeatureFlagVersion,
   refreshClientFeatureFlags,
+  setActiveCourseDeliveryMode,
   subscribeClientFeatureFlags,
 } from './features/classroom/mode-pack/flags';
 
@@ -49,6 +50,14 @@ export default function App() {
     setProfileOpen,
     lang,
   } = useAppComposer();
+
+  const lessonId = stageLessonParam || selectedLesson;
+  const activeLesson = lessons.find((lesson) => lesson.id === lessonId);
+  setActiveCourseDeliveryMode(activeLesson?.delivery_mode ?? null);
+
+  React.useEffect(() => {
+    return () => setActiveCourseDeliveryMode(null);
+  }, []);
 
   React.useEffect(() => {
     void refreshClientFeatureFlags();

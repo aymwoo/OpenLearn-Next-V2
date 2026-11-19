@@ -535,7 +535,7 @@ MFE 远端登记。MFE 执行边界已移除，表保留作历史数据兼容。
 
 <!-- AUTO-GENERATED:table-inventory BEGIN -->
 
-共 **104** 张表（迁移 69 个，金样生成于 2026-11-19T12:48:14.437Z）。列清单为列名（类型与约束见迁移 SQL）：
+共 **104** 张表（迁移 70 个，金样生成于 2026-11-19T14:57:57.433Z）。列清单为列名（类型与约束见迁移 SQL）：
 
 - `_academic_year_backfill`: backfilled_at, id
 - `_class_passcode_encryption`: id, note
@@ -598,7 +598,7 @@ MFE 远端登记。MFE 执行边界已移除，表保留作历史数据兼容。
 - `lesson_discussions`: activity_id, author_id, content, created_at, id, parent_id, updated_at
 - `lesson_preset_polls`: correct_option, created_at, id, lesson_id, options_json, question_type, sort_order, title, updated_at
 - `lesson_quiz_submissions`: answer, element_id, id, is_correct, lesson_id, score, student_id, student_name, submitted_at, time_spent_ms
-- `lessons`: content, course_id, created_at, creator_id, id, progress_conditions, progress_mode, source_package_hash, source_package_id, source_package_key, timeline, title, updated_at
+- `lessons`: content, course_id, created_at, creator_id, delivery_mode, id, progress_conditions, progress_mode, source_package_hash, source_package_id, source_package_key, timeline, title, updated_at
 - `mfe_remotes`: created_at, entry, meta, name, updated_at
 - `pending_commands`: actor_id, command_type, created_at, id, payload
 - `pending_side_effects`: attempts, biz_key, correlation_id, created_at, id, last_error, max_attempts, next_retry_at, op, origin_actor_id, payload, resolved_at, source, status, updated_at

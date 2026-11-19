@@ -172,16 +172,10 @@ describe('LiveClassroomView - classroom.active_segment.main extension slot', () 
       </PluginHostProvider>,
     );
 
-    // 1. Tab button should appear
-    await waitFor(() => {
-      expect(screen.getByTestId('teacher-active-segment-main-tab-btn')).toBeTruthy();
-    });
-
-    // 2. Hint banner on top of whiteboard should appear
-    expect(screen.getByTestId('classroom-active-segment-main-hint')).toBeTruthy();
-
-    // 3. Click tab button to switch to segment_main workspace
-    const tabBtn = screen.getByTestId('teacher-active-segment-main-tab-btn');
+    // 白板课把环节工作区收进「课堂面板」，不再在画布上钉提示条。
+    expect(screen.queryByTestId('classroom-active-segment-main-hint')).toBeNull();
+    fireEvent.click(await screen.findByTestId('teacher-whiteboard-panels'));
+    const tabBtn = await screen.findByTestId('teacher-active-segment-main-tab-btn');
     fireEvent.click(tabBtn);
 
     // 4. Extension component rendered

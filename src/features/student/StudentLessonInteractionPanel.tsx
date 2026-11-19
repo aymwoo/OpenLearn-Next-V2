@@ -49,6 +49,8 @@ export interface StudentLessonInteractionPanelProps {
   /** 当前课堂所属班级（白板内插件挂件的作用域） */
   classId?: string | null;
   addToast: (title: string, description: string, type: string) => void;
+  /** tabs：带标签栏的旧交互区。surface：只渲染当前标签的学习面，供课堂主区或侧栏使用。 */
+  chrome?: 'tabs' | 'surface';
 }
 
 export function StudentLessonInteractionPanel(props: StudentLessonInteractionPanelProps) {
@@ -81,6 +83,7 @@ export function StudentLessonInteractionPanel(props: StudentLessonInteractionPan
     studentName,
     classId,
     addToast,
+    chrome = 'tabs',
   } = props;
 
   const navigationLocked = isNavigationLocked ?? isStudentLocked;
@@ -131,100 +134,107 @@ export function StudentLessonInteractionPanel(props: StudentLessonInteractionPan
   return (
     <div
       data-testid="student-lesson-interaction-panel"
-      className={`${resolveInteractionPanelClass(studentFullscreenPanel, isStudentLessonContentCollapsed)} relative flex flex-col min-h-0 transition-all duration-300`}
+      data-chrome={chrome}
+      className={
+        chrome === 'surface'
+          ? 'relative flex min-h-0 flex-1 flex-col'
+          : `${resolveInteractionPanelClass(studentFullscreenPanel, isStudentLessonContentCollapsed)} relative flex flex-col min-h-0 transition-all duration-300`
+      }
     >
-      <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setIsStudentLessonContentCollapsed(!isStudentLessonContentCollapsed)}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-primary-theme/10 text-primary-theme rounded-lg hover:bg-primary-theme/20 transition-colors border border-primary-theme/20 cursor-pointer shadow-3xs"
-            title={isStudentLessonContentCollapsed ? '展开课程内容' : '折叠课程内容'}
-          >
-            <BookOpen size={13} className="text-primary-theme" />
-            <span>
-              {isStudentLessonContentCollapsed
-                ? lang === 'zh'
-                  ? '展开课程内容'
-                  : 'Expand Content'
-                : lang === 'zh'
-                  ? '折叠课程内容'
-                  : 'Collapse Content'}
-            </span>
-          </button>
-          <button
-            onClick={() => handleTabChange('whiteboard')}
-            className={tabButtonClass('whiteboard')}
-            title={
-              interactionLocked && lang === 'zh'
-                ? '锁定中：白板为只读跟随模式'
-                : navigationLocked && lang === 'zh'
-                  ? '答题锁定中：请在此页面完成作答'
-                  : undefined
-            }
-          >
-            Interactive Whiteboard
-            {interactionLocked && studentLessonTab === 'whiteboard' && (
-              <span className="ml-1.5 text-xs font-bold text-indigo-500">🔒 {lang === 'zh' ? '只读' : 'RO'}</span>
-            )}
-            {!interactionLocked && navigationLocked && studentLessonTab === 'whiteboard' && (
-              <span className="ml-1.5 text-xs font-bold text-amber-600">
-                ✏️ {lang === 'zh' ? '答题锁定' : 'Answering'}
-              </span>
-            )}
-          </button>
-          <button onClick={() => handleTabChange('courseware')} className={tabButtonClass('courseware')}>
-            Interactive Courseware Viewer
-          </button>
-          <button onClick={() => handleTabChange('assignment')} className={tabButtonClass('assignment')}>
-            {lang === 'zh' ? '作业提交与互评' : 'Assignments & Peer Reviews'}
-          </button>
-          {showParallelXueanTab && (
+      {chrome === 'tabs' ? (
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-2">
             <button
-              type="button"
-              data-testid="student-parallel-xuean-tab"
-              onClick={() => handleTabChange('xuean')}
-              className={tabButtonClass('xuean')}
-              title={lang === 'zh' ? '学案式课时包' : 'Xuean Lesson Package'}
+              onClick={() => setIsStudentLessonContentCollapsed(!isStudentLessonContentCollapsed)}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-primary-theme/10 text-primary-theme rounded-lg hover:bg-primary-theme/20 transition-colors border border-primary-theme/20 cursor-pointer shadow-3xs"
+              title={isStudentLessonContentCollapsed ? '展开课程内容' : '折叠课程内容'}
             >
-              <BookOpenCheck size={12} className="inline -mt-0.5 mr-1" />
-              {lang === 'zh' ? '学案' : 'Xuean'}
+              <BookOpen size={13} className="text-primary-theme" />
+              <span>
+                {isStudentLessonContentCollapsed
+                  ? lang === 'zh'
+                    ? '展开课程内容'
+                    : 'Expand Content'
+                  : lang === 'zh'
+                    ? '折叠课程内容'
+                    : 'Collapse Content'}
+              </span>
             </button>
-          )}
-        </div>
-
-        <div className="flex items-center gap-2">
-          {/* 学生端随堂工具扩展 */}
-          <ExtensionPointRenderer
-            slot="student.lesson.tool"
-            slotProps={{
-              lessonId: selectedLesson,
-              studentId: activeStudentId,
-              activeSegmentId,
-              lang,
-            }}
-            locked={interactionLocked}
-          />
-
-          <button
-            data-testid="student-interaction-fullscreen-toggle"
-            onClick={() => setStudentFullscreenPanel((p) => (p === 'right' ? 'none' : 'right'))}
-            className="p-1 hover:bg-gray-100 text-subtle hover:text-main rounded transition-colors cursor-pointer flex items-center gap-1"
-            title={studentFullscreenPanel === 'right' ? '退出全屏' : '全屏'}
-          >
-            {studentFullscreenPanel === 'right' ? (
-              <>
-                <Minimize2 size={13} />
-                <span className="text-xs font-medium">退出全屏</span>
-              </>
-            ) : (
-              <>
-                <Maximize2 size={13} />
-                <span className="text-xs font-medium">全屏</span>
-              </>
+            <button
+              onClick={() => handleTabChange('whiteboard')}
+              className={tabButtonClass('whiteboard')}
+              title={
+                interactionLocked && lang === 'zh'
+                  ? '锁定中：白板为只读跟随模式'
+                  : navigationLocked && lang === 'zh'
+                    ? '答题锁定中：请在此页面完成作答'
+                    : undefined
+              }
+            >
+              Interactive Whiteboard
+              {interactionLocked && studentLessonTab === 'whiteboard' && (
+                <span className="ml-1.5 text-xs font-bold text-indigo-500">🔒 {lang === 'zh' ? '只读' : 'RO'}</span>
+              )}
+              {!interactionLocked && navigationLocked && studentLessonTab === 'whiteboard' && (
+                <span className="ml-1.5 text-xs font-bold text-amber-600">
+                  ✏️ {lang === 'zh' ? '答题锁定' : 'Answering'}
+                </span>
+              )}
+            </button>
+            <button onClick={() => handleTabChange('courseware')} className={tabButtonClass('courseware')}>
+              Interactive Courseware Viewer
+            </button>
+            <button onClick={() => handleTabChange('assignment')} className={tabButtonClass('assignment')}>
+              {lang === 'zh' ? '作业提交与互评' : 'Assignments & Peer Reviews'}
+            </button>
+            {showParallelXueanTab && (
+              <button
+                type="button"
+                data-testid="student-parallel-xuean-tab"
+                onClick={() => handleTabChange('xuean')}
+                className={tabButtonClass('xuean')}
+                title={lang === 'zh' ? '学案式课时包' : 'Xuean Lesson Package'}
+              >
+                <BookOpenCheck size={12} className="inline -mt-0.5 mr-1" />
+                {lang === 'zh' ? '学案' : 'Xuean'}
+              </button>
             )}
-          </button>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {/* 学生端随堂工具扩展 */}
+            <ExtensionPointRenderer
+              slot="student.lesson.tool"
+              slotProps={{
+                lessonId: selectedLesson,
+                studentId: activeStudentId,
+                activeSegmentId,
+                lang,
+              }}
+              locked={interactionLocked}
+            />
+
+            <button
+              data-testid="student-interaction-fullscreen-toggle"
+              onClick={() => setStudentFullscreenPanel((p) => (p === 'right' ? 'none' : 'right'))}
+              className="p-1 hover:bg-gray-100 text-subtle hover:text-main rounded transition-colors cursor-pointer flex items-center gap-1"
+              title={studentFullscreenPanel === 'right' ? '退出全屏' : '全屏'}
+            >
+              {studentFullscreenPanel === 'right' ? (
+                <>
+                  <Minimize2 size={13} />
+                  <span className="text-xs font-medium">退出全屏</span>
+                </>
+              ) : (
+                <>
+                  <Maximize2 size={13} />
+                  <span className="text-xs font-medium">全屏</span>
+                </>
+              )}
+            </button>
+          </div>
         </div>
-      </div>
+      ) : null}
       {hideSegmentBody ? (
         <div className="flex-1 flex flex-col items-center justify-center p-6 text-amber-800 bg-amber-50/60 rounded-xl border border-amber-200 gap-3">
           <div className="text-sm font-semibold flex items-center gap-2">

@@ -327,7 +327,7 @@ test.describe('师生双端一镜到底课堂全生命周期黄金旅程 E2E 测
       // Stage 2: 课中授课与中控互动 (IN_CLASS_TEACHING)
       // =========================================================================
       logEvidence('Stage 2: 推进至课中授课白板');
-      await expect(teacherPage.getByTestId('classroom-stage-stepper')).toBeVisible({ timeout: 20_000 });
+      await expect(teacherPage.getByTestId('teacher-current-stage')).toBeVisible({ timeout: 20_000 });
       await expect(teacherPage.getByText('Live Broadcaster Connected')).toBeVisible({ timeout: 15_000 });
 
       // 1. 发起限时倒计时测试
@@ -342,6 +342,7 @@ test.describe('师生双端一镜到底课堂全生命周期黄金旅程 E2E 测
 
       // 2. 教师端发起极速投票 (Quick Poll)
       logEvidence('Stage 2: 教师发起极速投票');
+      await teacherPage.getByTestId('teacher-whiteboard-tools').click();
       const quickPollBtn = teacherPage.locator('button:has-text("极速投票")');
       await expect(quickPollBtn).toBeVisible();
       await quickPollBtn.click();
@@ -387,6 +388,7 @@ test.describe('师生双端一镜到底课堂全生命周期黄金旅程 E2E 测
 
       // 教师点击推进进入课后小结
       logEvidence('Stage 2 -> Stage 3: 教师点击推进进入课后');
+      await teacherPage.getByTestId('teacher-whiteboard-panels').click();
       const advanceToWrapupBtn = teacherPage.locator('button:has-text("完成授课，进入课后")');
       await expect(advanceToWrapupBtn).toBeVisible();
       await advanceToWrapupBtn.click();
@@ -491,9 +493,10 @@ test.describe('师生双端一镜到底课堂全生命周期黄金旅程 E2E 测
       const backToTeachingBtn = teacherPage.locator('button:has-text("返回课中白板")');
       await expect(backToTeachingBtn).toBeVisible();
       await backToTeachingBtn.click();
-      await expect(teacherPage.getByTestId('classroom-stage-stepper')).toBeVisible({ timeout: 15_000 });
+      await expect(teacherPage.getByTestId('teacher-current-stage')).toBeVisible({ timeout: 15_000 });
 
       // 再次推进至简报完成闭环
+      await teacherPage.getByTestId('teacher-whiteboard-panels').click();
       const advanceAgainBtn = teacherPage.locator('button:has-text("完成授课，进入课后")');
       await advanceAgainBtn.click();
       await expect(teacherPage.locator('button#post-class-advance-report-btn')).toBeVisible({ timeout: 15_000 });

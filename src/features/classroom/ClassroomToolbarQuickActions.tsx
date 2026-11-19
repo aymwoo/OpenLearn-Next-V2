@@ -19,6 +19,8 @@ export interface ClassroomToolbarQuickActionsProps {
   syncChannel: ClassroomSyncChannel | null;
   onlineStudentCount: number;
   onTimeRemainingChange: (timeRemaining: number, isRunning: boolean) => void;
+  /** 白板精简顶栏把计时留在外面，面板里不再重复。 */
+  showUtilities?: boolean;
 }
 
 export function ClassroomToolbarQuickActions({
@@ -36,6 +38,7 @@ export function ClassroomToolbarQuickActions({
   syncChannel,
   onlineStudentCount,
   onTimeRemainingChange,
+  showUtilities = true,
 }: ClassroomToolbarQuickActionsProps) {
   return (
     <div className="flex items-center gap-1.5 ml-auto border-l border-theme pl-2.5 shrink-0">
@@ -132,15 +135,19 @@ export function ClassroomToolbarQuickActions({
         </button>
       )}
       <ExtensionPointRenderer slot="classroom.toolbar.quick_action" slotProps={{ lessonId: selectedLesson, lang }} />
-      <EdgeLanStatusIndicator className="ml-1 shrink-0" />
-      <ClassroomCountdownWidget
-        variant="header"
-        lessonId={selectedLesson}
-        lang={lang}
-        syncChannel={syncChannel}
-        onlineStudentCount={onlineStudentCount}
-        onTimeRemainingChange={onTimeRemainingChange}
-      />
+      {showUtilities ? (
+        <>
+          <EdgeLanStatusIndicator className="ml-1 shrink-0" />
+          <ClassroomCountdownWidget
+            variant="header"
+            lessonId={selectedLesson}
+            lang={lang}
+            syncChannel={syncChannel}
+            onlineStudentCount={onlineStudentCount}
+            onTimeRemainingChange={onTimeRemainingChange}
+          />
+        </>
+      ) : null}
     </div>
   );
 }

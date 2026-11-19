@@ -148,7 +148,7 @@ test.describe('课堂意外刷新容灾与高级教学模态框 E2E 测试 (Phas
 
       // 验证授课界面就绪
       await expect(page.locator('#classroom-interactive-cockpit')).toBeVisible({ timeout: 15_000 });
-      await expect(page.getByTestId('classroom-stage-stepper')).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByTestId('teacher-current-stage')).toBeVisible({ timeout: 15_000 });
 
       // =========================================================================
       // 5. 测试课中意外刷新容灾恢复 (Session Resilience: page.reload())
@@ -157,7 +157,7 @@ test.describe('课堂意外刷新容灾与高级教学模态框 E2E 测试 (Phas
 
       // 刷新后验证自动恢复到课中授课状态，未退回课前准备
       await expect(page.locator('#classroom-interactive-cockpit')).toBeVisible({ timeout: 15_000 });
-      await expect(page.getByTestId('classroom-stage-stepper')).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByTestId('teacher-current-stage')).toBeVisible({ timeout: 15_000 });
 
       // 截图存盘：刷新恢复后现场
       const RESILIENCE_SHOT = path.join(screenshotDir, 'resilience_after_reload.png');
@@ -167,6 +167,7 @@ test.describe('课堂意外刷新容灾与高级教学模态框 E2E 测试 (Phas
       // =========================================================================
       // 6. 测试高级模态框 1：AI 实时学情预测 (MasteryPredictionModal)
       // =========================================================================
+      await page.getByTestId('teacher-whiteboard-more').click();
       const masteryBtn = page.locator('button[aria-label="AI 实时学情预测"]');
       await expect(masteryBtn).toBeVisible();
       await masteryBtn.click();
@@ -212,6 +213,7 @@ test.describe('课堂意外刷新容灾与高级教学模态框 E2E 测试 (Phas
       // =========================================================================
       // 9. 测试高级模态框 4：学生五维雷达成长档案 (StudentGrowthProfileModal)
       // =========================================================================
+      await page.getByTestId('teacher-whiteboard-tools').click();
       const rollcallBtn = page.locator('#classroom-interactive-cockpit button:has-text("随机抽问")');
       await expect(rollcallBtn).toBeVisible();
       await rollcallBtn.click();

@@ -169,11 +169,24 @@ afterEach(() => {
 
 /** 切到「学生提交数据」页（用正则匹配，避免 emoji 前缀影响精确匹配） */
 async function openSubmissionsTab() {
+  fireEvent.click(await screen.findByTestId('teacher-whiteboard-panels'));
   const tab = await screen.findByText(/学生提交数据/);
   fireEvent.click(tab);
 }
 
 describe('学生提交数据 · 录入成绩按钮可用性', () => {
+  it('提交和完成授课不钉在白板主界面，从课堂面板打开', async () => {
+    render(
+      <AppDataProvider value={baseProps as any}>
+        <LiveClassroomView initialPortalOpen={false} />
+      </AppDataProvider>,
+    );
+    expect(screen.queryByRole('button', { name: '学生提交数据' })).toBeNull();
+    fireEvent.click(await screen.findByTestId('teacher-whiteboard-panels'));
+    expect(screen.getByRole('button', { name: '学生提交数据' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: '完成授课，进入课后' })).toBeTruthy();
+  });
+
   it('【历史 bug】completed 状态的记录按钮可点击（同文件筛选下拉也认这个状态）', async () => {
     // 数据库实际写入的终态就是 completed
     attempts = [attempt({ attemptId: 'att-c', status: 'completed', score: 92 })];

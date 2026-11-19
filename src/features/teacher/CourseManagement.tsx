@@ -25,6 +25,7 @@ import { useAppStore } from '../../store/appStore';
 import { useAppData } from '../../context/AppDataContext';
 import { ExtensionPointRenderer } from '../../plugin-host/extension-point-renderer';
 import { extractCourseSummary } from '../../utils/courseSummary';
+import { resolveCourseDeliveryMode } from '../../../packages/core/plugin-host/course-delivery-mode';
 
 interface CourseStats {
   whiteboardCount: number;
@@ -74,6 +75,7 @@ export function CourseManagement() {
     effectiveSession?.subRole === 'administrator';
 
   const [filterMyLessons, setFilterMyLessons] = useState(false);
+  const [filterDeliveryMode, setFilterDeliveryMode] = useState<'all' | 'whiteboard' | 'xuean'>('all');
   const [deleteTarget, setDeleteTarget] = useState<Lesson | null>(null);
   const [deleteStats, setDeleteStats] = useState<CourseStats | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
@@ -245,6 +247,28 @@ export function CourseManagement() {
                   {lang === 'zh' ? '有内容' : 'Has Content'}
                 </button>
                 <button
+                  type="button"
+                  onClick={() => setFilterDeliveryMode(filterDeliveryMode === 'whiteboard' ? 'all' : 'whiteboard')}
+                  className={`px-2 py-1 text-xs font-bold rounded-md border transition-all cursor-pointer ${
+                    filterDeliveryMode === 'whiteboard'
+                      ? 'bg-sky-50 text-sky-800 border-sky-200'
+                      : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'
+                  }`}
+                >
+                  {lang === 'zh' ? '白板' : 'Whiteboard'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFilterDeliveryMode(filterDeliveryMode === 'xuean' ? 'all' : 'xuean')}
+                  className={`px-2 py-1 text-xs font-bold rounded-md border transition-all cursor-pointer ${
+                    filterDeliveryMode === 'xuean'
+                      ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                      : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'
+                  }`}
+                >
+                  {lang === 'zh' ? '学案' : 'Guided study'}
+                </button>
+                <button
                   onClick={() => setFilterThisMonth(!filterThisMonth)}
                   className={`px-2 py-1 text-xs font-bold rounded-md border transition-all cursor-pointer ${
                     filterThisMonth
@@ -302,6 +326,12 @@ export function CourseManagement() {
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
               {filteredLessons
                 .filter((lesson) => {
+                  if (
+                    filterDeliveryMode !== 'all' &&
+                    resolveCourseDeliveryMode(lesson.delivery_mode) !== filterDeliveryMode
+                  ) {
+                    return false;
+                  }
                   if (!filterMyLessons) return true;
                   return (
                     !lesson.creator_id ||
@@ -333,6 +363,22 @@ export function CourseManagement() {
                         </div>
                         <div className="flex items-center gap-1.5 shrink-0">
                           <ExtensionPointRenderer slot="course.card.badge" slotProps={{ course: lesson }} />
+                          <span
+                            data-testid="course-delivery-mode-badge"
+                            className={`text-xs font-medium px-1.5 py-0.5 rounded border ${
+                              resolveCourseDeliveryMode(lesson.delivery_mode) === 'xuean'
+                                ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                                : 'bg-sky-50 text-sky-800 border-sky-200'
+                            }`}
+                          >
+                            {resolveCourseDeliveryMode(lesson.delivery_mode) === 'xuean'
+                              ? lang === 'zh'
+                                ? '学案'
+                                : 'Guided study'
+                              : lang === 'zh'
+                                ? '白板'
+                                : 'Whiteboard'}
+                          </span>
                           {lesson.creator_name ? (
                             <span
                               className={`text-xs font-medium px-1.5 py-0.5 rounded border flex items-center gap-0.5 ${

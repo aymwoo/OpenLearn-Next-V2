@@ -400,11 +400,11 @@ export function registerLessonsRoutes(ctx: ServerContext) {
 
   app.post('/api/lessons', requireAuth('teacher', 'administrator'), async (req, res) => {
     try {
-      const { title, content } = req.body;
+      const { title, content, deliveryMode } = req.body;
       const session = (req as any).session;
       const creatorId = session?.userId || session?.username || 'usr_teacher';
       const actorId = getActorId(req) || 'teacher';
-      const result = await lessonService.createLesson({ title, content, creatorId }, actorId);
+      const result = await lessonService.createLesson({ title, content, creatorId, deliveryMode }, actorId);
       res.json({ success: true, result });
     } catch (e: any) {
       sendSafeError(res, e);

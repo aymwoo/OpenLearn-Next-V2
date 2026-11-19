@@ -35,6 +35,8 @@ export interface CreateLessonParams {
   title: string;
   content?: string;
   creatorId: string;
+  /** whiteboard | xuean。缺省由创建命令按白板写入。 */
+  deliveryMode?: string;
 }
 
 export interface UpdateTimelineParams {
@@ -465,7 +467,7 @@ export class LessonService {
     const cloneTx = this.db.transaction(() => {
       this.db
         .prepare(
-          'INSERT INTO lessons (id, title, content, timeline, progress_mode, progress_conditions, creator_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+          'INSERT INTO lessons (id, title, content, timeline, progress_mode, progress_conditions, creator_id, created_at, updated_at, delivery_mode) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
         )
         .run(
           newId,
@@ -477,6 +479,7 @@ export class LessonService {
           creatorId,
           now,
           now,
+          original.delivery_mode ?? null,
         );
 
       const whiteboardElements = this.db

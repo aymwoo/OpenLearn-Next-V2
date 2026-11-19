@@ -1,11 +1,13 @@
 /**
  * Mode Pack 与学生平行学案页的运行时开关。
  *
- * 设置是唯一来源（`GET /api/feature-flags`，由管理员在「站点信息设置 → 运行时策略」写入）。
- * 未拉到设置、或设置未配置时：Mode Pack 关闭，平行学案页隐藏（与原先未设置构建期/调试旗标时一致）。
- * 单测用 `setModePacksEnabledForTests` / `setModePackShowXueanTabForTests` 覆盖。
+ * 全局开关的唯一来源是设置（`GET /api/feature-flags`，管理员在「站点信息设置 → 运行时策略」写入）。
+ * 未拉到设置、或设置未配置时：Mode Pack 关闭，平行学案页隐藏。
+ * 当前课的交付模式是学案时，本课始终走 Mode Pack，不依赖这个全局开关。
+ * 单测用 `setModePacksEnabledForTests` / `setModePackShowXueanTabForTests` 覆盖，优先于课程模式和设置。
  */
 import { useSyncExternalStore } from 'react';
+import { isXueanDeliveryMode } from '../../../../packages/core/plugin-host/course-delivery-mode';
 
 export interface ClientFeatureFlags {
   modePacksEnabled: boolean;
@@ -21,6 +23,7 @@ let current: ClientFeatureFlags = { ...DEFAULT_FLAGS };
 let revision = 0;
 let modePackTestOverride: boolean | null = null;
 let xueanTabTestOverride: boolean | null = null;
+let activeDeliveryMode: unknown = null;
 const listeners = new Set<() => void>();
 
 function emit(): void {
@@ -35,6 +38,18 @@ export function subscribeClientFeatureFlags(listener: () => void): () => void {
 
 export function getClientFeatureFlagVersion(): number {
   return revision;
+}
+
+/** 由应用根在渲染时写入当前课的 delivery_mode。传 null 表示没有选中课。 */
+export function setActiveCourseDeliveryMode(mode: unknown): void {
+  const next = mode ?? null;
+  if (next === activeDeliveryMode) return;
+  activeDeliveryMode = next;
+  emit();
+}
+
+export function getActiveCourseDeliveryMode(): unknown {
+  return activeDeliveryMode;
 }
 
 /** 仅测试使用：覆盖 Mode Pack；传 null 清除。 */
@@ -53,11 +68,13 @@ export function resetClientFeatureFlagsForTests(): void {
   current = { ...DEFAULT_FLAGS };
   modePackTestOverride = null;
   xueanTabTestOverride = null;
+  activeDeliveryMode = null;
   emit();
 }
 
 export function isModePacksEnabled(): boolean {
   if (modePackTestOverride !== null) return modePackTestOverride;
+  if (isXueanDeliveryMode(activeDeliveryMode)) return true;
   return current.modePacksEnabled;
 }
 

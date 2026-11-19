@@ -1,4 +1,4 @@
-import React, { type ComponentProps, type RefObject } from 'react';
+import React, { useState, type ComponentProps, type RefObject } from 'react';
 import { Presentation, ChevronRight, Activity, AlertTriangle, Trophy, Sparkles } from 'lucide-react';
 import { LazyWhiteboard } from '../../components/LazyWhiteboard';
 import type { WhiteboardHandle } from '../whiteboard/InteractiveWhiteboard';
@@ -50,6 +50,8 @@ export type LiveClassroomMiddleWorkspaceProps = LiveSubmissionsPanelProps & {
   students: StudentType[];
   addToast: TopPerformersAddToast;
   fetchElements: (lessonId: string) => void;
+  /** 白板课：中栏默认只有画布，「课堂面板」里再打开提交、成绩和榜单。 */
+  compact?: boolean;
 };
 
 export function LiveClassroomMiddleWorkspace(props: LiveClassroomMiddleWorkspaceProps) {
@@ -86,8 +88,10 @@ export function LiveClassroomMiddleWorkspace(props: LiveClassroomMiddleWorkspace
     classes,
     students,
     addToast,
+    compact = false,
     ...submissionsProps
   } = props;
+  const [panelsOpen, setPanelsOpen] = useState(false);
 
   return (
     <div className="flex-1 flex flex-col min-w-0 bg-surface-secondary/40 p-3 gap-3 relative">
@@ -105,65 +109,167 @@ export function LiveClassroomMiddleWorkspace(props: LiveClassroomMiddleWorkspace
                   <span className="text-xs font-bold tracking-wider">{lang === 'zh' ? '展开' : 'Expand'}</span>
                 </button>
               )}
-              <div className="bg-surface-secondary p-0.5 rounded-lg flex items-center gap-1 border border-theme">
-                <button
-                  onClick={() => setMiddleTab('whiteboard')}
-                  className={`px-3 py-1 rounded-md text-xs font-bold transition-all cursor-pointer ${
-                    middleTab === 'whiteboard' ? 'bg-surface text-primary-ink shadow-sm' : 'text-muted hover:text-main'
-                  }`}
-                >
-                  {lang === 'zh' ? '💻 演示白板' : '💻 Whiteboard'}
-                </button>
-                <button
-                  onClick={() => setMiddleTab('submissions')}
-                  className={`px-3 py-1 rounded-md text-xs font-bold transition-all cursor-pointer ${
-                    middleTab === 'submissions' ? 'bg-surface text-primary-ink shadow-sm' : 'text-muted hover:text-main'
-                  }`}
-                >
-                  {lang === 'zh' ? '📊 学生提交数据' : '📊 Student Submissions'}
-                </button>
-                <button
-                  id="teacher_assignment_eval_tab_btn"
-                  onClick={() => setMiddleTab('assignment')}
-                  className={`px-3 py-1 rounded-md text-xs font-bold transition-all cursor-pointer ${
-                    middleTab === 'assignment' ? 'bg-surface text-primary-ink shadow-sm' : 'text-muted hover:text-main'
-                  }`}
-                >
-                  {lang === 'zh' ? '🎓 作业成绩评定' : '🎓 Assignment Grades'}
-                </button>
-                <button
-                  id="teacher_top_performers_tab_btn"
-                  data-testid="teacher-top-performers-tab-btn"
-                  onClick={() => setMiddleTab('top_performers')}
-                  className={`px-3 py-1 rounded-md text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
-                    middleTab === 'top_performers'
-                      ? 'bg-surface text-amber-700 dark:text-amber-400 shadow-sm'
-                      : 'text-muted hover:text-main'
-                  }`}
-                >
-                  <Trophy size={12} className="text-amber-700 dark:text-amber-400" />
-                  <span>{lang === 'zh' ? '🏆 随堂测验榜' : '🏆 Top Performers'}</span>
-                </button>
-                {hasSegmentMainExtension && currentActiveSegment && (
+              {compact ? (
+                <div className="relative">
                   <button
-                    id="teacher_active_segment_main_tab_btn"
-                    data-testid="teacher-active-segment-main-tab-btn"
-                    onClick={() => setMiddleTab('segment_main')}
-                    className={`px-3 py-1 rounded-md text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
-                      middleTab === 'segment_main'
-                        ? 'bg-surface text-primary-theme shadow-sm'
+                    type="button"
+                    data-testid="teacher-whiteboard-panels"
+                    aria-expanded={panelsOpen}
+                    aria-controls="teacher-whiteboard-panel-menu"
+                    onClick={() => setPanelsOpen((open) => !open)}
+                    className="px-3 py-1 rounded-full text-xs font-medium cursor-pointer bg-surface border border-theme text-main"
+                  >
+                    {lang === 'zh' ? '课堂面板' : 'Class panels'}
+                  </button>
+                  <div
+                    id="teacher-whiteboard-panel-menu"
+                    data-testid="teacher-whiteboard-panel-menu"
+                    data-open={panelsOpen ? 'true' : 'false'}
+                    hidden={!panelsOpen}
+                    className="absolute z-20 mt-1 flex min-w-40 flex-col gap-1 rounded-xl border border-theme bg-surface p-2 shadow-md"
+                  >
+                    {panelsOpen ? (
+                      <>
+                        <button
+                          type="button"
+                          className="text-left text-xs font-medium px-2 py-1 rounded-md hover:bg-surface-secondary cursor-pointer"
+                          onClick={() => {
+                            setMiddleTab('whiteboard');
+                            setPanelsOpen(false);
+                          }}
+                        >
+                          {lang === 'zh' ? '演示白板' : 'Whiteboard'}
+                        </button>
+                        <button
+                          type="button"
+                          className="text-left text-xs font-medium px-2 py-1 rounded-md hover:bg-surface-secondary cursor-pointer"
+                          onClick={() => {
+                            setMiddleTab('submissions');
+                            setPanelsOpen(false);
+                          }}
+                        >
+                          {lang === 'zh' ? '学生提交数据' : 'Student Submissions'}
+                        </button>
+                        <button
+                          type="button"
+                          id="teacher_assignment_eval_tab_btn"
+                          className="text-left text-xs font-medium px-2 py-1 rounded-md hover:bg-surface-secondary cursor-pointer"
+                          onClick={() => {
+                            setMiddleTab('assignment');
+                            setPanelsOpen(false);
+                          }}
+                        >
+                          {lang === 'zh' ? '作业成绩评定' : 'Assignment Grades'}
+                        </button>
+                        <button
+                          type="button"
+                          id="teacher_top_performers_tab_btn"
+                          data-testid="teacher-top-performers-tab-btn"
+                          className="text-left text-xs font-medium px-2 py-1 rounded-md hover:bg-surface-secondary cursor-pointer"
+                          onClick={() => {
+                            setMiddleTab('top_performers');
+                            setPanelsOpen(false);
+                          }}
+                        >
+                          {lang === 'zh' ? '随堂测验榜' : 'Top Performers'}
+                        </button>
+                        {hasSegmentMainExtension && currentActiveSegment ? (
+                          <button
+                            type="button"
+                            id="teacher_active_segment_main_tab_btn"
+                            data-testid="teacher-active-segment-main-tab-btn"
+                            className="text-left text-xs font-medium px-2 py-1 rounded-md hover:bg-surface-secondary cursor-pointer"
+                            onClick={() => {
+                              setMiddleTab('segment_main');
+                              setPanelsOpen(false);
+                            }}
+                          >
+                            {lang === 'zh'
+                              ? currentActiveSegment.title || '环节工作区'
+                              : currentActiveSegment.title || 'Segment Workspace'}
+                          </button>
+                        ) : null}
+                        <button
+                          type="button"
+                          className="text-left text-xs font-medium px-2 py-1 rounded-md hover:bg-surface-secondary cursor-pointer"
+                          onClick={() => {
+                            setPanelsOpen(false);
+                            onFinishTeaching();
+                          }}
+                        >
+                          {lang === 'zh' ? '完成授课，进入课后' : 'Finish Teaching → Post-Class'}
+                        </button>
+                      </>
+                    ) : null}
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-surface-secondary p-0.5 rounded-lg flex items-center gap-1 border border-theme">
+                  <button
+                    onClick={() => setMiddleTab('whiteboard')}
+                    className={`px-3 py-1 rounded-md text-xs font-bold transition-all cursor-pointer ${
+                      middleTab === 'whiteboard'
+                        ? 'bg-surface text-primary-ink shadow-sm'
                         : 'text-muted hover:text-main'
                     }`}
                   >
-                    <Sparkles size={12} className="text-primary-theme" />
-                    <span>
-                      {lang === 'zh'
-                        ? `🧩 ${currentActiveSegment.title || '环节工作区'}`
-                        : `🧩 ${currentActiveSegment.title || 'Segment Workspace'}`}
-                    </span>
+                    {lang === 'zh' ? '💻 演示白板' : '💻 Whiteboard'}
                   </button>
-                )}
-              </div>
+                  <button
+                    onClick={() => setMiddleTab('submissions')}
+                    className={`px-3 py-1 rounded-md text-xs font-bold transition-all cursor-pointer ${
+                      middleTab === 'submissions'
+                        ? 'bg-surface text-primary-ink shadow-sm'
+                        : 'text-muted hover:text-main'
+                    }`}
+                  >
+                    {lang === 'zh' ? '📊 学生提交数据' : '📊 Student Submissions'}
+                  </button>
+                  <button
+                    id="teacher_assignment_eval_tab_btn"
+                    onClick={() => setMiddleTab('assignment')}
+                    className={`px-3 py-1 rounded-md text-xs font-bold transition-all cursor-pointer ${
+                      middleTab === 'assignment'
+                        ? 'bg-surface text-primary-ink shadow-sm'
+                        : 'text-muted hover:text-main'
+                    }`}
+                  >
+                    {lang === 'zh' ? '🎓 作业成绩评定' : '🎓 Assignment Grades'}
+                  </button>
+                  <button
+                    id="teacher_top_performers_tab_btn"
+                    data-testid="teacher-top-performers-tab-btn"
+                    onClick={() => setMiddleTab('top_performers')}
+                    className={`px-3 py-1 rounded-md text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                      middleTab === 'top_performers'
+                        ? 'bg-surface text-amber-700 dark:text-amber-400 shadow-sm'
+                        : 'text-muted hover:text-main'
+                    }`}
+                  >
+                    <Trophy size={12} className="text-amber-700 dark:text-amber-400" />
+                    <span>{lang === 'zh' ? '🏆 随堂测验榜' : '🏆 Top Performers'}</span>
+                  </button>
+                  {hasSegmentMainExtension && currentActiveSegment && (
+                    <button
+                      id="teacher_active_segment_main_tab_btn"
+                      data-testid="teacher-active-segment-main-tab-btn"
+                      onClick={() => setMiddleTab('segment_main')}
+                      className={`px-3 py-1 rounded-md text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                        middleTab === 'segment_main'
+                          ? 'bg-surface text-primary-theme shadow-sm'
+                          : 'text-muted hover:text-main'
+                      }`}
+                    >
+                      <Sparkles size={12} className="text-primary-theme" />
+                      <span>
+                        {lang === 'zh'
+                          ? `🧩 ${currentActiveSegment.title || '环节工作区'}`
+                          : `🧩 ${currentActiveSegment.title || 'Segment Workspace'}`}
+                      </span>
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
             <div className="flex items-center gap-2">
               {studentErrors.length > 0 && (
@@ -201,20 +307,22 @@ export function LiveClassroomMiddleWorkspace(props: LiveClassroomMiddleWorkspace
               >
                 <Activity size={10} /> {isSocketConnected ? 'Live Broadcaster Connected' : 'Broadcaster Reconnecting'}
               </span>
-              <button
-                type="button"
-                onClick={() => onFinishTeaching()}
-                className="ml-2 px-3 py-1 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white rounded-lg text-xs font-bold flex items-center gap-1 shadow-xs cursor-pointer hover:shadow-md transition-all active:scale-95"
-              >
-                <span>{lang === 'zh' ? '完成授课，进入课后' : 'Finish Teaching → Post-Class'}</span>
-                <ChevronRight size={12} />
-              </button>
+              {compact ? null : (
+                <button
+                  type="button"
+                  onClick={() => onFinishTeaching()}
+                  className="ml-2 px-3 py-1 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white rounded-lg text-xs font-bold flex items-center gap-1 shadow-xs cursor-pointer hover:shadow-md transition-all active:scale-95"
+                >
+                  <span>{lang === 'zh' ? '完成授课，进入课后' : 'Finish Teaching → Post-Class'}</span>
+                  <ChevronRight size={12} />
+                </button>
+              )}
             </div>
           </div>
 
           {middleTab === 'whiteboard' ? (
             <>
-              {hasSegmentMainExtension && currentActiveSegment && (
+              {!compact && hasSegmentMainExtension && currentActiveSegment && (
                 <div
                   data-testid="classroom-active-segment-main-hint"
                   className="flex items-center justify-between px-3 py-1.5 bg-primary-theme/10 border border-primary-theme/20 rounded-lg text-xs text-primary-theme shrink-0"
