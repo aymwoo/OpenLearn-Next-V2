@@ -493,8 +493,7 @@ test.describe('师生双端一镜到底课堂全生命周期黄金旅程 E2E 测
       const backToTeachingBtn = teacherPage.locator('button:has-text("返回课中白板")');
       await expect(backToTeachingBtn).toBeVisible();
       await backToTeachingBtn.click();
-      await teacherPage.getByTestId('teacher-whiteboard-tools').click();
-      await expect(teacherPage.getByTestId('classroom-stage-stepper')).toBeVisible({ timeout: 15_000 });
+      await expect(teacherPage.getByTestId('teacher-current-stage')).toBeVisible({ timeout: 15_000 });
 
       // 再次推进至简报完成闭环
       await teacherPage.getByTestId('teacher-whiteboard-panels').click();
