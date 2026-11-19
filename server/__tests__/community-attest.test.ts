@@ -4,7 +4,6 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import {
-  communityInstallEnabled,
   communityPublicKeyPem,
   getStoredCommunityInstallEnabled,
   hashMatches,
@@ -21,13 +20,6 @@ describe('community-attest 密码学完整性与签名校验', () => {
   const testBytes = Buffer.from('fake-zip-binary-payload-data');
   const testHashHex = crypto.createHash('sha256').update(testBytes).digest('hex');
   const testSig = crypto.sign(null, Buffer.from(testHashHex, 'utf8'), privateKey).toString('base64');
-
-  it('开关读取正常（默认开启，仅 0/false 关闭）', () => {
-    expect(communityInstallEnabled({})).toBe(true);
-    expect(communityInstallEnabled({ OPENLEARN_COMMUNITY_INSTALL: '1' })).toBe(true);
-    expect(communityInstallEnabled({ OPENLEARN_COMMUNITY_INSTALL: '0' })).toBe(false);
-    expect(communityInstallEnabled({ OPENLEARN_COMMUNITY_INSTALL: 'false' })).toBe(false);
-  });
 
   it('正确比对 hash 与 Ed25519 签名', () => {
     expect(hashMatches(testBytes, testHashHex)).toBe(true);
@@ -153,60 +145,29 @@ describe('resolveCommunityInstallConfig 优先级与持久化', () => {
     };
   }
 
-  it('未配置且无环境变量时默认开启', () => {
-    const env = {} as NodeJS.ProcessEnv;
-    expect(communityInstallEnabled(env)).toBe(true);
-    const resolved = resolveCommunityInstallConfig(memoryDb(null), env);
-    expect(resolved).toMatchObject({
-      enabled: true,
-      storedValue: null,
-      envEnabled: true,
-      configSource: 'default',
-      hasEnvFallback: false,
-    });
-  });
-
-  it('数据库尚未显式设置时回退 OPENLEARN_COMMUNITY_INSTALL=1 或 0', () => {
-    const env = { OPENLEARN_COMMUNITY_INSTALL: '1' } as NodeJS.ProcessEnv;
-    const resolved = resolveCommunityInstallConfig(memoryDb(null), env);
-    expect(resolved).toMatchObject({
-      enabled: true,
-      storedValue: null,
-      envEnabled: true,
-      configSource: 'env',
-      hasEnvFallback: true,
-    });
+  it('未配置时默认开启，环境变量 0 或 1 都不能改变它', () => {
     const envOff = { OPENLEARN_COMMUNITY_INSTALL: '0' } as NodeJS.ProcessEnv;
+    const envOn = { OPENLEARN_COMMUNITY_INSTALL: '1' } as NodeJS.ProcessEnv;
     expect(resolveCommunityInstallConfig(memoryDb(null), envOff)).toMatchObject({
-      enabled: false,
+      enabled: true,
       storedValue: null,
-      envEnabled: false,
-      configSource: 'env',
-      hasEnvFallback: true,
+      configSource: 'default',
+    });
+    expect(resolveCommunityInstallConfig(memoryDb(null), envOn)).toMatchObject({
+      enabled: true,
+      storedValue: null,
+      configSource: 'default',
     });
   });
 
-  it('缺少列时按未配置处理并回退环境变量或默认开启', () => {
+  it('缺少列时按未配置处理并保持默认开启', () => {
     const env = { OPENLEARN_COMMUNITY_INSTALL: '0' } as NodeJS.ProcessEnv;
     expect(getStoredCommunityInstallEnabled(memoryDb('missing'))).toBeNull();
-    expect(resolveCommunityInstallConfig(memoryDb('missing'), env).enabled).toBe(false);
+    expect(resolveCommunityInstallConfig(memoryDb('missing'), env).enabled).toBe(true);
     expect(resolveCommunityInstallConfig(memoryDb('missing'), {}).enabled).toBe(true);
   });
 
-  it('环境变量仅 0/false 会关闭，其余值保持开启', () => {
-    for (const value of ['0', 'false']) {
-      const env = { OPENLEARN_COMMUNITY_INSTALL: value } as NodeJS.ProcessEnv;
-      expect(communityInstallEnabled(env)).toBe(false);
-      expect(resolveCommunityInstallConfig(memoryDb(null), env).enabled).toBe(false);
-    }
-    for (const value of ['', '1', 'true', 'yes']) {
-      const env = { OPENLEARN_COMMUNITY_INSTALL: value } as NodeJS.ProcessEnv;
-      expect(communityInstallEnabled(env)).toBe(true);
-      expect(resolveCommunityInstallConfig(memoryDb(null), env).enabled).toBe(true);
-    }
-  });
-
-  it('界面显式关闭覆盖环境变量 1，清除后恢复环境回退', () => {
+  it('界面显式关闭后环境变量 1 不能重新打开，清除后恢复默认开启', () => {
     const env = { OPENLEARN_COMMUNITY_INSTALL: '1' } as NodeJS.ProcessEnv;
     const db = memoryDb(null);
     const closed = setStoredCommunityInstallEnabled(db, false, env);
@@ -214,7 +175,6 @@ describe('resolveCommunityInstallConfig 优先级与持久化', () => {
       enabled: false,
       storedValue: false,
       configSource: 'database',
-      hasEnvFallback: true,
     });
     // 再次读取模拟进程重载后仍读持久化值
     expect(resolveCommunityInstallConfig(db, env).enabled).toBe(false);
@@ -222,7 +182,7 @@ describe('resolveCommunityInstallConfig 优先级与持久化', () => {
     expect(cleared).toMatchObject({
       enabled: true,
       storedValue: null,
-      configSource: 'env',
+      configSource: 'default',
     });
   });
 
@@ -234,7 +194,6 @@ describe('resolveCommunityInstallConfig 优先级与持久化', () => {
       enabled: true,
       storedValue: true,
       configSource: 'database',
-      hasEnvFallback: false,
     });
     expect(resolveCommunityInstallConfig(db, env).enabled).toBe(true);
   });

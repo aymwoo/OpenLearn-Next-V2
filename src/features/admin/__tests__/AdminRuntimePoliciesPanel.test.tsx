@@ -14,33 +14,40 @@ const policies = {
     enabled: true,
     storedValue: null,
     configSource: 'default',
-    hasEnvFallback: false,
-    envVar: 'BRIDGE_HOOK_TELEMETRY',
     effect: '新打开的课件会立即按此值注入',
   },
   httpAccessLog: {
     mode: 'errors',
     storedMode: null,
     modeSource: 'default',
-    hasModeEnvFallback: false,
     ignorePrefixes: [],
     storedIgnore: null,
     ignoreSource: 'default',
     slowMs: 1000,
     storedSlowMs: null,
     slowSource: 'default',
-    envVar: 'HTTP_ACCESS_LOG',
-    ignoreEnvVar: 'HTTP_ACCESS_LOG_IGNORE',
-    slowEnvVar: 'HTTP_SLOW_MS',
     effect: '对后续请求立即生效',
   },
   allowUnsigned: {
     allowByDefault: true,
     storedValue: null,
     configSource: 'default',
-    hasEnvFallback: false,
-    envVar: 'OPENLEARN_ALLOW_UNSIGNED',
     effect: '不是全信任',
+  },
+  modePacks: {
+    enabled: false,
+    storedValue: null,
+    configSource: 'default',
+    showXueanTab: false,
+    storedShowXueanTab: null,
+    showXueanTabSource: 'default',
+    effect: '默认关闭',
+  },
+  communityInstall: {
+    enabled: true,
+    storedValue: null,
+    configSource: 'default',
+    effect: '默认开启',
   },
 };
 
@@ -65,6 +72,9 @@ describe('AdminRuntimePoliciesPanel', () => {
             reservedEnvBoundaries: [
               { key: 'OPENLEARN_SKIP_PASSWORD_CHANGE_GATE', reason: '跳过改密门禁属于认证绕过，禁止做成普通按钮。' },
             ],
+            retiredFeatureEnv: [
+              { key: 'OPENLEARN_COMMUNITY_INSTALL', setting: '允许从社区注册表安装', historicalDefault: '开启' },
+            ],
           }),
         };
       }
@@ -77,6 +87,7 @@ describe('AdminRuntimePoliciesPanel', () => {
             { key: 'OPENLEARN_SKIP_PASSWORD_CHANGE_GATE', reason: '跳过改密门禁属于认证绕过，禁止做成普通按钮。' },
             { key: 'LOG_REDACT', reason: '允许从界面关闭会把口令与令牌写入日志。' },
           ],
+          retiredFeatureEnv: [{ key: 'VITE_OPENLEARN_MODE_PACKS', setting: 'Mode Pack', historicalDefault: '关闭' }],
         }),
       };
     });
@@ -84,7 +95,10 @@ describe('AdminRuntimePoliciesPanel', () => {
 
     render(<AdminRuntimePoliciesPanel lang="zh" />);
     expect(await screen.findByText('运行时策略（管理员）')).toBeTruthy();
-    expect(screen.getByText(/优先级为界面显式值/)).toBeTruthy();
+    expect(screen.getByText(/不再读取环境变量/)).toBeTruthy();
+    expect(screen.getByTestId('runtime-policy-mode-packs')).toBeTruthy();
+    expect(screen.getByRole('switch', { name: 'Mode Pack' })).toBeTruthy();
+    expect(screen.getByTestId('runtime-policy-retired-env').textContent).toContain('VITE_OPENLEARN_MODE_PACKS');
     expect(screen.getByTestId('runtime-policy-reserved-env').textContent).toContain(
       'OPENLEARN_SKIP_PASSWORD_CHANGE_GATE',
     );

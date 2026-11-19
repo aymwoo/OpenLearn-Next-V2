@@ -201,8 +201,8 @@
   var __lmsHandlers = {};
   var __lmsPendingRequests = {};
 
-  // HOOK 遥测总闸：服务端注入 window.__LMS_HOOK_TELEMETRY__（默认 true；
-  // BRIDGE_HOOK_TELEMETRY=off 可关闭 fetch/XHR/axios/beacon/form 上报）。
+  // HOOK 遥测总闸：服务端按「站点信息设置 → 运行时策略」注入 window.__LMS_HOOK_TELEMETRY__
+  // （未配置时默认 true；关闭后停止 fetch/XHR/axios/beacon/form 上报）。
   function __hookAllowed() {
     return window.__LMS_HOOK_TELEMETRY__ !== false;
   }

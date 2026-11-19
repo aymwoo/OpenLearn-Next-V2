@@ -31,7 +31,6 @@ const NODE_ENVS = ['development', 'production', 'test'] as const;
 const ISOLATE_KINDS = ['thread', 'process'] as const;
 const PERMISSION_POLICIES = ['rw', 'ro', 'off'] as const;
 const LIVENESS_VALUES = ['on', 'off'] as const;
-const TELEMETRY_VALUES = ['on', 'off'] as const;
 /**
  * 插件资源配额（`packages/core/worker-runtime/plugin-quota.ts`）的可调键。
  *
@@ -331,15 +330,6 @@ export function validateStartupEnv(env: NodeJS.ProcessEnv = process.env): EnvVal
         message: `${key} 必须是正整数（毫秒），实际为 "${value}"。非法值会静默回落默认探活节奏。`,
       });
     }
-  }
-
-  const telemetry = trimmed(env, 'BRIDGE_HOOK_TELEMETRY');
-  if (telemetry && !(TELEMETRY_VALUES as readonly string[]).includes(telemetry.toLowerCase())) {
-    errors.push({
-      key: 'BRIDGE_HOOK_TELEMETRY',
-      severity: 'error',
-      message: `BRIDGE_HOOK_TELEMETRY 只能是 on / off，实际为 "${telemetry}"。`,
-    });
   }
 
   // ── CORS / iframe / LTI 白名单 ───────────────────────────────────────

@@ -6,7 +6,7 @@ import { LazyCourseware } from '../../components/LazyCourseware';
 import { StudentAssignmentEvalPanel } from '../../components/StudentAssignmentEvalPanel';
 import { ExtensionPointRenderer } from '../../plugin-host/extension-point-renderer';
 import { resolveInteractionPanelClass, type StudentFullscreenPanel } from './studentFullscreenLayout';
-import { isModePacksEnabled } from '../classroom/mode-pack';
+import { isModePackShowXueanTab, useModePacksEnabled } from '../classroom/mode-pack';
 
 const LazyStudentXueanView = lazy(() =>
   import('./xuean/StudentXueanView').then((m) => ({ default: m.StudentXueanView })),
@@ -117,9 +117,9 @@ export function StudentLessonInteractionPanel(props: StudentLessonInteractionPan
   const boardSegmentId = contentSegmentId || activeSegmentId;
   const hideSegmentBody = blockSegmentContent;
   // Mode Pack 开启时学案走 active_segment.student_main primary；平行 tab 默认隐藏。
-  // 调试入口：`window.__OPENLEARN_DEBUG_XUEAN_TAB__ = true` 可临时恢复平行 tab。
-  const showParallelXueanTab =
-    !isModePacksEnabled() || (typeof window !== 'undefined' && window.__OPENLEARN_DEBUG_XUEAN_TAB__ === true);
+  // Mode Pack 关闭时保留平行学案页；开启后默认隐藏，除非设置里打开「显示学生平行学案页」。
+  const modePacksEnabled = useModePacksEnabled();
+  const showParallelXueanTab = !modePacksEnabled || isModePackShowXueanTab();
 
   const tabButtonClass = (tab: 'whiteboard' | 'courseware' | 'assignment' | 'xuean') =>
     `px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${

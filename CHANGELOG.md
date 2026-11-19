@@ -12,6 +12,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Features
 
+- **功能开关改由设置管理**：Mode Pack、学生平行学案页、社区注册表安装、课件网络遥测、HTTP 访问日志（模式 / 忽略前缀 / 慢请求阈值）和未签名本地插件策略都在管理后台「站点信息设置 → 运行时策略」里开关。未配置时保持原先默认（Mode Pack 关，社区安装与遥测开，访问日志 `errors`，未签名包默认放行）。`VITE_OPENLEARN_MODE_PACKS`、`window.__OPENLEARN_MODE_PACKS__`、`window.__OPENLEARN_DEBUG_XUEAN_TAB__` 以及对应的 `OPENLEARN_*` / `BRIDGE_HOOK_TELEMETRY` / `HTTP_ACCESS_LOG*` 环境变量不再打开或关闭这些功能。保存后无需重启。端口、数据库、密钥、隔离、SQL 守卫和改密门禁仍是部署配置。
+
+### Features
+
 - **课节标题只读服务**：进程插件仍不能 SQL 读取 `lessons`。新增 `ILessonOutlineService` / `ctx.services.lessonOutline.getOutline(lessonId)`，在宿主内返回课节标题和 `timeline` 环节标题。调用方须声明 `lesson:read`，并且只能看到当前登录用户在 `GET /api/lessons/:id` 中可见的课节（`canSeeLesson`）。课节不存在返回 null。
 
 - **ClassroomFlow Mode Pack 契约（P0）与白板包骨架（P1 起）**（Issues #546 / #547）：
