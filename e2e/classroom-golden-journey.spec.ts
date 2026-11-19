@@ -327,7 +327,7 @@ test.describe('师生双端一镜到底课堂全生命周期黄金旅程 E2E 测
       // Stage 2: 课中授课与中控互动 (IN_CLASS_TEACHING)
       // =========================================================================
       logEvidence('Stage 2: 推进至课中授课白板');
-      await expect(teacherPage.getByTestId('classroom-stage-stepper')).toBeVisible({ timeout: 20_000 });
+      await expect(teacherPage.getByTestId('teacher-current-stage')).toBeVisible({ timeout: 20_000 });
       await expect(teacherPage.getByText('Live Broadcaster Connected')).toBeVisible({ timeout: 15_000 });
 
       // 1. 发起限时倒计时测试

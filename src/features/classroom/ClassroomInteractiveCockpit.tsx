@@ -625,17 +625,19 @@ export function ClassroomInteractiveCockpit({
           <div className="flex items-center gap-2">
             {/* 口播单选投票 */}
             {activePoll && activePoll.status === 'ACTIVE' ? (
-              <button
-                onClick={handleClosePoll}
-                className="px-3 py-1.5 bg-amber-700 text-white font-bold rounded-lg hover:bg-amber-800 transition-colors flex items-center gap-1.5 shadow-3xs cursor-pointer animate-pulse"
-              >
-                <CheckCircle2 size={13} />
-                <span>
-                  {lang === 'zh'
-                    ? `结束投票 (${activePoll.totalVotes || 0}人)`
-                    : `Close Poll (${activePoll.totalVotes || 0})`}
-                </span>
-              </button>
+              compact ? null : (
+                <button
+                  onClick={handleClosePoll}
+                  className="px-3 py-1.5 bg-amber-700 text-white font-bold rounded-lg hover:bg-amber-800 transition-colors flex items-center gap-1.5 shadow-3xs cursor-pointer animate-pulse"
+                >
+                  <CheckCircle2 size={13} />
+                  <span>
+                    {lang === 'zh'
+                      ? `结束投票 (${activePoll.totalVotes || 0}人)`
+                      : `Close Poll (${activePoll.totalVotes || 0})`}
+                  </span>
+                </button>
+              )
             ) : (
               <button
                 onClick={() => setIsPollDialogOpen(true)}
@@ -648,13 +650,15 @@ export function ClassroomInteractiveCockpit({
 
             {/* 毫秒抢答器 */}
             {activeBuzzer ? (
-              <button
-                onClick={handleResetBuzzer}
-                className="px-3 py-1.5 bg-rose-600 text-white font-bold rounded-lg hover:bg-rose-700 transition-colors flex items-center gap-1.5 shadow-3xs cursor-pointer"
-              >
-                <RotateCcw size={13} />
-                <span>{lang === 'zh' ? '重置抢答' : 'Reset Buzzer'}</span>
-              </button>
+              compact ? null : (
+                <button
+                  onClick={handleResetBuzzer}
+                  className="px-3 py-1.5 bg-rose-600 text-white font-bold rounded-lg hover:bg-rose-700 transition-colors flex items-center gap-1.5 shadow-3xs cursor-pointer"
+                >
+                  <RotateCcw size={13} />
+                  <span>{lang === 'zh' ? '重置抢答' : 'Reset Buzzer'}</span>
+                </button>
+              )
             ) : (
               <button
                 onClick={handleStartBuzzer}
