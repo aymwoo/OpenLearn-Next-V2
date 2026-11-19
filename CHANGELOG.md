@@ -15,8 +15,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - **课程交付模式**：新建课程时选择学案或白板，两条向导分开，上课也按这门课的模式走。学案课直接使用学案 Mode Pack，不必再开全局 Mode Pack 开关。旧课没有该字段时仍按白板，课堂路径不变。门户上的讲授 / 探究等标签不参与这次选择。
 - **学生课堂页**：进课后按交付模式进入白板页或学案页。白板页以画布为主，学案页以学案正文为主；大纲、课件、作业、签到等收在可关闭的侧栏里。学生不能在本地改全班环节或阶段。
 - **白板课堂减负**：教师端和学生端的白板课默认只留课题、画布、锁定和当前阶段。返回门户、投票、提交、成绩等从「更多」「课堂工具」「课堂面板」或学生「工具」里打开。学案课的教师顶栏不变。
-
-### Features
+- **插件可枚举 AI 提供商（Issue #561）**：`IAIService.listProviders()` 是可选方法，inline 与 worker / process 都能调用。返回值沿用 `GET /api/ai-providers` 的元数据字段（`id`、`name`、`api_url`、`model_name`、`owner_id`、`is_shared`、`created_at`、`updated_at`），但**不包含** `api_key`（包括掩码片段）。可见范围跟 `resolveAccessibleAiProvider` 一致，并由宿主绑定的当前用户决定，插件不能传入 userId。调用需 `ai:invoke`。`ai_providers` 仍在 sql-guard 禁读表中。这不是 `ActivityRegistry.listProviders()`。
 
 - **课节标题只读服务**：进程插件仍不能 SQL 读取 `lessons`。新增 `ILessonOutlineService` / `ctx.services.lessonOutline.getOutline(lessonId)`，在宿主内返回课节标题和 `timeline` 环节标题。调用方须声明 `lesson:read`，并且只能看到当前登录用户在 `GET /api/lessons/:id` 中可见的课节（`canSeeLesson`）。课节不存在返回 null。
 

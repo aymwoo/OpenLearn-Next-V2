@@ -158,6 +158,7 @@ delete(key: string): Promise<void>;
 
 ```ts
 generateText(prompt: string, options?: { systemInstruction?: string; temperature?: number }): Promise<string>;
+listProviders?(): Promise<AIProviderSummary[]>; // 需 ai:invoke；不含 api_key
 registerAIPersona?(persona): void;
 listAIPersonas?(): AIPersonaDefinition[];
 unregisterAIPersona?(id): void;
@@ -165,9 +166,10 @@ registerAIContextProvider?(id, fn: (lessonId: string | null) => string | null): 
 unregisterAIContextProvider?(id): void;
 ```
 
-`generateText` 需 `ai:invoke` 能力（`CAP_AI_INVOKE`）。
-标注 `?` 的 5 个方法在 `IAIService` 接口上是**可选成员**，老版本宿主不实现它们 ——
-调用前用 `typeof ctx.services.ai.registerAIPersona === 'function'` 判定，直接调会 `TypeError`。
+`generateText` 与 `listProviders` 都需 `ai:invoke` 能力（`CAP_AI_INVOKE`）。
+`listProviders` 返回当前调用方可用的提供商元数据（形状同 `GET /api/ai-providers`，但没有 `api_key`）。
+标注 `?` 的 6 个方法在 `IAIService` 接口上是**可选成员**，老版本宿主不实现它们 ——
+调用前用 `typeof ctx.services.ai.listProviders === 'function'` 判定，直接调会 `TypeError`。
 
 ### 2.8 `pointsDimension` / `pointsLedger`
 

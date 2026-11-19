@@ -11,6 +11,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Features
 
+- **`IAIService.listProviders()`**（平台 Issue #561）：可选方法，返回 `AIProviderSummary[]`。字段与 `GET /api/ai-providers` 的列表项一致，但永不包含 `api_key`。需 `ai:invoke`。纯新增，旧插件与旧 mock 不必实现。不是活动生态的 `ActivityRegistry.listProviders()`。
+
 - **课节标题只读服务**：新增 `ILessonOutlineService`、`LessonOutline`、`LessonSegmentTitle` 与 `ILessonOutlineServiceToken`。`PluginContext.services.lessonOutline.getOutline(lessonId)` 返回 `{ id, title, segments }`。需 `lesson:read`。不放宽 sql-guard。
 
 - **Mode Pack 契约导出（平台 Issues #546 / #547 / #550）**：
