@@ -1281,6 +1281,8 @@ interface IAIService {
       temperature?: number; // 温度 (0-1)
     },
   ): Promise<string>;
+  /** 可选。枚举当前调用方可用的提供商元数据，不含 api_key。需 ai:invoke。 */
+  listProviders?(): Promise<AIProviderSummary[]>;
 }
 ```
 
@@ -1291,6 +1293,11 @@ const summary = await ctx.services.ai.generateText(`请分析以下学生作业�
   systemInstruction: '你是一位教学助手，请用中文回复。',
   temperature: 0.3,
 });
+
+if (typeof ctx.services.ai.listProviders === 'function') {
+  const providers = await ctx.services.ai.listProviders();
+  // providers[i] 有 id / name / api_url / model_name，没有 api_key
+}
 ```
 
 ### 5.8 IStorageService

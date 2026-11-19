@@ -568,7 +568,7 @@ export const CAP_API_WRITE = 'api:write'; // 浏览器侧任意非 GET 调用
 export const CAP_API_ADMIN = 'api:admin'; // 高危路径 / 不可逆操作
 export const CAP_GRADES_WRITE = 'grades:write'; // 学期成绩写入
 export const CAP_AGENT_TOOL = 'agent:tool'; // 注册暴露给 AI Agent 的 action
-export const CAP_AI_INVOKE = 'ai:invoke'; // 驱动 AI 生成
+export const CAP_AI_INVOKE = 'ai:invoke'; // 驱动 AI 生成，以及枚举提供商元数据
 export const CAP_TASK_REGISTER = 'task:register'; // 注册后台常驻任务
 export const CAP_STUDENT_DATA_READ = 'student-data:read'; // 读学生个人敏感数据
 export const CAP_STUDENT_DATA_WRITE = 'student-data:write'; // 写学生个人敏感数据
@@ -576,19 +576,19 @@ export const CAP_STUDENT_DATA_WRITE = 'student-data:write'; // 写学生个人�
 
 ### 6.1 判定规则表
 
-| Token                    | 方法                                    | 需要            | 拒绝原因（原文）                                                                                 |
-| ------------------------ | --------------------------------------- | --------------- | ------------------------------------------------------------------------------------------------ |
-| `IFrontendAPI`           | 非只读（`isReadOnlyMethod` 之外的全部） | `api:write`     | `写操作（<method>）需要 manifest 声明 'api:write' 能力（普通只读调用请用 get）`                  |
-| `IFrontendAPI`           | 命中高危前缀 / 不可逆后缀 / 实体级删除  | `api:admin`     | `写入高危路径 '<p>' 需要 manifest 声明 'api:admin' 能力`                                         |
-| `ISocketService`         | `disconnect` / `destroy`                | —               | `插件无权调用 <method>()——断开课堂实时通道会中断正在进行的教学`（**任何能力都解锁不了**）        |
-| `ISemesterGradeService`  | `save*` / `write*` / `set*`             | `grades:write`  | `写入学期成绩需要 manifest 声明 'grades:write' 能力（'grades' 或 'grades:read' 不足以解锁写入）` |
-| `IProcessService`        | `registerHandler` / `registerInterval`  | `task:register` | `注册后台任务（<method>）需要 manifest 声明 'task:register' 能力`                                |
-| `IProcessService`        | `restore`                               | `task:register` | `恢复后台任务（restore）会重放全部插件的 running 进程，需要...`                                  |
-| `IAIService`             | `generateText` / `chat` / `complete`    | `ai:invoke`     | `调用 AI 生成（<method>）需要 manifest 声明 'ai:invoke' 能力`                                    |
-| `IActionRegistryService` | `register` 且 `exposeToAgent !== false` | `agent:tool`    | 见 §6.3（实际走降级，不拒绝）                                                                    |
-| `IStorageService`        | 全部                                    | —               | 允许（已在 DB 层按 `plugin_id` 隔离）                                                            |
-| `IUIService`             | 全部                                    | —               | 允许                                                                                             |
-| 未列入的 Token           | 全部                                    | —               | `return null`，交由 Barrier 1 白名单裁决                                                         |
+| Token                    | 方法                                                   | 需要            | 拒绝原因（原文）                                                                                                                                |
+| ------------------------ | ------------------------------------------------------ | --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `IFrontendAPI`           | 非只读（`isReadOnlyMethod` 之外的全部）                | `api:write`     | `写操作（<method>）需要 manifest 声明 'api:write' 能力（普通只读调用请用 get）`                                                                 |
+| `IFrontendAPI`           | 命中高危前缀 / 不可逆后缀 / 实体级删除                 | `api:admin`     | `写入高危路径 '<p>' 需要 manifest 声明 'api:admin' 能力`                                                                                        |
+| `ISocketService`         | `disconnect` / `destroy`                               | —               | `插件无权调用 <method>()——断开课堂实时通道会中断正在进行的教学`（**任何能力都解锁不了**）                                                       |
+| `ISemesterGradeService`  | `save*` / `write*` / `set*`                            | `grades:write`  | `写入学期成绩需要 manifest 声明 'grades:write' 能力（'grades' 或 'grades:read' 不足以解锁写入）`                                                |
+| `IProcessService`        | `registerHandler` / `registerInterval`                 | `task:register` | `注册后台任务（<method>）需要 manifest 声明 'task:register' 能力`                                                                               |
+| `IProcessService`        | `restore`                                              | `task:register` | `恢复后台任务（restore）会重放全部插件的 running 进程，需要...`                                                                                 |
+| `IAIService`             | `generateText` / `chat` / `complete` / `listProviders` | `ai:invoke`     | 生成：`调用 AI 生成（<method>）需要 manifest 声明 'ai:invoke' 能力`；枚举：`枚举 AI 提供商（listProviders）需要 manifest 声明 'ai:invoke' 能力` |
+| `IActionRegistryService` | `register` 且 `exposeToAgent !== false`                | `agent:tool`    | 见 §6.3（实际走降级，不拒绝）                                                                                                                   |
+| `IStorageService`        | 全部                                                   | —               | 允许（已在 DB 层按 `plugin_id` 隔离）                                                                                                           |
+| `IUIService`             | 全部                                                   | —               | 允许                                                                                                                                            |
+| 未列入的 Token           | 全部                                                   | —               | `return null`，交由 Barrier 1 白名单裁决                                                                                                        |
 
 ```{important}
 **未列入本策略的 Token 返回 `null`（允许）**，注释写明「不在此处裁决，

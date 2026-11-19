@@ -246,6 +246,7 @@ export type {
   IProcessService,
   IStorageService,
   IAIService,
+  AIProviderSummary,
   AIPersonaRole,
   AIPersonaToolPolicy,
   AIPersonaDefinition,

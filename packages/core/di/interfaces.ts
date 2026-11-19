@@ -273,6 +273,25 @@ export interface IStorageService {
 // ── 7. IAIService ─────────────────────────────────────────────────────────
 
 /**
+ * 插件可见的 AI 提供商元数据（Issue #561）。
+ *
+ * 字段与 `GET /api/ai-providers` 的列表项一致，但**永不包含** `api_key`
+ * （包括掩码后的密钥片段）。`is_shared` 与该 HTTP 接口一样是布尔值。
+ * 这不是 `ActivityRegistry.listProviders()`（活动生态注册表）。
+ */
+export interface AIProviderSummary {
+  id: string;
+  name: string;
+  api_url: string;
+  model_name: string;
+  owner_id: string | null;
+  /** 平台共享，或没有 owner 的预设行（与 `resolveAccessibleAiProvider` 的可用判定一致）。 */
+  is_shared: boolean;
+  created_at: number;
+  updated_at: number;
+}
+
+/**
  * Kernel-level AI text generation.
  *
  * Based on the wrappedAI.generateText API from PluginRuntime (D-12).
@@ -287,6 +306,15 @@ export interface IAIService {
    * @returns The trimmed response text.
    */
   generateText(prompt: string, options?: { systemInstruction?: string; temperature?: number }): Promise<string>;
+
+  /**
+   * 枚举当前调用方可用的 AI 提供商元数据。
+   *
+   * 可选成员：旧插件与旧 mock 不必实现。返回值不含凭据。
+   * 需 manifest 声明 `ai:invoke`（与 `generateText` 同级）。无参数；
+   * 插件不能传入 userId，可见范围只由宿主绑定的当前登录用户决定。
+   */
+  listProviders?(): Promise<AIProviderSummary[]>;
 
   /**
    * 注册插件 AI 上下文切片提供者（P2: ai.context.provider）。

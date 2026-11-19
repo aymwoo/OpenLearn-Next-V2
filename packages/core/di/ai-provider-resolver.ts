@@ -1,5 +1,6 @@
 import type BetterSqlite3 from 'better-sqlite3';
 import { decryptApiKey } from './api-key-crypto.js';
+import type { AIProviderSummary } from './interfaces.js';
 
 export interface StoredAIProvider {
   id: string;
@@ -147,4 +148,75 @@ export function resolveAccessibleAiProvider(
   }
 
   return provider;
+}
+
+/** 与 `GET /api/ai-providers` 一样只返回有限条，避免一次把表倒给插件。 */
+const LIST_LIMIT = 500;
+
+type ProviderListRow = {
+  id: string;
+  name: string;
+  api_url: string;
+  model_name: string;
+  owner_id?: string | null;
+  is_shared?: number | null;
+  created_at?: number | null;
+  updated_at?: number | null;
+};
+
+/**
+ * 列出调用方可用的 AI 提供商元数据。
+ *
+ * SELECT 列表刻意不含 `api_key`。可见范围与 `resolveAccessibleAiProvider` 对齐，
+ * 而不是把整张表交出去：
+ * - 有 userId：本人私有（owner_id = userId）、平台共享（is_shared = 1）、无主预设（owner_id IS NULL）；
+ * - 无 userId：只有共享与无主预设（未绑定登录用户的插件调用只能看到自己真正能用的那些）；
+ * - 升级前的库还没有 owner 列：历史上这些行是全局提供商，全部按共享元数据返回。
+ *
+ * 插件不能自己指定 userId。调用方（AIService）只传入宿主绑定的当前用户。
+ */
+export function listAccessibleAiProviders(db: BetterSqlite3.Database, userId?: string | null): AIProviderSummary[] {
+  const table = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'ai_providers'").get() as
+    { name: string } | undefined;
+  if (!table) return [];
+
+  if (!hasOwnerColumns(db)) {
+    const rows = db
+      .prepare(
+        `SELECT id, name, api_url, model_name, created_at, updated_at
+           FROM ai_providers
+          ORDER BY created_at DESC
+          LIMIT ${LIST_LIMIT}`,
+      )
+      .all() as ProviderListRow[];
+    return rows.map((row) => toProviderSummary(row, true));
+  }
+
+  const sql = `SELECT id, name, api_url, model_name, owner_id, is_shared, created_at, updated_at
+                 FROM ai_providers
+                WHERE ${userId ? 'owner_id = ? OR is_shared = 1 OR owner_id IS NULL' : 'is_shared = 1 OR owner_id IS NULL'}
+                ORDER BY created_at DESC
+                LIMIT ${LIST_LIMIT}`;
+  const rows = (userId ? db.prepare(sql).all(userId) : db.prepare(sql).all()) as ProviderListRow[];
+  return rows.map((row) => toProviderSummary(row, false));
+}
+
+function toProviderSummary(row: ProviderListRow, legacyGlobal: boolean): AIProviderSummary {
+  const ownerId = legacyGlobal || row.owner_id == null || row.owner_id === '' ? null : String(row.owner_id);
+  const summary: AIProviderSummary = {
+    id: String(row.id),
+    name: String(row.name ?? ''),
+    api_url: String(row.api_url ?? ''),
+    model_name: String(row.model_name ?? ''),
+    owner_id: ownerId,
+    is_shared: legacyGlobal || Number(row.is_shared) === 1 || ownerId === null,
+    created_at: Number(row.created_at ?? 0),
+    updated_at: Number(row.updated_at ?? 0),
+  };
+  // 纵深防御：即使以后有人把 SELECT * 铺进这里，凭据字段也不能离开这个函数。
+  const leaked = summary as AIProviderSummary & Record<string, unknown>;
+  for (const key of Object.keys(leaked)) {
+    if (/api[_-]?key|secret|password|token|authorization/i.test(key)) delete leaked[key];
+  }
+  return summary;
 }

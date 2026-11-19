@@ -284,6 +284,7 @@ delete(key: string): Promise<void>;
 
 ```ts
 generateText(prompt: string, options?: { systemInstruction?: string; temperature?: number }): Promise<string>;
+listProviders?(): Promise<AIProviderSummary[]>; // ai:invoke；返回值不含 api_key
 registerAIPersona?(persona: AIPersonaDefinition): void;
 listAIPersonas?(): AIPersonaDefinition[];
 unregisterAIPersona?(id: string): void;

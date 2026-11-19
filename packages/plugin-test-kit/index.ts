@@ -278,6 +278,22 @@ export class MockAI implements IAIService {
   async generateText(prompt: string, options?: { systemInstruction?: string; temperature?: number }): Promise<string> {
     return this.generateTextFn(prompt, options);
   }
+
+  /** 测试桩默认没有已配置的提供商。平台实现不会在这里放 api_key。 */
+  async listProviders(): Promise<
+    Array<{
+      id: string;
+      name: string;
+      api_url: string;
+      model_name: string;
+      owner_id: string | null;
+      is_shared: boolean;
+      created_at: number;
+      updated_at: number;
+    }>
+  > {
+    return [];
+  }
 }
 
 // ── Mock: IPluginLogger ──────────────────────────────────────────────────

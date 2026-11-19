@@ -331,6 +331,7 @@ manifest JSON 解析失败的行**静默跳过**。
 ```typescript
 interface IAIService {
   generateText(prompt: string, options?: { systemInstruction?: string; temperature?: number }): Promise<string>;
+  listProviders?(): Promise<AIProviderSummary[]>;
 
   registerAIContextProvider?(id: string, fn: (lessonId: string | null) => string | null): void;
   unregisterAIContextProvider?(id: string): void;
@@ -376,6 +377,7 @@ interface AIPersonaDefinition {
 | 能力                        | 可达性                         | 能力门槛     | 说明                                                                                                             |
 | :-------------------------- | :----------------------------- | :----------- | :--------------------------------------------------------------------------------------------------------------- |
 | `generateText`              | inline / worker / process 均可 | `ai:invoke`  | 委托数据库里配置的 OpenAI 兼容提供商，返回 `trim()` 后的文本                                                     |
+| `listProviders`             | inline / worker / process 均可 | `ai:invoke`  | 返回当前调用方可用的提供商元数据，形状同 `GET /api/ai-providers`，但永不包含 `api_key`。不是活动注册表的同名方法 |
 | `registerAIContextProvider` | ⚠ **仅 Inline**                | `ai:persona` | `fn` 是**服务端闭包**，Worker 序列化边界无法传递函数。Agent 对话时按 `lessonId` 调用（学生角色自动跳过插件切片） |
 | `registerAIPersona`         | inline / worker 均可           | `ai:persona` | `persona` 持久化到 `ai_personas` 表；支持 `overlay` / `replace`、角色可见性与 `toolPolicy`；宿主内置不可覆盖删除 |
 | `listAIPersonas`            | —                              | —            | 返回 builtin + plugin（含管理员覆盖后的）角色定义                                                                |

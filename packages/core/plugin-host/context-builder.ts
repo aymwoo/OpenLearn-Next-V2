@@ -25,7 +25,13 @@ import type { ResourceTracker } from './resource-tracker.js';
 import type { ServiceRegistry } from '../di/service-registry.js';
 import { createLogger } from '../observability/logger.js';
 import { recordSecurityAudit } from '../observability/audit-log.js';
-import { CAP_AI_PERSONA, CAP_STUDENT_DATA_READ, CAP_STUDENT_DATA_WRITE, hasCapability } from './method-policy.js';
+import {
+  CAP_AI_INVOKE,
+  CAP_AI_PERSONA,
+  CAP_STUDENT_DATA_READ,
+  CAP_STUDENT_DATA_WRITE,
+  hasCapability,
+} from './method-policy.js';
 import { PluginCapabilityDeniedError } from './errors.js';
 import { createGuardedPluginDatabase, isSqlGuardAllModesEnabled } from './inline-db-guard.js';
 import { warnDeprecation } from '../extension-points/index.js';
@@ -1005,6 +1011,22 @@ function wrapAI(
   tracker: ResourceTracker,
   capabilities?: readonly string[],
 ): IAIService {
+  const assertInvokeCapability = (method: string) => {
+    const hasCap = hasCapability(capabilities ?? [], CAP_AI_INVOKE);
+    recordSecurityAudit('plugin.ai_provider_list', {
+      pluginId,
+      method,
+      hasCapability: hasCap,
+      ...(hasCap ? {} : { denied: true }),
+    });
+    if (!hasCap) {
+      console.error(
+        `[Security] 插件 "${pluginId}" 调用 ai.${method} 被拒：缺少能力 "${CAP_AI_INVOKE}"。请在 manifest.capabilitiesProposed 声明它。`,
+      );
+      throw new PluginCapabilityDeniedError(pluginId, CAP_AI_INVOKE, 'read', method);
+    }
+  };
+
   const assertPersonaCapability = (method: string, targetId: string, extra?: Record<string, unknown>) => {
     const hasCap = hasCapability(capabilities ?? [], CAP_AI_PERSONA);
     recordSecurityAudit('plugin.ai_persona_access', {
@@ -1034,6 +1056,11 @@ function wrapAI(
         }
       },
     ),
+    // 枚举提供商：忽略插件入参，避免伪造 userId。底层未实现时返回空列表（可选成员）。
+    listProviders: createSafeFunction(async () => {
+      assertInvokeCapability('listProviders');
+      return (await aiService.listProviders?.()) ?? [];
+    }),
     // P2: ai.context.provider —— 插件注册 AI 上下文切片（可选方法）
     //
     // 审计 D-1：这两类注册此前**没有**登记 disposer，停用后永久留存 ——
