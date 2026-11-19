@@ -433,7 +433,7 @@ AI 助手对话记忆。`id` / `conv_key` / `role` / `content` / `created_at`。
 
 ### `site_settings`
 
-站点设置。`id` / `site_name` / `slogan` / `logo_url` / `community_registry_url`（迁移 051，未配置时回落 `PLUGIN_COMMUNITY_REGISTRY_URL`） / `community_install_enabled`（迁移 052：`NULL` 表示未配置并回落 `OPENLEARN_COMMUNITY_INSTALL`，`0` 为显式关闭，`1` 为显式开启） / `bridge_hook_telemetry`、`http_access_log_mode`、`http_access_log_ignore`、`http_slow_ms`、`allow_unsigned_plugins`（迁移 053：均为 `NULL` 表示未配置并回落对应环境变量；管理员在「站点信息设置 → 运行时策略」配置。`http_access_log_mode` 取值 `off`/`errors`/`all`，不是布尔）。
+站点设置。`id` / `site_name` / `slogan` / `logo_url` / `community_registry_url`（迁移 051，未配置时回落 `PLUGIN_COMMUNITY_REGISTRY_URL`） / `community_install_enabled`（迁移 052：`NULL` 表示未配置并默认开启，`0` 为显式关闭，`1` 为显式开启；环境变量不再控制） / `bridge_hook_telemetry`、`http_access_log_mode`、`http_access_log_ignore`、`http_slow_ms`、`allow_unsigned_plugins`（迁移 053：均为 `NULL` 表示未配置并使用历史默认；管理员在「站点信息设置 → 运行时策略」配置。`http_access_log_mode` 取值 `off`/`errors`/`all`，不是布尔） / `mode_packs_enabled`、`mode_pack_show_xuean_tab`（迁移 068：`NULL` 表示未配置，两者默认关闭）。
 
 ### `system_resources`
 
@@ -535,7 +535,7 @@ MFE 远端登记。MFE 执行边界已移除，表保留作历史数据兼容。
 
 <!-- AUTO-GENERATED:table-inventory BEGIN -->
 
-共 **104** 张表（迁移 69 个，金样生成于 2026-11-19T13:06:17.774Z）。列清单为列名（类型与约束见迁移 SQL）：
+共 **104** 张表（迁移 70 个，金样生成于 2026-11-19T14:44:10.790Z）。列清单为列名（类型与约束见迁移 SQL）：
 
 - `_academic_year_backfill`: backfilled_at, id
 - `_class_passcode_encryption`: id, note
@@ -623,7 +623,7 @@ MFE 远端登记。MFE 执行边界已移除，表保留作历史数据兼容。
 - `schedules`: academic_year, class_id, created_at, id, lesson_id, notes, scheduled_date, status, time_slot
 - `segment_gate_overrides`: actor_id, created_at, lesson_id, reason, segment_id, student_id
 - `segment_visits`: entered_at, id, left_at, lesson_id, segment_id, student_id
-- `site_settings`: academic_start_month, allow_public_student_lookup, allow_unsigned_plugins, bridge_hook_telemetry, community_install_enabled, community_registry_url, current_academic_year, default_theme_id, file_storage_config, http_access_log_ignore, http_access_log_mode, http_slow_ms, id, logo_url, logout_clear_site_data, site_name, slogan, upload_max_file_mb
+- `site_settings`: academic_start_month, allow_public_student_lookup, allow_unsigned_plugins, bridge_hook_telemetry, community_install_enabled, community_registry_url, current_academic_year, default_theme_id, file_storage_config, http_access_log_ignore, http_access_log_mode, http_slow_ms, id, logo_url, logout_clear_site_data, mode_pack_show_xuean_tab, mode_packs_enabled, site_name, slogan, upload_max_file_mb
 - `student_lesson_progress`: academic_year, assigned_at, completed, completed_segments, lesson_id, progress_percent, student_id, verified, verified_progress_percent
 - `student_point_logs`: class_id, created_at, delta_points, dimension_id, id, plugin_id, reason, student_id
 - `student_read_notifications`: created_at, notification_id, student_id

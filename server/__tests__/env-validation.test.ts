@@ -110,7 +110,6 @@ describe('startup env validation', () => {
       OPENLEARN_PLUGIN_PERMISSION: 'ro',
       OPENLEARN_PLUGIN_MAX_HEAP_MB: '256',
       OPENLEARN_WORKER_LIVENESS: 'on',
-      BRIDGE_HOOK_TELEMETRY: 'off',
       ENCRYPTION_KEY: 'a'.repeat(64),
       OPENLEARN_ADMIN_PASSWORD: 'S3cure-Admin-Pass',
       OPENLEARN_TEACHER_PASSWORD: 'S3cure-Teacher-Pass',
@@ -136,9 +135,9 @@ describe('startup env validation', () => {
         'OPENLEARN_PLUGIN_PERMISSION',
         'OPENLEARN_PLUGIN_MAX_HEAP_MB',
         'OPENLEARN_WORKER_LIVENESS',
-        'BRIDGE_HOOK_TELEMETRY',
       ]),
     );
+    expect(keys).not.toContain('BRIDGE_HOOK_TELEMETRY');
   });
 
   it('拒绝越界的 PORT', () => {

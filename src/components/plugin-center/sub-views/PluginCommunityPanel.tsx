@@ -1058,8 +1058,8 @@ export function PluginCommunityPanel({
         setInstallNotice(
           installEnabled === null
             ? zh
-              ? '已清除界面覆盖，将按环境变量或默认开启生效'
-              : 'Cleared UI override; env or default-on now applies'
+              ? '已清除设置，恢复默认开启'
+              : 'Cleared the setting; community install is on by default'
             : installEnabled
               ? zh
                 ? '已允许从社区注册表安装，立即生效'
@@ -1082,21 +1082,16 @@ export function PluginCommunityPanel({
     const enabled = Boolean(data?.installEnabled ?? true);
     const source = canConfigure ? data?.installConfigSource : null;
     const stored = canConfigure ? data?.storedInstallEnabled : null;
-    const hasEnvFallback = canConfigure ? Boolean(data?.hasInstallEnvFallback) : false;
     const sourceLabel =
       source === 'database'
         ? zh
-          ? '当前来源：管理员界面配置（覆盖环境变量）'
-          : 'Source: admin UI setting (overrides env)'
-        : source === 'env'
+          ? '当前来源：设置（站点信息或本页）'
+          : 'Source: Settings'
+        : source === 'default'
           ? zh
-            ? `当前来源：环境变量 OPENLEARN_COMMUNITY_INSTALL=${enabled ? '1' : '0'}（未在界面显式配置）`
-            : `Source: OPENLEARN_COMMUNITY_INSTALL=${enabled ? '1' : '0'} (no explicit UI setting)`
-          : source === 'default'
-            ? zh
-              ? '当前来源：默认开启（未在界面或环境变量中关闭）'
-              : 'Source: default on (not disabled in UI or env)'
-            : null;
+            ? '当前来源：默认开启（设置里尚未配置）'
+            : 'Source: default on (not set in Settings)'
+          : null;
 
     return (
       <div
@@ -1115,8 +1110,8 @@ export function PluginCommunityPanel({
             <p className="text-xs text-gray-500 leading-relaxed mt-1">
               {canConfigure
                 ? zh
-                  ? '默认开启。管理员可在此开启或关闭，保存后立即对安装、URL 更新和社区直传生效。未在界面显式配置时，可使用环境变量 OPENLEARN_COMMUNITY_INSTALL=0 关闭；显式设置会覆盖该环境变量。'
-                  : 'On by default. Admins can turn this on or off here; the change applies immediately to install, URL update, and community direct upload. When no explicit UI value is stored, env OPENLEARN_COMMUNITY_INSTALL=0 can disable it; an explicit UI value overrides that env.'
+                  ? '默认开启。管理员可在此或「站点信息设置 → 运行时策略」开关。保存后立即对安装、URL 更新和社区直传生效，无需重启。环境变量不再控制此开关。'
+                  : 'On by default. Administrators can change it here or under Site Settings → Runtime policies. It applies immediately to install, URL update, and community upload, without a restart. Environment variables no longer control this switch.'
                 : zh
                   ? '社区安装由管理员在插件中心配置，默认开启。'
                   : 'Community install is configured by an administrator and is on by default.'}
@@ -1151,13 +1146,7 @@ export function PluginCommunityPanel({
             onClick={() => void submitInstallConfig(null)}
             className="text-xs font-semibold text-indigo-700 hover:text-indigo-900 disabled:opacity-60 cursor-pointer"
           >
-            {hasEnvFallback
-              ? zh
-                ? '清除界面覆盖，回退到环境变量'
-                : 'Clear UI override and fall back to env'
-              : zh
-                ? '清除界面覆盖，恢复默认开启'
-                : 'Clear UI override and fall back to default on'}
+            {zh ? '清除设置，恢复默认开启' : 'Clear the setting and restore the default (on)'}
           </button>
         )}
         {installError && (

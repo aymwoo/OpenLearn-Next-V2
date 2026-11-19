@@ -6,12 +6,12 @@
 
 ## 1. 前置条件
 
-| 项         | 要求                                                                                                                                 |
-| :--------- | :----------------------------------------------------------------------------------------------------------------------------------- |
-| 宿主平台   | OpenLearnV2 `>=0.7.7`（或按 `engines.openlearn` 声明的范围）                                                                         |
-| Node.js    | `20.x` / `22.x` / `24.x`（`engines` 硬约束，安装期守卫会拦截其它版本）                                                               |
-| 包管理器   | `pnpm@10.33.4`（平台侧）；插件侧 `npm` / `pnpm` 均可                                                                                 |
-| 宿主已开启 | 未签名本地包：`OPENLEARN_ALLOW_UNSIGNED`（默认放行，记 `unverified_local_acknowledged` 审计）；签名分发：`OPENLEARN_TRUSTED_PUBKEYS` |
+| 项         | 要求                                                                                                                                          |
+| :--------- | :-------------------------------------------------------------------------------------------------------------------------------------------- |
+| 宿主平台   | OpenLearnV2 `>=0.7.7`（或按 `engines.openlearn` 声明的范围）                                                                                  |
+| Node.js    | `20.x` / `22.x` / `24.x`（`engines` 硬约束，安装期守卫会拦截其它版本）                                                                        |
+| 包管理器   | `pnpm@10.33.4`（平台侧）；插件侧 `npm` / `pnpm` 均可                                                                                          |
+| 宿主已开启 | 未签名本地包：管理后台「站点信息设置 → 运行时策略」默认放行（记 `unverified_local_acknowledged` 审计）；签名分发：`OPENLEARN_TRUSTED_PUBKEYS` |
 
 ---
 
@@ -111,10 +111,10 @@ npx @openlearn/plugin-sdk sign --key publisher.pem --publisher "My Team" dist/my
 
 安装方式三选一：
 
-1. **管理端上传**：插件中心 → 上传 ZIP。（未签名包在 `OPENLEARN_ALLOW_UNSIGNED=0` 时，
-   每次上传需带请求头 `x-allow-unsigned: true`。）
+1. **管理端上传**：插件中心 → 上传 ZIP。（未签名包在运行时策略里收紧后，
+   每次上传需带请求头 `x-allow-unsigned: true`。未配置时默认放行。）
 2. **ZIP 直传 API**：`POST /api/plugins/...`（安装/更新走同一路径，签名覆盖 `integrity` 字符串的 UTF-8 字节）。
-3. **社区注册表**：在插件中心「社区」页配置注册表地址，并由管理员打开「允许从社区注册表安装」（或在未配置时回退 `OPENLEARN_COMMUNITY_INSTALL=1`），同时设置 `OPENLEARN_COMMUNITY_PUBKEY`；缺公钥仍装不上。注册表只接受公网 HTTP(S)，回环与私网段被拒。
+3. **社区注册表**：在插件中心「社区」页配置注册表地址。社区安装默认开启，管理员可在「站点信息设置 → 运行时策略」或社区页关闭。同时设置 `OPENLEARN_COMMUNITY_PUBKEY`；缺公钥仍装不上。注册表只接受公网 HTTP(S)，回环与私网段被拒。
 
 验证：
 

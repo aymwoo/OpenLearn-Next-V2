@@ -21,9 +21,7 @@ import { RotatingFileStream, resolveRotationConfig } from './rotating-file-strea
  * - `LOG_MAX_SIZE_MB`   单文件大小上限（MB），默认 10
  * - `LOG_MAX_FILES`     轮转保留份数，默认 5
  */
-const defaultLevel =
-  process.env.LOG_LEVEL ||
-  (process.env.HTTP_ACCESS_LOG === 'all' ? 'debug' : process.env.NODE_ENV === 'production' ? 'info' : 'debug');
+const defaultLevel = process.env.LOG_LEVEL || (process.env.NODE_ENV === 'production' ? 'info' : 'debug');
 const consoleLevel = process.env.LOG_CONSOLE_LEVEL || defaultLevel;
 const fileLevel = defaultLevel;
 

@@ -1,6 +1,8 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterEach } from 'vitest';
 import { BRIDGE_SDK_CODE } from '../utils/bridge-sdk.js';
 import { injectLmsSdk } from '../routes/shared.js';
+import { kernelContainer } from '../../packages/core/kernel/index.js';
+import { setRuntimePolicies } from '../services/runtime-policies.js';
 
 describe('bridge HOOK telemetry kill-switch', () => {
   it('全部 5 处 HOOK 上报均受 __hookAllowed() 门控', () => {
@@ -16,20 +18,24 @@ describe('bridge HOOK telemetry kill-switch', () => {
     }
   });
 
-  it('注入默认开启，BRIDGE_HOOK_TELEMETRY=off 时关闭', () => {
+  it('注入默认开启；设置关闭后才关闭，环境变量 off 无效', () => {
     const req: any = { headers: {} };
     const cw = { id: 'cw-hook-test', name: 'hook', uuid: 'hook-uuid' };
+    process.env.BRIDGE_HOOK_TELEMETRY = 'off';
     const htmlOn = injectLmsSdk('<html><head></head><body></body></html>', req, cw);
     expect(htmlOn).toContain('window.__LMS_HOOK_TELEMETRY__ = true');
 
-    const prev = process.env.BRIDGE_HOOK_TELEMETRY;
-    process.env.BRIDGE_HOOK_TELEMETRY = 'off';
+    setRuntimePolicies(kernelContainer.db, { hookTelemetryEnabled: false });
+    const htmlOff = injectLmsSdk('<html><head></head><body></body></html>', req, cw);
+    expect(htmlOff).toContain('window.__LMS_HOOK_TELEMETRY__ = false');
+    delete process.env.BRIDGE_HOOK_TELEMETRY;
+  });
+
+  afterEach(() => {
     try {
-      const htmlOff = injectLmsSdk('<html><head></head><body></body></html>', req, cw);
-      expect(htmlOff).toContain('window.__LMS_HOOK_TELEMETRY__ = false');
-    } finally {
-      if (prev === undefined) delete process.env.BRIDGE_HOOK_TELEMETRY;
-      else process.env.BRIDGE_HOOK_TELEMETRY = prev;
+      setRuntimePolicies(kernelContainer.db, { hookTelemetryEnabled: null });
+    } catch {
+      /* 列尚未建立时忽略 */
     }
   });
 });

@@ -35,8 +35,7 @@ Manifest 贡献键：`contributes['mode.pack']`（见 `@openlearn/plugin-sdk` �
 
 宿主灰度开关（默认关，只影响**没有学案交付模式**的课）：
 
-- 构建期：`VITE_OPENLEARN_MODE_PACKS=1`
-- 运行时调试：`window.__OPENLEARN_MODE_PACKS__ = true`
+管理员在「站点信息设置 → 运行时策略」打开 Mode Pack。未配置时关闭。构建期变量和 `window` 调试旗标不再控制此开关。已打开的页面在重新获得焦点或刷新后生效，不需要重启进程。
 
 课程交付模式写在课节 `lessons.delivery_mode`（`whiteboard` 或 `xuean`）。它不是门户 `teachingModeId`。
 
@@ -75,7 +74,7 @@ flag 关闭 = 旧双编辑器路径，零行为变化。
 
 - 教师中栏 → 学生 tab 广播映射统一为 `mapTeacherMiddleTabToStudentTab()`（删除重复内联映射）。
 - Mode Pack 声明 `outlineContributionId`；课中侧栏按环节类型渲染白板页大纲或学案活动大纲。
-- flag 开时学生平行「学案」tab 默认隐藏；调试可设 `window.__OPENLEARN_DEBUG_XUEAN_TAB__ = true`。
+- flag 开时学生平行「学案」tab 默认隐藏；同一设置页可打开「显示学生平行学案页」。
 - `LiveClassroomView` 编排壳目标 ≤ ~1.5k LOC（逻辑外移到 hooks / 子组件）；第三方接入见 [mode-pack-third-party.md](../tutorials/mode-pack-third-party.md)。
 
 ### 1.1.3 学生进课后的两套页面

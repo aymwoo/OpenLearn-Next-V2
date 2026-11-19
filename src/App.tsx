@@ -19,9 +19,19 @@ import { CommandPaletteHost } from './features/command-palette/CommandPaletteHos
 import { SystemErrorCenterModal } from './features/modals/SystemErrorCenterModal';
 import ThemeFailsafeRecoveryButton from './components/ThemeFailsafeRecoveryButton';
 import { useAppComposer } from './hooks/useAppComposer';
-import { setActiveCourseDeliveryMode } from './features/classroom/mode-pack/flags';
+import {
+  getClientFeatureFlagVersion,
+  refreshClientFeatureFlags,
+  setActiveCourseDeliveryMode,
+  subscribeClientFeatureFlags,
+} from './features/classroom/mode-pack/flags';
 
 export default function App() {
+  const _featureFlagRevision = React.useSyncExternalStore(
+    subscribeClientFeatureFlags,
+    getClientFeatureFlagVersion,
+    getClientFeatureFlagVersion,
+  );
   const {
     appData,
     sessionLoading,
@@ -50,8 +60,26 @@ export default function App() {
   }, []);
 
   React.useEffect(() => {
+    void refreshClientFeatureFlags();
+    if (typeof document === 'undefined') return;
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void refreshClientFeatureFlags();
+    };
+    const onLocal = () => {
+      void refreshClientFeatureFlags();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('openlearn:feature-flags-changed', onLocal);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('openlearn:feature-flags-changed', onLocal);
+    };
+  }, []);
+
+  React.useEffect(() => {
     if (typeof document === 'undefined') return;
     document.documentElement.lang = lang === 'en' ? 'en' : 'zh-CN';
+    void _featureFlagRevision;
     const siteName = appData.siteInfo?.siteName?.trim() || 'OpenLearn Next';
     const section = !session
       ? lang === 'en'
@@ -73,7 +101,7 @@ export default function App() {
               ? 'Teacher Workbench'
               : '教师工作台';
     document.title = section ? `${siteName} · ${section}` : siteName;
-  }, [lang, appData.siteInfo?.siteName, session, isStageDisplayMode, activeRole]);
+  }, [lang, appData.siteInfo?.siteName, session, isStageDisplayMode, activeRole, _featureFlagRevision]);
 
   if (sessionLoading) {
     return (

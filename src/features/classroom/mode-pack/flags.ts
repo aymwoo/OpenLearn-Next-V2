@@ -1,54 +1,125 @@
 /**
- * Mode Pack 引擎是否对该课生效。
+ * Mode Pack 与学生平行学案页的运行时开关。
  *
- * - 当前选中课程的交付模式是学案：始终走 Mode Pack（学案向导与学案课中），
- *   不依赖全局 `VITE_OPENLEARN_MODE_PACKS` / `window.__OPENLEARN_MODE_PACKS__`。
- * - 白板或未设置：仍看全局灰度开关。关闭时宿主走既有白板中栏。
- * - 单测：`setModePacksEnabledForTests` 优先于课程模式。
+ * 全局开关的唯一来源是设置（`GET /api/feature-flags`，管理员在「站点信息设置 → 运行时策略」写入）。
+ * 未拉到设置、或设置未配置时：Mode Pack 关闭，平行学案页隐藏。
+ * 当前课的交付模式是学案时，本课始终走 Mode Pack，不依赖这个全局开关。
+ * 单测用 `setModePacksEnabledForTests` / `setModePackShowXueanTabForTests` 覆盖，优先于课程模式和设置。
  */
+import { useSyncExternalStore } from 'react';
 import { isXueanDeliveryMode } from '../../../../packages/core/plugin-host/course-delivery-mode';
 
-declare global {
-  interface Window {
-    __OPENLEARN_MODE_PACKS__?: boolean;
-    /** P4：Mode Pack 开启时临时恢复学生平行学案 tab（调试） */
-    __OPENLEARN_DEBUG_XUEAN_TAB__?: boolean;
-  }
+export interface ClientFeatureFlags {
+  modePacksEnabled: boolean;
+  modePackShowXueanTab: boolean;
 }
 
-let testOverride: boolean | null = null;
+const DEFAULT_FLAGS: ClientFeatureFlags = {
+  modePacksEnabled: false,
+  modePackShowXueanTab: false,
+};
+
+let current: ClientFeatureFlags = { ...DEFAULT_FLAGS };
+let revision = 0;
+let modePackTestOverride: boolean | null = null;
+let xueanTabTestOverride: boolean | null = null;
 let activeDeliveryMode: unknown = null;
+const listeners = new Set<() => void>();
+
+function emit(): void {
+  revision += 1;
+  listeners.forEach((listener) => listener());
+}
+
+export function subscribeClientFeatureFlags(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
+
+export function getClientFeatureFlagVersion(): number {
+  return revision;
+}
 
 /** 由应用根在渲染时写入当前课的 delivery_mode。传 null 表示没有选中课。 */
 export function setActiveCourseDeliveryMode(mode: unknown): void {
-  activeDeliveryMode = mode ?? null;
+  const next = mode ?? null;
+  if (next === activeDeliveryMode) return;
+  activeDeliveryMode = next;
+  emit();
 }
 
 export function getActiveCourseDeliveryMode(): unknown {
   return activeDeliveryMode;
 }
 
-/** 仅测试使用：覆盖全局开关；传 null 清除。不影响课程模式，除非覆盖值非 null。 */
+/** 仅测试使用：覆盖 Mode Pack；传 null 清除。 */
 export function setModePacksEnabledForTests(value: boolean | null): void {
-  testOverride = value;
+  modePackTestOverride = value;
+  emit();
 }
 
-function readGlobalModePackFlag(): boolean {
-  if (typeof window !== 'undefined' && typeof window.__OPENLEARN_MODE_PACKS__ === 'boolean') {
-    return window.__OPENLEARN_MODE_PACKS__;
-  }
+/** 仅测试使用：覆盖「Mode Pack 开启时显示平行学案页」；传 null 清除。 */
+export function setModePackShowXueanTabForTests(value: boolean | null): void {
+  xueanTabTestOverride = value;
+  emit();
+}
 
-  try {
-    const env = (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env;
-    const raw = env?.VITE_OPENLEARN_MODE_PACKS;
-    return raw === '1' || raw === 'true';
-  } catch {
-    return false;
-  }
+export function resetClientFeatureFlagsForTests(): void {
+  current = { ...DEFAULT_FLAGS };
+  modePackTestOverride = null;
+  xueanTabTestOverride = null;
+  activeDeliveryMode = null;
+  emit();
 }
 
 export function isModePacksEnabled(): boolean {
-  if (testOverride !== null) return testOverride;
+  if (modePackTestOverride !== null) return modePackTestOverride;
   if (isXueanDeliveryMode(activeDeliveryMode)) return true;
-  return readGlobalModePackFlag();
+  return current.modePacksEnabled;
+}
+
+export function isModePackShowXueanTab(): boolean {
+  if (xueanTabTestOverride !== null) return xueanTabTestOverride;
+  return current.modePackShowXueanTab;
+}
+
+export function applyClientFeatureFlags(flags: Partial<ClientFeatureFlags>): void {
+  const next: ClientFeatureFlags = {
+    modePacksEnabled: flags.modePacksEnabled === true,
+    modePackShowXueanTab: flags.modePackShowXueanTab === true,
+  };
+  if (
+    next.modePacksEnabled === current.modePacksEnabled &&
+    next.modePackShowXueanTab === current.modePackShowXueanTab
+  ) {
+    return;
+  }
+  current = next;
+  emit();
+}
+
+export async function refreshClientFeatureFlags(): Promise<void> {
+  if (typeof fetch !== 'function') return;
+  try {
+    const res = await fetch('/api/feature-flags');
+    if (!res?.ok) return;
+    const body = (await res.json()) as Partial<ClientFeatureFlags> | null;
+    if (!body || typeof body !== 'object') return;
+    applyClientFeatureFlags({
+      modePacksEnabled: body.modePacksEnabled === true,
+      modePackShowXueanTab: body.modePackShowXueanTab === true,
+    });
+  } catch {
+    // 保留上一次成功值；首次失败维持默认关闭。
+  }
+}
+
+export function useModePacksEnabled(): boolean {
+  useSyncExternalStore(subscribeClientFeatureFlags, getClientFeatureFlagVersion, getClientFeatureFlagVersion);
+  return isModePacksEnabled();
+}
+
+export function useModePackShowXueanTab(): boolean {
+  useSyncExternalStore(subscribeClientFeatureFlags, getClientFeatureFlagVersion, getClientFeatureFlagVersion);
+  return isModePackShowXueanTab();
 }

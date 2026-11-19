@@ -1,33 +1,12 @@
 /**
- * 管理员运行时策略：课件遥测、HTTP 访问日志、未签名本地插件。
- * 优先级：界面显式值（含显式关闭）> 未配置时环境变量回退 > 历史默认。
- * 列缺失或尚未配置时返回 stored=null，以免掩盖 ENV 回退。
+ * 管理员运行时策略与产品功能开关。
+ * 设置是唯一来源：未配置（NULL）时使用历史默认，不再读取环境变量。
+ * 列缺失时按未配置处理，避免旧库在迁移完成前改变默认行为。
  */
 export type HttpAccessLogMode = 'off' | 'errors' | 'all';
 export const DEFAULT_HTTP_SLOW_MS = 1000;
-export const HOOK_TELEMETRY_ENV = 'BRIDGE_HOOK_TELEMETRY';
-export const HTTP_ACCESS_LOG_ENV = 'HTTP_ACCESS_LOG';
-export const HTTP_ACCESS_LOG_IGNORE_ENV = 'HTTP_ACCESS_LOG_IGNORE';
-export const HTTP_SLOW_MS_ENV = 'HTTP_SLOW_MS';
-export const ALLOW_UNSIGNED_ENV = 'OPENLEARN_ALLOW_UNSIGNED';
-export const LOG_LEVEL_ENV = 'LOG_LEVEL';
 
-function envHttpAccessLogMode(env: NodeJS.ProcessEnv): HttpAccessLogMode {
-  const normalized = env[HTTP_ACCESS_LOG_ENV]?.trim().toLowerCase();
-  if (normalized === 'off' || normalized === 'errors' || normalized === 'all') return normalized;
-  const level = env[LOG_LEVEL_ENV]?.trim().toLowerCase();
-  if (level === 'debug' || level === 'trace') return 'all';
-  return 'errors';
-}
-
-function envSlowMs(env: NodeJS.ProcessEnv): number {
-  const raw = env[HTTP_SLOW_MS_ENV];
-  if (!raw) return DEFAULT_HTTP_SLOW_MS;
-  const parsed = Number.parseInt(raw.trim(), 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_HTTP_SLOW_MS;
-}
-
-export type PolicyConfigSource = 'database' | 'env' | 'default';
+export type PolicyConfigSource = 'database' | 'default';
 
 export interface RuntimePolicyDbLike {
   prepare(sql: string): {
@@ -42,14 +21,14 @@ export interface StoredRuntimePolicyRow {
   http_access_log_ignore?: string | null;
   http_slow_ms?: number | null;
   allow_unsigned_plugins?: number | boolean | null;
+  mode_packs_enabled?: number | boolean | null;
+  mode_pack_show_xuean_tab?: number | boolean | null;
 }
 
 export interface HookTelemetryPolicy {
   enabled: boolean;
   storedValue: boolean | null;
-  envOff: boolean;
   configSource: PolicyConfigSource;
-  hasEnvFallback: boolean;
 }
 
 export interface HttpAccessLogPolicy {
@@ -62,24 +41,31 @@ export interface HttpAccessLogPolicy {
   modeSource: PolicyConfigSource;
   ignoreSource: PolicyConfigSource;
   slowSource: PolicyConfigSource;
-  hasModeEnvFallback: boolean;
-  hasIgnoreEnvFallback: boolean;
-  hasSlowEnvFallback: boolean;
 }
 
 export interface AllowUnsignedPolicy {
   /** true = 未签名本地包可默认放行（仍记审计，不是全信任/内联）。false = 必须逐次 x-allow-unsigned: true。 */
   allowByDefault: boolean;
   storedValue: boolean | null;
-  envRestricts: boolean;
   configSource: PolicyConfigSource;
-  hasEnvFallback: boolean;
+}
+
+export interface ModePackPolicy {
+  /** 历史默认关闭。 */
+  enabled: boolean;
+  storedValue: boolean | null;
+  configSource: PolicyConfigSource;
+  /** Mode Pack 开启时是否显示学生平行学案页。历史默认关闭（隐藏）。 */
+  showXueanTab: boolean;
+  storedShowXueanTab: boolean | null;
+  showXueanTabSource: PolicyConfigSource;
 }
 
 export interface RuntimePoliciesSnapshot {
   hookTelemetry: HookTelemetryPolicy;
   httpAccessLog: HttpAccessLogPolicy;
   allowUnsigned: AllowUnsignedPolicy;
+  modePacks: ModePackPolicy;
 }
 
 const GLOBAL_ID = 'global';
@@ -139,7 +125,8 @@ export function getStoredRuntimePolicyRow(db: RuntimePolicyDbLike): StoredRuntim
   try {
     const row = db
       .prepare(
-        `SELECT bridge_hook_telemetry, http_access_log_mode, http_access_log_ignore, http_slow_ms, allow_unsigned_plugins
+        `SELECT bridge_hook_telemetry, http_access_log_mode, http_access_log_ignore, http_slow_ms,
+                allow_unsigned_plugins, mode_packs_enabled, mode_pack_show_xuean_tab
          FROM site_settings WHERE id = ?`,
       )
       .get(GLOBAL_ID) as StoredRuntimePolicyRow | undefined;
@@ -149,73 +136,32 @@ export function getStoredRuntimePolicyRow(db: RuntimePolicyDbLike): StoredRuntim
   }
 }
 
-/** 仅解析环境变量：只有显式 off 才关闭；未设置或 on 都开启（历史默认开启）。 */
-export function hookTelemetryEnabledFromEnv(env: NodeJS.ProcessEnv = process.env): boolean {
-  return env[HOOK_TELEMETRY_ENV] !== 'off';
-}
-
-/** 仅解析环境变量：只有 0/false 才收紧；未设置默认放行。 */
-export function allowUnsignedByDefaultFromEnv(env: NodeJS.ProcessEnv = process.env): boolean {
-  const raw = String(env[ALLOW_UNSIGNED_ENV] ?? '').toLowerCase();
-  return !['0', 'false'].includes(raw);
-}
-
-export function resolveHookTelemetryPolicy(
-  db: RuntimePolicyDbLike | null,
-  env: NodeJS.ProcessEnv = process.env,
-): HookTelemetryPolicy {
-  const storedValue = db ? parseStoredBool(getStoredRuntimePolicyRow(db)?.bridge_hook_telemetry) : null;
-  const envOff = env[HOOK_TELEMETRY_ENV] === 'off';
-  const envEnabled = hookTelemetryEnabledFromEnv(env);
+function boolPolicy(
+  storedValue: boolean | null,
+  fallback: boolean,
+): { enabled: boolean; configSource: PolicyConfigSource } {
   if (storedValue === true || storedValue === false) {
-    return {
-      enabled: storedValue,
-      storedValue,
-      envOff,
-      configSource: 'database',
-      hasEnvFallback: envOff,
-    };
+    return { enabled: storedValue, configSource: 'database' };
   }
-  return {
-    enabled: envEnabled,
-    storedValue: null,
-    envOff,
-    configSource: envOff ? 'env' : 'default',
-    hasEnvFallback: envOff,
-  };
+  return { enabled: fallback, configSource: 'default' };
 }
 
-export function resolveHttpAccessLogPolicy(
-  db: RuntimePolicyDbLike | null,
-  env: NodeJS.ProcessEnv = process.env,
-): HttpAccessLogPolicy {
+export function resolveHookTelemetryPolicy(db: RuntimePolicyDbLike | null): HookTelemetryPolicy {
+  const storedValue = db ? parseStoredBool(getStoredRuntimePolicyRow(db)?.bridge_hook_telemetry) : null;
+  const resolved = boolPolicy(storedValue, true);
+  return { enabled: resolved.enabled, storedValue, configSource: resolved.configSource };
+}
+
+export function resolveHttpAccessLogPolicy(db: RuntimePolicyDbLike | null): HttpAccessLogPolicy {
   const row = db ? getStoredRuntimePolicyRow(db) : null;
   const storedMode = parseStoredMode(row?.http_access_log_mode);
   const storedIgnore = typeof row?.http_access_log_ignore === 'string' ? row.http_access_log_ignore : null;
   const storedSlowMs =
     typeof row?.http_slow_ms === 'number' && Number.isInteger(row.http_slow_ms) ? row.http_slow_ms : null;
 
-  const envModeRaw = env[HTTP_ACCESS_LOG_ENV]?.trim().toLowerCase();
-  const hasModeEnv = envModeRaw === 'off' || envModeRaw === 'errors' || envModeRaw === 'all';
-  const envMode = envHttpAccessLogMode(env);
-  const mode = storedMode ?? envMode;
-  let modeSource: PolicyConfigSource;
-  if (storedMode) modeSource = 'database';
-  else if (hasModeEnv) modeSource = 'env';
-  else if (envMode === 'all')
-    modeSource = 'env'; // LOG_LEVEL=debug|trace 回退
-  else modeSource = 'default';
-
-  const envIgnore = env[HTTP_ACCESS_LOG_IGNORE_ENV];
-  const hasIgnoreEnv = Boolean(envIgnore && envIgnore.trim());
-  const ignorePrefixes =
-    storedIgnore !== null ? parseHttpAccessLogIgnoreInput(storedIgnore) : parseHttpAccessLogIgnoreInput(envIgnore);
-  const ignoreSource: PolicyConfigSource = storedIgnore !== null ? 'database' : hasIgnoreEnv ? 'env' : 'default';
-
-  const hasSlowEnv = Boolean(env[HTTP_SLOW_MS_ENV] && env[HTTP_SLOW_MS_ENV]!.trim());
-  const slowMs = storedSlowMs ?? envSlowMs(env);
-  const slowSource: PolicyConfigSource =
-    storedSlowMs != null ? 'database' : hasSlowEnv ? 'env' : slowMs === DEFAULT_HTTP_SLOW_MS ? 'default' : 'env';
+  const mode = storedMode ?? 'errors';
+  const ignorePrefixes = storedIgnore !== null ? parseHttpAccessLogIgnoreInput(storedIgnore) : [];
+  const slowMs = storedSlowMs ?? DEFAULT_HTTP_SLOW_MS;
 
   return {
     mode,
@@ -224,48 +170,40 @@ export function resolveHttpAccessLogPolicy(
     storedIgnore,
     slowMs,
     storedSlowMs,
-    modeSource,
-    ignoreSource,
-    slowSource,
-    hasModeEnvFallback: hasModeEnv,
-    hasIgnoreEnvFallback: hasIgnoreEnv,
-    hasSlowEnvFallback: hasSlowEnv,
+    modeSource: storedMode ? 'database' : 'default',
+    ignoreSource: storedIgnore !== null ? 'database' : 'default',
+    slowSource: storedSlowMs != null ? 'database' : 'default',
   };
 }
 
-export function resolveAllowUnsignedPolicy(
-  db: RuntimePolicyDbLike | null,
-  env: NodeJS.ProcessEnv = process.env,
-): AllowUnsignedPolicy {
+export function resolveAllowUnsignedPolicy(db: RuntimePolicyDbLike | null): AllowUnsignedPolicy {
   const storedValue = db ? parseStoredBool(getStoredRuntimePolicyRow(db)?.allow_unsigned_plugins) : null;
-  const envRestricts = !allowUnsignedByDefaultFromEnv(env);
-  const envAllows = allowUnsignedByDefaultFromEnv(env);
-  if (storedValue === true || storedValue === false) {
-    return {
-      allowByDefault: storedValue,
-      storedValue,
-      envRestricts,
-      configSource: 'database',
-      hasEnvFallback: envRestricts,
-    };
-  }
+  const resolved = boolPolicy(storedValue, true);
+  return { allowByDefault: resolved.enabled, storedValue, configSource: resolved.configSource };
+}
+
+export function resolveModePackPolicy(db: RuntimePolicyDbLike | null): ModePackPolicy {
+  const row = db ? getStoredRuntimePolicyRow(db) : null;
+  const storedValue = parseStoredBool(row?.mode_packs_enabled);
+  const storedShowXueanTab = parseStoredBool(row?.mode_pack_show_xuean_tab);
+  const enabled = boolPolicy(storedValue, false);
+  const showXueanTab = boolPolicy(storedShowXueanTab, false);
   return {
-    allowByDefault: envAllows,
-    storedValue: null,
-    envRestricts,
-    configSource: envRestricts ? 'env' : 'default',
-    hasEnvFallback: envRestricts,
+    enabled: enabled.enabled,
+    storedValue,
+    configSource: enabled.configSource,
+    showXueanTab: showXueanTab.enabled,
+    storedShowXueanTab,
+    showXueanTabSource: showXueanTab.configSource,
   };
 }
 
-export function resolveRuntimePolicies(
-  db: RuntimePolicyDbLike | null,
-  env: NodeJS.ProcessEnv = process.env,
-): RuntimePoliciesSnapshot {
+export function resolveRuntimePolicies(db: RuntimePolicyDbLike | null): RuntimePoliciesSnapshot {
   return {
-    hookTelemetry: resolveHookTelemetryPolicy(db, env),
-    httpAccessLog: resolveHttpAccessLogPolicy(db, env),
-    allowUnsigned: resolveAllowUnsignedPolicy(db, env),
+    hookTelemetry: resolveHookTelemetryPolicy(db),
+    httpAccessLog: resolveHttpAccessLogPolicy(db),
+    allowUnsigned: resolveAllowUnsignedPolicy(db),
+    modePacks: resolveModePackPolicy(db),
   };
 }
 
@@ -275,6 +213,8 @@ export interface RuntimePolicyPatch {
   httpAccessLogIgnore?: string | null;
   httpSlowMs?: number | null;
   allowUnsignedByDefault?: boolean | null;
+  modePacksEnabled?: boolean | null;
+  modePackShowXueanTab?: boolean | null;
 }
 
 function upsertColumn(db: RuntimePolicyDbLike, column: string, value: unknown): void {
@@ -284,25 +224,20 @@ function upsertColumn(db: RuntimePolicyDbLike, column: string, value: unknown): 
   ).run(GLOBAL_ID, value);
 }
 
-export function setRuntimePolicies(
-  db: RuntimePolicyDbLike,
-  patch: RuntimePolicyPatch,
-  env: NodeJS.ProcessEnv = process.env,
-): RuntimePoliciesSnapshot {
-  if (
-    patch.hookTelemetryEnabled === undefined &&
-    patch.httpAccessLogMode === undefined &&
-    patch.httpAccessLogIgnore === undefined &&
-    patch.httpSlowMs === undefined &&
-    patch.allowUnsignedByDefault === undefined
-  ) {
+function assertBoolOrNull(value: unknown, name: string): asserts value is boolean | null {
+  if (value !== null && typeof value !== 'boolean') {
+    throw new RuntimePolicyError(`${name} 必须是布尔值或 null`);
+  }
+}
+
+export function setRuntimePolicies(db: RuntimePolicyDbLike, patch: RuntimePolicyPatch): RuntimePoliciesSnapshot {
+  const keys = Object.keys(patch) as (keyof RuntimePolicyPatch)[];
+  if (keys.length === 0 || keys.every((key) => patch[key] === undefined)) {
     throw new RuntimePolicyError('缺少要更新的运行时策略字段');
   }
 
   if (patch.hookTelemetryEnabled !== undefined) {
-    if (patch.hookTelemetryEnabled !== null && typeof patch.hookTelemetryEnabled !== 'boolean') {
-      throw new RuntimePolicyError('hookTelemetryEnabled 必须是布尔值或 null');
-    }
+    assertBoolOrNull(patch.hookTelemetryEnabled, 'hookTelemetryEnabled');
     upsertColumn(
       db,
       'bridge_hook_telemetry',
@@ -331,25 +266,32 @@ export function setRuntimePolicies(
     }
   }
   if (patch.allowUnsignedByDefault !== undefined) {
-    if (patch.allowUnsignedByDefault !== null && typeof patch.allowUnsignedByDefault !== 'boolean') {
-      throw new RuntimePolicyError('allowUnsignedByDefault 必须是布尔值或 null');
-    }
+    assertBoolOrNull(patch.allowUnsignedByDefault, 'allowUnsignedByDefault');
     upsertColumn(
       db,
       'allow_unsigned_plugins',
       patch.allowUnsignedByDefault === null ? null : patch.allowUnsignedByDefault ? 1 : 0,
     );
   }
-  return resolveRuntimePolicies(db, env);
+  if (patch.modePacksEnabled !== undefined) {
+    assertBoolOrNull(patch.modePacksEnabled, 'modePacksEnabled');
+    upsertColumn(db, 'mode_packs_enabled', patch.modePacksEnabled === null ? null : patch.modePacksEnabled ? 1 : 0);
+  }
+  if (patch.modePackShowXueanTab !== undefined) {
+    assertBoolOrNull(patch.modePackShowXueanTab, 'modePackShowXueanTab');
+    upsertColumn(
+      db,
+      'mode_pack_show_xuean_tab',
+      patch.modePackShowXueanTab === null ? null : patch.modePackShowXueanTab ? 1 : 0,
+    );
+  }
+  return resolveRuntimePolicies(db);
 }
 
-export function tryResolveRuntimePoliciesFromKernel(
-  getDb: () => RuntimePolicyDbLike | null,
-  env: NodeJS.ProcessEnv = process.env,
-): RuntimePoliciesSnapshot {
+export function tryResolveRuntimePoliciesFromKernel(getDb: () => RuntimePolicyDbLike | null): RuntimePoliciesSnapshot {
   try {
-    return resolveRuntimePolicies(getDb(), env);
+    return resolveRuntimePolicies(getDb());
   } catch {
-    return resolveRuntimePolicies(null, env);
+    return resolveRuntimePolicies(null);
   }
 }

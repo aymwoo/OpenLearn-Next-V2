@@ -14,12 +14,6 @@ import { BRIDGE_SDK_CODE } from '../utils/bridge-sdk.js';
 import { ensureTestSchema } from './helpers/test-schema.js';
 import { setAuditSinkForTests, type AuditRecord } from '../../packages/core/observability/audit-log.js';
 import {
-  ALLOW_UNSIGNED_ENV,
-  HOOK_TELEMETRY_ENV,
-  HTTP_ACCESS_LOG_ENV,
-  HTTP_ACCESS_LOG_IGNORE_ENV,
-  HTTP_SLOW_MS_ENV,
-  LOG_LEVEL_ENV,
   RuntimePolicyError,
   normalizeHttpAccessLogIgnoreInput,
   normalizeHttpSlowMs,
@@ -53,12 +47,13 @@ function memoryPolicyDb(initial: StoredRuntimePolicyRow = {}): RuntimePolicyDbLi
 }
 
 const ENV_KEYS = [
-  HOOK_TELEMETRY_ENV,
-  HTTP_ACCESS_LOG_ENV,
-  HTTP_ACCESS_LOG_IGNORE_ENV,
-  HTTP_SLOW_MS_ENV,
-  ALLOW_UNSIGNED_ENV,
-  LOG_LEVEL_ENV,
+  'BRIDGE_HOOK_TELEMETRY',
+  'HTTP_ACCESS_LOG',
+  'HTTP_ACCESS_LOG_IGNORE',
+  'HTTP_SLOW_MS',
+  'OPENLEARN_ALLOW_UNSIGNED',
+  'LOG_LEVEL',
+  'OPENLEARN_COMMUNITY_INSTALL',
 ] as const;
 
 function clearEnv(): void {
@@ -74,7 +69,10 @@ function clearStoredPolicies(): void {
              http_access_log_mode = NULL,
              http_access_log_ignore = NULL,
              http_slow_ms = NULL,
-             allow_unsigned_plugins = NULL
+             allow_unsigned_plugins = NULL,
+             mode_packs_enabled = NULL,
+             mode_pack_show_xuean_tab = NULL,
+             community_install_enabled = NULL
          WHERE id = ?`,
       )
       .run('global');
@@ -88,8 +86,8 @@ describe('runtime policy resolvers', () => {
     clearEnv();
   });
 
-  it('默认：遥测开启、访问日志 errors、未签名默认放行，来源为 default', () => {
-    const snapshot = resolveRuntimePolicies(memoryPolicyDb(), {});
+  it('默认：遥测开启、访问日志 errors、未签名默认放行、Mode Pack 关闭', () => {
+    const snapshot = resolveRuntimePolicies(memoryPolicyDb());
     expect(snapshot.hookTelemetry).toMatchObject({
       enabled: true,
       storedValue: null,
@@ -108,88 +106,97 @@ describe('runtime policy resolvers', () => {
       storedValue: null,
       configSource: 'default',
     });
+    expect(snapshot.modePacks).toMatchObject({
+      enabled: false,
+      storedValue: null,
+      configSource: 'default',
+      showXueanTab: false,
+      showXueanTabSource: 'default',
+    });
   });
 
-  it('未设置存储值时回退环境变量', () => {
-    const env = {
-      [HOOK_TELEMETRY_ENV]: 'off',
-      [HTTP_ACCESS_LOG_ENV]: 'all',
-      [HTTP_ACCESS_LOG_IGNORE_ENV]: '/api/vfs,/health',
-      [HTTP_SLOW_MS_ENV]: '2500',
-      [ALLOW_UNSIGNED_ENV]: '0',
-    };
-    const snapshot = resolveRuntimePolicies(memoryPolicyDb(), env);
-    expect(snapshot.hookTelemetry).toMatchObject({ enabled: false, configSource: 'env', hasEnvFallback: true });
+  it('环境变量与 LOG_LEVEL 不再改变功能开关', () => {
+    process.env.BRIDGE_HOOK_TELEMETRY = 'off';
+    process.env.HTTP_ACCESS_LOG = 'all';
+    process.env.HTTP_ACCESS_LOG_IGNORE = '/api/vfs,/health';
+    process.env.HTTP_SLOW_MS = '2500';
+    process.env.OPENLEARN_ALLOW_UNSIGNED = '0';
+    process.env.LOG_LEVEL = 'debug';
+    const snapshot = resolveRuntimePolicies(memoryPolicyDb());
+    expect(snapshot.hookTelemetry).toMatchObject({ enabled: true, configSource: 'default' });
     expect(snapshot.httpAccessLog).toMatchObject({
-      mode: 'all',
-      modeSource: 'env',
-      ignorePrefixes: ['/api/vfs', '/health'],
-      ignoreSource: 'env',
-      slowMs: 2500,
-      slowSource: 'env',
+      mode: 'errors',
+      modeSource: 'default',
+      ignorePrefixes: [],
+      ignoreSource: 'default',
+      slowMs: 1000,
+      slowSource: 'default',
     });
-    expect(snapshot.allowUnsigned).toMatchObject({
-      allowByDefault: false,
-      configSource: 'env',
-      hasEnvFallback: true,
-    });
+    expect(snapshot.allowUnsigned).toMatchObject({ allowByDefault: true, configSource: 'default' });
+    expect(snapshot.modePacks.enabled).toBe(false);
   });
 
-  it('LOG_LEVEL=debug 在未设置 HTTP_ACCESS_LOG 时回退为 all', () => {
-    const policy = resolveHttpAccessLogPolicy(memoryPolicyDb(), { [LOG_LEVEL_ENV]: 'debug' });
-    expect(policy.mode).toBe('all');
-    expect(policy.modeSource).toBe('env');
-  });
-
-  it('显式存储值（含显式关闭）覆盖环境变量', () => {
+  it('显式存储值（含显式关闭）是唯一来源', () => {
     const db = memoryPolicyDb({
       bridge_hook_telemetry: 0,
       http_access_log_mode: 'off',
       http_access_log_ignore: '/metrics',
       http_slow_ms: 200,
       allow_unsigned_plugins: 1,
+      mode_packs_enabled: 1,
+      mode_pack_show_xuean_tab: 1,
     });
-    const env = {
-      [HOOK_TELEMETRY_ENV]: 'on',
-      [HTTP_ACCESS_LOG_ENV]: 'all',
-      [ALLOW_UNSIGNED_ENV]: '0',
-    };
-    const snapshot = resolveRuntimePolicies(db, env);
+    process.env.BRIDGE_HOOK_TELEMETRY = 'on';
+    process.env.HTTP_ACCESS_LOG = 'all';
+    process.env.OPENLEARN_ALLOW_UNSIGNED = '0';
+    const snapshot = resolveRuntimePolicies(db);
     expect(snapshot.hookTelemetry).toMatchObject({ enabled: false, storedValue: false, configSource: 'database' });
     expect(snapshot.httpAccessLog).toMatchObject({ mode: 'off', modeSource: 'database', slowMs: 200 });
     expect(snapshot.allowUnsigned).toMatchObject({ allowByDefault: true, storedValue: true, configSource: 'database' });
+    expect(snapshot.modePacks).toMatchObject({ enabled: true, showXueanTab: true, configSource: 'database' });
   });
 
-  it('列缺失时当作未配置并回退 ENV', () => {
+  it('列缺失时当作未配置并使用历史默认', () => {
     const missing: RuntimePolicyDbLike = {
       prepare() {
         throw new Error('no such column: bridge_hook_telemetry');
       },
     };
-    const policy = resolveHookTelemetryPolicy(missing, { [HOOK_TELEMETRY_ENV]: 'off' });
-    expect(policy).toMatchObject({ enabled: false, storedValue: null, configSource: 'env' });
+    process.env.BRIDGE_HOOK_TELEMETRY = 'off';
+    const policy = resolveHookTelemetryPolicy(missing);
+    expect(policy).toMatchObject({ enabled: true, storedValue: null, configSource: 'default' });
   });
 
-  it('持久化后再次读取仍是显式值；清除后恢复 ENV', () => {
+  it('持久化后再次读取仍是显式值；清除后恢复历史默认', () => {
     const db = memoryPolicyDb();
-    const env = { [HOOK_TELEMETRY_ENV]: 'off', [ALLOW_UNSIGNED_ENV]: '0', [HTTP_ACCESS_LOG_ENV]: 'all' };
-    setRuntimePolicies(
-      db,
-      { hookTelemetryEnabled: true, allowUnsignedByDefault: true, httpAccessLogMode: 'errors' },
-      env,
-    );
-    expect(resolveRuntimePolicies(db, env).hookTelemetry).toMatchObject({
+    process.env.BRIDGE_HOOK_TELEMETRY = 'off';
+    process.env.OPENLEARN_ALLOW_UNSIGNED = '0';
+    process.env.HTTP_ACCESS_LOG = 'all';
+    setRuntimePolicies(db, {
+      hookTelemetryEnabled: true,
+      allowUnsignedByDefault: true,
+      httpAccessLogMode: 'errors',
+      modePacksEnabled: true,
+    });
+    expect(resolveRuntimePolicies(db).hookTelemetry).toMatchObject({
       enabled: true,
       configSource: 'database',
     });
-    expect(resolveAllowUnsignedPolicy(db, env).allowByDefault).toBe(true);
-    expect(resolveHttpAccessLogPolicy(db, env).mode).toBe('errors');
+    expect(resolveAllowUnsignedPolicy(db).allowByDefault).toBe(true);
+    expect(resolveHttpAccessLogPolicy(db).mode).toBe('errors');
+    expect(resolveRuntimePolicies(db).modePacks.enabled).toBe(true);
 
-    setRuntimePolicies(db, { hookTelemetryEnabled: null, allowUnsignedByDefault: null, httpAccessLogMode: null }, env);
-    const restored = resolveRuntimePolicies(db, env);
-    expect(restored.hookTelemetry).toMatchObject({ enabled: false, storedValue: null, configSource: 'env' });
-    expect(restored.allowUnsigned).toMatchObject({ allowByDefault: false, storedValue: null, configSource: 'env' });
-    expect(restored.httpAccessLog).toMatchObject({ mode: 'all', storedMode: null, modeSource: 'env' });
+    setRuntimePolicies(db, {
+      hookTelemetryEnabled: null,
+      allowUnsignedByDefault: null,
+      httpAccessLogMode: null,
+      modePacksEnabled: null,
+    });
+    const restored = resolveRuntimePolicies(db);
+    expect(restored.hookTelemetry).toMatchObject({ enabled: true, storedValue: null, configSource: 'default' });
+    expect(restored.allowUnsigned).toMatchObject({ allowByDefault: true, storedValue: null, configSource: 'default' });
+    expect(restored.httpAccessLog).toMatchObject({ mode: 'errors', storedMode: null, modeSource: 'default' });
+    expect(restored.modePacks).toMatchObject({ enabled: false, storedValue: null, configSource: 'default' });
   });
 
   it('拒绝非法忽略前缀与慢请求阈值', () => {
@@ -298,14 +305,20 @@ describe('runtime policy routes and execution gates', () => {
     expect(body).toEqual({ enabled: true });
   });
 
-  it('管理员可读写策略，清除后恢复 ENV，审计不含密钥', async () => {
+  it('管理员可读写策略，清除后恢复历史默认，审计不含密钥', async () => {
     setAuditSinkForTests((row) => audits.push(row));
-    process.env[HOOK_TELEMETRY_ENV] = 'off';
+    process.env.BRIDGE_HOOK_TELEMETRY = 'off';
+    process.env.OPENLEARN_ALLOW_UNSIGNED = '0';
     const initial = await fetch(`${baseUrl}/api/admin/runtime-policies`, { headers: cookie(adminToken) });
     expect(initial.status).toBe(200);
     const initialBody = (await initial.json()) as any;
-    expect(initialBody.policies.hookTelemetry.enabled).toBe(false);
-    expect(initialBody.policies.hookTelemetry.configSource).toBe('env');
+    expect(initialBody.policies.hookTelemetry.enabled).toBe(true);
+    expect(initialBody.policies.hookTelemetry.configSource).toBe('default');
+    expect(initialBody.policies.modePacks.enabled).toBe(false);
+    expect(initialBody.policies.communityInstall.enabled).toBe(true);
+    expect(
+      initialBody.retiredFeatureEnv.some((item: { key: string }) => item.key.includes('OPENLEARN_ALLOW_UNSIGNED')),
+    ).toBe(true);
     expect(initialBody.reservedEnvBoundaries.some((item: { key: string }) => item.key.includes('ENCRYPTION_KEY'))).toBe(
       true,
     );
@@ -335,8 +348,26 @@ describe('runtime policy routes and execution gates', () => {
     });
     expect(clearRes.status).toBe(200);
     const cleared = (await clearRes.json()) as any;
-    expect(cleared.policies.hookTelemetry).toMatchObject({ enabled: false, storedValue: null, configSource: 'env' });
-    expect(cleared.policies.allowUnsigned).toMatchObject({ allowByDefault: true, storedValue: null });
+    expect(cleared.policies.hookTelemetry).toMatchObject({ enabled: true, storedValue: null, configSource: 'default' });
+    expect(cleared.policies.allowUnsigned).toMatchObject({
+      allowByDefault: true,
+      storedValue: null,
+      configSource: 'default',
+    });
+    expect(cleared.policies.httpAccessLog.mode).toBe('errors');
+  });
+
+  it('公开功能开关只返回 Mode Pack 生效值，环境变量不能打开它', async () => {
+    process.env.VITE_OPENLEARN_MODE_PACKS = '1';
+    const off = await fetch(`${baseUrl}/api/feature-flags`);
+    expect(off.status).toBe(200);
+    expect(await off.json()).toEqual({ modePacksEnabled: false, modePackShowXueanTab: false });
+
+    setRuntimePolicies(kernelContainer.db, { modePacksEnabled: true, modePackShowXueanTab: true });
+    const on = await fetch(`${baseUrl}/api/feature-flags`);
+    expect(await on.json()).toEqual({ modePacksEnabled: true, modePackShowXueanTab: true });
+    setRuntimePolicies(kernelContainer.db, { modePacksEnabled: null, modePackShowXueanTab: null });
+    delete process.env.VITE_OPENLEARN_MODE_PACKS;
   });
 
   it('公开站点设置不泄露运行时策略', async () => {
@@ -350,12 +381,16 @@ describe('runtime policy routes and execution gates', () => {
     expect(body).not.toContain('reservedEnvBoundaries');
   });
 
-  it('injectLmsSdk 与 /bridge.js 读取同一存储覆盖值', async () => {
-    process.env[HOOK_TELEMETRY_ENV] = 'off';
+  it('injectLmsSdk 与 /bridge.js 读取设置，环境变量 off 不能关闭遥测', async () => {
+    process.env.BRIDGE_HOOK_TELEMETRY = 'off';
     const req: any = { headers: {}, protocol: 'http', get: () => '127.0.0.1' };
     const cw = { id: 'cw-runtime', name: 'runtime', uuid: 'runtime-uuid' };
     const htmlEnv = injectLmsSdk('<html><head></head><body></body></html>', req, cw);
-    expect(htmlEnv).toContain('window.__LMS_HOOK_TELEMETRY__ = false');
+    expect(htmlEnv).toContain('window.__LMS_HOOK_TELEMETRY__ = true');
+
+    setRuntimePolicies(kernelContainer.db, { hookTelemetryEnabled: false });
+    const htmlOff = injectLmsSdk('<html><head></head><body></body></html>', req, cw);
+    expect(htmlOff).toContain('window.__LMS_HOOK_TELEMETRY__ = false');
 
     setRuntimePolicies(kernelContainer.db, { hookTelemetryEnabled: true });
     const htmlDb = injectLmsSdk('<html><head></head><body></body></html>', req, cw);
@@ -380,7 +415,7 @@ describe('runtime policy routes and execution gates', () => {
       body: JSON.stringify({ httpAccessLogIgnore: 'https://evil.example/' }),
     });
     expect(res.status).toBe(400);
-    const snap = resolveHttpAccessLogPolicy(kernelContainer.db, {});
+    const snap = resolveHttpAccessLogPolicy(kernelContainer.db);
     expect(snap.storedIgnore).toBeNull();
   });
 });

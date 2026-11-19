@@ -8,7 +8,7 @@ import { setAuditSinkForTests, type AuditRecord } from '../../packages/core/obse
 import { registerPluginsRoutes } from '../routes/plugins.js';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
 import { COMMUNITY_REGISTRY_ENV, DEFAULT_COMMUNITY_REGISTRY_URL } from '../services/community-registry.js';
-import { COMMUNITY_INSTALL_DISABLED_MESSAGE, COMMUNITY_INSTALL_ENV } from '../services/community-attest.js';
+import { COMMUNITY_INSTALL_DISABLED_MESSAGE } from '../services/community-attest.js';
 
 vi.mock('../services/community-registry.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../services/community-registry.js')>();
@@ -320,7 +320,7 @@ describe('community plugin registry routes', () => {
     beforeAll(() => {
       savedPubkeyEnv = process.env.OPENLEARN_COMMUNITY_PUBKEY;
       process.env.OPENLEARN_COMMUNITY_PUBKEY = pubPem;
-      process.env.OPENLEARN_COMMUNITY_INSTALL = '1';
+      process.env.OPENLEARN_COMMUNITY_INSTALL = '0';
       setAuditSinkForTests((record) => {
         auditEvents.push(record);
       });
@@ -364,7 +364,7 @@ describe('community plugin registry routes', () => {
       return await zip.generateAsync({ type: 'nodebuffer' });
     }
 
-    it('B2: OPENLEARN_ALLOW_UNSIGNED=0 时未签名本地包被拦截拒绝 (400 COMMUNITY_ATTESTATION_REQUIRED)', async () => {
+    it('B2: OPENLEARN_ALLOW_UNSIGNED=0 不再收紧；未配置时仍默认放行', async () => {
       const saved = process.env.OPENLEARN_ALLOW_UNSIGNED;
       process.env.OPENLEARN_ALLOW_UNSIGNED = '0';
       try {
@@ -379,10 +379,10 @@ describe('community plugin registry routes', () => {
           body: zipBuf,
         });
 
-        expect(res.status).toBe(400);
-        const body = (await res.json()) as { code?: string; error: string };
-        expect(body.code).toBe('COMMUNITY_ATTESTATION_REQUIRED');
-        expect(body.error).toContain('allowUnsigned');
+        expect(res.status).toBe(200);
+        const body = (await res.json()) as { success?: boolean; code?: string };
+        expect(body.success).toBe(true);
+        expect(body.code).not.toBe('COMMUNITY_ATTESTATION_REQUIRED');
       } finally {
         if (saved === undefined) delete process.env.OPENLEARN_ALLOW_UNSIGNED;
         else process.env.OPENLEARN_ALLOW_UNSIGNED = saved;
@@ -641,16 +641,16 @@ describe('community plugin registry routes', () => {
     let savedPubkeyEnv: string | undefined;
 
     beforeEach(() => {
-      savedInstallEnv = process.env[COMMUNITY_INSTALL_ENV];
+      savedInstallEnv = process.env.OPENLEARN_COMMUNITY_INSTALL;
       savedPubkeyEnv = process.env.OPENLEARN_COMMUNITY_PUBKEY;
-      delete process.env[COMMUNITY_INSTALL_ENV];
+      process.env.OPENLEARN_COMMUNITY_INSTALL = '0';
       clearStoredInstall();
     });
 
     afterEach(() => {
       clearStoredInstall();
-      if (savedInstallEnv === undefined) delete process.env[COMMUNITY_INSTALL_ENV];
-      else process.env[COMMUNITY_INSTALL_ENV] = savedInstallEnv;
+      if (savedInstallEnv === undefined) delete process.env.OPENLEARN_COMMUNITY_INSTALL;
+      else process.env.OPENLEARN_COMMUNITY_INSTALL = savedInstallEnv;
       if (savedPubkeyEnv === undefined) delete process.env.OPENLEARN_COMMUNITY_PUBKEY;
       else process.env.OPENLEARN_COMMUNITY_PUBKEY = savedPubkeyEnv;
     });
@@ -712,7 +712,7 @@ describe('community plugin registry routes', () => {
       expect(adminBody.installEnabled).toBe(true);
       expect(adminBody.installConfigSource).toBe('default');
       expect(adminBody.storedInstallEnabled).toBeNull();
-      expect(adminBody.hasInstallEnvFallback).toBe(false);
+      expect(adminBody.hasInstallEnvFallback).toBeUndefined();
       expect(typeof adminBody.publicKeysConfigured).toBe('boolean');
 
       const teacherRes = await fetch(`${baseUrl}/api/plugins/community`, { headers: cookie(teacherToken) });
@@ -721,17 +721,16 @@ describe('community plugin registry routes', () => {
       expect(teacherBody.canConfigure).toBe(false);
       expect(teacherBody.installConfigSource).toBeNull();
       expect(teacherBody.storedInstallEnabled).toBeNull();
-      expect(teacherBody.hasInstallEnvFallback).toBeNull();
+      expect(teacherBody.hasInstallEnvFallback).toBeUndefined();
       expect(teacherBody.publicKeysConfigured).toBeNull();
     });
 
-    it('未配置时环境变量 1 可回退开启，显式关闭覆盖后再清除可恢复', async () => {
-      process.env[COMMUNITY_INSTALL_ENV] = '1';
+    it('环境变量 0 不能关闭未配置的社区安装；显式关闭后清除恢复默认开启', async () => {
+      process.env.OPENLEARN_COMMUNITY_INSTALL = '0';
       const envRes = await fetch(`${baseUrl}/api/plugins/community`, { headers: cookie(adminToken) });
       const envBody = (await envRes.json()) as Record<string, unknown>;
       expect(envBody.installEnabled).toBe(true);
-      expect(envBody.installConfigSource).toBe('env');
-      expect(envBody.hasInstallEnvFallback).toBe(true);
+      expect(envBody.installConfigSource).toBe('default');
 
       const offRes = await putConfig(adminToken, { installEnabled: false });
       expect(offRes.status).toBe(200);
@@ -740,7 +739,6 @@ describe('community plugin registry routes', () => {
         installEnabled: false,
         storedInstallEnabled: false,
         installConfigSource: 'database',
-        hasInstallEnvFallback: true,
       });
       expect(storedInstall()).toBe(0);
 
@@ -753,7 +751,7 @@ describe('community plugin registry routes', () => {
       expect(clearBody).toMatchObject({
         installEnabled: true,
         storedInstallEnabled: null,
-        installConfigSource: 'env',
+        installConfigSource: 'default',
       });
       expect(storedInstall()).toBeNull();
     });

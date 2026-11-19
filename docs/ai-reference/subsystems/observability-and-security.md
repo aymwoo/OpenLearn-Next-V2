@@ -24,12 +24,12 @@
 
 ### 1.1 日志级别与落点
 
-| 变量                                                          | 作用                               |
-| ------------------------------------------------------------- | ---------------------------------- |
-| `LOG_LEVEL`                                                   | 文件日志级别                       |
-| `LOG_CONSOLE_LEVEL`                                           | 控制台日志级别（可与文件不同）     |
-| `LOG_DIR`                                                     | 日志目录，默认 `logs/`             |
-| `HTTP_ACCESS_LOG` / `HTTP_SLOW_MS` / `HTTP_ACCESS_LOG_IGNORE` | 访问日志开关、慢请求阈值、忽略路径 |
+| 变量                           | 作用                                                      |
+| ------------------------------ | --------------------------------------------------------- |
+| `LOG_LEVEL`                    | 文件日志级别                                              |
+| `LOG_CONSOLE_LEVEL`            | 控制台日志级别（可与文件不同）                            |
+| `LOG_DIR`                      | 日志目录，默认 `logs/`                                    |
+| 访问日志（设置，不是环境变量） | 模式、慢请求阈值与忽略前缀在「站点信息设置 → 运行时策略」 |
 
 `server/middleware/request-observability.ts` 负责把请求 id 注入 `req.requestId`，
 并记录慢请求。它挂载在 `server.ts` L308。
@@ -124,15 +124,15 @@
 
 `packages/core/capability-governance/`（12 文件 / 544 行）+ `plugin-host/plugin-grants.ts`。
 
-| 关注点       | 位置                                                                         | 说明                                 |
-| ------------ | ---------------------------------------------------------------------------- | ------------------------------------ |
-| 能力授予     | `plugin-grants.ts`                                                           | 激活时按 `capabilitiesProposed` 授予 |
-| 能力准入评审 | `capability-governance/`                                                     | 高危能力的额外审查                   |
-| 插件签名     | `packages/core/security/plugin-signature.ts`                                 | 签名/完整性校验                      |
-| 签名错误族   | `plugin-host/errors.ts` L190-241                                             | `PluginSignatureError` 及 4 个子类   |
-| 未签名放行   | `OPENLEARN_ALLOW_UNSIGNED`（未配置时的回退；管理员也可在「运行时策略」覆盖） | 历史默认放行；生产建议收紧           |
+| 关注点       | 位置                                         | 说明                                 |
+| ------------ | -------------------------------------------- | ------------------------------------ |
+| 能力授予     | `plugin-grants.ts`                           | 激活时按 `capabilitiesProposed` 授予 |
+| 能力准入评审 | `capability-governance/`                     | 高危能力的额外审查                   |
+| 插件签名     | `packages/core/security/plugin-signature.ts` | 签名/完整性校验                      |
+| 签名错误族   | `plugin-host/errors.ts` L190-241             | `PluginSignatureError` 及 4 个子类   |
+| 未签名放行   | 管理后台「站点信息设置 → 运行时策略」        | 历史默认放行；生产建议收紧           |
 
-**`OPENLEARN_ALLOW_UNSIGNED`（及后台同类开关）不是「关闭校验」**，而是「允许无签名本地插件安装」；签名失败、公钥、网络限制、权限与沙箱仍不可绕过。
+**未签名放行开关不是「关闭校验」**，而是「允许无签名本地插件安装」；签名失败、公钥、网络限制、权限与沙箱仍不可绕过。环境变量不再控制此开关。
 有签名但签名错误的插件依然被拒（`PluginSignatureInvalidError`）。
 
 ---
