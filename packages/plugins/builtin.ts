@@ -16,6 +16,7 @@ import type { PluginContext } from '@openlearn/plugin-sdk';
 import { hasDataSubmission, hasScoreDisplay, injectScoreSubmissionUsingAI } from './ai-submit-injector.js';
 import { SCORE_MONITOR_SCRIPT, SCORE_MONITOR_SCRIPT_ID, SCORE_MONITOR_SCRIPT_OWNER } from './score-monitor-script.js';
 import { resolveDataDir } from '../core/db/backup-paths.js';
+import { resolveCourseDeliveryMode } from '../core/plugin-host/course-delivery-mode.js';
 import {
   aggregateAttemptScore,
   describeAggregation,
@@ -109,6 +110,10 @@ export const BuiltinPlugin = {
         properties: {
           title: { type: 'STRING', description: '课程标题' },
           content: { type: 'STRING', description: '课程的初始 Markdown 内容，请生成一段简短的介绍或教学大纲' },
+          deliveryMode: {
+            type: 'STRING',
+            description: '课程交付模式：whiteboard（白板，默认）或 xuean（学案）。不是门户教学模式标签。',
+          },
         },
         required: ['title', 'content'],
       },
@@ -124,10 +129,11 @@ export const BuiltinPlugin = {
             ? rawCreatorId.split(':')[1]
             : rawCreatorId;
 
+        const deliveryMode = resolveCourseDeliveryMode(payload.deliveryMode);
         const stmt = db.prepare(
-          'INSERT INTO lessons (id, title, content, creator_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
+          'INSERT INTO lessons (id, title, content, creator_id, created_at, updated_at, delivery_mode) VALUES (?, ?, ?, ?, ?, ?, ?)',
         );
-        stmt.run(lessonId, payload.title, payload.content || '', creatorId, Date.now(), Date.now());
+        stmt.run(lessonId, payload.title, payload.content || '', creatorId, Date.now(), Date.now(), deliveryMode);
 
         await eventBus.publish({
           id: uuidv7(),

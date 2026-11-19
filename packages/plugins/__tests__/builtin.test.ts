@@ -63,7 +63,8 @@ describe('BuiltinPlugin', () => {
         progress_conditions TEXT,
         creator_id TEXT,
         created_at INTEGER NOT NULL,
-        updated_at INTEGER NOT NULL
+        updated_at INTEGER NOT NULL,
+        delivery_mode TEXT
       );
 
       CREATE TABLE IF NOT EXISTS whiteboard_elements (
@@ -197,6 +198,7 @@ describe('BuiltinPlugin', () => {
     const lesson = db.prepare('SELECT * FROM lessons WHERE id = ?').get(lessonId) as any;
     expect(lesson).toBeDefined();
     expect(lesson.title).toBe('Introduction to Physics');
+    expect(lesson.delivery_mode).toBe('whiteboard');
 
     // 2. Draw on whiteboard
     const drawRes = (await commandBus.execute({

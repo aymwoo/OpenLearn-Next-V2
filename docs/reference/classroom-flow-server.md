@@ -33,12 +33,17 @@
 
 Manifest 贡献键：`contributes['mode.pack']`（见 `@openlearn/plugin-sdk` 的 `ModePackContribution`）。
 
-宿主灰度开关（默认关，零行为变化）：
+宿主灰度开关（默认关，只影响**没有学案交付模式**的课）：
 
 - 构建期：`VITE_OPENLEARN_MODE_PACKS=1`
 - 运行时调试：`window.__OPENLEARN_MODE_PACKS__ = true`
 
-启用后宿主必须先调用 `normalizeSegmentType()`（空 type → `whiteboard`），再按 `segment.type` 匹配 Mode Pack / `classroom.active_segment.*`。
+课程交付模式写在课节 `lessons.delivery_mode`（`whiteboard` 或 `xuean`）。它不是门户 `teachingModeId`。
+
+- 未写入或 `whiteboard`：按白板。全局开关关闭时仍走既有白板中栏；开关打开时才进入白板 Mode Pack。
+- `xuean`：建课走学案向导（预习 / 研读 / 练习），上课注册并使用 `@openlearn/mode-xuean`。不需要再打开全局 Mode Pack 开关。
+
+启用 Mode Pack 路径后，宿主必须先调用 `normalizeSegmentType()`（空 type → `whiteboard`），再按 `segment.type` 匹配 Mode Pack / `classroom.active_segment.*`。学案课的环节类型使用 `xuean` 前缀。
 
 内置白板包 id：`@openlearn/mode-whiteboard`（`isDefault: true`，认领 `whiteboard`）。
 

@@ -1,12 +1,12 @@
 /**
- * Mode Pack 灰度开关（P0）。
+ * Mode Pack 引擎是否对该课生效。
  *
- * 默认关闭 → 宿主走既有白板中栏 / 学生平行 tab，行为与 main 一致。
- * 开启方式（任一即可）：
- *   - 构建期：`VITE_OPENLEARN_MODE_PACKS=1`
- *   - 运行时：`window.__OPENLEARN_MODE_PACKS__ = true`（调试）
- *   - 单测：`setModePacksEnabledForTests(true)`
+ * - 当前选中课程的交付模式是学案：始终走 Mode Pack（学案向导与学案课中），
+ *   不依赖全局 `VITE_OPENLEARN_MODE_PACKS` / `window.__OPENLEARN_MODE_PACKS__`。
+ * - 白板或未设置：仍看全局灰度开关。关闭时宿主走既有白板中栏。
+ * - 单测：`setModePacksEnabledForTests` 优先于课程模式。
  */
+import { isXueanDeliveryMode } from '../../../../packages/core/plugin-host/course-delivery-mode';
 
 declare global {
   interface Window {
@@ -17,15 +17,23 @@ declare global {
 }
 
 let testOverride: boolean | null = null;
+let activeDeliveryMode: unknown = null;
 
-/** 仅测试使用：覆盖开关；传 null 清除。 */
+/** 由应用根在渲染时写入当前课的 delivery_mode。传 null 表示没有选中课。 */
+export function setActiveCourseDeliveryMode(mode: unknown): void {
+  activeDeliveryMode = mode ?? null;
+}
+
+export function getActiveCourseDeliveryMode(): unknown {
+  return activeDeliveryMode;
+}
+
+/** 仅测试使用：覆盖全局开关；传 null 清除。不影响课程模式，除非覆盖值非 null。 */
 export function setModePacksEnabledForTests(value: boolean | null): void {
   testOverride = value;
 }
 
-export function isModePacksEnabled(): boolean {
-  if (testOverride !== null) return testOverride;
-
+function readGlobalModePackFlag(): boolean {
   if (typeof window !== 'undefined' && typeof window.__OPENLEARN_MODE_PACKS__ === 'boolean') {
     return window.__OPENLEARN_MODE_PACKS__;
   }
@@ -37,4 +45,10 @@ export function isModePacksEnabled(): boolean {
   } catch {
     return false;
   }
+}
+
+export function isModePacksEnabled(): boolean {
+  if (testOverride !== null) return testOverride;
+  if (isXueanDeliveryMode(activeDeliveryMode)) return true;
+  return readGlobalModePackFlag();
 }

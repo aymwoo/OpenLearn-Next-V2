@@ -3,7 +3,11 @@ import Markdown from 'react-markdown';
 import AccessibleDialog from '../../components/AccessibleDialog';
 import { BookOpen, Sparkles, Activity, Plus, CheckCircle2, ChevronRight, Database, Loader2 } from 'lucide-react';
 import { ExtensionPointRenderer } from '../../plugin-host/extension-point-renderer';
-import { getDefaultWizardTimeline } from '../../hooks/useCourseWizard';
+import { getDefaultWizardTimeline, getDefaultXueanTimeline } from '../../hooks/useCourseWizard';
+import {
+  resolveCourseDeliveryMode,
+  type CourseDeliveryMode,
+} from '../../../packages/core/plugin-host/course-delivery-mode';
 
 export interface WizardSegment {
   id: string;
@@ -42,6 +46,8 @@ export interface CourseWizardModalProps {
   wizardIsGeneratingOutline: boolean;
   handleGenerateOutline: () => Promise<void>;
   handleDeployWizardCourse: () => void;
+  wizardDeliveryMode?: CourseDeliveryMode;
+  setWizardDeliveryMode?: (mode: CourseDeliveryMode) => void;
 }
 
 export function CourseWizardModal(props: CourseWizardModalProps) {
@@ -66,7 +72,24 @@ export function CourseWizardModal(props: CourseWizardModalProps) {
     wizardIsGeneratingOutline,
     handleGenerateOutline,
     handleDeployWizardCourse,
+    wizardDeliveryMode = 'whiteboard',
+    setWizardDeliveryMode = () => {},
   } = props;
+  const deliveryMode = resolveCourseDeliveryMode(wizardDeliveryMode);
+  const xueanWizard = deliveryMode === 'xuean';
+  const wizardSteps = xueanWizard
+    ? [
+        { step: 1, zh: '1学案选题', en: '1 Study topic' },
+        { step: 2, zh: '2学案活动', en: '2 Activities' },
+        { step: 3, zh: '3学习说明', en: '3 Guide' },
+        { step: 4, zh: '4发布学案', en: '4 Publish' },
+      ]
+    : [
+        { step: 1, zh: '1内容选题', en: '1 Background' },
+        { step: 2, zh: '2课堂脉络', en: '2 Timeslots' },
+        { step: 3, zh: '3编写大纲', en: '3 Syllabus' },
+        { step: 4, zh: '4总览部署', en: '4 Deploy' },
+      ];
 
   return (
     <AccessibleDialog
@@ -88,7 +111,13 @@ export function CourseWizardModal(props: CourseWizardModalProps) {
           </div>
           <div>
             <h2 id="course-wizard-dialog-title" className="font-bold text-gray-850 text-base md:text-lg">
-              {lang === 'zh' ? '⭐ 互动课程发布与时间轴向导' : '⭐ Course Design Guide & Wizard'}
+              {xueanWizard
+                ? lang === 'zh'
+                  ? '⭐ 学案课程向导'
+                  : '⭐ Guided-study course wizard'
+                : lang === 'zh'
+                  ? '⭐ 互动课程发布与时间轴向导'
+                  : '⭐ Course Design Guide & Wizard'}
             </h2>
             <p className="text-xs text-gray-500 mt-0.5">
               {lang === 'zh'
@@ -109,12 +138,7 @@ export function CourseWizardModal(props: CourseWizardModalProps) {
 
       {/* Steps Navigation Bar */}
       <div className="px-6 py-4.5 border-b border-gray-50 bg-slate-50/50 flex items-center justify-between gap-2 shrink-0 select-none">
-        {[
-          { step: 1, zh: '1内容选题', en: '1 Background' },
-          { step: 2, zh: '2课堂脉络', en: '2 Timeslots' },
-          { step: 3, zh: '3编写大纲', en: '3 Syllabus' },
-          { step: 4, zh: '4总览部署', en: '4 Deploy' },
-        ].map((s, idx) => {
+        {wizardSteps.map((s, idx) => {
           const isActive = wizardStep === s.step;
           const isCompleted = wizardStep > s.step;
           return (
@@ -168,6 +192,57 @@ export function CourseWizardModal(props: CourseWizardModalProps) {
                 </p>
               </div>
             </div>
+
+            <fieldset className="border border-gray-200 rounded-xl p-4" data-testid="course-delivery-mode">
+              <legend className="px-1 text-xs font-bold text-gray-500 uppercase tracking-wider">
+                {lang === 'zh' ? '课程模式' : 'Course mode'}
+              </legend>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {(
+                  [
+                    {
+                      id: 'whiteboard' as const,
+                      zh: '白板模式',
+                      en: 'Whiteboard',
+                      hintZh: '用课堂时间轴和互动白板备课、上课。',
+                      hintEn: 'Plan and teach with a timeline and the interactive whiteboard.',
+                    },
+                    {
+                      id: 'xuean' as const,
+                      zh: '学案模式',
+                      en: 'Guided study',
+                      hintZh: '用学案活动组织预习、研读和练习。开课走学案课堂，不必再开全局 Mode Pack。',
+                      hintEn:
+                        'Organize preview, study, and practice. Class uses the guided-study flow without a global Mode Pack switch.',
+                    },
+                  ] as const
+                ).map((choice) => (
+                  <label
+                    key={choice.id}
+                    className={`flex items-start gap-2 rounded-lg border p-3 cursor-pointer ${
+                      deliveryMode === choice.id ? 'border-indigo-400 bg-indigo-50' : 'border-gray-200 bg-white'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="course-delivery-mode"
+                      value={choice.id}
+                      checked={deliveryMode === choice.id}
+                      onChange={() => setWizardDeliveryMode(choice.id)}
+                      className="mt-1"
+                    />
+                    <span>
+                      <span className="block text-sm font-semibold text-gray-800">
+                        {lang === 'zh' ? choice.zh : choice.en}
+                      </span>
+                      <span className="block text-xs text-gray-500 mt-1 leading-relaxed">
+                        {lang === 'zh' ? choice.hintZh : choice.hintEn}
+                      </span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 font-sans">
               <div className="md:col-span-2 space-y-4">
@@ -292,8 +367,8 @@ export function CourseWizardModal(props: CourseWizardModalProps) {
           </div>
         )}
 
-        {/* STEP 2: Timeline Builder / Presets */}
-        {wizardStep === 2 && (
+        {/* STEP 2: Timeline Builder / Presets（白板） */}
+        {wizardStep === 2 && !xueanWizard && (
           <div className="space-y-5 animate-in fade-in duration-200 text-left font-sans">
             <div className="bg-emerald-50/40 py-3.5 px-4.5 rounded-xl border border-emerald-100 text-xs text-emerald-850 leading-relaxed flex items-start gap-2 text-left">
               <Activity size={16} className="text-emerald-555 shrink-0 mt-0.5 animate-pulse" />
@@ -573,6 +648,93 @@ export function CourseWizardModal(props: CourseWizardModalProps) {
           </div>
         )}
 
+        {wizardStep === 2 && xueanWizard && (
+          <div className="space-y-5 text-left font-sans" data-testid="xuean-wizard-activities">
+            <div className="bg-emerald-50/40 py-3.5 px-4.5 rounded-xl border border-emerald-100 text-xs text-emerald-900 leading-relaxed">
+              {lang === 'zh'
+                ? '学案按活动推进：预习、研读、练习。这里的环节会写入课程时间轴，并在发布时生成对应学案活动。上课时走学案课堂，而不是白板中栏。'
+                : 'Guided study moves through preview, study, and practice. These steps become the timeline and study activities. Class uses the guided-study flow, not the whiteboard column.'}
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {[
+                {
+                  id: 'xuean-standard',
+                  title: lang === 'zh' ? '预习 · 研读 · 练习' : 'Preview, study, practice',
+                  segments: getDefaultXueanTimeline(lang, 'seg-preset-'),
+                },
+                {
+                  id: 'xuean-read',
+                  title: lang === 'zh' ? '通读学案' : 'Read-through guide',
+                  segments: [
+                    {
+                      id: 'seg-preset-x1',
+                      title: lang === 'zh' ? '通读材料' : 'Read the material',
+                      type: 'xuean',
+                      duration: '25m',
+                      color: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+                      notes: '',
+                    },
+                    {
+                      id: 'seg-preset-x2',
+                      title: lang === 'zh' ? '提交收获' : 'Submit takeaways',
+                      type: 'xuean',
+                      duration: '15m',
+                      color: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+                      notes: '',
+                    },
+                  ],
+                },
+              ].map((preset) => (
+                <button
+                  key={preset.id}
+                  type="button"
+                  onClick={() => setWizardCourseTimeline(preset.segments)}
+                  className="bg-white border rounded-xl p-3 text-left hover:border-emerald-400 cursor-pointer"
+                >
+                  <div className="font-bold text-gray-800 text-sm">{preset.title}</div>
+                </button>
+              ))}
+            </div>
+            <div className="space-y-2 border border-gray-150 rounded-xl p-3.5 bg-gray-50/50">
+              {wizardCourseTimeline.map((seg, idx) => (
+                <div
+                  key={seg.id}
+                  className="flex flex-col sm:flex-row items-center gap-3 bg-white border rounded-lg p-2.5"
+                >
+                  <span className="w-5 h-5 rounded-full bg-slate-100 flex items-center justify-center text-xs font-bold">
+                    {idx + 1}
+                  </span>
+                  <input
+                    type="text"
+                    aria-label={lang === 'zh' ? `学案活动 ${idx + 1} 标题` : `Activity ${idx + 1} title`}
+                    value={seg.title}
+                    onChange={(e) => {
+                      const updated = [...wizardCourseTimeline];
+                      updated[idx] = { ...updated[idx], title: e.target.value };
+                      setWizardCourseTimeline(updated);
+                    }}
+                    className="font-bold text-xs text-gray-800 bg-transparent border-b border-transparent focus:border-emerald-500 py-0.5 px-1 flex-1"
+                  />
+                  <select
+                    aria-label={lang === 'zh' ? `学案活动 ${idx + 1} 类型` : `Activity ${idx + 1} type`}
+                    value={seg.type}
+                    onChange={(e) => {
+                      const updated = [...wizardCourseTimeline];
+                      updated[idx] = { ...updated[idx], type: e.target.value };
+                      setWizardCourseTimeline(updated);
+                    }}
+                    className="bg-slate-50 border border-gray-200 text-xs font-bold text-gray-600 rounded p-1"
+                  >
+                    <option value="xuean:preview">{lang === 'zh' ? '预习' : 'Preview'}</option>
+                    <option value="xuean">{lang === 'zh' ? '研读' : 'Study'}</option>
+                    <option value="xuean:drill">{lang === 'zh' ? '练习' : 'Practice'}</option>
+                  </select>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* STEP 3: Syllabus and materials */}
         {wizardStep === 3 && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-in fade-in duration-200 font-sans text-left">
@@ -661,6 +823,18 @@ export function CourseWizardModal(props: CourseWizardModalProps) {
                 <div className="font-bold text-indigo-950 text-base sm:text-lg truncate">
                   {wizardCourseTitle || (lang === 'zh' ? '未指定课程主题' : 'Blank Topic')}
                 </div>
+                <span
+                  data-testid="wizard-delivery-mode-badge"
+                  className="inline-flex px-2 py-0.5 rounded text-xs font-extrabold bg-emerald-50 text-emerald-800 tracking-wide border border-emerald-150 shrink-0"
+                >
+                  {xueanWizard
+                    ? lang === 'zh'
+                      ? '学案模式'
+                      : 'Guided study'
+                    : lang === 'zh'
+                      ? '白板模式'
+                      : 'Whiteboard'}
+                </span>
                 <span className="inline-flex px-2 py-0.5 rounded text-xs font-extrabold bg-indigo-50 text-indigo-800 uppercase tracking-wide border border-indigo-150 shrink-0">
                   {wizardCourseCategory}
                 </span>

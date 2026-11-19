@@ -19,6 +19,7 @@ import { CommandPaletteHost } from './features/command-palette/CommandPaletteHos
 import { SystemErrorCenterModal } from './features/modals/SystemErrorCenterModal';
 import ThemeFailsafeRecoveryButton from './components/ThemeFailsafeRecoveryButton';
 import { useAppComposer } from './hooks/useAppComposer';
+import { setActiveCourseDeliveryMode } from './features/classroom/mode-pack/flags';
 
 export default function App() {
   const {
@@ -39,6 +40,14 @@ export default function App() {
     setProfileOpen,
     lang,
   } = useAppComposer();
+
+  const lessonId = stageLessonParam || selectedLesson;
+  const activeLesson = lessons.find((lesson) => lesson.id === lessonId);
+  setActiveCourseDeliveryMode(activeLesson?.delivery_mode ?? null);
+
+  React.useEffect(() => {
+    return () => setActiveCourseDeliveryMode(null);
+  }, []);
 
   React.useEffect(() => {
     if (typeof document === 'undefined') return;

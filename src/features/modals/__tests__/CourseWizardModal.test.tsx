@@ -41,6 +41,30 @@ describe('CourseWizardModal', () => {
     expect(screen.getByText(/Course Design Guide & Wizard/)).toBeTruthy();
   });
 
+  it('建课第一步可以选择白板或学案，默认白板', () => {
+    const setWizardDeliveryMode = vi.fn();
+    render(<CourseWizardModal {...makeProps({ wizardStep: 1, setWizardDeliveryMode })} />);
+    const whiteboard = screen.getByRole('radio', { name: /白板模式/ });
+    const xuean = screen.getByRole('radio', { name: /学案模式/ });
+    expect((whiteboard as HTMLInputElement).checked).toBe(true);
+    expect((xuean as HTMLInputElement).checked).toBe(false);
+    fireEvent.click(xuean);
+    expect(setWizardDeliveryMode).toHaveBeenCalledWith('xuean');
+  });
+
+  it('学案向导的活动步不使用白板讲授模板', () => {
+    render(<CourseWizardModal {...makeProps({ wizardStep: 2, wizardDeliveryMode: 'xuean' })} />);
+    expect(screen.getByTestId('xuean-wizard-activities')).toBeTruthy();
+    expect(screen.queryByText(/经典 5-15-15-5 讲授模式/)).toBeNull();
+    expect(screen.getByText(/预习 · 研读 · 练习/)).toBeTruthy();
+  });
+
+  it('白板向导仍使用课堂时间轴模板', () => {
+    render(<CourseWizardModal {...makeProps({ wizardStep: 2, wizardDeliveryMode: 'whiteboard' })} />);
+    expect(screen.getByText(/经典 5-15-15-5 讲授模式/)).toBeTruthy();
+    expect(screen.queryByTestId('xuean-wizard-activities')).toBeNull();
+  });
+
   it('does not render the wizard when closed', () => {
     render(<CourseWizardModal {...makeProps({ isCourseWizardOpen: false })} />);
     expect(screen.queryByText(/互动课程发布与时间轴向导/)).toBeNull();

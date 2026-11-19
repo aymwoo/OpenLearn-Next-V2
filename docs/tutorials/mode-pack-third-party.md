@@ -2,7 +2,7 @@
 
 目标：在**不改宿主**的前提下，实现第三种课中交付引擎（类似白板 / 学案）。
 
-灰度开关默认关闭：`VITE_OPENLEARN_MODE_PACKS` / `window.__OPENLEARN_MODE_PACKS__`。关闭时宿主行为与既有 main 一致。
+全局灰度开关默认关闭：`VITE_OPENLEARN_MODE_PACKS` / `window.__OPENLEARN_MODE_PACKS__`。关闭时，交付模式不是学案的课仍走既有白板中栏。学案课（`lessons.delivery_mode = xuean`）会启用学案 Mode Pack，不依赖这个全局开关。
 
 ## 1. 契约清单
 
