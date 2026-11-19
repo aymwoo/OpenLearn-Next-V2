@@ -493,7 +493,8 @@ test.describe('无障碍门禁（WCAG 2.0/2.1 A+AA）', () => {
     if (modalShown) {
       await page.getByTestId('icebreaker-skip-btn').click();
     }
-    const assignmentTab = page.getByRole('button', { name: /作业提交与互评|Assignments & Peer Reviews/ }).first();
+    await page.getByTestId('student-whiteboard-tools').click();
+    const assignmentTab = page.getByTestId('student-tool-assignment');
     await expect(assignmentTab).toBeVisible({ timeout: 25_000 });
     await assignmentTab.click();
     await page.waitForTimeout(1500);
