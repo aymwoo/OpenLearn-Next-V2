@@ -342,6 +342,7 @@ test.describe('师生双端一镜到底课堂全生命周期黄金旅程 E2E 测
 
       // 2. 教师端发起极速投票 (Quick Poll)
       logEvidence('Stage 2: 教师发起极速投票');
+      await teacherPage.getByTestId('teacher-whiteboard-tools').click();
       const quickPollBtn = teacherPage.locator('button:has-text("极速投票")');
       await expect(quickPollBtn).toBeVisible();
       await quickPollBtn.click();
@@ -387,6 +388,7 @@ test.describe('师生双端一镜到底课堂全生命周期黄金旅程 E2E 测
 
       // 教师点击推进进入课后小结
       logEvidence('Stage 2 -> Stage 3: 教师点击推进进入课后');
+      await teacherPage.getByTestId('teacher-whiteboard-panels').click();
       const advanceToWrapupBtn = teacherPage.locator('button:has-text("完成授课，进入课后")');
       await expect(advanceToWrapupBtn).toBeVisible();
       await advanceToWrapupBtn.click();
@@ -491,9 +493,11 @@ test.describe('师生双端一镜到底课堂全生命周期黄金旅程 E2E 测
       const backToTeachingBtn = teacherPage.locator('button:has-text("返回课中白板")');
       await expect(backToTeachingBtn).toBeVisible();
       await backToTeachingBtn.click();
+      await teacherPage.getByTestId('teacher-whiteboard-tools').click();
       await expect(teacherPage.getByTestId('classroom-stage-stepper')).toBeVisible({ timeout: 15_000 });
 
       // 再次推进至简报完成闭环
+      await teacherPage.getByTestId('teacher-whiteboard-panels').click();
       const advanceAgainBtn = teacherPage.locator('button:has-text("完成授课，进入课后")');
       await advanceAgainBtn.click();
       await expect(teacherPage.locator('button#post-class-advance-report-btn')).toBeVisible({ timeout: 15_000 });

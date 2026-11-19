@@ -201,6 +201,7 @@ test.describe('live_class 课中页面文字对比度（Issue #77）', () => {
     for (const theme of THEMES) {
       await reloadWithTheme(page, theme);
       await openTeacherClassroom(page);
+      await page.getByTestId('teacher-whiteboard-tools').click();
       await page.locator(`${COCKPIT} button:has-text("极速投票")`).first().click();
       await expect(page.locator(POLL_DIALOG)).toBeVisible({ timeout: 10_000 });
       await freezeAnimations(page);

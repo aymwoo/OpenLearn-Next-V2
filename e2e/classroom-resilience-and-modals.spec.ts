@@ -198,6 +198,7 @@ test.describe('课堂意外刷新容灾与高级教学模态框 E2E 测试 (Phas
       // =========================================================================
       // 8. 测试高级模态框 3：家校通知生成器 (ParentNotificationModal)
       // =========================================================================
+      await page.getByTestId('teacher-whiteboard-more').click();
       const parentNoticeBtn = page.locator('button[aria-label="家校通知生成器（课中预生成可在下课期间直接复制）"]');
       await expect(parentNoticeBtn).toBeVisible();
       await parentNoticeBtn.click();
@@ -212,6 +213,7 @@ test.describe('课堂意外刷新容灾与高级教学模态框 E2E 测试 (Phas
       // =========================================================================
       // 9. 测试高级模态框 4：学生五维雷达成长档案 (StudentGrowthProfileModal)
       // =========================================================================
+      await page.getByTestId('teacher-whiteboard-tools').click();
       const rollcallBtn = page.locator('#classroom-interactive-cockpit button:has-text("随机抽问")');
       await expect(rollcallBtn).toBeVisible();
       await rollcallBtn.click();

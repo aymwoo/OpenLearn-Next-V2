@@ -211,6 +211,7 @@ test.describe('教师端中控与白板多环节操控 E2E 测试 (Phase 2)', ()
 
       // 恢复左侧边栏
       await expandLeftBtn.click();
+      await page.getByTestId('teacher-whiteboard-tools').click();
       await expect(page.getByTestId('classroom-stage-stepper')).toBeVisible();
 
       // 截图存盘：白板大纲与时间轴操控完成

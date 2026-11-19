@@ -40,6 +40,7 @@ export function WhiteboardStudentClassroom({
   primarySurface: ReactNode;
   extraSurface: ReactNode;
 }) {
+  const [menuOpen, setMenuOpen] = useState(false);
   const [tool, setTool] = useState<ToolId | null>(null);
   const activeTool = TOOLS.find((item) => item.id === tool);
 
@@ -117,22 +118,45 @@ export function WhiteboardStudentClassroom({
         </StudentToolDrawer>
       </div>
 
-      <nav aria-label="白板课堂工具" className="flex flex-wrap gap-2">
-        {TOOLS.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            data-testid={`student-tool-${item.id}`}
-            aria-expanded={tool === item.id}
-            aria-controls={STUDENT_TOOL_DRAWER_ID}
-            onClick={() => setTool((current) => (current === item.id ? null : item.id))}
-            className={`rounded-full px-3 py-1.5 text-sm font-medium cursor-pointer ${
-              tool === item.id ? 'bg-gray-900 text-white' : 'bg-white text-gray-700 border border-gray-200'
-            }`}
-          >
-            {item.label}
-          </button>
-        ))}
+      <nav aria-label="白板课堂工具" className="flex items-center gap-2">
+        <button
+          type="button"
+          data-testid="student-whiteboard-tools"
+          aria-expanded={menuOpen}
+          aria-controls="student-whiteboard-tool-menu"
+          onClick={() => setMenuOpen((open) => !open)}
+          className="rounded-full px-3 py-1.5 text-sm font-medium cursor-pointer bg-white text-gray-800 border border-gray-200"
+        >
+          工具
+        </button>
+        <div
+          id="student-whiteboard-tool-menu"
+          data-testid="student-whiteboard-tool-menu"
+          data-open={menuOpen ? 'true' : 'false'}
+          hidden={!menuOpen}
+          className="flex flex-wrap gap-2"
+        >
+          {menuOpen
+            ? TOOLS.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  data-testid={`student-tool-${item.id}`}
+                  aria-expanded={tool === item.id}
+                  aria-controls={STUDENT_TOOL_DRAWER_ID}
+                  onClick={() => {
+                    setTool((current) => (current === item.id ? null : item.id));
+                    setMenuOpen(false);
+                  }}
+                  className={`rounded-full px-3 py-1.5 text-sm font-medium cursor-pointer ${
+                    tool === item.id ? 'bg-gray-900 text-white' : 'bg-white text-gray-700 border border-gray-200'
+                  }`}
+                >
+                  {item.label}
+                </button>
+              ))
+            : null}
+        </div>
       </nav>
     </div>
   );

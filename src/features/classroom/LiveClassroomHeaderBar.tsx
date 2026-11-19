@@ -1,9 +1,10 @@
-import React, { type MutableRefObject } from 'react';
+import React, { useState, type MutableRefObject } from 'react';
 import { School, ArrowLeftRight, Edit3, Eye, Shield, ShieldAlert, FileEdit } from 'lucide-react';
 import { uiStore } from '../../store/uiStore';
 import { liveClassStore } from '../../store/liveClassStore';
 import { classLockHint } from './class-session-lock';
 import { ClassroomToolbarQuickActions } from './ClassroomToolbarQuickActions';
+import { ClassroomCountdownWidget } from './ClassroomCountdownWidget';
 import type { LockMode } from '../../types/app';
 import type { ClassroomSyncChannel } from '../../services/classroom-sync-channel';
 import { rememberActiveLesson } from './live-class-resume-memory';
@@ -46,6 +47,7 @@ export function LiveClassroomHeaderBar({
   setLiveClassIsActive,
   addToast,
   prevTimerRunningRef,
+  compact = false,
 }: {
   lang: string;
   liveClassIsActive: boolean;
@@ -84,7 +86,32 @@ export function LiveClassroomHeaderBar({
   setLiveClassIsActive: (v: boolean) => void;
   addToast: (title: string, message: string, type?: 'info' | 'success' | 'warning' | 'error') => void;
   prevTimerRunningRef: MutableRefObject<boolean>;
+  /** 白板课：默认只留课题、计时和锁定，其余收进「更多」。 */
+  compact?: boolean;
 }) {
+  const [moreOpen, setMoreOpen] = useState(false);
+  const showSecondary = !compact || moreOpen;
+  const lessonTitle =
+    lessons.find((item) => item.id === selectedLesson)?.title || (lang === 'zh' ? '未选择课节' : 'No lesson');
+  const onTimeRemainingChange = (timeRemaining: number, isRunning: boolean) => {
+    const wasRunning = prevTimerRunningRef.current;
+    prevTimerRunningRef.current = isRunning;
+    liveClassStore.getState().setLiveClassTimeRemaining(timeRemaining);
+    if (wasRunning !== isRunning) {
+      setLiveClassIsActive(isRunning);
+      if (wasRunning && !isRunning) {
+        addToast(
+          lang === 'zh' ? '⏰ 环节时间到' : '⏰ Phase Timer Ended',
+          lang === 'zh'
+            ? '当前教学环节设定的时间已耗尽，建议转入下一环节。'
+            : 'The current segment duration has elapsed. Transition recommended.',
+          'warning',
+        );
+      }
+    }
+    syncChannelRef.current?.broadcastSyncTimer(timeRemaining, isRunning);
+  };
+
   return (
     <div className="bg-surface-secondary px-4 py-2.5 border-b border-theme flex items-center justify-between gap-3 shrink-0 overflow-x-auto no-scrollbar">
       <div className="flex items-center gap-2.5 select-none shrink-0 min-w-0">
@@ -95,9 +122,18 @@ export function LiveClassroomHeaderBar({
             />
             <span className={`w-2 h-2 rounded-full ${liveClassIsActive ? 'bg-emerald-500' : 'bg-rose-500'} relative`} />
           </div>
-          <h2 className="text-sm font-extrabold tracking-tight text-main flex items-center gap-2 shrink-0">
-            {lang === 'zh' ? '🔴 在线课堂' : '🔴 Live Classroom'}
-          </h2>
+          {compact ? (
+            <h1
+              data-testid="teacher-learning-topic"
+              className="text-base font-semibold tracking-tight text-main truncate max-w-[14rem] sm:max-w-xs"
+            >
+              {lessonTitle}
+            </h1>
+          ) : (
+            <h2 className="text-sm font-extrabold tracking-tight text-main flex items-center gap-2 shrink-0">
+              {lang === 'zh' ? '🔴 在线课堂' : '🔴 Live Classroom'}
+            </h2>
+          )}
         </div>
 
         <div
@@ -115,138 +151,159 @@ export function LiveClassroomHeaderBar({
             {classLockHint(lang)}
           </span>
         </div>
-        <button
-          type="button"
-          id="live-classroom-back-to-portal"
-          onClick={() => {
-            userReturnedToPortalRef.current = true;
-            enteredClassroomRef.current = false;
-            rememberActiveLesson(null);
-            setEntryDecisionReady(true);
-            setShowSessionPicker(false);
-            setShowEntryPortal(true);
-          }}
-          className="inline-flex items-center text-xs font-medium px-2 py-1 rounded-lg border border-theme text-muted hover:text-main hover:bg-surface shrink-0 cursor-pointer"
-          title={
-            lang === 'zh'
-              ? '回到起始门户。进行中的课不能换班'
-              : 'Back to the start portal. In-progress lessons stay on this class.'
-          }
-        >
-          {lang === 'zh' ? '返回门户' : 'Back to portal'}
-        </button>
-        <button
-          type="button"
-          id="live-classroom-open-sessions"
-          onClick={() => setShowSessionManager(true)}
-          className="inline-flex items-center text-xs font-medium px-2 py-1 rounded-lg border border-theme text-muted hover:text-main hover:bg-surface shrink-0 cursor-pointer"
-          title={lang === 'zh' ? '管理课堂历史与进行中会话' : 'Manage classroom sessions'}
-        >
-          {lang === 'zh' ? '会话档案' : 'Sessions'}
-        </button>
-        <button
-          type="button"
-          id="live-classroom-open-drawer"
-          onClick={() => uiStore.getState().setClassroomDrawerTab('plugins')}
-          className="inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-lg border border-theme text-muted hover:text-primary-theme hover:bg-surface shrink-0 cursor-pointer"
-          title={lang === 'zh' ? '课中快捷设置抽屉（插件/班级/系统设置免切白板）' : 'In-Class Settings Drawer'}
-        >
-          <span>⚙️</span>
-          <span>{lang === 'zh' ? '课中设置' : 'Settings'}</span>
-        </button>
-
-        <div className="flex items-center gap-1.5 shrink-0">
-          <select
-            id="live-classroom-lesson-select"
-            aria-label={lang === 'zh' ? '选择授课课程' : 'Select lesson to teach'}
-            value={pendingLessonId || ''}
-            onChange={(e) => {
-              const val = e.target.value === '' ? null : e.target.value;
-              setPendingLessonId(val);
-            }}
-            className="bg-surface border border-theme rounded-lg text-xs font-semibold px-2.5 py-1.5 focus:ring-1 focus:ring-primary-theme text-main outline-none cursor-pointer hover:bg-surface-secondary transition-colors max-w-[180px] sm:max-w-[240px] truncate"
+        {showSecondary ? (
+          <div
+            id="teacher-whiteboard-more-panel"
+            data-testid="teacher-whiteboard-more-panel"
+            data-open="true"
+            className="flex items-center gap-1.5"
           >
-            <option value="">{lang === 'zh' ? '-- 选择授课课节 --' : '-- Select Lesson --'}</option>
-            {lessons.map((l) => (
-              <option key={l.id} value={l.id}>
-                {l.title}
-              </option>
-            ))}
-          </select>
-
-          <button
-            type="button"
-            id="live-classroom-switch-lesson-btn"
-            disabled={!pendingLessonId || pendingLessonId === selectedLesson}
-            onClick={() => setIsSwitchLessonConfirmOpen(true)}
-            className={`inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1.5 rounded-lg transition-all cursor-pointer ${
-              pendingLessonId && pendingLessonId !== selectedLesson
-                ? 'bg-primary-solid hover:opacity-90 text-white shadow-2xs ring-1 ring-primary-theme/50 active:scale-95'
-                : 'bg-surface border border-theme/60 text-muted opacity-45 cursor-not-allowed'
-            }`}
-            title={
-              pendingLessonId && pendingLessonId !== selectedLesson
-                ? lang === 'zh'
-                  ? '点击切换上课课程（将弹出确认框）'
-                  : 'Switch lesson (confirmation needed)'
-                : lang === 'zh'
-                  ? '在下拉框选择不同课程后点击切换'
-                  : 'Select a different lesson to switch'
-            }
-          >
-            <ArrowLeftRight size={12} />
-            <span>{lang === 'zh' ? '切换' : 'Switch'}</span>
-          </button>
-
-          {selectedLesson && (
             <button
               type="button"
-              onClick={() => handleEditLesson(selectedLesson)}
-              title={lang === 'zh' ? '进入此课程的课程编辑器' : 'Edit lesson in Lesson Editor'}
-              className="inline-flex items-center gap-1 bg-surface border border-theme hover:border-primary-theme hover:bg-surface-secondary text-main text-xs font-semibold px-2 py-1.5 rounded-lg transition-colors cursor-pointer"
+              id="live-classroom-back-to-portal"
+              onClick={() => {
+                userReturnedToPortalRef.current = true;
+                enteredClassroomRef.current = false;
+                rememberActiveLesson(null);
+                setEntryDecisionReady(true);
+                setShowSessionPicker(false);
+                setShowEntryPortal(true);
+              }}
+              className="inline-flex items-center text-xs font-medium px-2 py-1 rounded-lg border border-theme text-muted hover:text-main hover:bg-surface shrink-0 cursor-pointer"
+              title={
+                lang === 'zh'
+                  ? '回到起始门户。进行中的课不能换班'
+                  : 'Back to the start portal. In-progress lessons stay on this class.'
+              }
             >
-              <Edit3 size={12} />
-              <span>{lang === 'zh' ? '编辑' : 'Edit'}</span>
+              {lang === 'zh' ? '返回门户' : 'Back to portal'}
             </button>
-          )}
-        </div>
+            <button
+              type="button"
+              id="live-classroom-open-sessions"
+              onClick={() => setShowSessionManager(true)}
+              className="inline-flex items-center text-xs font-medium px-2 py-1 rounded-lg border border-theme text-muted hover:text-main hover:bg-surface shrink-0 cursor-pointer"
+              title={lang === 'zh' ? '管理课堂历史与进行中会话' : 'Manage classroom sessions'}
+            >
+              {lang === 'zh' ? '会话档案' : 'Sessions'}
+            </button>
+            <button
+              type="button"
+              id="live-classroom-open-drawer"
+              onClick={() => uiStore.getState().setClassroomDrawerTab('plugins')}
+              className="inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-lg border border-theme text-muted hover:text-primary-theme hover:bg-surface shrink-0 cursor-pointer"
+              title={lang === 'zh' ? '课中快捷设置抽屉（插件/班级/系统设置免切白板）' : 'In-Class Settings Drawer'}
+            >
+              <span>⚙️</span>
+              <span>{lang === 'zh' ? '课中设置' : 'Settings'}</span>
+            </button>
+
+            <div className="flex items-center gap-1.5 shrink-0">
+              <select
+                id="live-classroom-lesson-select"
+                aria-label={lang === 'zh' ? '选择授课课程' : 'Select lesson to teach'}
+                value={pendingLessonId || ''}
+                onChange={(e) => {
+                  const val = e.target.value === '' ? null : e.target.value;
+                  setPendingLessonId(val);
+                }}
+                className="bg-surface border border-theme rounded-lg text-xs font-semibold px-2.5 py-1.5 focus:ring-1 focus:ring-primary-theme text-main outline-none cursor-pointer hover:bg-surface-secondary transition-colors max-w-[180px] sm:max-w-[240px] truncate"
+              >
+                <option value="">{lang === 'zh' ? '-- 选择授课课节 --' : '-- Select Lesson --'}</option>
+                {lessons.map((l) => (
+                  <option key={l.id} value={l.id}>
+                    {l.title}
+                  </option>
+                ))}
+              </select>
+
+              <button
+                type="button"
+                id="live-classroom-switch-lesson-btn"
+                disabled={!pendingLessonId || pendingLessonId === selectedLesson}
+                onClick={() => setIsSwitchLessonConfirmOpen(true)}
+                className={`inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1.5 rounded-lg transition-all cursor-pointer ${
+                  pendingLessonId && pendingLessonId !== selectedLesson
+                    ? 'bg-primary-solid hover:opacity-90 text-white shadow-2xs ring-1 ring-primary-theme/50 active:scale-95'
+                    : 'bg-surface border border-theme/60 text-muted opacity-45 cursor-not-allowed'
+                }`}
+                title={
+                  pendingLessonId && pendingLessonId !== selectedLesson
+                    ? lang === 'zh'
+                      ? '点击切换上课课程（将弹出确认框）'
+                      : 'Switch lesson (confirmation needed)'
+                    : lang === 'zh'
+                      ? '在下拉框选择不同课程后点击切换'
+                      : 'Select a different lesson to switch'
+                }
+              >
+                <ArrowLeftRight size={12} />
+                <span>{lang === 'zh' ? '切换' : 'Switch'}</span>
+              </button>
+
+              {selectedLesson && (
+                <button
+                  type="button"
+                  onClick={() => handleEditLesson(selectedLesson)}
+                  title={lang === 'zh' ? '进入此课程的课程编辑器' : 'Edit lesson in Lesson Editor'}
+                  className="inline-flex items-center gap-1 bg-surface border border-theme hover:border-primary-theme hover:bg-surface-secondary text-main text-xs font-semibold px-2 py-1.5 rounded-lg transition-colors cursor-pointer"
+                >
+                  <Edit3 size={12} />
+                  <span>{lang === 'zh' ? '编辑' : 'Edit'}</span>
+                </button>
+              )}
+            </div>
+          </div>
+        ) : null}
       </div>
 
       <div className="flex items-center gap-2 ml-auto shrink-0">
-        <button
-          onClick={handleOpenStudentWindow}
-          className={`w-8 h-8 rounded-lg transition-all cursor-pointer flex items-center justify-center relative shadow-sm active:scale-95 shrink-0 ${
-            isStudentWindowOpen
-              ? 'bg-emerald-600 hover:bg-emerald-700 text-white ring-2 ring-emerald-400/50 shadow-emerald-500/20'
-              : 'bg-gradient-to-r from-pink-600 to-rose-600 hover:from-pink-700 hover:to-rose-700 text-white'
-          }`}
-          title={
-            lang === 'zh'
-              ? isStudentWindowOpen
-                ? '学生端已联动 (独立Tab) - 点击激活'
-                : '学生视角预览 (独立Tab) - 在新窗口中联动打开'
-              : isStudentWindowOpen
-                ? 'Student Linked (Focus Tab)'
-                : 'Student Preview (New Tab)'
-          }
-          aria-label={
-            lang === 'zh'
-              ? isStudentWindowOpen
-                ? '学生端已联动 (独立Tab)'
-                : '学生视角预览 (独立Tab)'
-              : isStudentWindowOpen
-                ? 'Student Linked (Focus Tab)'
-                : 'Student Preview (New Tab)'
-          }
-        >
-          <Eye size={16} />
-          {isStudentWindowOpen && (
-            <span className="absolute -top-0.5 -right-0.5 flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-300 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400"></span>
-            </span>
-          )}
-        </button>
+        {compact ? (
+          <ClassroomCountdownWidget
+            variant="header"
+            lessonId={selectedLesson}
+            lang={lang === 'zh' ? 'zh' : 'en'}
+            syncChannel={syncChannelRef.current}
+            onlineStudentCount={onlineStudentIds?.length || liveClassAcknowledgedMap.size || 0}
+            onTimeRemainingChange={onTimeRemainingChange}
+          />
+        ) : null}
+        {showSecondary ? (
+          <button
+            onClick={handleOpenStudentWindow}
+            className={`w-8 h-8 rounded-lg transition-all cursor-pointer flex items-center justify-center relative shadow-sm active:scale-95 shrink-0 ${
+              isStudentWindowOpen
+                ? 'bg-emerald-600 hover:bg-emerald-700 text-white ring-2 ring-emerald-400/50 shadow-emerald-500/20'
+                : 'bg-gradient-to-r from-pink-600 to-rose-600 hover:from-pink-700 hover:to-rose-700 text-white'
+            }`}
+            title={
+              lang === 'zh'
+                ? isStudentWindowOpen
+                  ? '学生端已联动 (独立Tab) - 点击激活'
+                  : '学生视角预览 (独立Tab) - 在新窗口中联动打开'
+                : isStudentWindowOpen
+                  ? 'Student Linked (Focus Tab)'
+                  : 'Student Preview (New Tab)'
+            }
+            aria-label={
+              lang === 'zh'
+                ? isStudentWindowOpen
+                  ? '学生端已联动 (独立Tab)'
+                  : '学生视角预览 (独立Tab)'
+                : isStudentWindowOpen
+                  ? 'Student Linked (Focus Tab)'
+                  : 'Student Preview (New Tab)'
+            }
+          >
+            <Eye size={16} />
+            {isStudentWindowOpen && (
+              <span className="absolute -top-0.5 -right-0.5 flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-300 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400"></span>
+              </span>
+            )}
+          </button>
+        ) : null}
         {isClassLocked ? (
           <div className="inline-flex rounded-lg shadow-sm shrink-0">
             <button
@@ -331,42 +388,40 @@ export function LiveClassroomHeaderBar({
           </div>
         )}
 
-        <ClassroomToolbarQuickActions
-          lang={lang as any}
-          onOpenDiagnosticCenter={() => setIsDiagnosticCenterOpen(true)}
-          onOpenMasteryPrediction={() => setIsMasteryPredictionOpen(true)}
-          onOpenGroupCollab={() => {
-            setCollabInitialGalleryMode(false);
-            setIsGroupCollabOpen(true);
-          }}
-          onOpenShowcaseDiff={() => setIsShowcaseDiffOpen(true)}
-          onOpenPeerReviewShowcase={() => setIsPeerReviewShowcaseOpen(true)}
-          onOpenParentNotification={() => setIsParentNotificationOpen(true)}
-          onOpenMacroRunner={() => setIsMacroRunnerOpen(true)}
-          onOpenHardwareSettings={() => setIsHardwareSettingsOpen(true)}
-          onOpenInContextDrawer={(tab) => uiStore.getState().setClassroomDrawerTab(tab || 'plugins')}
-          selectedLesson={selectedLesson}
-          syncChannel={syncChannelRef.current}
-          onlineStudentCount={onlineStudentIds?.length || liveClassAcknowledgedMap.size || 0}
-          onTimeRemainingChange={(timeRemaining, isRunning) => {
-            const wasRunning = prevTimerRunningRef.current;
-            prevTimerRunningRef.current = isRunning;
-            liveClassStore.getState().setLiveClassTimeRemaining(timeRemaining);
-            if (wasRunning !== isRunning) {
-              setLiveClassIsActive(isRunning);
-              if (wasRunning && !isRunning) {
-                addToast(
-                  lang === 'zh' ? '⏰ 环节时间到' : '⏰ Phase Timer Ended',
-                  lang === 'zh'
-                    ? '当前教学环节设定的时间已耗尽，建议转入下一环节。'
-                    : 'The current segment duration has elapsed. Transition recommended.',
-                  'warning',
-                );
-              }
-            }
-            syncChannelRef.current?.broadcastSyncTimer(timeRemaining, isRunning);
-          }}
-        />
+        {showSecondary ? (
+          <ClassroomToolbarQuickActions
+            lang={lang as any}
+            showUtilities={!compact}
+            onOpenDiagnosticCenter={() => setIsDiagnosticCenterOpen(true)}
+            onOpenMasteryPrediction={() => setIsMasteryPredictionOpen(true)}
+            onOpenGroupCollab={() => {
+              setCollabInitialGalleryMode(false);
+              setIsGroupCollabOpen(true);
+            }}
+            onOpenShowcaseDiff={() => setIsShowcaseDiffOpen(true)}
+            onOpenPeerReviewShowcase={() => setIsPeerReviewShowcaseOpen(true)}
+            onOpenParentNotification={() => setIsParentNotificationOpen(true)}
+            onOpenMacroRunner={() => setIsMacroRunnerOpen(true)}
+            onOpenHardwareSettings={() => setIsHardwareSettingsOpen(true)}
+            onOpenInContextDrawer={(tab) => uiStore.getState().setClassroomDrawerTab(tab || 'plugins')}
+            selectedLesson={selectedLesson}
+            syncChannel={syncChannelRef.current}
+            onlineStudentCount={onlineStudentIds?.length || liveClassAcknowledgedMap.size || 0}
+            onTimeRemainingChange={onTimeRemainingChange}
+          />
+        ) : null}
+        {compact ? (
+          <button
+            type="button"
+            data-testid="teacher-whiteboard-more"
+            aria-expanded={moreOpen}
+            aria-controls="teacher-whiteboard-more-panel"
+            onClick={() => setMoreOpen((open) => !open)}
+            className="rounded-full px-3 py-1.5 text-sm font-medium cursor-pointer bg-white text-gray-800 border border-gray-200"
+          >
+            {lang === 'zh' ? '更多' : 'More'}
+          </button>
+        ) : null}
       </div>
     </div>
   );

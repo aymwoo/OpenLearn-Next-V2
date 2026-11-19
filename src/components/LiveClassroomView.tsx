@@ -5,6 +5,7 @@ import { liveClassStore } from '../store/liveClassStore';
 import { useAppData } from '../context/AppDataContext';
 import type { WhiteboardPageItem, WhiteboardHandle } from '../features/whiteboard/InteractiveWhiteboard';
 import { extensionCoversSegmentType, normalizeSegmentType } from '../../packages/core/plugin-host/mode-pack';
+import { resolveCourseDeliveryMode } from '../../packages/core/plugin-host/course-delivery-mode';
 import { useOptionalPluginHost } from '../plugin-host/plugin-host-context';
 import {
   isModePacksEnabled,
@@ -1144,6 +1145,9 @@ export function LiveClassroomView({
   return (
     <div className="flex-grow flex-1 flex flex-col min-h-0 bg-surface border border-theme rounded-2xl shadow-xl text-main overflow-hidden font-sans">
       <LiveClassroomHeaderBar
+        compact={
+          resolveCourseDeliveryMode(lessons.find((item) => item.id === selectedLesson)?.delivery_mode) !== 'xuean'
+        }
         lang={lang}
         liveClassIsActive={liveClassIsActive}
         classes={classes}
@@ -1187,6 +1191,9 @@ export function LiveClassroomView({
 
       {/* Interactive Classroom Cockpit (Stages, Polls, Buzzers, Exit Tickets, Stage Display) */}
       <ClassroomInteractiveCockpit
+        compact={
+          resolveCourseDeliveryMode(lessons.find((item) => item.id === selectedLesson)?.delivery_mode) !== 'xuean'
+        }
         lessonId={selectedLesson}
         lessonTitle={lessons.find((l) => l.id === selectedLesson)?.title}
         classId={liveClassSelectedClassId}
@@ -1281,6 +1288,8 @@ export function LiveClassroomView({
           getPagesForSegment,
         }}
         middleWorkspaceProps={{
+          compact:
+            resolveCourseDeliveryMode(lessons.find((item) => item.id === selectedLesson)?.delivery_mode) !== 'xuean',
           isLeftSidebarCollapsed,
           setIsLeftSidebarCollapsed,
           middleTab,

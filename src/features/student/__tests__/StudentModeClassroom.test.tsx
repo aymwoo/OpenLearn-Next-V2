@@ -107,6 +107,8 @@ describe('学生课堂按课程模式分流', () => {
     expect(screen.getByTestId('student-tool-drawer').getAttribute('data-open')).toBe('false');
     expect(screen.queryByTestId('student-lesson-content-panel')).toBeNull();
 
+    expect(screen.queryByTestId('student-tool-outline')).toBeNull();
+    fireEvent.click(screen.getByTestId('student-whiteboard-tools'));
     fireEvent.click(screen.getByTestId('student-tool-outline'));
     expect(screen.getByTestId('student-tool-drawer').getAttribute('data-open')).toBe('true');
     expect(screen.getByTestId('student-lesson-content-panel')).toBeTruthy();

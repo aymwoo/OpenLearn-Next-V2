@@ -98,6 +98,7 @@ describe('学生白板页主学习面不被全屏类覆盖', () => {
         <StudentLessonView {...makeProps()} />
       </Suspense>,
     );
+    fireEvent.click(screen.getByTestId('student-whiteboard-tools'));
     fireEvent.click(screen.getByTestId('student-tool-outline'));
     const content = screen.getByTestId('student-lesson-content-panel');
     expect(content.className.split(/\s+/)).not.toContain('md:block');

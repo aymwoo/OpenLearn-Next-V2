@@ -16,8 +16,6 @@
  * 窄屏下内容栏仍默认不显示（与修复前一致）。
  */
 import { expect, test, type APIRequestContext, type BrowserContext, type Page } from '@playwright/test';
-import fs from 'node:fs';
-import path from 'node:path';
 
 /** 读取元素在浏览器里真实生效的 computed display。 */
 async function computedDisplay(page: Page, testId: string): Promise<string> {
@@ -116,8 +114,8 @@ async function enterLessonView(student: BrowserContext, studentPage: Page, fixtu
     await expect(icebreakerModal).toBeHidden({ timeout: 10_000 });
   }
 
-  await expect(studentPage.getByTestId('student-lesson-content-panel')).toBeAttached({ timeout: 20_000 });
-  await expect(studentPage.getByTestId('student-lesson-interaction-panel')).toBeAttached({ timeout: 20_000 });
+  await expect(studentPage.getByTestId('student-whiteboard-classroom')).toBeVisible({ timeout: 20_000 });
+  await expect(studentPage.getByTestId('student-learning-topic')).toBeVisible({ timeout: 20_000 });
 }
 
 /** 清理测试数据。 */
@@ -130,8 +128,8 @@ async function cleanupClassroom(request: APIRequestContext, fixture: ClassroomFi
   await request.delete(`/api/classes/${fixture.classId}`).catch(() => {});
 }
 
-test.describe('学生端课节「全屏」切换 (Issue IKVSIN)', () => {
-  test('右栏全屏真正让左栏让位，左栏全屏真正让交互区让位', async ({ browser, request }) => {
+test.describe('学生白板页：工具可关掉，画布一直在', () => {
+  test('大纲收在工具菜单里，打开和关闭都不挡住画布', async ({ browser, request }) => {
     test.setTimeout(180_000);
 
     const fixture = await setupClassroom(request);
@@ -141,106 +139,44 @@ test.describe('学生端课节「全屏」切换 (Issue IKVSIN)', () => {
     try {
       await enterLessonView(student, studentPage, fixture);
 
-      const contentPanel = studentPage.getByTestId('student-lesson-content-panel');
-      const interactionPanel = studentPage.getByTestId('student-lesson-interaction-panel');
+      const topic = studentPage.getByTestId('student-learning-topic');
+      const canvas = studentPage.getByTestId('student-whiteboard-canvas');
+      await expect(topic).toBeVisible();
+      await expect(canvas).toBeVisible();
+      await expect(studentPage.getByTestId('student-tool-outline')).toBeHidden();
 
-      // 桌面视口必须落在 md 断点（48rem）之上，否则 `md:block` 根本不生效。
-      expect(studentPage.viewportSize()!.width).toBeGreaterThanOrEqual(768);
+      await studentPage.getByTestId('student-whiteboard-tools').click();
+      await studentPage.getByTestId('student-tool-outline').click();
+      await expect(studentPage.getByTestId('student-lesson-content-panel')).toBeVisible();
+      await expect(topic).toBeVisible();
+      expect(await computedDisplay(studentPage, 'student-whiteboard-canvas')).not.toBe('none');
 
-      // 1. 基线：课程内容默认折叠 ⇒ 左栏不可见，右栏独占整行
-      expect(await computedDisplay(studentPage, 'student-lesson-content-panel')).toBe('none');
-      expect(await computedDisplay(studentPage, 'student-lesson-interaction-panel')).not.toBe('none');
-
-      // 2. 展开课程内容 ⇒ 左栏出现（这是「点击全屏看起来没反应」的复现前提）
-      await studentPage.getByRole('button', { name: /展开课程内容|Expand Content/ }).click();
-      await expect(contentPanel).toBeVisible({ timeout: 10_000 });
-      expect(await computedDisplay(studentPage, 'student-lesson-content-panel')).toBe('block');
-
-      const contentBox = await contentPanel.boundingBox();
-      const interactionBox = await interactionPanel.boundingBox();
-      expect(contentBox).not.toBeNull();
-      expect(interactionBox).not.toBeNull();
-      // 左栏确实只占了约 1/3，而不是独占整行
-      expect(contentBox!.width).toBeLessThan(interactionBox!.width);
-
-      // 3. **核心断言**：点右栏「全屏」⇒ 左栏必须真正让位（display:none）
-      //    修复前这里是 'block'（`md:block` 覆盖了 `hidden`）⇒ 全屏「没反应」。
-      await studentPage.getByTestId('student-interaction-fullscreen-toggle').click();
-      await expect(interactionPanel).toBeVisible({ timeout: 10_000 });
-      expect(await computedDisplay(studentPage, 'student-lesson-content-panel')).toBe('none');
-      expect(await computedDisplay(studentPage, 'student-lesson-interaction-panel')).not.toBe('none');
-
-      // 右栏全屏后应独占整行：宽度明显大于并排时的右栏宽度
-      const fullInteractionBox = await interactionPanel.boundingBox();
-      expect(fullInteractionBox).not.toBeNull();
-      expect(fullInteractionBox!.width).toBeGreaterThan(interactionBox!.width);
-
-      // 4. 退出全屏 ⇒ 左栏回到原位
-      await studentPage.getByTestId('student-interaction-fullscreen-toggle').click();
-      await expect(contentPanel).toBeVisible({ timeout: 10_000 });
-      expect(await computedDisplay(studentPage, 'student-lesson-content-panel')).toBe('block');
-
-      // 5. 左栏全屏 ⇒ 交互区必须真正让位
-      await studentPage.getByTestId('student-content-fullscreen-toggle').click();
-      await expect(contentPanel).toBeVisible({ timeout: 10_000 });
-      expect(await computedDisplay(studentPage, 'student-lesson-interaction-panel')).toBe('none');
-      expect(await computedDisplay(studentPage, 'student-lesson-content-panel')).toBe('block');
-
-      // 截图留证：左栏全屏，交互区已让位
-      const shotDir = path.join(process.cwd(), 'artifacts', 'screenshots');
-      if (!fs.existsSync(shotDir)) fs.mkdirSync(shotDir, { recursive: true });
-      const shot = path.join(shotDir, 'student_fullscreen_layout.png');
-      await studentPage.screenshot({ path: shot, fullPage: true });
-      expect(fs.existsSync(shot)).toBe(true);
-
-      // 6. 退出左栏全屏 ⇒ 两侧恢复并排
-      await studentPage.getByTestId('student-content-fullscreen-toggle').click();
-      await expect(interactionPanel).toBeVisible({ timeout: 10_000 });
-      expect(await computedDisplay(studentPage, 'student-lesson-interaction-panel')).not.toBe('none');
+      await studentPage.getByTestId('student-tool-drawer-close').click();
+      await expect(studentPage.getByTestId('student-lesson-content-panel')).toHaveCount(0);
+      await expect(canvas).toBeVisible();
+      expect(await computedDisplay(studentPage, 'student-whiteboard-canvas')).not.toBe('none');
     } finally {
       await cleanupClassroom(request, fixture);
       await student.close();
     }
   });
 
-  test('窄屏（<48rem）下内容栏保持隐藏，行为与修复前一致', async ({ browser, request }) => {
+  test('窄屏下画布仍然可见，大纲同样要打开工具才出现', async ({ browser, request }) => {
     test.setTimeout(180_000);
 
     const fixture = await setupClassroom(request);
-    // 500px < 48rem(768px) ⇒ 落在 md 断点之下
     const student = await browser.newContext({ viewport: { width: 500, height: 900 } });
     const studentPage = await student.newPage();
 
     try {
       await enterLessonView(student, studentPage, fixture);
-
-      const contentPanel = studentPage.getByTestId('student-lesson-content-panel');
-      const interactionPanel = studentPage.getByTestId('student-lesson-interaction-panel');
       expect(studentPage.viewportSize()!.width).toBeLessThan(768);
-
-      // 1. 基线：窄屏下内容栏不可见、交互区占满整行（与修复前一致）
-      expect(await computedDisplay(studentPage, 'student-lesson-content-panel')).toBe('none');
-      expect(await computedDisplay(studentPage, 'student-lesson-interaction-panel')).not.toBe('none');
-
-      // 2. 展开课程内容后，窄屏仍不显示内容栏（`hidden md:block` 语义）
-      await studentPage.getByRole('button', { name: /展开课程内容|Expand Content/ }).click();
-      await expect
-        .poll(async () => computedDisplay(studentPage, 'student-lesson-content-panel'), { timeout: 10_000 })
-        .toBe('none');
-      expect(await computedDisplay(studentPage, 'student-lesson-interaction-panel')).not.toBe('none');
-
-      // 3. 右栏全屏 ⇒ 内容栏在窄屏依然隐藏，交互区仍可见（不产生空白页）
-      await studentPage.getByTestId('student-interaction-fullscreen-toggle').click();
-      expect(await computedDisplay(studentPage, 'student-lesson-content-panel')).toBe('none');
-      expect(await computedDisplay(studentPage, 'student-lesson-interaction-panel')).not.toBe('none');
-
-      // 4. 窄屏下内容栏本身被隐藏 ⇒ 其「全屏」按钮不可达（左栏全屏在窄屏无法触发）。
-      //    这是修复前就存在的窄屏限制（内容栏 `hidden md:block`），本次修复不改动它。
-      await expect(studentPage.getByTestId('student-content-fullscreen-toggle')).toBeHidden();
-
-      // 5. 窄屏下交互区始终可见 —— 不存在「两栏同时消失」的空白页
-      await expect(interactionPanel).toBeVisible();
-      await expect(contentPanel).toBeHidden();
+      await expect(studentPage.getByTestId('student-whiteboard-canvas')).toBeVisible();
+      await expect(studentPage.getByTestId('student-tool-outline')).toBeHidden();
+      await studentPage.getByTestId('student-whiteboard-tools').click();
+      await studentPage.getByTestId('student-tool-outline').click();
+      await expect(studentPage.getByTestId('student-lesson-content-panel')).toBeVisible();
+      expect(await computedDisplay(studentPage, 'student-whiteboard-canvas')).not.toBe('none');
     } finally {
       await cleanupClassroom(request, fixture);
       await student.close();
