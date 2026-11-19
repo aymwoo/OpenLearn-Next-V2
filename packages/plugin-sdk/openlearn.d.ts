@@ -240,8 +240,28 @@ interface AIPersonaDefinition {
   maxTurns?: number;
 }
 
+/**
+ * 插件可见的 AI 提供商元数据。字段与 `GET /api/ai-providers` 的列表项一致，
+ * 但永不包含 `api_key`（包括掩码后的密钥片段）。不是活动生态的 `ActivityRegistry.listProviders()`。
+ */
+interface AIProviderSummary {
+  id: string;
+  name: string;
+  api_url: string;
+  model_name: string;
+  owner_id: string | null;
+  is_shared: boolean;
+  created_at: number;
+  updated_at: number;
+}
+
 interface IAIService {
   generateText(prompt: string, options?: { systemInstruction?: string; temperature?: number }): Promise<string>;
+  /**
+   * 枚举当前调用方可用的 AI 提供商元数据。可选成员：旧宿主可能没有。
+   * 需 `ai:invoke`。无参数，插件不能传入 userId。返回值不含凭据。
+   */
+  listProviders?(): Promise<AIProviderSummary[]>;
   /**
    * P2: ai.agent.persona —— 注册 AI Agent 角色模板（教师聊天面板可下拉选择）。
    * persona 为可序列化静态模板，Inline / Worker 插件均可注册。
@@ -1688,6 +1708,7 @@ export type {
   IProcessService,
   IStorageService,
   IAIService,
+  AIProviderSummary,
   AIPersonaDefinition,
   SqliteDatabase,
   SqliteStatement,

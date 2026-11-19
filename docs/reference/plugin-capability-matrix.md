@@ -106,7 +106,7 @@
 | `api:admin`          | `CAP_API_ADMIN`          | 授予高危路径 / 不可逆操作所需                                         |
 | `grades:write`       | `CAP_GRADES_WRITE`       | 授予学期成绩**写入**所需（`grades:read` 不足以解锁写入）              |
 | `agent:tool`         | `CAP_AGENT_TOOL`         | 授予「注册对外暴露给 AI Agent 的 action」所需                         |
-| `ai:invoke`          | `CAP_AI_INVOKE`          | 授予「驱动 AI 生成」所需                                              |
+| `ai:invoke`          | `CAP_AI_INVOKE`          | 授予「驱动 AI 生成」与「枚举 AI 提供商元数据」（`listProviders`）所需 |
 | `ai:persona`         | `CAP_AI_PERSONA`         | 授予「注册 AI Persona、上下文切片及声明式 `ai.persona.provider`」所需 |
 | `task:register`      | `CAP_TASK_REGISTER`      | 授予「注册后台常驻任务」所需                                          |
 | `student-data:read`  | `CAP_STUDENT_DATA_READ`  | 授予读取学生个人敏感数据（积分流水、维度汇总等）所需（§5.3）          |

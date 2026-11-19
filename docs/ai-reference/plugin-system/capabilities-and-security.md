@@ -26,12 +26,12 @@ vfs:write           whiteboard:read     whiteboard:write
 
 **不在这 19 条里的都是错**。三个高频错误写法：
 
-| 写了                | 实际归属                                 | 正确做法                                                                  |
-| ------------------- | ---------------------------------------- | ------------------------------------------------------------------------- |
-| `user:read`         | 不存在                                   | `management:read`                                                         |
-| `ai:invoke`         | ②方法级（`CAP_AI_INVOKE`），不是命令能力 | `ai.generateText` 的授权走 `capabilitiesProposed` 声明 `ai:invoke`        |
-| `quiz:write`        | ③运行时权限                              | 不属于 `capabilityRequired`                                               |
-| `segment:gate_eval` | 真实存在但**不是** `capabilityRequired`  | 仅作为 `capabilityRequired` 的**建议值**写在 JSDoc 里，`await` 校验时不算 |
+| 写了                | 实际归属                                 | 正确做法                                                                             |
+| ------------------- | ---------------------------------------- | ------------------------------------------------------------------------------------ |
+| `user:read`         | 不存在                                   | `management:read`                                                                    |
+| `ai:invoke`         | ②方法级（`CAP_AI_INVOKE`），不是命令能力 | `generateText` 与 `listProviders` 的授权都走 `capabilitiesProposed` 声明 `ai:invoke` |
+| `quiz:write`        | ③运行时权限                              | 不属于 `capabilityRequired`                                                          |
+| `segment:gate_eval` | 真实存在但**不是** `capabilityRequired`  | 仅作为 `capabilityRequired` 的**建议值**写在 JSDoc 里，`await` 校验时不算            |
 
 ### 1.2 方法级 8 个（`CAP_*`）
 
@@ -41,7 +41,7 @@ vfs:write           whiteboard:read     whiteboard:write
 | `CAP_API_ADMIN`          | `api:admin`          | 高危路径 / 不可逆操作 / 实体级删除                        |
 | `CAP_GRADES_WRITE`       | `grades:write`       | `saveSemesterGrade` 等写成绩                              |
 | `CAP_AGENT_TOOL`         | `agent:tool`         | 注册 `exposeToAgent !== false` 的 action                  |
-| `CAP_AI_INVOKE`          | `ai:invoke`          | `ai.generateText` / `chat` / `complete`                   |
+| `CAP_AI_INVOKE`          | `ai:invoke`          | `ai.generateText` / `chat` / `complete` / `listProviders` |
 | `CAP_TASK_REGISTER`      | `task:register`      | `processManager.registerHandler/registerInterval/restore` |
 | `CAP_STUDENT_DATA_READ`  | `student-data:read`  | 读学生积分/敏感数据                                       |
 | `CAP_STUDENT_DATA_WRITE` | `student-data:write` | 写学生积分/敏感数据                                       |
@@ -105,19 +105,19 @@ flowchart TD
 
 ### 3.1 Barrier 3 的具体判定表
 
-| Token                            | 方法                                               | 条件                            | 拒绝文案要点                                     |
-| -------------------------------- | -------------------------------------------------- | ------------------------------- | ------------------------------------------------ |
-| `IFrontendAPI`                   | `get*`                                             | 直接放行                        | —                                                |
-| `IFrontendAPI`                   | `post` / `del`                                     | 需要 `api:write`                | 「写操作（post）需要 manifest 声明 'api:write'」 |
-| `IFrontendAPI`                   | 路径命中高危前缀                                   | 需要 `api:admin`                | 「写入高危路径 '/api/plugins'」                  |
-| `IFrontendAPI`                   | 路径以 `/gdpr-delete` 结尾                         | 需要 `api:admin`                | 「不可逆操作」                                   |
-| `IFrontendAPI`                   | `del` 且路径恰为 `/api/<ns>/<id>`                  | 需要 `api:admin`                | 「实体级删除」                                   |
-| `ISocketService`                 | `disconnect` / `destroy`                           | **永远拒绝**                    | 「断开课堂实时通道会中断正在进行的教学」         |
-| `ISemesterGradeService`          | `save*` / `write*` / `set*`                        | 需要 `grades:write`             | 「'grades:read' 不足以解锁写入」                 |
-| `IProcessService`                | `registerHandler` / `registerInterval` / `restore` | 需要 `task:register`            | —                                                |
-| `IAIService`                     | `generateText` / `chat` / `complete`               | 需要 `ai:invoke`                | —                                                |
-| `IActionRegistryService`         | `register`（且 `exposeToAgent !== false`）         | 需要 `agent:tool`，否则**降级** | 见 §3.2                                          |
-| `IStorageService` / `IUIService` | 任意                                               | 放行                            | —                                                |
+| Token                            | 方法                                                   | 条件                            | 拒绝文案要点                                     |
+| -------------------------------- | ------------------------------------------------------ | ------------------------------- | ------------------------------------------------ |
+| `IFrontendAPI`                   | `get*`                                                 | 直接放行                        | —                                                |
+| `IFrontendAPI`                   | `post` / `del`                                         | 需要 `api:write`                | 「写操作（post）需要 manifest 声明 'api:write'」 |
+| `IFrontendAPI`                   | 路径命中高危前缀                                       | 需要 `api:admin`                | 「写入高危路径 '/api/plugins'」                  |
+| `IFrontendAPI`                   | 路径以 `/gdpr-delete` 结尾                             | 需要 `api:admin`                | 「不可逆操作」                                   |
+| `IFrontendAPI`                   | `del` 且路径恰为 `/api/<ns>/<id>`                      | 需要 `api:admin`                | 「实体级删除」                                   |
+| `ISocketService`                 | `disconnect` / `destroy`                               | **永远拒绝**                    | 「断开课堂实时通道会中断正在进行的教学」         |
+| `ISemesterGradeService`          | `save*` / `write*` / `set*`                            | 需要 `grades:write`             | 「'grades:read' 不足以解锁写入」                 |
+| `IProcessService`                | `registerHandler` / `registerInterval` / `restore`     | 需要 `task:register`            | —                                                |
+| `IAIService`                     | `generateText` / `chat` / `complete` / `listProviders` | 需要 `ai:invoke`                | 枚举文案含 `枚举 AI 提供商（listProviders）`     |
+| `IActionRegistryService`         | `register`（且 `exposeToAgent !== false`）             | 需要 `agent:tool`，否则**降级** | 见 §3.2                                          |
+| `IStorageService` / `IUIService` | 任意                                                   | 放行                            | —                                                |
 
 高危路径前缀（`HIGH_RISK_PATH_PREFIXES`，L60-69）：
 

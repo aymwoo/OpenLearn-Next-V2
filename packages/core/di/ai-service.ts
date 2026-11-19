@@ -18,13 +18,14 @@
  */
 
 import type BetterSqlite3 from 'better-sqlite3';
-import type { IAIService } from './interfaces.js';
+import type { AIProviderSummary, IAIService } from './interfaces.js';
 import { AIProviderGateway } from '../ai/provider/provider-gateway.js';
 
 import { AIEventBus } from '../ai/event/ai-event-bus.js';
 import { AIProviderConfig } from '../ai/types/index.js';
 import { looksLikeCiphertext } from './api-key-crypto.js';
-import { resolveAccessibleAiProvider } from './ai-provider-resolver.js';
+import { listAccessibleAiProviders, resolveAccessibleAiProvider } from './ai-provider-resolver.js';
+import { currentLessonViewer } from './lesson-viewer.js';
 
 export class AIService implements IAIService {
   private gateway: AIProviderGateway;
@@ -124,6 +125,14 @@ export class AIService implements IAIService {
 
   unregisterAIContextProvider(id: string, registeredBy?: string): void {
     (this._contextDelegates.unregister as ((id: string, by?: string) => void) | undefined)?.(id, registeredBy);
+  }
+
+  /**
+   * 列出插件可用的提供商元数据。忽略调用方传入的任何参数，避免用伪造的 userId 越权枚举。
+   */
+  async listProviders(): Promise<AIProviderSummary[]> {
+    const userId = currentLessonViewer()?.userId?.trim() || null;
+    return listAccessibleAiProviders(this.db, userId);
   }
 
   async generateText(

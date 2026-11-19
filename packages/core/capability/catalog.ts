@@ -42,7 +42,7 @@ export const CAP_GRADES_WRITE = 'grades:write';
 /** 授予「注册对外暴露给 AI Agent 的 action」所需。 */
 export const CAP_AGENT_TOOL = 'agent:tool';
 
-/** 授予「驱动 AI 生成」所需。 */
+/** 授予「驱动 AI 生成」与「枚举 AI 提供商元数据」所需。 */
 export const CAP_AI_INVOKE = 'ai:invoke';
 
 /** 授予「注册 AI Persona 角色模板或 AI 上下文切片提供者」所需。 */
