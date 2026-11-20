@@ -74,10 +74,36 @@ export interface SideEffectEnqueuer {
   }): void | Promise<void>;
 }
 
+/**
+ * 安全投递补偿队列。
+ *
+ * 事件发布失败本就属于降级路径，若 enqueue 自身再抛错（同步 throw 或异步
+ * rejection），不能让 fire-and-forget 的 promise 变成 unhandledRejection。
+ */
+export function enqueueCompensation(
+  enqueuer: SideEffectEnqueuer | undefined,
+  effect: Parameters<SideEffectEnqueuer['enqueue']>[0],
+  context: string,
+): void {
+  if (!enqueuer) {
+    console.warn(`[${context}] 事件发布失败，且未配置补偿队列`);
+    return;
+  }
+  const onError = (error: unknown) => console.error(`[${context}] 补偿入队失败`, error);
+  try {
+    void Promise.resolve(enqueuer.enqueue(effect)).catch(onError);
+  } catch (error) {
+    onError(error);
+  }
+}
+
 interface AwardRow {
   id: string;
   point_log_id: string;
   delta_points: number;
+  class_id: string;
+  dimension_id: string;
+  source: string;
 }
 
 export class CreditAwardService {
@@ -145,11 +171,25 @@ export class CreditAwardService {
     const tx = this.db.transaction((): AwardResult => {
       const existing = this.db
         .prepare(
-          `SELECT id, point_log_id, delta_points FROM credit_awards
+          `SELECT id, point_log_id, delta_points, class_id, dimension_id, source FROM credit_awards
             WHERE student_id = ? AND idempotency_key = ?`,
         )
         .get(input.studentId, input.idempotencyKey) as AwardRow | undefined;
       if (existing) {
+        // 幂等键必须指向同一个业务动作；复用同键但改动金额/来源/班级/维度
+        // 说明调用方拼错了键，静默返回旧记录会掩盖漏发/错发。
+        if (
+          existing.class_id !== input.classId ||
+          existing.dimension_id !== input.dimensionId ||
+          existing.source !== input.source ||
+          Number(existing.delta_points) !== Number(input.deltaPoints)
+        ) {
+          return {
+            ok: false,
+            code: 'DUPLICATE_AWARD',
+            message: '幂等键已用于不同的发放请求，拒绝复用',
+          };
+        }
         return {
           ok: true,
           idempotentHit: true,
@@ -225,16 +265,19 @@ export class CreditAwardService {
       },
       timestamp: now,
     };
-    void this.eventPublisher.publish(event).catch(() => {
-      if (this.enqueuer) {
-        void this.enqueuer.enqueue({
+    void this.eventPublisher.publish(event).catch((publishError) => {
+      console.warn('[credit-award] points.awarded 发布失败，转入补偿队列', publishError);
+      enqueueCompensation(
+        this.enqueuer,
+        {
           source: 'points.awarded',
           op: 'emitEvent',
           bizKey: `points.awarded:${result.pointLogId}`,
           payload: event,
           correlationId: result.pointLogId!,
-        });
-      }
+        },
+        'credit-award',
+      );
     });
 
     return result;

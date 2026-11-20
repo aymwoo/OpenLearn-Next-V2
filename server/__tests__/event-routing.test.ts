@@ -163,8 +163,8 @@ describe('createRouteDispatcher', () => {
     });
   });
 
-  it('delivers a targeted classroom.message only to the recipient and the staff room', () => {
-    const { emitted, deps } = buildDeps();
+  it('delivers a targeted classroom.message only to the recipient and the class owner', () => {
+    const { emitted, deps } = buildDeps((sql) => (sql.includes('owner_user_id') ? { owner_user_id: 't1' } : undefined));
     createRouteDispatcher(
       SOCKET_ROUTES,
       deps,
@@ -178,11 +178,13 @@ describe('createRouteDispatcher', () => {
     );
     expect(emitted[0]).toMatchObject({
       scope: 'room',
-      rooms: [userRoom('stu-1'), PRESENCE_STAFF_ROOM],
+      rooms: [userRoom('stu-1'), userRoom('t1')],
       event: 'classroom:message',
     });
     expect(emitted[0].rooms).not.toContain('L1');
     expect(emitted[0].rooms).not.toContain('class-C1');
+    // 定向载荷不再泄露给全校教师
+    expect(emitted[0].rooms).not.toContain(PRESENCE_STAFF_ROOM);
   });
 
   it('delivers a broadcast classroom.message to the lesson and class rooms', () => {

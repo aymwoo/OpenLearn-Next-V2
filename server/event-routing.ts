@@ -113,6 +113,23 @@ function lessonClassId(event: PlatformEvent<any>, deps: SocketRouteDeps): string
 }
 
 /**
+ * 班主任的私有房间。
+ *
+ * 定向消息此前追加 `PRESENCE_STAFF_ROOM`，等于把「某个学生发给老师的作答」
+ * 推给全校在线教师。改投班主任个人房间：教师连接时已自动加入 `user-*` 房间，
+ * 需要观课的其它教师不应看到定向载荷。
+ */
+function classOwnerRoom(db: RouteDb, classId: string): string | null {
+  try {
+    const row = db.prepare('SELECT owner_user_id FROM classes WHERE id = ?').get(classId) as
+      { owner_user_id?: string | null } | undefined;
+    return row?.owner_user_id ? userRoom(row.owner_user_id) : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * 课堂语义事件的默认投递面：课节房间 + 班级房间。
  *
  * 班级房间是必要的兜底：学生停在仪表盘 / 作业工作区时不在课节房间，
@@ -514,24 +531,31 @@ export const SOCKET_ROUTES: readonly SocketRoute[] = [
     // 前端据 messageId 去重（Q5），重连未确认消息由 /messages 拉取补投（Q13=C）。
     eventType: 'classroom.message',
     socketEvent: 'classroom:message',
-    rooms: (event) => {
+    rooms: (event, deps) => {
       const p = (event.payload ?? {}) as {
         lessonId?: string | null;
         classId?: string | null;
         targetUserIds?: string[] | null;
       };
       const targets = Array.isArray(p.targetUserIds) ? p.targetUserIds.filter((id): id is string => Boolean(id)) : [];
-      // 定向消息只进收件人与教师房间。classroomEventRooms 会把课节房间一并并入，
-      // 用在这里会把作答载荷广播给同课节的其他学生。
+      // 定向消息只进收件人 + 本班班主任。classroomEventRooms 会把课节房间一并并入，
+      // 用在这里会把作答载荷广播给同课节的其他学生；全校教师房间同理。
       if (targets.length > 0) {
-        return [...new Set([...targets.map((id) => userRoom(String(id))), PRESENCE_STAFF_ROOM])];
+        const classId =
+          typeof p.classId === 'string' && p.classId
+            ? p.classId
+            : typeof p.lessonId === 'string' && p.lessonId
+              ? loadLessonClassId(deps.db, p.lessonId)
+              : null;
+        const ownerRoom = classId ? classOwnerRoom(deps.db, classId) : null;
+        return [...new Set([...targets.map((id) => userRoom(String(id))), ...(ownerRoom ? [ownerRoom] : [])])];
       }
       const rooms = classroomEventRooms(p.lessonId, {
         classId: p.classId ?? undefined,
       });
       return rooms.length > 0 ? rooms : null;
     },
-    description: '通讯协议可靠消息 → 定向进收件人+教师房间；广播进课节+班级房间',
+    description: '通讯协议可靠消息 → 定向进收件人+班主任房间；广播进课节+班级房间',
   },
 
   // ── 关于被删除的 spotlight 路由 ──────────────────────────────────────────

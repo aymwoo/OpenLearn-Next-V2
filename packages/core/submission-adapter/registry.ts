@@ -115,19 +115,37 @@ export class SubmissionAggregator {
     }
     const items = await adapter.listSubmissions(filter);
     const sub = items.find((s) => s.id === submissionId);
-    if (!sub) return { ok: false, reason: 'submission-not-found' };
+    // 不能只信适配器自己的过滤：写分是特权操作，命中后必须再按本次授权的
+    // classId/lessonId/studentId 复核归属，避免用 A 班授权改到 B 班提交。
+    if (
+      !sub ||
+      (filter.classId && sub.classId !== filter.classId) ||
+      (filter.lessonId && sub.lessonId !== filter.lessonId) ||
+      (filter.studentId && sub.studentId !== filter.studentId)
+    ) {
+      return { ok: false, reason: 'submission-not-found' };
+    }
     const mapped = adapter.toGradeInput(sub);
     if (!mapped) return { ok: false, reason: 'not-gradeable' };
     // 分数、评语和是否越过手动分保护以教师本次请求为准。适配器只提供作业与学生映射。
-    return this.gradeWriter.applyGradeChange({
+    const result = this.gradeWriter.applyGradeChange({
       assignmentId: mapped.assignmentId,
       studentId: mapped.studentId,
       score: grade.score,
-      status: mapped.status,
+      // 本通道只承接教师显式打分（score 必填且 0..100），落库状态即为 graded。
+      status: 'graded',
       feedback: grade.feedback ?? null,
       source: 'manual',
       reason: grade.reason ?? mapped.reason ?? 'classroom-flow grade',
       overrideProtected: grade.overrideProtected === true,
     });
+    if (result.ok && adapter.afterGrade) {
+      try {
+        adapter.afterGrade(sub, { score: grade.score, status: 'graded' });
+      } catch {
+        // 插件侧回写失败不回滚平台成绩册
+      }
+    }
+    return result;
   }
 }

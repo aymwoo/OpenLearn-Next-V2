@@ -795,6 +795,7 @@ export interface IClassroomMessageService {
     classId?: string | null;
     sinceSeq: number;
     viewerId: string;
+    staffView?: boolean;
     limit?: number;
   }): Array<{
     seq: number;
@@ -806,6 +807,28 @@ export interface IClassroomMessageService {
     status: string;
     createdAt: number;
   }>;
+  /** 补投分页：返回逐条消息、扫描游标与是否还有下一批 */
+  replayPage(query: {
+    lessonId?: string | null;
+    classId?: string | null;
+    sinceSeq: number;
+    viewerId: string;
+    staffView?: boolean;
+    limit?: number;
+  }): {
+    messages: Array<{
+      seq: number;
+      id: string;
+      channel: string;
+      msgType: string;
+      correlationId: string | null;
+      payload: unknown;
+      status: string;
+      createdAt: number;
+    }>;
+    cursor: number;
+    hasMore: boolean;
+  };
   /** 注册 channel（owner 由宿主按 pluginId 注入，插件不可自报） */
   registerChannel(desc: {
     name: string;

@@ -1,7 +1,7 @@
 /**
  * ClassroomFlowServer 路由注册契约测试。
  *
- * 锁死：7 个端点都挂上、且每个都带认证/数据范围中间件（route-scope 审计的
+ * 锁死：12 个端点都挂上、且每个都带认证/数据范围中间件（route-scope 审计的
  * 第一道闸）；业务行为由三个 service 的单测覆盖，这里只验证门面接线。
  */
 import { describe, it, expect, vi } from 'vitest';

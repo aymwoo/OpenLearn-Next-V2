@@ -113,6 +113,16 @@ describe('CreditAwardService — 统一学分发放接口', () => {
     await expect(ledger.getStudentTotalByDimension('stu-1', 'cls-1', 'reward_credit')).resolves.toBe(10);
   });
 
+  it('幂等键复用但请求参数不同：拒绝，不串用旧记录', async () => {
+    const r1 = service.award(base);
+    const r2 = service.award({ ...base, deltaPoints: 20 });
+    expect(r1.ok).toBe(true);
+    expect(r2.ok).toBe(false);
+    expect(r2.code).toBe('DUPLICATE_AWARD');
+    await expect(ledger.getStudentTotalByDimension('stu-1', 'cls-1', 'reward_credit')).resolves.toBe(10);
+    expect(published).toHaveLength(1);
+  });
+
   it('负向发放（扣回）：deltaPoints 为负，余额相应减少', () => {
     service.award(base); // +10
     const r = service.award({

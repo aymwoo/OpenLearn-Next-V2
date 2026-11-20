@@ -142,6 +142,32 @@ describe('ClassroomMessageService — 可靠通道发送/ACK/补投', () => {
     expect(service.replay({ lessonId: 'les-1', sinceSeq: 0, viewerId: 'stu-2' })).toHaveLength(0);
   });
 
+  it('教师视角可补投定向消息（与实时投递收件人+班主任一致）', () => {
+    service.send({ ...base, messageId: 'm1', targetUserIds: ['stu-1'] });
+    expect(service.replay({ lessonId: 'les-1', sinceSeq: 0, viewerId: 'tea-1' })).toHaveLength(0);
+    expect(service.replay({ lessonId: 'les-1', sinceSeq: 0, viewerId: 'tea-1', staffView: true })).toHaveLength(1);
+  });
+
+  it('replayPage：游标越过不可见消息，并正确报告 hasMore', () => {
+    const hidden = service.send({ ...base, messageId: 'm1', targetUserIds: ['stu-2'] });
+    service.send({ ...base, messageId: 'm2' });
+    service.send({ ...base, messageId: 'm3' });
+
+    // 第一批只扫到定向消息，对 stu-1 不可见；游标仍必须前进，不能卡在同一段。
+    const first = service.replayPage({ lessonId: 'les-1', sinceSeq: 0, viewerId: 'stu-1', limit: 1 });
+    expect(first.messages).toEqual([]);
+    expect(first.hasMore).toBe(true);
+    expect(first.cursor).toBe(hidden.seq!);
+
+    const second = service.replayPage({ lessonId: 'les-1', sinceSeq: first.cursor, viewerId: 'stu-1', limit: 1 });
+    expect(second.messages.map((m) => m.id)).toEqual(['m2']);
+    expect(second.hasMore).toBe(true);
+
+    const third = service.replayPage({ lessonId: 'les-1', sinceSeq: second.cursor, viewerId: 'stu-1', limit: 1 });
+    expect(third.messages.map((m) => m.id)).toEqual(['m3']);
+    expect(third.hasMore).toBe(false);
+  });
+
   it('过期消息不补投', () => {
     service.send({ ...base, messageId: 'm1', ttlMs: -1000 });
     expect(service.replay({ lessonId: 'les-1', sinceSeq: 0, viewerId: 'stu-2' })).toHaveLength(0);

@@ -62,6 +62,11 @@ export interface SubmissionAdapter {
   getRaw?(submissionId: string): Promise<unknown> | unknown;
   /** 把统一视图中的一条映射为成绩写入输入；返回 null 表示不参与成绩 */
   toGradeInput?(sub: NormalizedSubmission): GradeWriteInputView | null;
+  /**
+   * 成绩成功写入平台成绩册后的回调，供插件把自己的真值存储同步到同一分数
+   * （例如学案把分数回写 activity_progress）。抛错不会改变成绩写入结果。
+   */
+  afterGrade?(sub: NormalizedSubmission, grade: { score: number | null; status: string }): void;
 }
 
 /** 成绩写入输入（与 grade-writer 的 GradeWriteInput 对齐的视图） */

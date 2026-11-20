@@ -122,4 +122,38 @@ describe('SubmissionAggregator', () => {
       'adapter-not-found-or-no-grade-mapping',
     );
   });
+
+  it('写分命中后按本次授权的班级/课节复核归属', async () => {
+    const reg = new SubmissionRegistry();
+    reg.register(makeAdapter('a1', 'ext-x', [makeSubmission()], { gradeMapping: true }));
+    const writer: GradeWriterPort = { applyGradeChange: vi.fn(() => ({ ok: true })) };
+    const agg = new SubmissionAggregator(reg, writer);
+
+    expect((await agg.writeGrade('a1', 'ext-xuean:sub-1', { classId: 'cls-2' }, { score: 90 })).reason).toBe(
+      'submission-not-found',
+    );
+    expect((await agg.writeGrade('a1', 'ext-xuean:sub-1', { lessonId: 'les-9' }, { score: 90 })).reason).toBe(
+      'submission-not-found',
+    );
+    expect((await agg.writeGrade('a1', 'ext-xuean:sub-1', { studentId: 'stu-9' }, { score: 90 })).reason).toBe(
+      'submission-not-found',
+    );
+    expect(writer.applyGradeChange).not.toHaveBeenCalled();
+  });
+
+  it('成绩写入成功后回调适配器回写真值', async () => {
+    const reg = new SubmissionRegistry();
+    const afterGrade = vi.fn();
+    const adapter = makeAdapter('a1', 'ext-x', [makeSubmission()], { gradeMapping: true });
+    adapter.afterGrade = afterGrade;
+    reg.register(adapter);
+    const agg = new SubmissionAggregator(reg, { applyGradeChange: () => ({ ok: true }) });
+
+    await agg.writeGrade('a1', 'ext-xuean:sub-1', { classId: 'cls-1' }, { score: 95 });
+
+    expect(afterGrade).toHaveBeenCalledWith(expect.objectContaining({ id: 'ext-xuean:sub-1' }), {
+      score: 95,
+      status: 'graded',
+    });
+  });
 });

@@ -12,6 +12,7 @@
  */
 import type { Database } from 'better-sqlite3';
 import { v7 as uuidv7 } from 'uuid';
+import { enqueueCompensation } from './credit-award-service.js';
 
 export interface SendMessageInput {
   channel: string;
@@ -59,7 +60,20 @@ export interface ReplayQuery {
   sinceSeq: number;
   /** 请求者 userId，用于 target_user_ids 过滤 */
   viewerId: string;
+  /**
+   * 教师/管理员视角：在已授权的课节或班级内，可补投定向消息
+   * （与实时投递「收件人 + 班主任」保持一致）。
+   */
+  staffView?: boolean;
   limit?: number;
+}
+
+export interface ReplayPage {
+  messages: ReplayedMessage[];
+  /** 本轮扫描到的最大 seq；下次请求从这里继续，即使消息对当前用户不可见 */
+  cursor: number;
+  /** 是否还有下一批（按 limit 截断） */
+  hasMore: boolean;
 }
 
 /** channel 注册描述符（Q14=B：归属 + 权限 + 格式校验） */
@@ -231,8 +245,11 @@ export class ClassroomMessageService {
     return true;
   }
 
-  /** 断线补投查询：严格按 seq 游标，过滤目标用户、过期消息和该用户已确认的回执 */
-  replay(query: ReplayQuery): ReplayedMessage[] {
+  /**
+   * 断线补投查询：严格按 seq 游标，过滤目标用户、过期消息和该用户已确认的回执。
+   * 分页返回游标与 hasMore，避免「过滤后 cursor 不前进」导致反复扫同一段。
+   */
+  replayPage(query: ReplayQuery): ReplayPage {
     const limit = Math.min(Math.max(query.limit ?? 100, 1), 500);
     const now = Date.now();
     const pendingClause = `
@@ -242,6 +259,7 @@ export class ClassroomMessageService {
         SELECT 1 FROM classroom_message_receipts r
         WHERE r.message_id = classroom_messages.id AND r.user_id = ?
       )`;
+    const fetchLimit = limit + 1;
     let rows: MessageRow[];
     if (query.lessonId && query.classId) {
       rows = this.db
@@ -251,7 +269,7 @@ export class ClassroomMessageService {
               ${pendingClause}
             ORDER BY seq ASC LIMIT ?`,
         )
-        .all(query.lessonId, query.classId, query.sinceSeq, now, query.viewerId, limit) as MessageRow[];
+        .all(query.lessonId, query.classId, query.sinceSeq, now, query.viewerId, fetchLimit) as MessageRow[];
     } else if (query.lessonId) {
       rows = this.db
         .prepare(
@@ -260,7 +278,7 @@ export class ClassroomMessageService {
               ${pendingClause}
             ORDER BY seq ASC LIMIT ?`,
         )
-        .all(query.lessonId, query.sinceSeq, now, query.viewerId, limit) as MessageRow[];
+        .all(query.lessonId, query.sinceSeq, now, query.viewerId, fetchLimit) as MessageRow[];
     } else if (query.classId) {
       rows = this.db
         .prepare(
@@ -269,13 +287,16 @@ export class ClassroomMessageService {
               ${pendingClause}
             ORDER BY seq ASC LIMIT ?`,
         )
-        .all(query.classId, query.sinceSeq, now, query.viewerId, limit) as MessageRow[];
+        .all(query.classId, query.sinceSeq, now, query.viewerId, fetchLimit) as MessageRow[];
     } else {
-      return [];
+      return { messages: [], cursor: query.sinceSeq, hasMore: false };
     }
 
-    return rows
-      .filter((r) => this.canSee(r, query.viewerId))
+    const hasMore = rows.length > limit;
+    const scanned = hasMore ? rows.slice(0, limit) : rows;
+    const cursor = scanned.length > 0 ? scanned[scanned.length - 1].seq : query.sinceSeq;
+    const messages = scanned
+      .filter((r) => this.canSee(r, query.viewerId, query.staffView === true))
       .map((r) => ({
         seq: r.seq,
         id: r.id,
@@ -286,6 +307,12 @@ export class ClassroomMessageService {
         status: r.status,
         createdAt: r.created_at,
       }));
+    return { messages, cursor, hasMore };
+  }
+
+  /** 兼容旧调用：只返回消息列表。需要游标/分页时用 replayPage。 */
+  replay(query: ReplayQuery): ReplayedMessage[] {
+    return this.replayPage(query).messages;
   }
 
   /** 标记已投递（重连补投 emit 成功后调用），供下次补投跳过 */
@@ -326,8 +353,9 @@ export class ClassroomMessageService {
     return { ok: true };
   }
 
-  private canSee(row: MessageRow, viewerId: string): boolean {
+  private canSee(row: MessageRow, viewerId: string, staffView = false): boolean {
     if (!row.target_user_ids) return true; // 房间广播
+    if (staffView) return true; // 课节/班级授权已在调用方完成，教师可观察定向消息
     try {
       const targets = JSON.parse(row.target_user_ids) as string[];
       return Array.isArray(targets) && targets.includes(viewerId);
@@ -362,16 +390,19 @@ export class ClassroomMessageService {
       timestamp: now,
       correlationId: input.correlationId ?? undefined,
     };
-    void this.publisher.publish(event).catch(() => {
-      if (this.enqueuer) {
-        void this.enqueuer.enqueue({
+    void this.publisher.publish(event).catch((publishError) => {
+      console.warn('[classroom-message] classroom.message 发布失败，转入补偿队列', publishError);
+      enqueueCompensation(
+        this.enqueuer,
+        {
           source: 'classroom.message',
           op: 'emitEvent',
           bizKey: `classroom.message:${messageId}`,
           payload: event,
           correlationId: messageId,
-        });
-      }
+        },
+        'classroom-message',
+      );
     });
   }
 }
