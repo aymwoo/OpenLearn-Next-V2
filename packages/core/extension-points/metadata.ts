@@ -1,4 +1,9 @@
 /**
+ * ⚠️ 本模块是「扩展点弃用账本」，不是运行时扩展注册表。
+ * - 不能用于发现"当前有哪些扩展"——请查 packages/core/extension-registry/extension-points.ts
+ * - 不能用于注册扩展——请查 contribution-registry / activity-ecosystem / RuntimeHooksManager
+ * - 唯一职责：声明哪些扩展点已弃用、何时弃用、替换方案
+ *
  * OpenLearn Platform Kernel - Extension Points Contract & Deprecation Metadata
  *
  * Defines the canonical metadata for all extensible primitives:
