@@ -22,14 +22,14 @@
 
 文件：`src/features/activity-ecosystem/activity-service.ts`
 
-| 行 | 当前路径 | 应迁到 | 优先级 | 备注 |
-|---|---|---|---|---|
-| 36 | `GET /api/activities?role=` | `GET /api/activity-providers?role=` | P1 | 响应形状不变（`{activities}`），纯路径替换 |
-| 48 | `GET /api/activities/running` | `GET /api/activity-runs?active=1` | P1 | **响应形状变化**：`{activities}` → `{runs}`，需前端适配 |
-| 60 | `POST /api/activities/:id/finish` | `POST /api/activity-runs/:runId/finish` | P1 | **需保存 runId**：start 响应新增 `runId`，不能再用 activity id |
-| 72 | `POST /api/activities/:id/pause` | `POST /api/activity-runs/:runId/pause` | P1 | 同上 |
-| 84 | `POST /api/activities/:id/resume` | `POST /api/activity-runs/:runId/resume` | P1 | 同上 |
-| 104 | `POST /api/activities/:id/start` | `POST /api/activity-providers/:id/runs` | P1 | 返回 201 + `runId`；前端需持久化 runId 供 pause/resume/finish |
+| 行  | 当前路径                          | 应迁到                                  | 优先级 | 备注                                                           |
+| --- | --------------------------------- | --------------------------------------- | ------ | -------------------------------------------------------------- |
+| 36  | `GET /api/activities?role=`       | `GET /api/activity-providers?role=`     | P1     | 响应形状不变（`{activities}`），纯路径替换                     |
+| 48  | `GET /api/activities/running`     | `GET /api/activity-runs?active=1`       | P1     | **响应形状变化**：`{activities}` → `{runs}`，需前端适配        |
+| 60  | `POST /api/activities/:id/finish` | `POST /api/activity-runs/:runId/finish` | P1     | **需保存 runId**：start 响应新增 `runId`，不能再用 activity id |
+| 72  | `POST /api/activities/:id/pause`  | `POST /api/activity-runs/:runId/pause`  | P1     | 同上                                                           |
+| 84  | `POST /api/activities/:id/resume` | `POST /api/activity-runs/:runId/resume` | P1     | 同上                                                           |
+| 104 | `POST /api/activities/:id/start`  | `POST /api/activity-providers/:id/runs` | P1     | 返回 201 + `runId`；前端需持久化 runId 供 pause/resume/finish  |
 
 **结论：** 这 6 处不是纯 URL 替换；`start` 后必须保存 `runId`，`running` 需适配新响应结构。建议一次性改完，避免半迁移状态。
 
@@ -37,13 +37,13 @@
 
 文件：`src/services/lessonActivitiesService.ts`
 
-| 行 | 当前路径 | 应迁到 | 优先级 | 备注 |
-|---|---|---|---|---|
-| 25 | `PUT /api/activities/:id` | `PUT /api/lesson-activities/:id` | P1 | 纯路径替换 |
-| 35 | `DELETE /api/activities/:id` | `DELETE /api/lesson-activities/:id` | P1 | 纯路径替换 |
-| 104 | `POST /api/activities/:activityId/progress` | `POST /api/lesson-activities/:id/progress` | P1 | 纯路径替换 |
-| 118 | `POST /api/activities/:activityId/progress/verify` | `POST /api/lesson-activities/:id/progress/verify` | P1 | 纯路径替换 |
-| 129 | `POST /api/activities/:activityId/nudge` | `POST /api/lesson-activities/:id/nudge` | P1 | 纯路径替换 |
+| 行  | 当前路径                                           | 应迁到                                            | 优先级 | 备注       |
+| --- | -------------------------------------------------- | ------------------------------------------------- | ------ | ---------- |
+| 25  | `PUT /api/activities/:id`                          | `PUT /api/lesson-activities/:id`                  | P1     | 纯路径替换 |
+| 35  | `DELETE /api/activities/:id`                       | `DELETE /api/lesson-activities/:id`               | P1     | 纯路径替换 |
+| 104 | `POST /api/activities/:activityId/progress`        | `POST /api/lesson-activities/:id/progress`        | P1     | 纯路径替换 |
+| 118 | `POST /api/activities/:activityId/progress/verify` | `POST /api/lesson-activities/:id/progress/verify` | P1     | 纯路径替换 |
+| 129 | `POST /api/activities/:activityId/nudge`           | `POST /api/lesson-activities/:id/nudge`           | P1     | 纯路径替换 |
 
 **结论：** 这 5 处可纯前端替换，无需后端配合。
 

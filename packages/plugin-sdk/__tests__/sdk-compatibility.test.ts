@@ -11,10 +11,7 @@ import {
 // 它们在 kernel/index.ts:224-226 被注册进 ServiceRegistry，但**零生产 resolve** ——
 // 对外承诺一个零消费者的 API 比不承诺更糟。内核侧仍从di/interfaces 正常引用。
 // 这里从**规范源**导入，证明「移除导出」没有破坏内核可用性。
-import {
-  IPluginRuntimeCompositionToken,
-  IPluginCapabilityGatewayToken,
-} from '../../core/di/interfaces.js';
+import { IPluginRuntimeCompositionToken, IPluginCapabilityGatewayToken } from '../../core/di/interfaces.js';
 // The unified foundation facade *classes* are exposed as TYPE-ONLY exports
 // from the SDK (see `export type` in index.ts). Verify the SDK type surface
 // is intact via `import type`, and assert the concrete runtime implementations
@@ -95,10 +92,7 @@ describe('Plugin SDK Compatibility Layer (P7-B6 EU-01)', () => {
     }
 
     // 内核侧仍然拿得到，且仍是合法 Token
-    for (const token of [
-      IPluginRuntimeCompositionToken,
-      IPluginCapabilityGatewayToken,
-    ]) {
+    for (const token of [IPluginRuntimeCompositionToken, IPluginCapabilityGatewayToken]) {
       expect(typeof token.name).toBe('string');
       expect(token.name).toMatch(/^@openlearn\/(core|plugins):/);
     }

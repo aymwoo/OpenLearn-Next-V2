@@ -25,10 +25,7 @@ import { resolveAccessibleAiProvider } from '../services/ai-provider-resolver.js
 import type { Request, Response, NextFunction } from 'express';
 import type { ServerContext, StoredAIProvider, AgentChatAttachment, AgentChatRequest } from '../context.js';
 import { ActivityRunService } from '../services/activity-run-service.js';
-import {
-  legacyActivityRouteKey,
-  recordLegacyActivityRouteHit,
-} from '../services/legacy-activity-route-usage.js';
+import { legacyActivityRouteKey, recordLegacyActivityRouteHit } from '../services/legacy-activity-route-usage.js';
 
 function getSharedProviderInfoMap(): Map<string, { name: string; modelName: string }> {
   const map = new Map<string, { name: string; modelName: string }>();

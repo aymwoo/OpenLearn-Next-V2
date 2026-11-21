@@ -105,10 +105,7 @@ import { PluginDistributionManager } from '../plugin-host/plugin-distribution-ma
 import { PluginCapabilityGateway } from '../plugin-host/plugin-capability-gateway.js';
 import { ExtensionCatalog } from '../plugin-host/extension-catalog.js';
 import { CONTRIBUTES_SLOT_KEYS } from '../esm-loader/manifest-schema.js';
-import {
-  assertExtensionPointsAligned,
-  resolveExtensionSlotMode,
-} from '../extension-registry/extension-points.js';
+import { assertExtensionPointsAligned, resolveExtensionSlotMode } from '../extension-registry/extension-points.js';
 import { PluginLifecycleManager } from '../plugin-host/plugin-lifecycle-manager.js';
 import { CapabilityRegistry } from '../ai-capability/registry/capability-registry.js';
 import path from 'path';

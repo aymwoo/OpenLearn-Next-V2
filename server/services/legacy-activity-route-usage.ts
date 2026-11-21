@@ -38,11 +38,7 @@ let lastSeenAt: number | null = null;
  * 由请求推导稳定的路由键：优先使用 Express 注册的路由模式，
  * 取不到时退化为具体 path（受 MAX_KEYS 保护）。
  */
-export function legacyActivityRouteKey(req: {
-  method?: string;
-  route?: { path?: string };
-  path?: string;
-}): string {
+export function legacyActivityRouteKey(req: { method?: string; route?: { path?: string }; path?: string }): string {
   const pattern = req.route?.path || req.path || 'unknown';
   return `${(req.method || 'GET').toUpperCase()} ${pattern}`;
 }

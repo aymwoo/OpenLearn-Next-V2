@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { EventBus } from '../../packages/core/event-bus/index.js';
+import type { PlatformEvent } from '../../packages/core/event-bus/index.js';
 import { publishActivityCompleted } from '../../packages/core/events/activity-events.js';
 import {
   ActivityRegistry,
@@ -50,9 +51,9 @@ const waitForDispatch = () => new Promise((resolve) => setTimeout(resolve, 10));
 describe('activity.completed 统一出口（Phase 2.2）', () => {
   it('eventBus 上可被订阅，payload 含 type/source/activityId', async () => {
     const bus = new EventBus();
-    const seen: Array<{ payload: any }> = [];
+    const seen: PlatformEvent[] = [];
     bus.subscribe('activity.completed', (event) => {
-      seen.push(event as never);
+      seen.push(event);
     });
 
     publishActivityCompleted(bus, {
@@ -75,9 +76,9 @@ describe('activity.completed 统一出口（Phase 2.2）', () => {
 
   it('ecosystem：provider finish 时发布 source=ecosystem', async () => {
     const bus = new EventBus();
-    const seen: Array<{ payload: any }> = [];
+    const seen: PlatformEvent[] = [];
     bus.subscribe('activity.completed', (event) => {
-      seen.push(event as never);
+      seen.push(event);
     });
 
     const registry = new ActivityRegistry();
@@ -98,9 +99,9 @@ describe('activity.completed 统一出口（Phase 2.2）', () => {
 
   it('学案活动：source=lesson-activity 的个人完成事件可被发布', async () => {
     const bus = new EventBus();
-    const seen: Array<{ payload: any }> = [];
+    const seen: PlatformEvent[] = [];
     bus.subscribe('activity.completed', (event) => {
-      seen.push(event as never);
+      seen.push(event);
     });
 
     publishActivityCompleted(bus, {
@@ -120,9 +121,9 @@ describe('activity.completed 统一出口（Phase 2.2）', () => {
 
   it('课堂内联：source=classroom-interaction 的完成事件可被发布', async () => {
     const bus = new EventBus();
-    const seen: Array<{ payload: any }> = [];
+    const seen: PlatformEvent[] = [];
     bus.subscribe('activity.completed', (event) => {
-      seen.push(event as never);
+      seen.push(event);
     });
 
     publishActivityCompleted(bus, {

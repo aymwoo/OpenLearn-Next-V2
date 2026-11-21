@@ -12,12 +12,12 @@
 
 ## 不要用它做这些事
 
-| 错误用法 | 正确入口 |
-|---|---|
-| 发现"当前有哪些扩展" | `packages/core/extension-registry/extension-points.ts`（Phase 1.4 建立） |
-| 注册 manifest slot 扩展 | `packages/core/plugin-host/contribution-registry.ts` |
-| 注册活动 provider | `packages/activity-ecosystem/registry.ts` |
-| 注册课堂运行时钩子 | `packages/core/classroom-runtime/hooks-system.ts` |
+| 错误用法                | 正确入口                                                                 |
+| ----------------------- | ------------------------------------------------------------------------ |
+| 发现"当前有哪些扩展"    | `packages/core/extension-registry/extension-points.ts`（Phase 1.4 建立） |
+| 注册 manifest slot 扩展 | `packages/core/plugin-host/contribution-registry.ts`                     |
+| 注册活动 provider       | `packages/activity-ecosystem/registry.ts`                                |
+| 注册课堂运行时钩子      | `packages/core/classroom-runtime/hooks-system.ts`                        |
 
 ## 当前真实消费方（2026-11-21）
 

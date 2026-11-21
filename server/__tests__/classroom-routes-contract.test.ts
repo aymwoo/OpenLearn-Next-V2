@@ -75,10 +75,7 @@ describe('互动课堂路由请求契约（投票 / 节奏信号 / 结课通票�
     app.use(express.json());
     classroomService = new ClassroomRuntimeService(db);
     activityTracker = new ActivityCompletedTracker(kernelContainer.eventBus);
-    registerClassroomRoutes(
-      { app, io: undefined, activityCompletedTracker: activityTracker } as any,
-      classroomService,
-    );
+    registerClassroomRoutes({ app, io: undefined, activityCompletedTracker: activityTracker } as any, classroomService);
 
     await new Promise<void>((resolve) => {
       server = createServer(app).listen(0, () => resolve());

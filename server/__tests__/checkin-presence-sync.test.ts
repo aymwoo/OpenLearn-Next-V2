@@ -1,5 +1,19 @@
 import { describe, it, expect } from 'vitest';
+import type { Server } from 'socket.io';
+import type { EventBusPort } from '../../packages/core/event-bus/index.js';
 import { getPresentStudentIds, markStudentCheckedIn, setupPresence } from '../presence.js';
+
+/** presence 只用到 socket 的少数成员，这里给出最小结构化类型，避免测试里堆 `any`。 */
+interface FakeSocket {
+  id: string;
+  data: Record<string, unknown>;
+  on: (event: string, cb: (data: unknown) => void) => void;
+  emit: () => void;
+  to: () => { emit: () => void };
+  join: () => void;
+  leave: () => void;
+  trigger: (event: string, data: unknown) => void;
+}
 
 /**
  * Phase 2.1：签到写侧同步 presence。
@@ -8,31 +22,31 @@ import { getPresentStudentIds, markStudentCheckedIn, setupPresence } from '../pr
  * 计入该生；重复签到幂等；离线学生不被伪造成在线。
  */
 function setupPresenceHarness() {
-  const connectionHandlers: Array<(socket: any) => void> = [];
+  const connectionHandlers: Array<(socket: FakeSocket) => void> = [];
   const io = {
-    on: (event: string, cb: (socket: any) => void) => {
+    on: (event: string, cb: (socket: FakeSocket) => void) => {
       if (event === 'connection') connectionHandlers.push(cb);
     },
     to: () => ({ emit: () => {} }),
-  } as any;
+  } as unknown as Server;
 
   setupPresence({
     io,
-    eventBus: { publish: async () => {}, subscribe: () => {} } as any,
+    eventBus: { publish: async () => {}, subscribe: () => {} } as unknown as EventBusPort,
   });
 
   function connect(studentId: string) {
-    const handlers = new Map<string, (data: any) => void>();
-    const socket = {
+    const handlers = new Map<string, (data: unknown) => void>();
+    const socket: FakeSocket = {
       id: `sock-${studentId}`,
       data: {},
-      on: (event: string, cb: (data: any) => void) => handlers.set(event, cb),
+      on: (event, cb) => handlers.set(event, cb),
       emit: () => {},
       to: () => ({ emit: () => {} }),
       join: () => {},
       leave: () => {},
-      trigger: (event: string, data: unknown) => handlers.get(event)?.(data),
-    } as any;
+      trigger: (event, data) => handlers.get(event)?.(data),
+    };
     connectionHandlers[connectionHandlers.length - 1](socket);
     socket.trigger('register-student', { studentId, name: studentId });
     return socket;

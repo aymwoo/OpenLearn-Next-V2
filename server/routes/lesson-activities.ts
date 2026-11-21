@@ -45,10 +45,7 @@ import {
 } from '../services/class-access.js';
 import type { ServerContext } from '../context.js';
 import { XUEAN_ACTIVITY_TYPES } from '../../packages/core/activity-contract/index.js';
-import {
-  legacyActivityRouteKey,
-  recordLegacyActivityRouteHit,
-} from '../services/legacy-activity-route-usage.js';
+import { legacyActivityRouteKey, recordLegacyActivityRouteHit } from '../services/legacy-activity-route-usage.js';
 
 // ── 内部常量 ─────────────────────────────────────────────────────────────
 const VALID_ACTIVITY_TYPES = new Set<string>(XUEAN_ACTIVITY_TYPES);
