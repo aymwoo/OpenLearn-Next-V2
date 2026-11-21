@@ -1,9 +1,38 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   resolveCourseDeliveryMode,
   xueanActivityTypeForSegment,
   type CourseDeliveryMode,
 } from '../../packages/core/plugin-host/course-delivery-mode';
+import {
+  BUILTIN_MODE_PACKS,
+  BUILTIN_WHITEBOARD_MODE_PACK_ID,
+  BUILTIN_XUEAN_MODE_PACK_ID,
+} from '../../packages/core/plugin-host/mode-pack';
+
+/** 课程向导里可选的一种交付模式（内置包 + 已激活插件包）。 */
+export interface WizardModePackChoice {
+  id: string;
+  label: string;
+  labelEn?: string;
+  source: 'builtin' | 'plugin';
+  /** 包认领的环节类型，用于判断是否走学案流程 */
+  segmentTypes: string[];
+}
+
+const DEFAULT_MODE_PACK_CHOICES: WizardModePackChoice[] = BUILTIN_MODE_PACKS.map((pack) => ({
+  id: pack.id,
+  label: pack.label,
+  labelEn: pack.labelEn,
+  source: 'builtin',
+  segmentTypes: pack.segmentTypes,
+}));
+
+function isXueanLikeChoice(choice: WizardModePackChoice | undefined): boolean {
+  if (!choice) return false;
+  if (choice.id === BUILTIN_XUEAN_MODE_PACK_ID) return true;
+  return choice.segmentTypes.some((type) => type === 'xuean' || type.startsWith('xuean:'));
+}
 
 export interface DefaultWizardSegment {
   id: string;
@@ -107,12 +136,58 @@ export function useCourseWizard(options: UseCourseWizardOptions) {
   const [wizardCourseContent, setWizardCourseContent] = useState('');
   const [wizardCourseTimeline, setWizardCourseTimeline] = useState<any[]>(() => getDefaultWizardTimeline(lang));
   const [wizardDeliveryMode, setWizardDeliveryModeState] = useState<CourseDeliveryMode>('whiteboard');
+  const [wizardModePackId, setWizardModePackIdState] = useState<string>(BUILTIN_WHITEBOARD_MODE_PACK_ID);
+  const [modePackChoices, setModePackChoices] = useState<WizardModePackChoice[]>(DEFAULT_MODE_PACK_CHOICES);
   const [wizardIsSubmitting, setWizardIsSubmitting] = useState(false);
+
+  // 打开向导时拉取服务端模式包目录：内置包之外，已激活插件贡献的包也会出现。
+  // 拉取失败时保留内置选项，向导仍可用。
+  useEffect(() => {
+    if (!isCourseWizardOpen || typeof fetch !== 'function') return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/mode-packs');
+        if (!res.ok) return;
+        const body = (await res.json()) as { data?: Array<Record<string, unknown>> } | null;
+        const rows = Array.isArray(body?.data) ? body.data : [];
+        const choices: WizardModePackChoice[] = [];
+        for (const row of rows) {
+          if (typeof row?.id !== 'string' || typeof row?.label !== 'string') continue;
+          choices.push({
+            id: row.id,
+            label: row.label,
+            labelEn: typeof row.labelEn === 'string' ? row.labelEn : undefined,
+            source: row.source === 'plugin' ? 'plugin' : 'builtin',
+            segmentTypes: Array.isArray(row.segmentTypes)
+              ? row.segmentTypes.filter((type): type is string => typeof type === 'string')
+              : [],
+          });
+        }
+        if (!cancelled && choices.length > 0) setModePackChoices(choices);
+      } catch {
+        // 保留内置选项
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isCourseWizardOpen]);
 
   const setWizardDeliveryMode = (mode: CourseDeliveryMode) => {
     const next = resolveCourseDeliveryMode(mode);
+    setWizardModePackIdState(next === 'xuean' ? BUILTIN_XUEAN_MODE_PACK_ID : BUILTIN_WHITEBOARD_MODE_PACK_ID);
     setWizardDeliveryModeState(next);
     setWizardCourseTimeline(next === 'xuean' ? getDefaultXueanTimeline(lang) : getDefaultWizardTimeline(lang));
+  };
+
+  /** 选择任意模式包（含第三方）：按包认领的环节类型切换默认时间轴。 */
+  const selectWizardModePack = (modePackId: string) => {
+    const choice = modePackChoices.find((item) => item.id === modePackId);
+    const isXuean = isXueanLikeChoice(choice);
+    setWizardModePackIdState(modePackId);
+    setWizardDeliveryModeState(isXuean ? 'xuean' : 'whiteboard');
+    setWizardCourseTimeline(isXuean ? getDefaultXueanTimeline(lang) : getDefaultWizardTimeline(lang));
   };
   const [wizardIsGeneratingOutline, setWizardIsGeneratingOutline] = useState(false);
 
@@ -194,12 +269,22 @@ export function useCourseWizard(options: UseCourseWizardOptions) {
           title: wizardCourseTitle,
           content: displayContent,
           deliveryMode: wizardDeliveryMode,
+          modePackId: wizardModePackId,
         }),
       });
 
       if (res.ok) {
         const data = await res.json();
         const newLessonId = data.result?.lessonId;
+        const modeBinding = data.result?.modeBinding;
+        if (modeBinding?.fallback) {
+          addToast(
+            lang === 'zh' ? '模式已回落' : 'Mode fell back',
+            (lang === 'zh' ? '所选模式包不可用：' : 'Selected mode pack is unavailable: ') +
+              (modeBinding.reason || wizardModePackId),
+            'warning',
+          );
+        }
         if (newLessonId) {
           await fetch(`/api/lessons/${newLessonId}/timeline`, {
             method: 'PUT',
@@ -238,6 +323,7 @@ export function useCourseWizard(options: UseCourseWizardOptions) {
         setWizardCourseContent('');
         setWizardCourseTimeline(getDefaultWizardTimeline(lang));
         setWizardDeliveryModeState('whiteboard');
+        setWizardModePackIdState(BUILTIN_WHITEBOARD_MODE_PACK_ID);
         setWizardStep(1);
       } else {
         addToast('Error', 'SQLite save failed', 'warning');
@@ -267,6 +353,9 @@ export function useCourseWizard(options: UseCourseWizardOptions) {
     setWizardCourseTimeline,
     wizardDeliveryMode,
     setWizardDeliveryMode,
+    wizardModePackId,
+    modePackChoices,
+    selectWizardModePack,
     wizardIsSubmitting,
     setWizardIsSubmitting,
     wizardIsGeneratingOutline,

@@ -18,6 +18,8 @@ export type Lesson = {
   creator_name?: string | null;
   /** 课程交付模式。空值是升级前的旧课，按白板处理。 */
   delivery_mode?: string | null;
+  /** 课时绑定的模式包 id（第三方插件可扩展）；优先于 delivery_mode。 */
+  mode_pack_id?: string | null;
 };
 
 export type TimelineSegment = {

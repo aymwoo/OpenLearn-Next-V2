@@ -13,6 +13,7 @@ import { CLASSROOM_EVENTS, publishClassroomEvent } from '../classroom-events.js'
 import { lessonActiveSegments, clearLessonRuntimeState } from '../shared-state.js';
 import type { Pagination } from '../utils/pagination.js';
 import { buildLessonVisibilityClause, isAdministrator, type LessonVisibilityScope } from './class-access.js';
+import { resolveLessonModeBinding } from './mode-pack-catalog.js';
 
 export interface LessonOwnershipResult {
   allowed: boolean;
@@ -37,6 +38,8 @@ export interface CreateLessonParams {
   creatorId: string;
   /** whiteboard | xuean。缺省由创建命令按白板写入。 */
   deliveryMode?: string;
+  /** 模式包 id；服务端会校验可用性，不可用则回落白板。 */
+  modePackId?: string | null;
 }
 
 export interface UpdateTimelineParams {
@@ -195,12 +198,33 @@ export class LessonService {
 
   /**
    * 创建课时 (通过 CommandBus)
+   *
+   * 绑定模式包前先经目录决议：显式 `modePackId` 不可用（插件未激活 / manifest
+   * 无效）时回落内置白板，并把回落原因随返回值交给调用方（向导提示 + 日志）。
    */
   public async createLesson(params: CreateLessonParams, actorId = 'teacher') {
-    const cmd = this.commandBus.createCommand('lesson.create', params, actorId, {
+    const modeBinding = resolveLessonModeBinding({
+      modePackId: params.modePackId,
+      deliveryMode: params.deliveryMode,
+    });
+    if (modeBinding.fallback) {
+      // 观测点：插件被停用/卸载后，旧向导或脚本仍可能提交已失效的模式包 id。
+      // 这里记录请求值与回落原因，便于管理端定位「为什么课变成白板」。
+      console.warn(`[lesson-service] 模式包回落：请求=${String(params.modePackId)}；${modeBinding.reason ?? ''}`);
+    }
+    // 原始 modePackId 可能不可用，必须丢弃后用决议结果重建；null 不写入
+    // payload（命令 schema 只声明 STRING，NULL 会触发 PayloadValidationError）。
+    const payload: Record<string, unknown> = { ...params, deliveryMode: modeBinding.deliveryMode };
+    if (modeBinding.modePackId) payload.modePackId = modeBinding.modePackId;
+    else delete payload.modePackId;
+    const cmd = this.commandBus.createCommand('lesson.create', payload, actorId, {
       approved: true,
     });
-    return await this.commandBus.execute(cmd);
+    const result = await this.commandBus.execute(cmd);
+    return {
+      ...(result && typeof result === 'object' ? result : { result }),
+      modeBinding,
+    };
   }
 
   /**

@@ -114,6 +114,11 @@ export const BuiltinPlugin = {
             type: 'STRING',
             description: '课程交付模式：whiteboard（白板，默认）或 xuean（学案）。不是门户教学模式标签。',
           },
+          modePackId: {
+            type: 'STRING',
+            description:
+              '模式包 id（manifest contributes["mode.pack"].id）。已由服务端校验可用性；缺省时按 deliveryMode 推导内置包。',
+          },
         },
         required: ['title', 'content'],
       },
@@ -130,10 +135,21 @@ export const BuiltinPlugin = {
             : rawCreatorId;
 
         const deliveryMode = resolveCourseDeliveryMode(payload.deliveryMode);
+        const modePackId =
+          typeof payload.modePackId === 'string' && payload.modePackId.trim() ? payload.modePackId.trim() : null;
         const stmt = db.prepare(
-          'INSERT INTO lessons (id, title, content, creator_id, created_at, updated_at, delivery_mode) VALUES (?, ?, ?, ?, ?, ?, ?)',
+          'INSERT INTO lessons (id, title, content, creator_id, created_at, updated_at, delivery_mode, mode_pack_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
         );
-        stmt.run(lessonId, payload.title, payload.content || '', creatorId, Date.now(), Date.now(), deliveryMode);
+        stmt.run(
+          lessonId,
+          payload.title,
+          payload.content || '',
+          creatorId,
+          Date.now(),
+          Date.now(),
+          deliveryMode,
+          modePackId,
+        );
 
         await eventBus.publish({
           id: uuidv7(),

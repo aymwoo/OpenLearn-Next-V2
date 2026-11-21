@@ -64,7 +64,8 @@ describe('BuiltinPlugin', () => {
         creator_id TEXT,
         created_at INTEGER NOT NULL,
         updated_at INTEGER NOT NULL,
-        delivery_mode TEXT
+        delivery_mode TEXT,
+        mode_pack_id TEXT
       );
 
       CREATE TABLE IF NOT EXISTS whiteboard_elements (

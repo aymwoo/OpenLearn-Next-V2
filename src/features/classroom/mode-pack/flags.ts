@@ -7,7 +7,10 @@
  * 单测用 `setModePacksEnabledForTests` / `setModePackShowXueanTabForTests` 覆盖，优先于课程模式和设置。
  */
 import { useSyncExternalStore } from 'react';
-import { isXueanDeliveryMode } from '../../../../packages/core/plugin-host/course-delivery-mode';
+import {
+  isXueanDeliveryMode,
+  resolveLessonModePackDeliveryMode,
+} from '../../../../packages/core/plugin-host/course-delivery-mode';
 
 export interface ClientFeatureFlags {
   modePacksEnabled: boolean;
@@ -40,9 +43,10 @@ export function getClientFeatureFlagVersion(): number {
   return revision;
 }
 
-/** 由应用根在渲染时写入当前课的 delivery_mode。传 null 表示没有选中课。 */
-export function setActiveCourseDeliveryMode(mode: unknown): void {
-  const next = mode ?? null;
+/** 由应用根在渲染时写入当前课的模式（`mode_pack_id` 优先，其次 `delivery_mode`）。 */
+export function setActiveCourseDeliveryMode(mode: unknown, modePackId?: unknown): void {
+  // 两者都为空 = 没选中任何课，保留 null 语义（测试与旧调用方依赖）。
+  const next = mode == null && modePackId == null ? null : resolveLessonModePackDeliveryMode(modePackId, mode);
   if (next === activeDeliveryMode) return;
   activeDeliveryMode = next;
   emit();
