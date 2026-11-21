@@ -239,6 +239,7 @@ export const WHITEBOARD_FULLSCREEN_CHANGED = 'whiteboard-fullscreen-changed';
  */
 let globalOnlineStudentsGetter: (() => string[]) | null = null;
 let globalActiveLessonsGetter: (() => Record<string, string>) | null = null;
+let globalMarkCheckedIn: ((lessonId: string, studentId: string) => boolean) | null = null;
 
 /** 读取当前实时在线的学生 ID 列表 */
 export function getOnlineStudentIds(): string[] {
@@ -268,6 +269,18 @@ export function getPresentStudentIds(lessonId: string | null | undefined): strin
     if (activeLessonId === lessonId && online.has(studentId)) present.push(studentId);
   }
   return present;
+}
+
+/**
+ * 签到成功后由 /checkin 调用，确保刚签到但未 enter-lesson 的学生
+ * 也能被 getPresentStudentIds 立即计入。幂等。
+ *
+ * 只对已在线的学生生效：离线学生没有 socket 在场事实，不应伪造在线状态。
+ *
+ * @returns 是否实际新增（已存在/离线/参数为空返回 false）
+ */
+export function markStudentCheckedIn(lessonId: string, studentId: string): boolean {
+  return globalMarkCheckedIn ? globalMarkCheckedIn(lessonId, studentId) : false;
 }
 
 export function setupPresence({
@@ -337,6 +350,15 @@ export function setupPresence({
         emitPresenceNow();
       }
     }, 500);
+  };
+
+  globalMarkCheckedIn = (lessonId: string, studentId: string): boolean => {
+    if (!lessonId || !studentId) return false;
+    if (!onlineStudents.has(studentId)) return false;
+    if (activeStudentLessons.get(studentId) === lessonId) return false;
+    activeStudentLessons.set(studentId, lessonId);
+    broadcastPresence();
+    return true;
   };
 
   io.on('connection', (socket: any) => {

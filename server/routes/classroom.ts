@@ -9,7 +9,7 @@ import type { ClassroomFeedService } from '../services/classroom-feed-service.js
 import type { ServerContext } from '../context.js';
 import { sendSafeError } from '../utils/error-handler.js';
 import { randomId } from '../utils/id.js';
-import { emitClassroomEvent, getOnlineStudentIds } from '../presence.js';
+import { emitClassroomEvent, getOnlineStudentIds, markStudentCheckedIn } from '../presence.js';
 import { loadLessonClassId } from '../services/classroom-class-lock.js';
 import { diagnosticService } from '../services/diagnostic-service.js';
 import { classroomReadCache, invalidateClassroomReadCache } from '../utils/ttl-cache.js';
@@ -1047,6 +1047,7 @@ export function registerClassroomRoutes(
         } catch (_) {}
 
         segmentGateService.recordCheckin(lessonId, studentId);
+        markStudentCheckedIn(lessonId, studentId);
         if (io) {
           emitClassroomEvent(
             io,
