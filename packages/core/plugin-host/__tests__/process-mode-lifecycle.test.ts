@@ -13,12 +13,27 @@
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { PluginState } from '../types.js';
-import { createDb, makeHost, makeTmpDir, removeTmpDir, insertPluginRow } from './helpers/audit-host.js';
+import { createDb, makeHost, makeTmpDir, removeTmpDir, insertPluginRow, baseReq } from './helpers/audit-host.js';
 
-/** 形 enough 的 WorkerManager mock：只暴露 PluginHost 会调用的方法 */
+/**
+ * 形 enough 的 WorkerManager mock：只暴露 PluginHost 会调用的方法。
+ *
+ * 每次 createWorker 返回**新的** serviceHost，并用递增的 seq 标记归属 ——
+ * 重载后派发必须落到新实例上（旧实例的 serviceHost 已被 terminate）。
+ */
 function createWorkerManagerMock() {
+  let seq = 0;
   return {
-    createWorker: vi.fn().mockResolvedValue({ transport: {}, serviceHost: {} }),
+    createWorker: vi.fn().mockImplementation(async () => {
+      seq += 1;
+      const current = seq;
+      return {
+        transport: {},
+        serviceHost: {
+          dispatchHttpRequest: vi.fn(async () => ({ status: 200, body: { seq: current } })),
+        },
+      };
+    }),
     terminateWorker: vi.fn().mockResolvedValue(undefined),
   };
 }
@@ -90,6 +105,25 @@ describe('F-1 · process 模式全生命周期走隔离路径', () => {
     expect(wm.createWorker.mock.calls.length).toBeGreaterThanOrEqual(2);
     const lastCall = wm.createWorker.mock.calls[wm.createWorker.mock.calls.length - 1];
     expect(lastCall[7]).toEqual({ isolateKind: 'process' });
+  });
+
+  it('reload(process) 成功后重新登记实例并回到 ACTIVE（否则更新后全部 API 503）', async () => {
+    const manifest = install('process', 'p6', 'ext-proc-6');
+    await host.activatePlugin('p6');
+
+    const newSource = `export const manifest = ${JSON.stringify({ ...manifest, version: '1.1.0' })};`;
+    await host.reloadPlugin('p6', newSource);
+
+    // 修复前：terminateWorker 已杀掉旧子进程，但 pluginInstances 未重新登记，
+    // 宿主状态也未恢复 —— 下发请求返回 503 "currently inactive"，历史数据页面全空。
+    expect(host.getPluginState('p6')).toBe(PluginState.ACTIVE);
+    const row = db.prepare('SELECT status FROM plugins WHERE id = ?').get('p6') as { status: string };
+    expect(row.status).toBe('active');
+
+    const res = await host.dispatchHttpRequest('p6', baseReq('/live') as never);
+    expect(res.status).toBe(200);
+    // 必须派发到**重建后**的实例（seq=2），而不是已 terminate 的旧实例
+    expect((res.body as { seq: number }).seq).toBe(2);
   });
 
   it('对照：inline 模式不触碰 WorkerManager', async () => {

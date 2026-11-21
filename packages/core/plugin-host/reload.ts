@@ -516,7 +516,7 @@ export abstract class PluginHostReload extends PluginHostLifecycle {
         fs.writeFileSync(path.join(pluginDir, 'index.js'), newSourceCode);
       }
 
-      await this.workerManager.createWorker(
+      const newWorkerRef = await this.workerManager.createWorker(
         pluginId,
         _newManifest,
         newSourceCode,
@@ -528,6 +528,18 @@ export abstract class PluginHostReload extends PluginHostLifecycle {
         // 重建，该插件的隔离强度会随一次热重载静默降级。
         { isolateKind: requiresProcessIsolation(mode) ? 'process' : 'thread' },
       );
+      // 重建后必须重新登记宿主侧实例并恢复 ACTIVE：旧 worker 已被 terminate，
+      // pluginInstances 若仍指向失效的 workerRef（或已被回收），
+      // 更新成功后所有插件 API 都会返回 503 "currently inactive"。
+      if (newWorkerRef) {
+        this.pluginInstances.set(pluginId, {
+          manifest: _newManifest,
+          activate: undefined,
+          deactivate: undefined,
+          workerRef: newWorkerRef,
+        });
+        this.setPluginState(pluginId, PluginState.ACTIVE, { persistDb: true });
+      }
       this.db
         .prepare('UPDATE plugins SET source_code = ?, updated_at = ?, version = ? WHERE id = ?')
         .run(newSourceCode, Date.now(), _newManifest.version, pluginId);
