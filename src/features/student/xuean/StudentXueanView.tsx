@@ -6,6 +6,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { getXuean, postActivityProgress, type ActivitySubmission } from '../../../services/lessonActivitiesService.js';
 import { sanitizeRichTextHtml } from '../../../../packages/core/security/html-sanitize';
+import { CoursewareHost } from '../../courseware/CoursewareHost';
 
 type Block = {
   id: string;
@@ -52,6 +53,7 @@ const BLOCK_TYPE_LABELS: Record<string, string> = {
   works_showcase: '作品赏析',
   reflection: '反思',
   free_html: '自由内容',
+  interactive_courseware: '互动课件',
 };
 
 const ACTIVITY_TYPE_LABELS: Record<string, string> = {
@@ -178,6 +180,27 @@ function BlockCard({ block }: { block: Block }) {
   const typeLabel = BLOCK_TYPE_LABELS[block.block_type] ?? block.block_type;
 
   const renderContent = () => {
+    if (block.block_type === 'interactive_courseware' && content && typeof content === 'object') {
+      const record = content as Record<string, unknown>;
+      const coursewareUuid = typeof record.coursewareUuid === 'string' ? record.coursewareUuid : null;
+      const resourceId = typeof record.resourceId === 'string' ? record.resourceId : null;
+      if (coursewareUuid || resourceId) {
+        return (
+          <div className="h-[420px] w-full overflow-hidden rounded-lg border border-theme">
+            <CoursewareHost
+              source={{
+                coursewareUuid: coursewareUuid ?? undefined,
+                resourceId: resourceId ?? undefined,
+                title: typeof record.title === 'string' ? record.title : undefined,
+              }}
+              lessonId={block.lesson_id}
+              elementId={block.id}
+              lazy={false}
+            />
+          </div>
+        );
+      }
+    }
     if (typeof content === 'string') {
       return block.block_type === 'free_html' ? (
         <div dangerouslySetInnerHTML={{ __html: sanitizeRichTextHtml(content) }} />

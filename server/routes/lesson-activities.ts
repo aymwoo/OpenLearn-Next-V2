@@ -58,6 +58,7 @@ const VALID_BLOCK_TYPES = new Set([
   'works_showcase',
   'reflection',
   'free_html',
+  'interactive_courseware',
 ]);
 
 const VALID_PROGRESS_STATUS = new Set(['not_started', 'in_progress', 'submitted', 'graded']);
@@ -166,6 +167,39 @@ function parseBlock(body: unknown): ParseResult<BlockValue> {
     return { ok: false, error: 'content is required', status: 400 };
   }
   let contentJson: string;
+  if (blockType === 'interactive_courseware') {
+    // 学案互动课件块只存「内容源描述」，不落 HTML 正文：内容仍由课件运行时
+    // 渲染在沙箱 iframe 中，避免学案表里出现可执行脚本。
+    const raw =
+      typeof content === 'string'
+        ? (() => {
+            try {
+              return JSON.parse(content) as unknown;
+            } catch {
+              return null;
+            }
+          })()
+        : content;
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+      return { ok: false, error: 'interactive_courseware content must be a JSON object', status: 400 };
+    }
+    const record = raw as Record<string, unknown>;
+    const coursewareUuid =
+      typeof record.coursewareUuid === 'string' && record.coursewareUuid.trim()
+        ? record.coursewareUuid.trim().slice(0, 128)
+        : null;
+    const resourceId =
+      typeof record.resourceId === 'string' && record.resourceId.trim() ? record.resourceId.trim().slice(0, 128) : null;
+    if (!coursewareUuid && !resourceId) {
+      return { ok: false, error: 'interactive_courseware requires coursewareUuid or resourceId', status: 400 };
+    }
+    contentJson = JSON.stringify({
+      coursewareUuid,
+      resourceId,
+      title: typeof record.title === 'string' ? record.title.trim().slice(0, 120) : null,
+    });
+    return { ok: true, value: { blockType, contentJson } };
+  }
   try {
     contentJson = typeof content === 'string' ? content : (JSON.stringify(content) as string);
   } catch {

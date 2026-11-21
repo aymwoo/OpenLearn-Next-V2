@@ -29,6 +29,11 @@ const BLOCK_TYPES: { value: string; label: string; hint: string }[] = [
   { value: 'works_showcase', label: '作品赏析', hint: 'JSON 数组或对象' },
   { value: 'reflection', label: '反思', hint: 'JSON 数组或对象' },
   { value: 'free_html', label: '自由 HTML', hint: '直接写 HTML 字符串' },
+  {
+    value: 'interactive_courseware',
+    label: '互动课件',
+    hint: 'JSON 对象，引用已上传课件：{"coursewareUuid":"..."} 或 {"resourceId":"..."}；可选 title。',
+  },
 ];
 
 interface Props {
@@ -241,6 +246,19 @@ function BlockEditor({
       // 数组类型：尝试解析；解析失败且是字符串 → 自动包裹成数组
       try {
         const parsed = JSON.parse(content);
+        if (blockType === 'interactive_courseware') {
+          const record = parsed as Record<string, unknown> | null;
+          if (
+            !record ||
+            typeof record !== 'object' ||
+            Array.isArray(record) ||
+            (!record.coursewareUuid && !record.resourceId)
+          ) {
+            setError('互动课件需要 {"coursewareUuid":"..."} 或 {"resourceId":"..."}');
+            setSaving(false);
+            return;
+          }
+        }
         if (Array.isArray(parsed) || (parsed && typeof parsed === 'object')) {
           contentJson = JSON.stringify(parsed);
         } else {
@@ -249,6 +267,11 @@ function BlockEditor({
           return;
         }
       } catch {
+        if (blockType === 'interactive_courseware') {
+          setError('互动课件内容需要是 JSON 对象');
+          setSaving(false);
+          return;
+        }
         contentJson = JSON.stringify([content]);
       }
     }
@@ -310,9 +333,15 @@ function BlockEditor({
           <textarea
             value={content}
             onChange={(e) => setContent(e.target.value)}
-            rows={blockType === 'free_html' ? 8 : 6}
+            rows={blockType === 'free_html' ? 8 : blockType === 'interactive_courseware' ? 4 : 6}
             className="w-full px-3 py-2 text-sm rounded-lg border border-theme bg-surface text-main focus:outline-none focus:ring-2 focus:ring-primary-theme/40 font-mono"
-            placeholder={blockType === 'free_html' ? '<p>HTML 内容</p>' : '["条目1", "条目2"]'}
+            placeholder={
+              blockType === 'free_html'
+                ? '<p>HTML 内容</p>'
+                : blockType === 'interactive_courseware'
+                  ? '{"coursewareUuid":"cw_..."}'
+                  : '["条目1", "条目2"]'
+            }
             autoFocus
           />
           <p className="text-[11px] text-muted/80">{hint}</p>

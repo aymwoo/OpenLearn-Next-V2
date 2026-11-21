@@ -243,6 +243,33 @@ describe('学案式课时包路由 (IKVO15 · P0)', () => {
       expect(res.status).toBe(200);
       expect(res.body.length).toBe(2);
     });
+
+    it('互动课件块只接受内容源描述并规范化落库', async () => {
+      const res = await fetchJson<TestRow>(`${baseUrl}/api/lessons/${lessonId}/blocks`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...teacherCookie },
+        body: JSON.stringify({
+          blockType: 'interactive_courseware',
+          content: { coursewareUuid: ' cw_demo ', title: ' 分数演示 ', script: '<script>alert(1)</script>' },
+        }),
+      });
+      expect(res.status).toBe(201);
+      expect(JSON.parse(String(res.body.content_json))).toEqual({
+        coursewareUuid: 'cw_demo',
+        resourceId: null,
+        title: '分数演示',
+      });
+      await fetch(`${baseUrl}/api/blocks/${res.body.id}`, { method: 'DELETE', headers: teacherCookie });
+    });
+
+    it('互动课件块缺少内容源时拒绝', async () => {
+      const res = await fetchJson(`${baseUrl}/api/lessons/${lessonId}/blocks`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...teacherCookie },
+        body: JSON.stringify({ blockType: 'interactive_courseware', content: { title: '空' } }),
+      });
+      expect(res.status).toBe(400);
+    });
   });
 
   // ── 学生学案聚合 ───────────────────────────────────────────────────
