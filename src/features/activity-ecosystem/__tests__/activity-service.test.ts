@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  describeRunState,
   fetchActivities,
   fetchRunningActivities,
   finishActivity,
@@ -62,9 +63,9 @@ describe('activity-service (canonical routes)', () => {
   });
 
   it('startActivity 使用 /api/activity-providers/:id/runs 并返回 runId', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      jsonResponse({ ok: true, runId: 'run_2', provider: 'official', dispatched: true }),
-    );
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(jsonResponse({ ok: true, runId: 'run_2', provider: 'official', dispatched: true }));
     vi.stubGlobal('fetch', fetchMock);
 
     const result = await startActivity('provider_2', { x: 1 }, 'teacher-1');
@@ -73,6 +74,39 @@ describe('activity-service (canonical routes)', () => {
       expect.objectContaining({ method: 'POST' }),
     );
     expect(result.runId).toBe('run_2');
+  });
+
+  it('describeRunState 区分 running/paused/interrupted 与未知态', () => {
+    expect(describeRunState('running', 'zh')).toMatchObject({
+      label: '进行中',
+      tone: 'running',
+      canPause: true,
+      canResume: false,
+      canFinish: true,
+    });
+    expect(describeRunState('paused', 'zh')).toMatchObject({
+      label: '已暂停',
+      tone: 'paused',
+      canPause: false,
+      canResume: true,
+      canFinish: true,
+    });
+    // 中断是终态：不提供恢复/结束按钮，避免稳定触发 409
+    expect(describeRunState('interrupted', 'zh')).toMatchObject({
+      label: '已中断',
+      tone: 'interrupted',
+      canPause: false,
+      canResume: false,
+      canFinish: false,
+    });
+    expect(describeRunState('failed', 'zh')).toEqual({
+      label: 'failed',
+      tone: 'unknown',
+      canPause: false,
+      canResume: false,
+      canFinish: false,
+    });
+    expect(describeRunState('', 'en').label).toBe('Unknown');
   });
 
   it('pause/resume/finish 使用 /api/activity-runs/:runId/*', async () => {

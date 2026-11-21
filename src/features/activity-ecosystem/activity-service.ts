@@ -31,10 +31,53 @@ export interface RunningActivity {
   icon?: string;
   category?: string;
   provider: string;
-  /** Lifecycle state — 'running' | 'paused' on this endpoint. */
+  /** Lifecycle state —— 活跃端点返回 running/paused；通用运行列表可能含 interrupted 等终态。 */
   state: string;
   /** Epoch ms when the activity entered `running`, or null. */
   startedAt: number | null;
+}
+
+export type RunStateTone = 'running' | 'paused' | 'interrupted' | 'unknown';
+
+export interface RunStateView {
+  label: string;
+  tone: RunStateTone;
+  /** 服务端状态机：running → paused/finished，paused → running/finished。 */
+  canPause: boolean;
+  canResume: boolean;
+  canFinish: boolean;
+}
+
+/**
+ * 把运行状态翻译成展示文案与可用操作。
+ *
+ * 关键点：`interrupted`（服务重启后未能恢复的运行）是终态，既不能恢复也不能结束，
+ * 因此不能再按旧逻辑一律回退成「已暂停」并展示恢复按钮（那会稳定拿到 409）。
+ */
+export function describeRunState(state: string, lang: 'zh' | 'en' = 'en'): RunStateView {
+  const zh = lang === 'zh';
+  switch (state) {
+    case 'running':
+      return { label: zh ? '进行中' : 'Running', tone: 'running', canPause: true, canResume: false, canFinish: true };
+    case 'paused':
+      return { label: zh ? '已暂停' : 'Paused', tone: 'paused', canPause: false, canResume: true, canFinish: true };
+    case 'interrupted':
+      return {
+        label: zh ? '已中断' : 'Interrupted',
+        tone: 'interrupted',
+        canPause: false,
+        canResume: false,
+        canFinish: false,
+      };
+    default:
+      return {
+        label: state || (zh ? '状态未知' : 'Unknown'),
+        tone: 'unknown',
+        canPause: false,
+        canResume: false,
+        canFinish: false,
+      };
+  }
 }
 
 interface ActivityRunDto {
