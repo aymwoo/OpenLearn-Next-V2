@@ -154,19 +154,9 @@ export function getUnifiedShowcaseWorks(
   try {
     const coursewareIds: string[] = [];
     try {
-      const els = db
-        .prepare("SELECT data FROM whiteboard_elements WHERE lesson_id = ? AND type = 'html-applet'")
-        .all(lessonId) as Array<{ data: string }>;
-      for (const el of els) {
-        try {
-          const parsed = JSON.parse(el.data || '{}');
-          const uuid = parsed?.coursewareUuid ?? parsed?.uuid;
-          if (typeof uuid === 'string' && uuid.trim()) {
-            const cw = db.prepare('SELECT id FROM courseware WHERE uuid = ?').get(uuid.trim()) as
-              { id: string } | undefined;
-            if (cw?.id && !coursewareIds.includes(cw.id)) coursewareIds.push(cw.id);
-          }
-        } catch {}
+      for (const uuid of collectLessonCoursewareUuids(db, lessonId)) {
+        const cw = db.prepare('SELECT id FROM courseware WHERE uuid = ?').get(uuid) as { id: string } | undefined;
+        if (cw?.id && !coursewareIds.includes(cw.id)) coursewareIds.push(cw.id);
       }
     } catch {}
 
@@ -293,24 +283,70 @@ export function getUnifiedShowcaseWorksResult(
   sessionId?: string | null,
   classId?: string | null,
 ): { works: ShowcaseWork[]; scope: 'lesson' | 'class' } {
-  // 检查白板上是否存在属于当前课节的 html-applet 课件
+  // 检查白板上是否存在属于当前课节的课件（新旧两种元素形态都算）
   let hasLessonCourseware = false;
   try {
-    const els = db
-      .prepare("SELECT data FROM whiteboard_elements WHERE lesson_id = ? AND type = 'html-applet'")
-      .all(lessonId) as Array<{ data: string }>;
-    for (const el of els) {
-      const parsed = JSON.parse(el.data || '{}');
-      if (parsed?.coursewareUuid || parsed?.uuid) {
-        hasLessonCourseware = true;
-        break;
-      }
-    }
+    hasLessonCourseware = collectLessonCoursewareUuids(db, lessonId).length > 0;
   } catch {}
 
   const works = getUnifiedShowcaseWorks(db, lessonId, sessionId, classId);
   const scope: 'lesson' | 'class' = hasLessonCourseware ? 'lesson' : 'class';
   return { works, scope };
+}
+
+/**
+ * 收集课时白板上引用的课件 UUID（用于作品展示的课件作答聚合）。
+ *
+ * 阶段 5 起白板元素是 `learning_surface`，课件 uuid 存在
+ * `learning_surfaces.content_ref_json`；迁移前 / 回滚后的 `html-applet`
+ * 仍从元素 data 读取，两条路径取并集。
+ */
+export function collectLessonCoursewareUuids(db: Database.Database, lessonId: string): string[] {
+  const uuids = new Set<string>();
+  const add = (value: unknown) => {
+    if (typeof value === 'string' && value.trim()) uuids.add(value.trim());
+  };
+
+  try {
+    const rows = db
+      .prepare("SELECT data FROM whiteboard_elements WHERE lesson_id = ? AND type = 'learning_surface'")
+      .all(lessonId) as Array<{ data: string }>;
+    for (const row of rows) {
+      try {
+        const data = JSON.parse(row.data || '{}') as Record<string, unknown>;
+        const surfaceId = typeof data.surfaceId === 'string' ? data.surfaceId : '';
+        if (!surfaceId) continue;
+        const surface = db.prepare('SELECT content_ref_json FROM learning_surfaces WHERE id = ?').get(surfaceId) as
+          { content_ref_json: string } | undefined;
+        if (!surface) continue;
+        const ref = JSON.parse(surface.content_ref_json) as {
+          rendererId?: string;
+          source?: { kind?: string; id?: string };
+        };
+        if (ref.rendererId === 'html_courseware' && ref.source?.kind === 'courseware') add(ref.source.id);
+      } catch {
+        // 单个元素数据损坏不影响其余元素
+      }
+    }
+  } catch {
+    // 迁移尚未执行或表缺失时降级到旧路径
+  }
+
+  try {
+    const els = db
+      .prepare("SELECT data FROM whiteboard_elements WHERE lesson_id = ? AND type = 'html-applet'")
+      .all(lessonId) as Array<{ data: string }>;
+    for (const el of els) {
+      try {
+        const parsed = JSON.parse(el.data || '{}') as Record<string, unknown>;
+        add(parsed?.coursewareUuid ?? parsed?.uuid);
+      } catch {
+        // 忽略损坏的旧元素
+      }
+    }
+  } catch {}
+
+  return Array.from(uuids);
 }
 
 export class ShowcaseWorkService {
