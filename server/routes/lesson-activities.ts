@@ -30,6 +30,7 @@
  */
 import type { Request, Response, NextFunction } from 'express';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
+import { publishActivityCompleted } from '../../packages/core/events/activity-events.js';
 import { requireScopedAuth } from '../middleware/data-scope.js';
 import { sendSafeError } from '../utils/error-handler.js';
 import { randomId } from '../utils/id.js';
@@ -845,6 +846,14 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
       const row = readDb
         .prepare('SELECT * FROM activity_progress WHERE activity_id = ? AND student_id = ?')
         .get(activityId, studentId);
+      publishActivityCompleted(kernelContainer.eventBus, {
+        source: 'lesson-activity',
+        activityId: `xuean:${activityId}`,
+        lessonId: activity.lesson_id,
+        studentId,
+        completedAt: ts,
+        raw: { status: newStatus ?? null, score: scoreVal ?? null },
+      });
       res.json(row);
     } catch (err: unknown) {
       sendSafeError(res, err);

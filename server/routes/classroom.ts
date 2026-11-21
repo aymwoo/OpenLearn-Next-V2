@@ -10,6 +10,7 @@ import type { ServerContext } from '../context.js';
 import { sendSafeError } from '../utils/error-handler.js';
 import { randomId } from '../utils/id.js';
 import { emitClassroomEvent, getOnlineStudentIds, markStudentCheckedIn } from '../presence.js';
+import { publishActivityCompleted } from '../../packages/core/events/activity-events.js';
 import { loadLessonClassId } from '../services/classroom-class-lock.js';
 import { diagnosticService } from '../services/diagnostic-service.js';
 import { classroomReadCache, invalidateClassroomReadCache } from '../utils/ttl-cache.js';
@@ -1224,6 +1225,16 @@ export function registerClassroomRoutes(
 
         const { distribution, totalVotes: total } = classroomSessionService.closeQuickPoll(pollId);
 
+        publishActivityCompleted(kernelContainer.eventBus, {
+          source: 'classroom-interaction',
+          activityId: 'classroom-legacy:quick-poll',
+          lessonId,
+          sessionId: poll.sessionId,
+          classId: pollSession?.class_id,
+          completedAt: Date.now(),
+          raw: { pollId, totalVotes: total },
+        });
+
         if (io) {
           emitClassroomEvent(
             io,
@@ -1817,6 +1828,17 @@ export function registerClassroomRoutes(
         const countRow = db
           .prepare('SELECT COUNT(*) as count FROM classroom_exit_tickets WHERE session_id = ?')
           .get(sessionId) as any;
+
+        publishActivityCompleted(kernelContainer.eventBus, {
+          source: 'classroom-interaction',
+          activityId: 'classroom-legacy:exit-ticket',
+          lessonId,
+          sessionId,
+          classId: activeSession.class_id,
+          studentId,
+          completedAt: now,
+          raw: { ticketId, rating, tierLevel },
+        });
 
         if (io) {
           // 此前这里只投 `lesson-${lessonId}`（无人加入的房间）且**没有任何全局兜底**，

@@ -189,6 +189,7 @@ async function startServer() {
   const activityRunService = new ActivityRunService(
     activityRegistry,
     kernelContainer.db as unknown as import('better-sqlite3').Database,
+    kernelContainer.eventBus,
   );
   // Phase 1：把动态 provider 源接入只读 ExtensionCatalog。
   kernelContainer.extensionCatalog.attachActivitySource(() =>

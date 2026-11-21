@@ -13,6 +13,8 @@ import type { Database as BetterSqliteDatabase } from 'better-sqlite3';
 import type { ActivityContext, ActivityRegistry } from '../../packages/activity-ecosystem/index.js';
 import type { ActivityRunState } from '../../packages/core/activity-contract/index.js';
 import { makeActivityId } from '../../packages/core/activity-contract/index.js';
+import type { EventBusPort } from '../../packages/core/event-bus/index.js';
+import { publishActivityCompleted } from '../../packages/core/events/activity-events.js';
 
 export interface ActivityRunRecord {
   runId: string;
@@ -54,6 +56,7 @@ export class ActivityRunService {
   constructor(
     private readonly registry: ActivityRegistry,
     private readonly db?: BetterSqliteDatabase,
+    private readonly eventBus?: EventBusPort,
   ) {
     this.restoreActiveRuns();
   }
@@ -163,6 +166,17 @@ export class ActivityRunService {
       }
     }
     this.persist(run);
+
+    if (nextState === 'finished') {
+      publishActivityCompleted(this.eventBus, {
+        source: 'ecosystem',
+        activityId: run.activityId,
+        lessonId: run.lessonId ?? '',
+        classId: run.classId ?? undefined,
+        completedAt: run.endedAt ?? Date.now(),
+        raw: { runId: run.runId, providerId: run.providerId, actorId: run.actorId },
+      });
+    }
     return true;
   }
 

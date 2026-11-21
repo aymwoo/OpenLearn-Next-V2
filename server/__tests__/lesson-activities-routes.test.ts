@@ -2,7 +2,7 @@
  * Issue IKVO15 · P0 学案式课时包路由集成测试。
  * 用微型 Express + kernelContainer + client_sessions 模拟真实服务。
  */
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import express from 'express';
 import { createServer, type Server } from 'http';
 import type { AddressInfo } from 'net';
@@ -329,6 +329,7 @@ describe('学案式课时包路由 (IKVO15 · P0)', () => {
         headers: teacherCookie,
       });
       const first = list.body[0];
+      const publishSpy = vi.spyOn(kernelContainer.eventBus, 'publish');
       const res = await fetchJson(`${baseUrl}/api/activities/${first.id}/progress/verify`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...teacherCookie },
@@ -338,6 +339,16 @@ describe('学案式课时包路由 (IKVO15 · P0)', () => {
       expect(res.body.verified).toBe(1);
       expect(res.body.status).toBe('graded');
       expect(res.body.score).toBe(95);
+
+      const completed = publishSpy.mock.calls
+        .map(([event]) => event as any)
+        .filter((event) => event.type === 'activity.completed');
+      expect(
+        completed.some(
+          (event) => event.payload.source === 'lesson-activity' && event.payload.activityId === `xuean:${first.id}`,
+        ),
+      ).toBe(true);
+      publishSpy.mockRestore();
     });
 
     it('进度面板聚合到活动 × 学生', async () => {
