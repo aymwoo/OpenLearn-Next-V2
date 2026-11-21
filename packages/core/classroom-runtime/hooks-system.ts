@@ -47,6 +47,16 @@ export class RuntimeHooksManager {
   }
 
   /**
+   * 返回当前已注册的 hook 名称与回调数量（只读，不暴露回调本身）。
+   */
+  public listHooks(): ReadonlyArray<{ name: RuntimeHookName; count: number }> {
+    return Array.from(this.hooks.entries()).map(([name, callbacks]) => ({
+      name,
+      count: callbacks.size,
+    }));
+  }
+
+  /**
    * Clear all registered hooks.
    */
   public clear(): void {

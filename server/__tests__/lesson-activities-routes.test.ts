@@ -171,6 +171,25 @@ describe('学案式课时包路由 (IKVO15 · P0)', () => {
       expect(res.body.due_at).toBe(9999);
     });
 
+    it('旧路径 307 到 /api/lesson-activities/:id，新路径 200', async () => {
+      const legacy = await fetch(`${baseUrl}/api/activities/${activityId}`, {
+        method: 'PUT',
+        redirect: 'manual',
+        headers: { 'Content-Type': 'application/json', ...teacherCookie },
+        body: JSON.stringify({ title: '旧路径别名' }),
+      });
+      expect(legacy.status).toBe(307);
+      expect(legacy.headers.get('location')).toBe(`/api/lesson-activities/${activityId}`);
+
+      const canonical = await fetchJson(`${baseUrl}/api/lesson-activities/${activityId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', ...teacherCookie },
+        body: JSON.stringify({ title: '新路径' }),
+      });
+      expect(canonical.status).toBe(200);
+      expect(canonical.body.title).toBe('新路径');
+    });
+
     it('批量重排', async () => {
       const list = await fetchJson<TestRow[]>(`${baseUrl}/api/lessons/${lessonId}/activities`, {
         headers: teacherCookie,

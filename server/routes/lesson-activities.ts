@@ -28,7 +28,7 @@
  *   - 教师：lesson owner 或管理员可 CRUD 活动/blocks + 看进度面板 + 批阅
  *   - 活动完成不自动推进课堂门禁（issue 明确要求，与 timeline 并列）
  */
-import type { Request } from 'express';
+import type { Request, Response, NextFunction } from 'express';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
 import { requireScopedAuth } from '../middleware/data-scope.js';
 import { sendSafeError } from '../utils/error-handler.js';
@@ -43,18 +43,10 @@ import {
   studentActorId,
 } from '../services/class-access.js';
 import type { ServerContext } from '../context.js';
+import { XUEAN_ACTIVITY_TYPES } from '../../packages/core/activity-contract/index.js';
 
 // ── 内部常量 ─────────────────────────────────────────────────────────────
-const VALID_ACTIVITY_TYPES = new Set([
-  'reading',
-  'submission',
-  'quiz',
-  'discussion',
-  'courseware',
-  'scratch',
-  'form',
-  'other',
-]);
+const VALID_ACTIVITY_TYPES = new Set<string>(XUEAN_ACTIVITY_TYPES);
 
 const VALID_BLOCK_TYPES = new Set([
   'learning_goals',
@@ -186,6 +178,27 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
   const db = kernelContainer.db;
   const readDb = kernelContainer.getReadDb();
 
+  // 旧 `/api/activities/:id/*` 兼容层：标注弃用，并把嵌套路由的 :activityId 映射为 :id。
+  const markLegacyActivityRoute = (_req: Request, res: Response, next: NextFunction) => {
+    res.setHeader('Deprecation', 'true');
+    res.setHeader('Link', '</api/lesson-activities/{id}>; rel="successor-version"');
+    next();
+  };
+  const redirectLegacy307 = (req: Request, res: Response, target: string) => {
+    const query = req.originalUrl.includes('?') ? req.originalUrl.slice(req.originalUrl.indexOf('?')) : '';
+    return res.redirect(307, `${target}${query}`);
+  };
+  const requireActivityInLesson = (req: Request, res: Response, next: NextFunction) => {
+    const { lessonId, activityId } = req.params;
+    const row = readDb.prepare('SELECT lesson_id FROM lesson_activities WHERE id = ?').get(activityId) as
+      { lesson_id: string } | undefined;
+    if (!row || row.lesson_id !== lessonId) {
+      return res.status(404).json({ success: false, error: 'Activity not found' });
+    }
+    (req.params as Record<string, string>).id = activityId;
+    next();
+  };
+
   // ══════════════════════════════════════════════════════════════════════
   // 活动（lesson_activities）
   // ══════════════════════════════════════════════════════════════════════
@@ -260,7 +273,7 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
   });
 
   // 更新活动（教师/管理员）
-  app.put('/api/activities/:id', requireScopedAuth('class-staff'), (req, res) => {
+  const updateActivityHandler = (req: Request, res: Response) => {
     try {
       const id = req.params.id;
       const session = requestSession(req);
@@ -304,10 +317,20 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
     } catch (err: unknown) {
       sendSafeError(res, err);
     }
-  });
+  };
+  app.put('/api/activities/:id', requireScopedAuth('class-staff'), markLegacyActivityRoute, (req, res) =>
+    redirectLegacy307(req, res, `/api/lesson-activities/${encodeURIComponent(req.params.id)}`),
+  );
+  app.put('/api/lesson-activities/:id', requireScopedAuth('class-staff'), updateActivityHandler);
+  app.put(
+    '/api/lessons/:lessonId/activities/:activityId',
+    requireScopedAuth('class-staff'),
+    requireActivityInLesson,
+    updateActivityHandler,
+  );
 
   // 删除活动（教师/管理员）
-  app.delete('/api/activities/:id', requireScopedAuth('class-staff'), (req, res) => {
+  const deleteActivityHandler = (req: Request, res: Response) => {
     try {
       const id = req.params.id;
       const session = requestSession(req);
@@ -324,7 +347,17 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
     } catch (err: unknown) {
       sendSafeError(res, err);
     }
-  });
+  };
+  app.delete('/api/activities/:id', requireScopedAuth('class-staff'), markLegacyActivityRoute, (req, res) =>
+    redirectLegacy307(req, res, `/api/lesson-activities/${encodeURIComponent(req.params.id)}`),
+  );
+  app.delete('/api/lesson-activities/:id', requireScopedAuth('class-staff'), deleteActivityHandler);
+  app.delete(
+    '/api/lessons/:lessonId/activities/:activityId',
+    requireScopedAuth('class-staff'),
+    requireActivityInLesson,
+    deleteActivityHandler,
+  );
 
   // 批量重排（传有序 id 数组；仅限同一 lesson 内）
   app.post('/api/lessons/:lessonId/activities/reorder', requireScopedAuth('class-staff'), (req, res) => {
@@ -620,7 +653,7 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
   });
 
   // 活动进度上报（学生自报，verified 保持 0）
-  app.post('/api/activities/:id/progress', requireScopedAuth('authenticated'), (req, res) => {
+  const submitProgressHandler = (req: Request, res: Response) => {
     try {
       const activityId = req.params.id;
       const session = requestSession(req);
@@ -738,14 +771,24 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
     } catch (err: unknown) {
       sendSafeError(res, err);
     }
-  });
+  };
+  app.post('/api/activities/:id/progress', requireScopedAuth('authenticated'), markLegacyActivityRoute, (req, res) =>
+    redirectLegacy307(req, res, `/api/lesson-activities/${encodeURIComponent(req.params.id)}/progress`),
+  );
+  app.post('/api/lesson-activities/:id/progress', requireScopedAuth('authenticated'), submitProgressHandler);
+  app.post(
+    '/api/lessons/:lessonId/activities/:activityId/progress',
+    requireScopedAuth('authenticated'),
+    requireActivityInLesson,
+    submitProgressHandler,
+  );
 
   // ══════════════════════════════════════════════════════════════════════
   // 教师端：批阅 + 进度面板
   // ══════════════════════════════════════════════════════════════════════
 
   // 教师批阅/验证：写 verified + 可选 score + 状态置 graded/submitted
-  app.post('/api/activities/:id/progress/verify', requireScopedAuth('class-staff'), (req, res) => {
+  const verifyProgressHandler = (req: Request, res: Response) => {
     try {
       const activityId = req.params.id;
       const session = requestSession(req);
@@ -806,10 +849,24 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
     } catch (err: unknown) {
       sendSafeError(res, err);
     }
-  });
+  };
+  app.post(
+    '/api/activities/:id/progress/verify',
+    requireScopedAuth('class-staff'),
+    markLegacyActivityRoute,
+    (req, res) =>
+      redirectLegacy307(req, res, `/api/lesson-activities/${encodeURIComponent(req.params.id)}/progress/verify`),
+  );
+  app.post('/api/lesson-activities/:id/progress/verify', requireScopedAuth('class-staff'), verifyProgressHandler);
+  app.post(
+    '/api/lessons/:lessonId/activities/:activityId/progress/verify',
+    requireScopedAuth('class-staff'),
+    requireActivityInLesson,
+    verifyProgressHandler,
+  );
 
   // 一键催办：教师给未完成学生发催办，更新 nudged_at + nudge_count
-  app.post('/api/activities/:id/nudge', requireScopedAuth('class-staff'), (req, res) => {
+  const nudgeActivityHandler = (req: Request, res: Response) => {
     try {
       const activityId = req.params.id;
       const session = requestSession(req);
@@ -846,10 +903,20 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
     } catch (err: unknown) {
       sendSafeError(res, err);
     }
-  });
+  };
+  app.post('/api/activities/:id/nudge', requireScopedAuth('class-staff'), markLegacyActivityRoute, (req, res) =>
+    redirectLegacy307(req, res, `/api/lesson-activities/${encodeURIComponent(req.params.id)}/nudge`),
+  );
+  app.post('/api/lesson-activities/:id/nudge', requireScopedAuth('class-staff'), nudgeActivityHandler);
+  app.post(
+    '/api/lessons/:lessonId/activities/:activityId/nudge',
+    requireScopedAuth('class-staff'),
+    requireActivityInLesson,
+    nudgeActivityHandler,
+  );
 
   // 互评：学生给同学的活动提交打分（仅 peer_review=1 的活动）
-  app.post('/api/activities/:id/peer-review', requireScopedAuth('class-member'), (req, res) => {
+  const peerReviewHandler = (req: Request, res: Response) => {
     try {
       const activityId = req.params.id;
       const session = requestSession(req);
@@ -883,10 +950,20 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
     } catch (err: unknown) {
       sendSafeError(res, err);
     }
-  });
+  };
+  app.post('/api/activities/:id/peer-review', requireScopedAuth('class-member'), markLegacyActivityRoute, (req, res) =>
+    redirectLegacy307(req, res, `/api/lesson-activities/${encodeURIComponent(req.params.id)}/peer-review`),
+  );
+  app.post('/api/lesson-activities/:id/peer-review', requireScopedAuth('class-member'), peerReviewHandler);
+  app.post(
+    '/api/lessons/:lessonId/activities/:activityId/peer-review',
+    requireScopedAuth('class-member'),
+    requireActivityInLesson,
+    peerReviewHandler,
+  );
 
   // 查看某学生在某活动收到的互评列表
-  app.get('/api/activities/:id/peer-reviews', requireScopedAuth('class-member'), (req, res) => {
+  const listPeerReviewsHandler = (req: Request, res: Response) => {
     try {
       const activityId = req.params.id;
       const revieweeId = req.query.revieweeId as string;
@@ -900,11 +977,21 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
     } catch (err: unknown) {
       sendSafeError(res, err);
     }
-  });
+  };
+  app.get('/api/activities/:id/peer-reviews', requireScopedAuth('class-member'), markLegacyActivityRoute, (req, res) =>
+    redirectLegacy307(req, res, `/api/lesson-activities/${encodeURIComponent(req.params.id)}/peer-reviews`),
+  );
+  app.get('/api/lesson-activities/:id/peer-reviews', requireScopedAuth('class-member'), listPeerReviewsHandler);
+  app.get(
+    '/api/lessons/:lessonId/activities/:activityId/peer-reviews',
+    requireScopedAuth('class-member'),
+    requireActivityInLesson,
+    listPeerReviewsHandler,
+  );
 
   // ── 活动讨论区（IKVO15 P2）──────────────────────────────────────────────
   // 获取讨论列表（含回复嵌套）
-  app.get('/api/activities/:id/discussions', requireScopedAuth('class-member'), (req, res) => {
+  const listDiscussionsHandler = (req: Request, res: Response) => {
     try {
       const activityId = req.params.id;
       const rows = readDb
@@ -914,10 +1001,20 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
     } catch (err: unknown) {
       sendSafeError(res, err);
     }
-  });
+  };
+  app.get('/api/activities/:id/discussions', requireScopedAuth('class-member'), markLegacyActivityRoute, (req, res) =>
+    redirectLegacy307(req, res, `/api/lesson-activities/${encodeURIComponent(req.params.id)}/discussions`),
+  );
+  app.get('/api/lesson-activities/:id/discussions', requireScopedAuth('class-member'), listDiscussionsHandler);
+  app.get(
+    '/api/lessons/:lessonId/activities/:activityId/discussions',
+    requireScopedAuth('class-member'),
+    requireActivityInLesson,
+    listDiscussionsHandler,
+  );
 
   // 发帖 / 回复
-  app.post('/api/activities/:id/discussions', requireScopedAuth('class-member'), (req, res) => {
+  const createDiscussionHandler = (req: Request, res: Response) => {
     try {
       const activityId = req.params.id;
       const session = requestSession(req);
@@ -936,6 +1033,30 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
     } catch (err: unknown) {
       sendSafeError(res, err);
     }
+  };
+  app.post('/api/activities/:id/discussions', requireScopedAuth('class-member'), markLegacyActivityRoute, (req, res) =>
+    redirectLegacy307(req, res, `/api/lesson-activities/${encodeURIComponent(req.params.id)}/discussions`),
+  );
+  app.post('/api/lesson-activities/:id/discussions', requireScopedAuth('class-member'), createDiscussionHandler);
+  app.post(
+    '/api/lessons/:lessonId/activities/:activityId/discussions',
+    requireScopedAuth('class-member'),
+    requireActivityInLesson,
+    createDiscussionHandler,
+  );
+
+  // alias 层歧义判别，移除 alias 时删除
+  app.all('/api/activities/:id', (req, res) => {
+    const provider = ctx.activityRegistry.getProvider(req.params.id);
+    const lessonRow = readDb.prepare('SELECT 1 FROM lesson_activities WHERE id = ?').get(req.params.id);
+    if (!provider && !lessonRow) {
+      return res.status(404).json({
+        error: 'Not found as provider or lesson-activity; use explicit path',
+      });
+    }
+    return res.status(409).json({
+      error: 'Ambiguous legacy path; use /api/activity-providers/:id/runs or /api/lesson-activities/:id',
+    });
   });
 
   // 删除帖子（仅作者本人）

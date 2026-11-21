@@ -1,7 +1,7 @@
 {
   "_comment": "数据库结构金样（自动生成，勿手改）：空库跑完 migrations/ 全部迁移后的表→列快照。启动时 assertSchemaMatchesGolden 以子集校验（实际库缺金样结构即拒绝启动；多出的表/列不报错）。改迁移后请运行 pnpm db:gen-golden 再生成。",
-  "migrationCount": 70,
-  "generatedAt": "2026-11-19T14:57:57.433Z",
+  "migrationCount": 71,
+  "generatedAt": "2026-11-20T15:01:03.959Z",
   "tables": {
     "_academic_year_backfill": ["backfilled_at", "id"],
     "_class_passcode_encryption": ["id", "note"],
@@ -21,6 +21,18 @@
       "student_id",
       "submission_json",
       "verified"
+    ],
+    "activity_runs": [
+      "activity_id",
+      "actor_id",
+      "class_id",
+      "ended_at",
+      "id",
+      "lesson_id",
+      "payload_json",
+      "provider_id",
+      "started_at",
+      "state"
     ],
     "agent_conversations": ["content", "conv_key", "created_at", "id", "role"],
     "ai_persona_governance": ["description_en", "description_zh", "enabled", "persona_id", "preferred_provider_id"],
@@ -447,12 +459,14 @@
     "lesson_activities": [
       "config_json",
       "created_at",
+      "descriptor_version",
       "due_at",
       "group_mode",
       "id",
       "lesson_id",
       "order_index",
       "peer_review",
+      "provider_id",
       "release_at",
       "required",
       "rubric_json",

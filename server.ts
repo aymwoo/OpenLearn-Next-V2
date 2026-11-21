@@ -98,7 +98,10 @@ import {
   IActivityRegistryToken,
 } from './packages/activity-ecosystem/index.js';
 import type { ServerContext } from './server/context.js';
+import { makeActivityId, type ActivityDescriptorBase } from './packages/core/activity-contract/index.js';
 import { registerOsRoutes } from './server/routes/os.js';
+import { registerActivityProviderRoutes } from './server/routes/activity-providers.js';
+import { ActivityRunService } from './server/services/activity-run-service.js';
 import { registerFilesRoutes, serveFileAsset } from './server/routes/files.js';
 import { getFileStorageService } from './server/services/file-storage/index.js';
 import { registerResourcesRoutes } from './server/routes/resources.js';
@@ -180,6 +183,28 @@ async function startServer() {
   registerOfficialActivities(activityRegistry, kernelContainer.actionRegistry);
   await kernelContainer.serviceRegistry.register(IActivityRegistryToken, activityRegistry);
   console.log(`[ActivityEcosystem] Registered ${activityRegistry.listProviders().length} official activity providers.`);
+
+  // Phase 2/3：活动运行态服务（定义与运行分离）。DB 表不存在时自动退化为内存态。
+  const activityRunService = new ActivityRunService(
+    activityRegistry,
+    kernelContainer.db as unknown as import('better-sqlite3').Database,
+  );
+  // Phase 1：把动态 provider 源接入只读 ExtensionCatalog。
+  kernelContainer.extensionCatalog.attachActivitySource(() =>
+    activityRegistry.listDescriptors().map((descriptor): ActivityDescriptorBase => ({
+      kind: 'provider',
+      activityId: makeActivityId('provider', descriptor.id),
+      title: descriptor.name,
+      category: descriptor.category,
+      icon: descriptor.icon,
+      description: descriptor.description,
+      roles: descriptor.supportedRoles?.filter(
+        (role): role is 'teacher' | 'student' | 'assistant' =>
+          role === 'teacher' || role === 'student' || role === 'assistant',
+      ),
+      capabilities: descriptor.permissions,
+    })),
+  );
 
   const app = express();
   kernelContainer.pluginHost.setExpressApp(app);
@@ -396,7 +421,8 @@ async function startServer() {
   io.use(socketAuthMiddleware);
   kernelContainer.pluginHost.setSocketIO(io);
   ctx.io = io;
-  registerOsRoutes(ctx);
+  registerOsRoutes(ctx, activityRunService);
+  registerActivityProviderRoutes(ctx, activityRunService);
   registerFilesRoutes(ctx);
 
   // System Resources APIs

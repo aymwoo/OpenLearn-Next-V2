@@ -762,6 +762,14 @@ const contributesSchema = z
   .passthrough()
   .optional();
 
+/**
+ * manifest `contributes` 支持的 slot 键集合。
+ *
+ * 供 `extension-parity` 测试与宿主声明账本对账；`contributesSchema` 被 `.optional()`
+ * 包裹，故先 `unwrap()` 再取 shape。
+ */
+export const CONTRIBUTES_SLOT_KEYS: ReadonlyArray<string> = Object.keys(contributesSchema.unwrap().shape);
+
 const deploySchema = z
   .object({
     script: z.string().min(1, { error: 'deploy.script 不能为空' }).optional(),
