@@ -110,14 +110,20 @@ describe('ActivityRunService（Phase 3）', () => {
     expect(await service.pauseLatestByProvider('fake_activity', context)).toBe(false);
   });
 
-  it('新实例可从 activity_runs 恢复 running/paused 运行', async () => {
+  it('新实例把未完成运行恢复为 interrupted，不再伪造 running', async () => {
     const running = await service.start('fake_activity', context, {}, 'teacher-1', { lessonId: 'L1' });
     await service.start('fake_activity', context, {}, 'teacher-1', { lessonId: 'L2' });
 
     const restored = new ActivityRunService(registry, db);
-    const runningRuns = restored.listRunning();
 
-    expect(runningRuns.length).toBe(2);
-    expect(runningRuns.some((run) => run.runId === running.runId)).toBe(true);
+    // provider 内存态无法跨重启恢复，因此活跃运行统一降级为 interrupted。
+    expect(restored.listRunning()).toEqual([]);
+    expect(restored.getRun(running.runId)?.state).toBe('interrupted');
+    expect(restored.latestActiveRun('fake_activity')).toBeUndefined();
+    expect(await restored.resume(running.runId, context)).toBe(false);
+
+    // 持久化层也同步为 interrupted，供管理端查询。
+    const row = db.prepare('SELECT state FROM activity_runs WHERE id = ?').get(running.runId) as { state: string };
+    expect(row.state).toBe('interrupted');
   });
 });

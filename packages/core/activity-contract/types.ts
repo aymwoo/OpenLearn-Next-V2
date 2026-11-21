@@ -12,7 +12,7 @@ export type ActivityId = `${ActivityKind}:${string}`;
 
 export type ActivityActorRole = 'teacher' | 'student' | 'administrator' | 'assistant';
 
-export type ActivityRunState = 'created' | 'running' | 'paused' | 'finished' | 'failed' | 'cancelled';
+export type ActivityRunState = 'created' | 'running' | 'paused' | 'interrupted' | 'finished' | 'failed' | 'cancelled';
 
 /** 所有活动体系共享的“定义”元数据。 */
 export interface ActivityDescriptorBase {

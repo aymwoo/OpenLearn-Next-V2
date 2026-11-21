@@ -152,7 +152,8 @@ export class ActivityRunService {
     action: (provider: NonNullable<ReturnType<ActivityRegistry['getProvider']>>) => Promise<void> | void,
   ): Promise<boolean> {
     const run = this.runs.get(runId);
-    if (!run || run.state === 'finished' || run.state === 'failed' || run.state === 'cancelled') return false;
+    if (!run) return false;
+    if (['finished', 'failed', 'cancelled', 'interrupted'].includes(run.state)) return false;
 
     const provider = this.registry.getProvider(run.providerId);
     if (!provider) return false;
@@ -195,8 +196,14 @@ export class ActivityRunService {
 
       for (const row of rows) {
         const record = this.fromRow(row);
+        // provider 对象状态不持久化：重启后无法恢复 running/paused 的内存态。
+        // 统一标记为 interrupted，避免 UI/API 伪造成“仍在运行”。
+        if (record.state === 'running' || record.state === 'paused') {
+          record.state = 'interrupted';
+          this.persist(record);
+        }
         this.runs.set(record.runId, record);
-        this.latestRunByProvider.set(record.providerId, record.runId);
+        // interrupted 不算活跃运行，不进入 latestRunByProvider。
       }
     } catch {
       /* activity_runs 表在最小测试库中可能不存在；运行态退化为纯内存。 */
