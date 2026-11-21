@@ -14,6 +14,7 @@
  */
 
 import { warnDeprecation } from '../extension-points/index.js';
+import { assertSlotExists } from '../extension-registry/extension-points.js';
 
 // ── Contribution Config Types ────────────────────────────────────────────
 
@@ -1102,6 +1103,7 @@ export class ContributionRegistry {
       if (slot === 'locales') continue;
       if (!Array.isArray(configs) || configs.length === 0) continue;
 
+      assertSlotExists(slot);
       warnDeprecation('slot', slot, pluginId);
 
       if (!this.contributions.has(slot)) {

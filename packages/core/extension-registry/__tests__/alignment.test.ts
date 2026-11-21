@@ -3,6 +3,7 @@ import { CONTRIBUTES_SLOT_KEYS } from '../../esm-loader/manifest-schema.js';
 import {
   ALL_EXTENSION_POINTS,
   assertExtensionPointsAligned,
+  assertSlotExists,
   getUnknownExtensionSlots,
   isExtensionPointId,
   resolveExtensionSlotMode,
@@ -66,5 +67,33 @@ describe('extension point alignment (Phase 1.4 / 2.0)', () => {
   it('isExtensionPointId 只认 canonical 名单', () => {
     expect(isExtensionPointId('teacher.tab')).toBe(true);
     expect(isExtensionPointId('not.a.slot')).toBe(false);
+  });
+
+  it('assertSlotExists：已知 slot 通过，未知 slot 在 warn 下只告警', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    expect(assertSlotExists('teacher.tab')).toBe(true);
+    expect(assertSlotExists('anchor:whiteboard-toolbar:rollcall')).toBe(true);
+    expect(assertSlotExists('not.a.slot')).toBe(false);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('not.a.slot'));
+  });
+
+  it('assertSlotExists：strict 下拒绝未知 slot', () => {
+    process.env.OPENLEARN_EXTENSION_STRICT_SLOTS = 'strict';
+    try {
+      expect(() => assertSlotExists('not.a.slot')).toThrow(/未知 slot/);
+    } finally {
+      delete process.env.OPENLEARN_EXTENSION_STRICT_SLOTS;
+    }
+  });
+
+  it('assertSlotExists：lenient 下静默返回 false', () => {
+    process.env.OPENLEARN_EXTENSION_STRICT_SLOTS = 'lenient';
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      expect(assertSlotExists('not.a.slot')).toBe(false);
+      expect(warn).not.toHaveBeenCalled();
+    } finally {
+      delete process.env.OPENLEARN_EXTENSION_STRICT_SLOTS;
+    }
   });
 });

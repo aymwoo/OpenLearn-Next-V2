@@ -54,6 +54,34 @@ export function isExtensionPointId(value: string): value is ExtensionPointId {
   return Object.prototype.hasOwnProperty.call(ALL_EXTENSION_POINTS, value);
 }
 
+/**
+ * 宿主专属命名空间，不进入插件 manifest 的 contributes 白名单：
+ * - `anchor:*`：宿主公布的开放锚点；
+ * - `legacy.*`：待移除的历史槽位。
+ */
+export function isHostOnlyExtensionSlot(slot: string): boolean {
+  return slot.startsWith('anchor:') || slot.startsWith('legacy.');
+}
+
+/**
+ * 注册期防呆：已知 slot 返回 true；未知 slot 按 mode 处理。
+ * - strict：抛错（阻止写入）
+ * - warn：console.warn 后返回 false（仍允许写入，启动对账会记录）
+ * - lenient：静默返回 false
+ */
+export function assertSlotExists(slot: string): boolean {
+  if (isExtensionPointId(slot) || isHostOnlyExtensionSlot(slot)) return true;
+
+  const mode = resolveExtensionSlotMode();
+  if (mode === 'strict') {
+    throw new Error(`[ExtensionPoints] 未知 slot: "${slot}"。请先在 manifest-schema 中声明。`);
+  }
+  if (mode === 'warn') {
+    console.warn(`[ExtensionPoints] 注册了未知 slot "${slot}"；已保留，启动对账会记录。`);
+  }
+  return false;
+}
+
 function recordUnknownSlots(unknown: ReadonlyArray<string>, mode: ExtensionSlotMode): void {
   lastUnknownSlots = Object.freeze([...unknown]);
   console.warn(
@@ -99,7 +127,9 @@ export function assertExtensionPointsAligned(
 
   const missingInManifest = [...canonical].filter((slot) => !manifest.has(slot)).sort();
   const unknownInManifest = [...manifest].filter((slot) => !canonical.has(slot)).sort();
-  const unknownInRegistry = [...registry].filter((slot) => !canonical.has(slot)).sort();
+  const unknownInRegistry = [...registry]
+    .filter((slot) => !canonical.has(slot) && !isHostOnlyExtensionSlot(slot))
+    .sort();
 
   const manifestProblems: string[] = [];
   if (missingInManifest.length > 0) {
