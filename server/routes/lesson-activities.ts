@@ -45,6 +45,10 @@ import {
 } from '../services/class-access.js';
 import type { ServerContext } from '../context.js';
 import { XUEAN_ACTIVITY_TYPES } from '../../packages/core/activity-contract/index.js';
+import {
+  legacyActivityRouteKey,
+  recordLegacyActivityRouteHit,
+} from '../services/legacy-activity-route-usage.js';
 
 // ── 内部常量 ─────────────────────────────────────────────────────────────
 const VALID_ACTIVITY_TYPES = new Set<string>(XUEAN_ACTIVITY_TYPES);
@@ -180,9 +184,11 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
   const readDb = kernelContainer.getReadDb();
 
   // 旧 `/api/activities/:id/*` 兼容层：标注弃用，并把嵌套路由的 :activityId 映射为 :id。
-  const markLegacyActivityRoute = (_req: Request, res: Response, next: NextFunction) => {
+  const markLegacyActivityRoute = (req: Request, res: Response, next: NextFunction) => {
     res.setHeader('Deprecation', 'true');
     res.setHeader('Link', '</api/lesson-activities/{id}>; rel="successor-version"');
+    // 摘除别名前统计真实调用；内存计数，不影响响应
+    recordLegacyActivityRouteHit(legacyActivityRouteKey(req));
     next();
   };
   const redirectLegacy307 = (req: Request, res: Response, target: string) => {
@@ -1056,6 +1062,7 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
 
   // alias 层歧义判别，移除 alias 时删除
   app.all('/api/activities/:id', (req, res) => {
+    recordLegacyActivityRouteHit(legacyActivityRouteKey(req));
     const provider = ctx.activityRegistry.getProvider(req.params.id);
     const lessonRow = readDb.prepare('SELECT 1 FROM lesson_activities WHERE id = ?').get(req.params.id);
     if (!provider && !lessonRow) {

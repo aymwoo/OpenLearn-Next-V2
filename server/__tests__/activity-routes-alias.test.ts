@@ -7,6 +7,10 @@ import { registerOsRoutes } from '../../server/routes/os.js';
 import { registerLessonActivitiesRoutes } from '../../server/routes/lesson-activities.js';
 import { ActivityRegistry } from '../../packages/activity-ecosystem/index.js';
 import { ActivityRunService } from '../../server/services/activity-run-service.js';
+import {
+  getLegacyActivityRouteUsage,
+  resetLegacyActivityRouteUsage,
+} from '../../server/services/legacy-activity-route-usage.js';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
 import type { ServerContext } from '../../server/context.js';
 
@@ -24,6 +28,7 @@ describe('/api/activities alias 307（Phase 2.1）', () => {
   const db = kernelContainer.db;
 
   beforeAll(async () => {
+    resetLegacyActivityRouteUsage();
     const token = `tok_${randomUUID().replace(/-/g, '').slice(0, 12)}`;
     const userId = `usr_${randomUUID().replace(/-/g, '').slice(0, 12)}`;
     const now = Date.now();
@@ -94,5 +99,19 @@ describe('/api/activities alias 307（Phase 2.1）', () => {
     expect(res.status).toBe(404);
     const body = (await res.json()) as { error?: string };
     expect(body.error).toContain('Not found as provider or lesson-activity');
+  });
+
+  it('别名调用按 METHOD + 路由模式聚合，供摘除前评估', () => {
+    const usage = getLegacyActivityRouteUsage();
+    expect(usage.total).toBeGreaterThanOrEqual(4);
+    expect(usage.firstSeenAt).toEqual(expect.any(Number));
+    expect(usage.lastSeenAt).toEqual(expect.any(Number));
+
+    const routes = usage.routes.map((item) => item.route);
+    expect(routes).toContain('GET /api/activities');
+    expect(routes).toContain('POST /api/activities/:id/start');
+    expect(routes).toContain('PUT /api/activities/:id');
+    // 歧义兜底路由也计入，避免漏掉无法归类的旧调用
+    expect(routes).toContain('PATCH /api/activities/:id');
   });
 });

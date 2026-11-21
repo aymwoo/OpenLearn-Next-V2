@@ -25,6 +25,10 @@ import { resolveAccessibleAiProvider } from '../services/ai-provider-resolver.js
 import type { Request, Response, NextFunction } from 'express';
 import type { ServerContext, StoredAIProvider, AgentChatAttachment, AgentChatRequest } from '../context.js';
 import { ActivityRunService } from '../services/activity-run-service.js';
+import {
+  legacyActivityRouteKey,
+  recordLegacyActivityRouteHit,
+} from '../services/legacy-activity-route-usage.js';
 
 function getSharedProviderInfoMap(): Map<string, { name: string; modelName: string }> {
   const map = new Map<string, { name: string; modelName: string }>();
@@ -204,9 +208,11 @@ export function registerOsRoutes(ctx: ServerContext, runService?: ActivityRunSer
   // ── Activity Ecosystem REST — 兼容别名（canonical 见 activity-providers.ts）──
   // 旧路由按“子路径/方法”静态分派：start|running|pause|resume|finish 属 provider；
   // 学案 item 级路由仍留在 lesson-activities.ts，按方法分派。
-  const markLegacyActivityRoute = (_req: Request, res: Response, next: NextFunction) => {
+  const markLegacyActivityRoute = (req: Request, res: Response, next: NextFunction) => {
     res.setHeader('Deprecation', 'true');
     res.setHeader('Link', '</api/activity-providers>; rel="successor-version"');
+    // 摘除别名前统计真实调用；内存计数，不影响响应
+    recordLegacyActivityRouteHit(legacyActivityRouteKey(req));
     next();
   };
   const redirectLegacy307 = (req: Request, res: Response, target: string) => {
