@@ -101,6 +101,7 @@ import type { ServerContext } from './server/context.js';
 import { makeActivityId, type ActivityDescriptorBase } from './packages/core/activity-contract/index.js';
 import { registerOsRoutes } from './server/routes/os.js';
 import { registerActivityProviderRoutes } from './server/routes/activity-providers.js';
+import { registerExtensionPointRoutes } from './server/routes/extension-points.js';
 import { ActivityRunService } from './server/services/activity-run-service.js';
 import { registerFilesRoutes, serveFileAsset } from './server/routes/files.js';
 import { getFileStorageService } from './server/services/file-storage/index.js';
@@ -423,6 +424,7 @@ async function startServer() {
   ctx.io = io;
   registerOsRoutes(ctx, activityRunService);
   registerActivityProviderRoutes(ctx, activityRunService);
+  registerExtensionPointRoutes(ctx);
   registerFilesRoutes(ctx);
 
   // System Resources APIs
