@@ -1,28 +1,9 @@
-import React, { useState, useEffect } from 'react';
-import { wrapSrcDocWithBridge } from '../utils/bridgeUtils';
+import { useState, useEffect } from 'react';
 import { listFromEnvelope } from '../../../utils/listEnvelope.js';
-import { coursewareSourceRegistry } from '../courseware/courseware-source-registry';
-import { useCoursewareFrameMount } from '../courseware/courseware-frame-limiter';
-import { useThemeStore, getThemeTokens } from '../../../store/themeStore';
-import { useFontSizeStore } from '../../../store/fontSizeStore';
 import { useAppStore } from '../../../store/appStore';
-import {
-  broadcastThemeToIframes,
-  broadcastFontScaleToIframes,
-  registerManagedIframe,
-} from '../../../services/lms-bridge';
 import { getSocketInstance } from '../../../services/socket-service';
 import type { HtmlAppletPayload } from '../types/payloads';
-import { whiteboardEventSlot } from '../events/WhiteboardEventSlot';
-
-function pickNumber(v: unknown): number | undefined {
-  if (typeof v === 'number' && Number.isFinite(v)) return v;
-  if (typeof v === 'string') {
-    const n = Number(v);
-    return Number.isFinite(n) ? n : undefined;
-  }
-  return undefined;
-}
+import { CoursewareHost } from '../../courseware/CoursewareHost';
 
 export interface HtmlAppletFrameProps {
   data: HtmlAppletPayload;
@@ -84,83 +65,19 @@ export function sortAttemptsByRank(attempts: CoursewareAttempt[], ranks: Map<str
 }
 
 /**
- * 统一渲染 html-applet 的四种内容源（优先级从高到低）：
- *   1. coursewareUuid → `/runtime/:uuid/`（ZIP 解包的多文件互动课件）
- *   2. resourceId     → `/api/resources/:id/`（系统资源库单 HTML / 文件夹）
- *   3. 插件自定义内容源 → `coursewareSourceRegistry` 返回的 src URL
- *   4. code           → iframe `srcDoc` + `wrapSrcDocWithBridge`（手写 HTML）
+ * 白板 html-applet 元素渲染器。
  *
- * 画布内嵌、全屏渲染器、默认兜底渲染器三处复用此组件；并内置懒挂载与并发上限。
- *
- * 当承载的是具体的某个 coursewareUuid 时，叠加一层「实时成绩浮层」：
+ * 沙箱渲染、内容源解析、Bridge 事件归一化由独立容器 `CoursewareHost` 承担；
+ * 本组件只叠加白板特有的「实时成绩浮层」：
  *   - 进入时拉取该课件的全部 attempts（通过 GET /api/courseware/attempts?coursewareUuid=…）
  *   - 订阅 Socket.IO 的 `courseware-attempt-updated` 事件，自动重拉
  *   - 浮层按钮默认收起，避免遮挡课件；点击展开后只显示已提交的学生成绩
  */
 export function HtmlAppletFrame({ data, lessonId, elementId, className, title, lazy = true }: HtmlAppletFrameProps) {
-  const containerRef = React.useRef<HTMLDivElement>(null);
-  const iframeRef = React.useRef<HTMLIFrameElement>(null);
-  const mounted = useCoursewareFrameMount(lazy, containerRef);
-  const { theme } = useThemeStore();
-  const { scale } = useFontSizeStore();
   const session = useAppStore((s) => s.session);
 
   const [attempts, setAttempts] = useState<CoursewareAttempt[]>([]);
   const [showScores, setShowScores] = useState(false);
-  // SEC-AUTH: /runtime 课件 HTML 入口的短时访问 token（见 server/utils/courseware-access.ts）。
-  // 正常浏览器靠 Sec-Fetch 元数据放行即可，这里铸造 token 作为旧浏览器/特殊 webview 的兜底。
-  const [runtimeToken, setRuntimeToken] = useState<string | null>(null);
-  // SEC-NET-02: 手写 HTML 课件经服务端落库（POST /api/courseware/inline）后改走
-  // /runtime/inline-<hash>/ 加载 —— srcdoc 文档会继承父页面 CSP，全局 CSP 收紧后
-  // 课件内联脚本会被拦；服务端直出的 /runtime 文档有自有宽松 CSP，不受影响。
-  const [inlineUuid, setInlineUuid] = useState<string | null>(null);
-
-  const customSrc = coursewareSourceRegistry.resolve(data, { lessonId });
-  const isInlineOnly = !!data.code && !data.coursewareUuid && !data.resourceId && !customSrc;
-  const effectiveUuid = data.coursewareUuid ?? (isInlineOnly ? inlineUuid : null);
-
-  useEffect(() => {
-    if (!isInlineOnly || !data.code) {
-      setInlineUuid(null);
-      return;
-    }
-    let cancelled = false;
-    fetch('/api/courseware/inline', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code: data.code }),
-    })
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
-      .then((j: { uuid?: unknown }) => {
-        if (!cancelled && typeof j?.uuid === 'string' && j.uuid) setInlineUuid(j.uuid);
-      })
-      .catch(() => {
-        // 落库失败不阻断渲染：降级回 srcDoc（内联脚本在收紧后的全局 CSP 下会被拦，
-        // 但页面 HTML 仍可见），由教师重新保存元素恢复
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [isInlineOnly, data.code]);
-
-  useEffect(() => {
-    if (!effectiveUuid) {
-      setRuntimeToken(null);
-      return;
-    }
-    let cancelled = false;
-    fetch(`/api/courseware/${encodeURIComponent(effectiveUuid)}/access-token`)
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
-      .then((j: { token?: unknown }) => {
-        if (!cancelled && typeof j?.token === 'string' && j.token) setRuntimeToken(j.token);
-      })
-      .catch(() => {
-        // 铸造失败不阻断渲染：现代浏览器仍可经 Sec-Fetch 元数据通过门控
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [effectiveUuid]);
 
   useEffect(() => {
     const uuid = data.coursewareUuid;
@@ -197,131 +114,6 @@ export function HtmlAppletFrame({ data, lessonId, elementId, className, title, l
     };
   }, [data.coursewareUuid]);
 
-  const handleIframeLoad = () => {
-    broadcastThemeToIframes(theme, getThemeTokens(theme));
-    broadcastFontScaleToIframes(scale);
-  };
-
-  /**
-   * 监听 iframe 内的 postMessage，把 LMS Bridge SDK 协议事件归一化进 WhiteboardEventSlot。
-   *
-   * 注意：
-   * - 仅监听本组件的 iframe（通过 contentWindow 引用比对），与全局 lms-bridge 监听器共存不冲突
-   * - 适配 LMS_SUBMIT / LMS_SAVE_PROGRESS / LMS_FINISH / courseware:score / openlearn-cw-sdk:score
-   * - 未知 LMS_* 协议事件统一记入 'courseware.unknown'，便于调试面板观察
-   */
-  useEffect(() => {
-    const shapeId = elementId ?? data.title ?? undefined;
-    const uuid = data.coursewareUuid;
-    if (!shapeId && !uuid) return;
-    if (!mounted) return;
-
-    const iframe = containerRef.current?.querySelector('iframe');
-    if (!iframe || !(iframe instanceof HTMLIFrameElement) || !iframe.contentWindow) return;
-
-    const messageHandler = (event: MessageEvent) => {
-      // 仅信任本组件的 iframe
-      if (event.source !== iframe.contentWindow) return;
-
-      const msg = event.data;
-      if (!msg || typeof msg !== 'object') return;
-
-      // LMS Bridge SDK 协议
-      if (msg.type === 'LMS_SUBMIT') {
-        const payload = (msg.payload ?? {}) as Record<string, unknown>;
-        whiteboardEventSlot.ingest({
-          source: 'iframe.postMessage',
-          type: 'courseware.submitted',
-          lessonId,
-          elementId: shapeId,
-          coursewareUuid: uuid,
-          attemptId: typeof msg.attempt_id === 'string' ? msg.attempt_id : undefined,
-          payload: {
-            score: pickNumber(payload.score ?? payload.grade),
-            total: pickNumber(payload.total ?? payload.fullScore),
-            completion: pickNumber(payload.completion ?? payload.progress),
-            comment: typeof payload.comment === 'string' ? payload.comment : undefined,
-          },
-          raw: msg,
-        });
-      } else if (msg.type === 'LMS_SAVE_PROGRESS') {
-        const payload = (msg.payload ?? {}) as Record<string, unknown>;
-        whiteboardEventSlot.ingest({
-          source: 'iframe.postMessage',
-          type: 'courseware.progress_saved',
-          lessonId,
-          elementId: shapeId,
-          coursewareUuid: uuid,
-          attemptId: typeof msg.attempt_id === 'string' ? msg.attempt_id : undefined,
-          payload: {
-            score: pickNumber(payload.score),
-            completion: pickNumber(payload.completion ?? payload.progress),
-          },
-          raw: msg,
-        });
-      } else if (msg.type === 'LMS_FINISH') {
-        whiteboardEventSlot.ingest({
-          source: 'iframe.postMessage',
-          type: 'courseware.finished',
-          lessonId,
-          elementId: shapeId,
-          coursewareUuid: uuid,
-          attemptId: typeof msg.attempt_id === 'string' ? msg.attempt_id : undefined,
-          payload: {},
-          raw: msg,
-        });
-      } else if (msg.type === 'courseware:score' || msg.type === 'openlearn-cw-sdk:score') {
-        // v2_plugins/courseware-hub SDK 协议
-        const payload = (msg.payload ?? msg) as Record<string, unknown>;
-        whiteboardEventSlot.ingest({
-          source: 'applet.score',
-          type: 'courseware.submitted',
-          lessonId,
-          elementId: shapeId,
-          coursewareUuid: uuid,
-          payload: {
-            score: pickNumber(payload.score),
-            total: pickNumber(payload.total),
-            detail: payload.detail,
-            source: typeof msg.source === 'string' ? msg.source : 'openlearn-cw-sdk',
-          },
-          raw: msg,
-        });
-      } else if (typeof msg.type === 'string' && msg.type.startsWith('LMS_')) {
-        // 其他 LMS_* 协议事件统一记入 unknown 分桶
-        whiteboardEventSlot.ingest({
-          source: 'iframe.postMessage',
-          type: 'courseware.unknown',
-          lessonId,
-          elementId: shapeId,
-          coursewareUuid: uuid,
-          payload: { originalType: msg.type },
-          raw: msg,
-        });
-      }
-    };
-
-    window.addEventListener('message', messageHandler);
-    return () => window.removeEventListener('message', messageHandler);
-  }, [mounted, elementId, data.title, data.coursewareUuid, lessonId]);
-
-  const src = data.coursewareUuid
-    ? `/runtime/${data.coursewareUuid}/${runtimeToken ? `?ct=${encodeURIComponent(runtimeToken)}` : ''}`
-    : data.resourceId
-      ? `/api/resources/${data.resourceId}/`
-      : (customSrc ??
-        (inlineUuid
-          ? `/runtime/${inlineUuid}/${runtimeToken ? `?ct=${encodeURIComponent(runtimeToken)}` : ''}`
-          : undefined));
-
-  useEffect(() => {
-    if (!mounted) return;
-    const iframe = iframeRef.current ?? containerRef.current?.querySelector('iframe');
-    if (iframe && iframe instanceof HTMLIFrameElement) {
-      return registerManagedIframe(iframe);
-    }
-  }, [mounted, src]);
-
   const submittedAttempts = attempts.filter((a) => a.finished_at !== null && a.finished_at !== undefined);
   const scoredAttempts = submittedAttempts.filter((a) => a.score !== null && a.score !== undefined);
   const avgScore =
@@ -345,103 +137,92 @@ export function HtmlAppletFrame({ data, lessonId, elementId, className, title, l
   const showOverlay = !!data.coursewareUuid && attempts.length > 0;
 
   return (
-    <div ref={containerRef} className={(className ?? 'w-full h-full') + ' relative'}>
-      {mounted ? (
-        <iframe
-          ref={iframeRef}
-          className="w-full h-full border-none"
-          src={src}
-          srcDoc={src ? undefined : wrapSrcDocWithBridge(data.code || '', lessonId)}
-          sandbox="allow-scripts allow-forms allow-downloads"
-          data-lms-bridge="true"
-          referrerPolicy="no-referrer"
-          title={title ?? data.title ?? 'Interactive Courseware'}
-          {...({ credentialless: 'true' } as any)}
-          onLoad={handleIframeLoad}
-        />
-      ) : (
-        <div className="w-full h-full flex items-center justify-center text-xs text-gray-400 bg-slate-50 rounded-xl">
-          课件未加载
-        </div>
-      )}
-
-      {showOverlay && (
-        <>
-          <button
-            type="button"
-            onClick={() => setShowScores((v) => !v)}
-            data-testid="courseware-scores-toggle"
-            className="absolute top-2 right-2 z-[60] px-3 py-1.5 bg-white/95 backdrop-blur-sm rounded-lg shadow-lg border border-gray-200 text-xs font-medium text-gray-700 hover:bg-white transition-colors"
-          >
-            {showScores ? '隐藏成绩' : `查看成绩 (${orderedAttempts.length})`}
-          </button>
-
-          {showScores && (
-            <div
-              data-testid="courseware-scores-panel"
-              className="absolute top-12 right-2 z-[60] w-72 max-h-96 overflow-auto bg-white/95 backdrop-blur-sm rounded-xl shadow-lg border border-gray-200 p-3"
+    <CoursewareHost
+      source={data}
+      lessonId={lessonId}
+      elementId={elementId}
+      className={className}
+      title={title}
+      lazy={lazy}
+      overlay={
+        showOverlay ? (
+          <>
+            <button
+              type="button"
+              onClick={() => setShowScores((v) => !v)}
+              data-testid="courseware-scores-toggle"
+              className="absolute top-2 right-2 z-[60] px-3 py-1.5 bg-white/95 backdrop-blur-sm rounded-lg shadow-lg border border-gray-200 text-xs font-medium text-gray-700 hover:bg-white transition-colors"
             >
-              <div className="text-xs text-gray-400 mb-2 flex items-center justify-between">
-                <span>
-                  {orderedAttempts.length} 人已提交
-                  {avgScore !== null && ` · 均分 ${avgScore.toFixed(1)}`}
-                </span>
-              </div>
+              {showScores ? '隐藏成绩' : `查看成绩 (${orderedAttempts.length})`}
+            </button>
 
-              {myStudentId && (
-                <div
-                  data-testid="courseware-my-score"
-                  className="text-xs text-blue-700 bg-blue-50 border border-blue-100 rounded-lg px-2 py-1.5 mb-2"
-                >
-                  {myAttempt
-                    ? `我的成绩 ${typeof myAttempt.score === 'number' ? myAttempt.score : '—'}${
-                        myRank !== null ? ` · 全班第 ${myRank}/${rankedCount} 名` : ''
-                      }`
-                    : '我还没有提交'}
+            {showScores && (
+              <div
+                data-testid="courseware-scores-panel"
+                className="absolute top-12 right-2 z-[60] w-72 max-h-96 overflow-auto bg-white/95 backdrop-blur-sm rounded-xl shadow-lg border border-gray-200 p-3"
+              >
+                <div className="text-xs text-gray-400 mb-2 flex items-center justify-between">
+                  <span>
+                    {orderedAttempts.length} 人已提交
+                    {avgScore !== null && ` · 均分 ${avgScore.toFixed(1)}`}
+                  </span>
                 </div>
-              )}
 
-              {orderedAttempts.length === 0 ? (
-                <div className="text-xs text-gray-400 text-center py-4">暂无提交</div>
-              ) : (
-                <div className="space-y-1.5">
-                  {orderedAttempts.map((a) => {
-                    const scoreNum = typeof a.score === 'number' ? a.score : null;
-                    const completionPct = typeof a.completion === 'number' ? Math.round(a.completion * 100) : null;
-                    const rank = ranks.get(a.attemptId);
-                    const isSelf = !!myStudentId && a.studentId === myStudentId;
-                    return (
-                      <div
-                        key={a.attemptId}
-                        className={`flex items-center justify-between gap-2 text-xs rounded-md px-1.5 py-1 ${
-                          isSelf ? 'bg-blue-50 ring-1 ring-blue-200' : ''
-                        }`}
-                        data-testid={`courseware-attempt-row-${a.attemptId}`}
-                      >
-                        <span className="w-4 shrink-0 text-right font-mono text-gray-400">{rank ?? '-'}</span>
-                        <span className="font-medium text-gray-700 truncate flex-1">
-                          {a.studentName || a.studentId}
-                          {isSelf && <span className="ml-1 font-normal text-blue-600">（我）</span>}
-                        </span>
-                        <span
-                          className={`font-mono font-bold ${
-                            scoreNum !== null && scoreNum >= passScore ? 'text-green-600' : 'text-red-500'
+                {myStudentId && (
+                  <div
+                    data-testid="courseware-my-score"
+                    className="text-xs text-blue-700 bg-blue-50 border border-blue-100 rounded-lg px-2 py-1.5 mb-2"
+                  >
+                    {myAttempt
+                      ? `我的成绩 ${typeof myAttempt.score === 'number' ? myAttempt.score : '—'}${
+                          myRank !== null ? ` · 全班第 ${myRank}/${rankedCount} 名` : ''
+                        }`
+                      : '我还没有提交'}
+                  </div>
+                )}
+
+                {orderedAttempts.length === 0 ? (
+                  <div className="text-xs text-gray-400 text-center py-4">暂无提交</div>
+                ) : (
+                  <div className="space-y-1.5">
+                    {orderedAttempts.map((a) => {
+                      const scoreNum = typeof a.score === 'number' ? a.score : null;
+                      const completionPct = typeof a.completion === 'number' ? Math.round(a.completion * 100) : null;
+                      const rank = ranks.get(a.attemptId);
+                      const isSelf = !!myStudentId && a.studentId === myStudentId;
+                      return (
+                        <div
+                          key={a.attemptId}
+                          className={`flex items-center justify-between gap-2 text-xs rounded-md px-1.5 py-1 ${
+                            isSelf ? 'bg-blue-50 ring-1 ring-blue-200' : ''
                           }`}
+                          data-testid={`courseware-attempt-row-${a.attemptId}`}
                         >
-                          {scoreNum !== null ? scoreNum : '-'}
-                          {completionPct !== null && (
-                            <span className="ml-1 text-gray-400 font-normal">{completionPct}%</span>
-                          )}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          )}
-        </>
-      )}
-    </div>
+                          <span className="w-4 shrink-0 text-right font-mono text-gray-400">{rank ?? '-'}</span>
+                          <span className="font-medium text-gray-700 truncate flex-1">
+                            {a.studentName || a.studentId}
+                            {isSelf && <span className="ml-1 font-normal text-blue-600">（我）</span>}
+                          </span>
+                          <span
+                            className={`font-mono font-bold ${
+                              scoreNum !== null && scoreNum >= passScore ? 'text-green-600' : 'text-red-500'
+                            }`}
+                          >
+                            {scoreNum !== null ? scoreNum : '-'}
+                            {completionPct !== null && (
+                              <span className="ml-1 text-gray-400 font-normal">{completionPct}%</span>
+                            )}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+          </>
+        ) : null
+      }
+    />
   );
 }
