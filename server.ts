@@ -107,6 +107,7 @@ import { registerOsRoutes } from './server/routes/os.js';
 import { registerActivityProviderRoutes } from './server/routes/activity-providers.js';
 import { registerExtensionPointRoutes } from './server/routes/extension-points.js';
 import { ActivityRunService } from './server/services/activity-run-service.js';
+import { ActivityCompletedTracker } from './server/services/activity-completed-tracker.js';
 import { registerFilesRoutes, serveFileAsset } from './server/routes/files.js';
 import { getFileStorageService } from './server/services/file-storage/index.js';
 import { registerResourcesRoutes } from './server/routes/resources.js';
@@ -195,6 +196,9 @@ async function startServer() {
     kernelContainer.db as unknown as import('better-sqlite3').Database,
     kernelContainer.eventBus,
   );
+  // Phase 3 后续：activity.completed 聚合消费者（事件已由 kernel 的 '*' 写入 events 表）。
+  const activityCompletedTracker = new ActivityCompletedTracker(kernelContainer.eventBus);
+
   // Phase 1：把动态 provider 源接入只读 ExtensionCatalog。
   kernelContainer.extensionCatalog.attachActivitySource(() =>
     activityRegistry.listDescriptors().map((descriptor): ActivityDescriptorBase => ({
@@ -429,7 +433,7 @@ async function startServer() {
   ctx.io = io;
   registerOsRoutes(ctx, activityRunService);
   registerActivityProviderRoutes(ctx, activityRunService);
-  registerExtensionPointRoutes(ctx);
+  registerExtensionPointRoutes(ctx, activityCompletedTracker);
   registerFilesRoutes(ctx);
 
   // System Resources APIs

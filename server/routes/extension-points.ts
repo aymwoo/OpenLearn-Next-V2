@@ -1,8 +1,10 @@
 /**
- * 扩展点健康接口（Phase 2.0）。
+ * 系统观测接口（Phase 2.0 / Phase 3 后续）。
  *
- * 只读暴露最近一次启动对账的结果，供运维/管理后台排查第三方插件使用了
- * 哪些未在 manifest schema 中声明的 slot。仅管理员可读，避免泄露插件清单。
+ * - 扩展点健康：最近一次启动对账的未知 slot；
+ * - 活动完成覆盖：activity.completed 的三类来源聚合。
+ *
+ * 均只读、仅管理员可访问。
  */
 
 import type { Request, Response } from 'express';
@@ -12,8 +14,12 @@ import {
   resolveExtensionSlotMode,
 } from '../../packages/core/extension-registry/extension-points.js';
 import type { ServerContext } from '../context.js';
+import type { ActivityCompletedTracker } from '../services/activity-completed-tracker.js';
 
-export function registerExtensionPointRoutes(ctx: ServerContext): void {
+export function registerExtensionPointRoutes(
+  ctx: ServerContext,
+  activityCompletedTracker: ActivityCompletedTracker,
+): void {
   ctx.app.get('/api/system/extension-points', requireScopedAuth('admin'), (_req: Request, res: Response) => {
     const unknownSlots = getUnknownExtensionSlots();
     res.json({
@@ -22,5 +28,9 @@ export function registerExtensionPointRoutes(ctx: ServerContext): void {
       count: unknownSlots.length,
       unknownSlots,
     });
+  });
+
+  ctx.app.get('/api/system/activity-completions', requireScopedAuth('admin'), (_req: Request, res: Response) => {
+    res.json({ ok: true, ...activityCompletedTracker.snapshot() });
   });
 }
