@@ -1163,11 +1163,14 @@ interface QuickActivityDescriptor {
   supportedRoles?: ('teacher' | 'student')[];
 }
 
-interface IInteractionRuntimeService {
+interface IClassroomActivityCatalog {
   registerActivityProvider(owner: string, descriptor: QuickActivityDescriptor): void;
   unregisterActivityProvider(owner: string, id: string): void;
   listActivityProviders(): QuickActivityDescriptor[];
 }
+
+/** @deprecated 使用 `IClassroomActivityCatalog`。 */
+interface IInteractionRuntimeService extends IClassroomActivityCatalog {}
 
 interface ClassroomCountdownDescriptor {
   lessonId: string;
@@ -1352,6 +1355,7 @@ declare const IPluginCapabilityGatewayToken: Token<IPluginCapabilityGateway>;
 declare const IPluginDistributionManagerToken: Token<IPluginDistributionManager>;
 declare const ICoursewareRuntimeScriptRegistryToken: Token<ICoursewareRuntimeScriptRegistry>;
 declare const IClassroomLifecycleServiceToken: Token<IClassroomLifecycleService>;
+declare const IClassroomActivityCatalogToken: Token<IClassroomActivityCatalog>;
 declare const IInteractionRuntimeServiceToken: Token<IInteractionRuntimeService>;
 declare const IClassroomCountdownServiceToken: Token<IClassroomCountdownService>;
 declare const IAssessmentGraderRegistryToken: Token<IAssessmentGraderRegistry>;
@@ -1731,6 +1735,7 @@ export type {
   ClassroomStageGuard,
   IClassroomLifecycleService,
   QuickActivityDescriptor,
+  IClassroomActivityCatalog,
   IInteractionRuntimeService,
   ClassroomCountdownDescriptor,
   IClassroomCountdownService,
@@ -1838,6 +1843,7 @@ export {
   IPluginDistributionManagerToken,
   ICoursewareRuntimeScriptRegistryToken,
   IClassroomLifecycleServiceToken,
+  IClassroomActivityCatalogToken,
   IInteractionRuntimeServiceToken,
   IClassroomCountdownServiceToken,
   IAssessmentGraderRegistryToken,

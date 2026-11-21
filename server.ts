@@ -27,7 +27,11 @@ import { createServer as createHttpServer } from 'http';
 import { Server } from 'socket.io';
 import { kernelContainer } from './packages/core/kernel/index.js';
 import { PLATFORM_VERSION } from './packages/core/version.js';
-import { IClassroomLifecycleServiceToken, IInteractionRuntimeServiceToken } from './packages/core/di/interfaces.js';
+import {
+  IClassroomLifecycleServiceToken,
+  IClassroomActivityCatalogToken,
+  IInteractionRuntimeServiceToken,
+} from './packages/core/di/interfaces.js';
 import { IClassroomMessageServiceToken, type IClassroomMessageService } from './packages/core/di/interfaces.js';
 import { startSideEffectWorker } from './packages/core/di/side-effect-worker.js';
 import { ClassroomRuntimeService } from './server/services/classroom-runtime-service.js';
@@ -459,6 +463,7 @@ async function startServer() {
   // timeline.gates 由 SegmentGateService 在学生进入环节、教师广播环节时判定。
   const classroomRuntimeService = new ClassroomRuntimeService(kernelContainer.db, io);
   await kernelContainer.serviceRegistry.register(IClassroomLifecycleServiceToken, classroomRuntimeService);
+  await kernelContainer.serviceRegistry.register(IClassroomActivityCatalogToken, classroomRuntimeService);
   await kernelContainer.serviceRegistry.register(IInteractionRuntimeServiceToken, classroomRuntimeService);
 
   // Classroom Feed：课堂动态流持久化（会话保存与恢复）——订阅内核事件总线

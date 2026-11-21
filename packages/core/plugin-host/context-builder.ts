@@ -48,6 +48,7 @@ import {
   IClassRosterServiceToken,
   ILessonOutlineServiceToken,
   IClassroomLifecycleServiceToken,
+  IClassroomActivityCatalogToken,
   IInteractionRuntimeServiceToken,
   IClassroomMessageServiceToken,
   ISubmissionRegistryToken,
@@ -68,7 +69,7 @@ import type {
   ILessonOutlineService,
   PointsDimensionSpec,
   IClassroomLifecycleService,
-  IInteractionRuntimeService,
+  IClassroomActivityCatalog,
   IClassroomMessageService,
   ClassroomStageGuard,
   ClassroomLifecycleStage,
@@ -652,7 +653,7 @@ function wrapClassroomLifecycleService(
 }
 
 /**
- * 包装 IInteractionRuntimeService：拦截互动提供者的注册，使它随插件停用而回收。
+ * 包装 IClassroomActivityCatalog：拦截互动提供者的注册，使它随插件停用而回收。
  *
  * 这里的难点比阶段门禁更硬：内部键是 `${owner}:${id}`，但
  * **`QuickActivityDescriptor` 不带 owner 字段**，`listActivityProviders()` 只返回
@@ -662,10 +663,10 @@ function wrapClassroomLifecycleService(
  * 拦截后记下插件实际传入的 (owner, id)，dispose 时精确注销。
  */
 function wrapInteractionRuntimeService(
-  service: IInteractionRuntimeService,
+  service: IClassroomActivityCatalog,
   tracker: ResourceTracker,
   pluginId: string,
-): IInteractionRuntimeService {
+): IClassroomActivityCatalog {
   return {
     registerActivityProvider: createSafeFunction((owner: string, descriptor: QuickActivityDescriptor) => {
       service.registerActivityProvider(owner, descriptor);
@@ -682,7 +683,7 @@ function wrapInteractionRuntimeService(
       service.unregisterActivityProvider(owner, id);
     }),
     listActivityProviders: createSafeFunction(() => service.listActivityProviders()),
-  } as IInteractionRuntimeService;
+  } as IClassroomActivityCatalog;
 }
 
 /**
@@ -794,8 +795,8 @@ function wrapPluginRuntimeService<T>(
   if (tokenName === IClassroomLifecycleServiceToken.name) {
     return wrapClassroomLifecycleService(raw as IClassroomLifecycleService, tracker, pluginId) as T;
   }
-  if (tokenName === IInteractionRuntimeServiceToken.name) {
-    return wrapInteractionRuntimeService(raw as IInteractionRuntimeService, tracker, pluginId) as T;
+  if (tokenName === IClassroomActivityCatalogToken.name || tokenName === IInteractionRuntimeServiceToken.name) {
+    return wrapInteractionRuntimeService(raw as IClassroomActivityCatalog, tracker, pluginId) as T;
   }
   // Issue #367：inline 默认不拦 SQL（存量插件会整批炸），打开开关后与 worker 同一口径。
   if (tokenName === '@openlearn/core:IDatabase' && isSqlGuardAllModesEnabled()) {

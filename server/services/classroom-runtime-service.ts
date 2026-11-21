@@ -12,7 +12,7 @@ import type {
   ClassroomLifecycleStage,
   ClassroomStageGuard,
   IClassroomLifecycleService,
-  IInteractionRuntimeService,
+  IClassroomActivityCatalog,
   QuickActivityDescriptor,
   StageGuardResult,
 } from '../../packages/core/di/interfaces.js';
@@ -101,7 +101,7 @@ async function runClassroomGuard(
   }
 }
 
-export class ClassroomRuntimeService implements IClassroomLifecycleService, IInteractionRuntimeService {
+export class ClassroomRuntimeService implements IClassroomLifecycleService, IClassroomActivityCatalog {
   private db: Database.Database;
   private io?: Server;
   private stageGuards = new Map<string, ClassroomStageGuard>();
@@ -272,7 +272,7 @@ export class ClassroomRuntimeService implements IClassroomLifecycleService, IInt
     return { success: true, stage: toStage };
   }
 
-  // ── IInteractionRuntimeService Implementation ───────────────────────────
+  // ── IClassroomActivityCatalog Implementation ────────────────────────────
 
   public registerActivityProvider(owner: string, descriptor: QuickActivityDescriptor): void {
     this.activityProviders.set(`${owner}:${descriptor.id}`, descriptor);

@@ -1074,7 +1074,7 @@ export const IClassroomLifecycleServiceToken = new Token<IClassroomLifecycleServ
 );
 
 /**
- * 互动运行时服务接口 —— 支持极速投票、抢答、结课通票，并支持第三方插件注册自定义互动
+ * 课堂活动元数据描述 —— 目录层只存描述，不执行生命周期。
  */
 export interface QuickActivityDescriptor {
   id: string;
@@ -1085,13 +1085,29 @@ export interface QuickActivityDescriptor {
   supportedRoles?: ('teacher' | 'student')[];
 }
 
-export interface IInteractionRuntimeService {
+/**
+ * 课堂活动元数据目录 —— 只登记活动描述（QuickActivityDescriptor），不承载生命周期。
+ * 真正的活动执行入口是 activity-ecosystem 的 ActivityRegistry.startActivity。
+ */
+export interface IClassroomActivityCatalog {
   registerActivityProvider(owner: string, descriptor: QuickActivityDescriptor): void;
   unregisterActivityProvider(owner: string, id: string): void;
   listActivityProviders(): QuickActivityDescriptor[];
 }
 
-export const IInteractionRuntimeServiceToken = new Token<IInteractionRuntimeService>(
+/**
+ * @deprecated 使用 `IClassroomActivityCatalog`。旧名暗示“运行时”，实际只是元数据目录。
+ */
+export type IInteractionRuntimeService = IClassroomActivityCatalog;
+
+export const IClassroomActivityCatalogToken = new Token<IClassroomActivityCatalog>(
+  '@openlearn/core:IClassroomActivityCatalog',
+);
+
+/**
+ * @deprecated 使用 `IClassroomActivityCatalogToken`。
+ */
+export const IInteractionRuntimeServiceToken = new Token<IClassroomActivityCatalog>(
   '@openlearn/core:IInteractionRuntimeService',
 );
 
@@ -1248,6 +1264,7 @@ export const PLUGIN_RESOLVABLE_TOKENS = [
   ICoursewareRuntimeScriptRegistryToken,
   IStageGuardServiceToken,
   IClassroomLifecycleServiceToken,
+  IClassroomActivityCatalogToken,
   IInteractionRuntimeServiceToken,
   IClassroomCountdownServiceToken,
   IAssessmentGraderRegistryToken,

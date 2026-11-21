@@ -514,6 +514,7 @@ export type {
   ClassroomStageGuard,
   IClassroomLifecycleService,
   QuickActivityDescriptor,
+  IClassroomActivityCatalog,
   IInteractionRuntimeService,
   ClassroomCountdownDescriptor,
   IClassroomCountdownService,
@@ -525,6 +526,7 @@ export type {
 
 export {
   IClassroomLifecycleServiceToken,
+  IClassroomActivityCatalogToken,
   IInteractionRuntimeServiceToken,
   IClassroomCountdownServiceToken,
   IAssessmentGraderRegistryToken,
