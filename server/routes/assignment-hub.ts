@@ -12,7 +12,7 @@ import { getActorId, requireAuth } from '../middleware/auth.js';
 import { requireScopedAuth } from '../middleware/data-scope.js';
 import type { ServerContext } from '../context.js';
 import { sendSafeError } from '../utils/error-handler.js';
-import { ASSIGNMENT_MAX_FILE_SIZE } from '../utils/assignment-upload-policy.js';
+import { rejectLegacyAssignmentWrite } from '../utils/legacy-assignment-write.js';
 import { isInlineSafeContentType, resolveContentType } from '../../packages/core/assignment/file-preview-policy.js';
 import { AssignmentService } from '../services/assignment-service.js';
 import {
@@ -22,16 +22,6 @@ import {
   isTeacher,
   rejectUnless,
 } from '../services/class-access.js';
-
-function decodeFileName(raw: unknown): string {
-  const text = String(raw ?? '').trim();
-  if (!text) return '';
-  try {
-    return decodeURIComponent(text);
-  } catch {
-    return text;
-  }
-}
 
 function getSession(req: unknown): Record<string, unknown> | undefined {
   return (req as { session?: Record<string, unknown> })?.session;
@@ -132,17 +122,8 @@ export function registerAssignmentHubRoutes(ctx: ServerContext) {
   };
 
   // ── 作业实体 ─────────────────────────────────────────────────────────────
-  app.post('/api/assignments', requireAuth('teacher', 'administrator'), async (req, res) => {
-    try {
-      if (requireAssignmentCommand(res, 'assignment.create')) return;
-      const classId = (req.body || {}).classId || (req.body || {}).class_id;
-      if (classId && rejectUnlessHubClass(req, res, String(classId), 'staff')) return;
-      const cmd = kernelContainer.commandBus.createCommand('assignment.create', req.body || {}, getActorId(req));
-      const result = await kernelContainer.commandBus.execute(cmd);
-      res.json(result);
-    } catch (e) {
-      sendHubError(res, e);
-    }
+  app.post('/api/assignments', requireAuth('teacher', 'administrator'), (_req, res) => {
+    rejectLegacyAssignmentWrite(res, '/api/learning-surface-assignments');
   });
 
   app.get('/api/assignments', requireScopedAuth('class-member'), async (req, res) => {
@@ -210,48 +191,9 @@ export function registerAssignmentHubRoutes(ctx: ServerContext) {
   });
 
   // ── 文件上传（原始二进制体）────────────────────────────────────────────
-  app.post(
-    '/api/assignments/:assignmentId/files',
-    requireScopedAuth('class-member'),
-    express.raw({ type: () => true, limit: ASSIGNMENT_MAX_FILE_SIZE + 1024 * 1024 }),
-    async (req, res) => {
-      try {
-        const assignmentId = req.params.assignmentId;
-        const { isPrivileged, studentId: sessionStudentId } = describeRequester(req);
-        if (rejectUnlessHubClass(req, res, hubAssignmentClassId(assignmentId), isPrivileged ? 'staff' : 'member'))
-          return;
-
-        const headerStudent = decodeFileName(req.header('x-student-id') || '');
-        const ownerStudentId = isPrivileged ? headerStudent || sessionStudentId : sessionStudentId;
-        if (!ownerStudentId) {
-          return res.status(400).json({ success: false, error: 'Missing studentId' });
-        }
-
-        const fileName = decodeFileName(req.header('x-file-name') || '');
-        if (!fileName) {
-          return res.status(400).json({ success: false, error: 'Missing X-File-Name header' });
-        }
-
-        const buffer: Buffer = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0);
-
-        const file = await assignmentService.uploadAssignmentFile({
-          assignmentId,
-          ownerStudentId,
-          isPrivileged,
-          fileName,
-          buffer,
-          contentType: req.header('content-type') || null,
-        });
-
-        res.json({ success: true, file });
-      } catch (e: unknown) {
-        if ((e as Error).message?.includes('At most')) {
-          return res.status(409).json({ success: false, error: (e as Error).message });
-        }
-        sendHubError(res, e);
-      }
-    },
-  );
+  app.post('/api/assignments/:assignmentId/files', requireScopedAuth('class-member'), (_req, res) => {
+    rejectLegacyAssignmentWrite(res, '/api/learning-surface-assignments/:assignmentId/files');
+  });
 
   // ── 文件列表 / 下载 / 删除 ───────────────────────────────────────────────
   app.get('/api/assignments/:assignmentId/files', requireScopedAuth('class-member'), async (req, res) => {
@@ -318,107 +260,24 @@ export function registerAssignmentHubRoutes(ctx: ServerContext) {
     }
   });
 
-  app.delete('/api/assignments/:assignmentId/files/:fileId', requireScopedAuth('class-member'), async (req, res) => {
-    try {
-      const { isPrivileged, studentId } = describeRequester(req);
-      if (
-        rejectUnlessHubClass(req, res, hubAssignmentClassId(req.params.assignmentId), isPrivileged ? 'staff' : 'member')
-      )
-        return;
-      assignmentService.softDeleteAssignmentFile(req.params.assignmentId, req.params.fileId, studentId, isPrivileged);
-      res.json({ success: true });
-    } catch (e) {
-      sendHubError(res, e);
-    }
+  app.delete('/api/assignments/:assignmentId/files/:fileId', requireScopedAuth('class-member'), (_req, res) => {
+    rejectLegacyAssignmentWrite(res, '/api/learning-surface-assignments/:assignmentId/files/:fileId');
   });
 
-  // ── 提交 / 互评 / 评分（透传命令总线，校验在插件内完成）─────────────────
-  app.post('/api/assignments/:assignmentId/submit', requireScopedAuth('class-member'), async (req, res) => {
-    try {
-      if (requireAssignmentCommand(res, 'assignment.submit')) return;
-      const { isPrivileged, studentId } = describeRequester(req);
-      const body = req.body || {};
-      const targetStudentId = isPrivileged ? String(body.studentId || '') : String(studentId || '');
-      if (!targetStudentId) {
-        return res.status(400).json({ success: false, error: 'Missing studentId' });
-      }
-      const assignmentRow = kernelContainer.db
-        .prepare('SELECT class_id FROM plugin_assignments WHERE id = ?')
-        .get(req.params.assignmentId) as { class_id: string | null } | undefined;
-      if (rejectUnlessHubClass(req, res, assignmentRow?.class_id, isPrivileged ? 'staff' : 'member')) return;
-      if (!isPrivileged) assignmentService.assertClassMembership(assignmentRow, false, targetStudentId);
-      const cmd = kernelContainer.commandBus.createCommand(
-        'assignment.submit',
-        {
-          assignmentId: req.params.assignmentId,
-          studentId: targetStudentId,
-          fileIds: Array.isArray(body.fileIds) ? body.fileIds : [],
-          textContent: body.textContent,
-          linkUrl: body.linkUrl,
-        },
-        getActorId(req),
-      );
-      const result = await kernelContainer.commandBus.execute(cmd);
-      res.json(result);
-    } catch (e) {
-      sendHubError(res, e);
-    }
+  // ── 提交 / 互评 / 评分（阶段 2 起统一走 learning-surface 通道）──────────
+  app.post('/api/assignments/:assignmentId/submit', requireScopedAuth('class-member'), (_req, res) => {
+    rejectLegacyAssignmentWrite(res, '/api/learning-surface-assignments/:assignmentId/submit');
   });
 
-  app.post('/api/assignments/:assignmentId/peer-review', requireScopedAuth('class-member'), async (req, res) => {
-    try {
-      if (requireAssignmentCommand(res, 'assignment.peer_review')) return;
-      const { isPrivileged, studentId } = describeRequester(req);
-      const body = req.body || {};
-      const reviewerId = isPrivileged ? String(body.reviewerId || body.studentId || '') : String(studentId || '');
-      if (!reviewerId) {
-        return res.status(400).json({ success: false, error: 'Missing reviewerId' });
-      }
-      const reviewAssignmentRow = kernelContainer.db
-        .prepare('SELECT class_id FROM plugin_assignments WHERE id = ?')
-        .get(req.params.assignmentId) as { class_id: string | null } | undefined;
-      if (rejectUnlessHubClass(req, res, reviewAssignmentRow?.class_id, isPrivileged ? 'staff' : 'member')) return;
-      if (!isPrivileged) assignmentService.assertClassMembership(reviewAssignmentRow, false, reviewerId);
-      const submissionId = String(body.submissionId || '');
-      if (!submissionId) {
-        return res.status(400).json({ success: false, error: 'Missing submissionId' });
-      }
-      const cmd = kernelContainer.commandBus.createCommand(
-        'assignment.peer_review',
-        {
-          submissionId,
-          reviewerId,
-          score: body.score,
-          comment: body.comment,
-          taskId: body.taskId,
-        },
-        getActorId(req),
-      );
-      const result = await kernelContainer.commandBus.execute(cmd);
-      res.json(result);
-    } catch (e) {
-      sendHubError(res, e);
-    }
+  app.post('/api/assignments/:assignmentId/peer-review', requireScopedAuth('class-member'), (_req, res) => {
+    rejectLegacyAssignmentWrite(res, '/api/learning-surface-assignments/:assignmentId/peer-review');
   });
 
   app.post(
     '/api/assignments/:assignmentId/assign-peer-reviews',
     requireAuth('teacher', 'administrator'),
-    async (req, res) => {
-      try {
-        if (requireAssignmentCommand(res, 'assignment.assign_peer_reviews')) return;
-        if (rejectUnlessHubClass(req, res, hubAssignmentClassId(req.params.assignmentId), 'staff')) return;
-        const body = req.body || {};
-        const cmd = kernelContainer.commandBus.createCommand(
-          'assignment.assign_peer_reviews',
-          { assignmentId: req.params.assignmentId, reviewerCount: body.reviewerCount, dueAt: body.dueAt },
-          getActorId(req),
-        );
-        const result = await kernelContainer.commandBus.execute(cmd);
-        res.json(result);
-      } catch (e) {
-        sendHubError(res, e);
-      }
+    (_req, res) => {
+      rejectLegacyAssignmentWrite(res, '/api/learning-surface-assignments/:assignmentId/assign-peer-reviews');
     },
   );
 }

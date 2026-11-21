@@ -27,6 +27,7 @@ import {
   Upload,
   Blocks,
   Globe,
+  Layers,
   SlidersHorizontal,
 } from 'lucide-react';
 import { Html } from 'react-konva-utils';
@@ -70,6 +71,7 @@ import { CodeSandboxWrapper } from './widgets/CodeSandboxWrapper';
 import { MathGraphWrapper } from './widgets/MathGraphWrapper';
 import { HelloWorldWrapper } from './widgets/HelloWorldWrapper';
 import { HtmlAppletFrame } from './components/HtmlAppletFrame';
+import { LearningSurfaceHost } from '../learning-surface/LearningSurfaceHost';
 import { WhiteboardToolbar } from './components/WhiteboardToolbar';
 import { WhiteboardPageBar } from './components/WhiteboardPageBar';
 import { WhiteboardDialog } from './components/WhiteboardDialog';
@@ -2801,6 +2803,82 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                       elementId={el.id}
                       className="w-full h-full border-none"
                     />
+                  </WidgetFrame>
+                  {readOnly && <ReadOnlyLockCover />}
+                  {!data.isMinimized && renderResizeHandles()}
+                </div>
+              </Html>
+            </Group>
+          );
+        }
+        if (el.type === 'learning_surface') {
+          const surfaceId = typeof data.surfaceId === 'string' ? data.surfaceId : '';
+          return (
+            <Group key={el.id}>
+              <Html
+                divProps={{
+                  style: {
+                    position: 'absolute',
+                    top: `${displayY}px`,
+                    left: `${displayX}px`,
+                    pointerEvents: 'none',
+                    zIndex: isThisSelected ? 20 : 10,
+                  },
+                }}
+              >
+                <div
+                  onPointerDown={(e) => {
+                    if (readOnly) return;
+                    setSelectedShapeId(el.id);
+                    e.stopPropagation();
+                  }}
+                  onContextMenu={(e) => {
+                    if (readOnly) {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      return;
+                    }
+                    const point = toCanvasPointFromEvent(e.clientX, e.clientY);
+                    if (point) {
+                      setContextMenu({
+                        x: point.x,
+                        y: point.y,
+                        elementId: el.id,
+                      });
+                    }
+                  }}
+                  className={`bg-white border border-gray-300 rounded-lg shadow-xl overflow-hidden flex flex-col font-sans text-sm relative ${hoverCardClass}`}
+                  style={{
+                    pointerEvents: readOnly ? 'none' : 'auto',
+                    userSelect: readOnly ? 'none' : 'auto',
+                    width: `${displayWidth}px`,
+                    height: `${displayHeight}px`,
+                  }}
+                >
+                  <WidgetFrame
+                    {...getWidgetTitleBarProps(
+                      data.title || '学习面',
+                      <Layers size={13} className="text-primary-theme" />,
+                      'indigo',
+                    )}
+                    contentClassName="flex-1 bg-white overflow-hidden relative min-h-0"
+                  >
+                    {surfaceId ? (
+                      <LearningSurfaceHost
+                        surfaceId={surfaceId}
+                        lessonId={lessonId}
+                        hostId={el.id}
+                        title={data.title}
+                        preview={userRole === 'teacher'}
+                        lazy={false}
+                        className="w-full h-full"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex flex-col items-center justify-center gap-1 p-4 text-center bg-slate-50">
+                        <p className="text-sm font-semibold text-gray-700">学习面未绑定内容</p>
+                        <p className="text-xs text-gray-400">在属性栏选择渲染器与资源后即可显示</p>
+                      </div>
+                    )}
                   </WidgetFrame>
                   {readOnly && <ReadOnlyLockCover />}
                   {!data.isMinimized && renderResizeHandles()}

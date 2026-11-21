@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Settings, Undo2, Redo2, X, Trash2, Plus, Paintbrush, Loader2, Save, Check, AlertCircle } from 'lucide-react';
 import { AssignmentBindingField } from './AssignmentBindingField';
 import { AssignmentPeerProgressPanel } from './AssignmentPeerProgressPanel';
+import { LearningSurfaceBindingPanel } from './LearningSurfaceBindingPanel';
 import { propertyEditorRegistry } from '../properties/PropertyEditorRegistry';
 import { buildQuizAnswerFields, resolveCorrectIndex } from '../../../../packages/core/whiteboard/quiz-answer.js';
 import { paletteItemRegistry } from '../../teacher/lesson-editor/palette-item-registry';
@@ -20,6 +21,7 @@ const WIDGET_ELEMENT_TYPES = [
   'quiz',
   'assignment',
   'html-applet',
+  'learning_surface',
   'code-sandbox',
   'math-graph',
   'presentation',
@@ -510,6 +512,19 @@ export const WhiteboardPropertiesSidebar: React.FC<WhiteboardPropertiesSidebarPr
               />
             ) : null}
           </div>
+        )}
+
+        {/* 2.5 LEARNING SURFACE (统一内容 / 活动宿主) */}
+        {selectedEl.type === 'learning_surface' && (
+          <LearningSurfaceBindingPanel
+            key={`${selectedEl.id}:${String(editingProperties.surfaceId ?? '')}`}
+            lessonId={lessonId}
+            elementId={selectedEl.id}
+            surfaceId={typeof editingProperties.surfaceId === 'string' ? editingProperties.surfaceId : undefined}
+            title={typeof editingProperties.title === 'string' ? editingProperties.title : undefined}
+            onBound={(patch) => handleUpdateElementData(patch)}
+            onUnbound={() => handleUpdateElementData({ surfaceId: null })}
+          />
         )}
 
         {/* 3. CODE SANDBOX 和 HTML APPLET 和 Sandbox */}

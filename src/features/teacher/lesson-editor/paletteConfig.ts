@@ -1,4 +1,14 @@
-import { Terminal, Activity, Presentation, Puzzle, Globe, ClipboardList, Shuffle, Sparkles } from 'lucide-react';
+import {
+  Terminal,
+  Activity,
+  Presentation,
+  Puzzle,
+  Globe,
+  ClipboardList,
+  Shuffle,
+  Sparkles,
+  Layers,
+} from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
 export type PaletteColorKey = 'slate' | 'blue' | 'violet' | 'amber' | 'rose' | 'emerald' | 'cyan' | 'pink' | 'indigo';
@@ -259,6 +269,18 @@ export const PALETTE_ITEMS: PaletteItemConfig[] = [
         placeholderZh: '<div>…</div>',
       },
     ],
+  },
+  {
+    type: 'learning_surface',
+    labelZh: '学习面',
+    labelEn: 'Learning Surface',
+    descriptionZh: '统一内容 / 活动容器',
+    descriptionEn: 'Unified content surface',
+    icon: Layers,
+    color: 'indigo',
+    group: 'present',
+    defaultData: {},
+    editFields: [],
   },
   {
     type: 'quiz',

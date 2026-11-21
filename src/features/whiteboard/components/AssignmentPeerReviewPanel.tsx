@@ -184,7 +184,7 @@ export function AssignmentPeerReviewPanel({
     setSubmitting(true);
     setError(null);
     try {
-      const res = await fetch(`/api/assignments/${encodeURIComponent(assignmentId)}/peer-review`, {
+      const res = await fetch(`/api/learning-surface-assignments/${encodeURIComponent(assignmentId)}/peer-review`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

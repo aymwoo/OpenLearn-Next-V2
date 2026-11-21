@@ -3,6 +3,7 @@
   "_source": "packages/core/esm-loader/manifest-schema.ts:542（frontendSlotsShape）/ :594（contributesSchema）",
   "a_strict_keys": [
     "locales",
+    "learning.surface",
     "classroom.tool",
     "teacher.tab",
     "teacher.dashboard.widget",
@@ -122,10 +123,11 @@
     "assessment.attempt.toolbar",
     "assessment.stats.card"
   ],
-  "a_total": 74,
+  "a_total": 75,
   "b_total": 43,
   "a_not_in_extension_slot": [
     "ai.persona.provider",
+    "learning.surface",
     "locales",
     "mode.pack",
     "palette.items",

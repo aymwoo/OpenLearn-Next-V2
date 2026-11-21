@@ -43,6 +43,7 @@ architecture/classroom-runtime
 architecture/activity-contract
 architecture/extension-points
 architecture/resource-runtime
+architecture/learning-surface
 architecture/assignment
 architecture/assessment-model
 architecture/plugin-worker-isolation-l1-proposal

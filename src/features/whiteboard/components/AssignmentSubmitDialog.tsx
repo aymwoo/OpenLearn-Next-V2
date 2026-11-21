@@ -202,7 +202,7 @@ export function AssignmentSubmitDialog({ assignmentId, onClose, onToast, lang = 
         }
         const xhr = new XMLHttpRequest();
         xhrRef.current.set(key, xhr);
-        xhr.open('POST', `/api/assignments/${encodeURIComponent(assignmentId)}/files`, true);
+        xhr.open('POST', `/api/learning-surface-assignments/${encodeURIComponent(assignmentId)}/files`, true);
         // 中文文件名不能直接进 HTTP 头，服务端会 decodeURIComponent
         xhr.setRequestHeader('X-File-Name', encodeURIComponent(file.name));
         xhr.setRequestHeader('Content-Type', 'application/octet-stream');
@@ -303,9 +303,12 @@ export function AssignmentSubmitDialog({ assignmentId, onClose, onToast, lang = 
   const removeRemoteFile = useCallback(
     async (fileId: string) => {
       try {
-        const res = await fetch(`/api/assignments/${encodeURIComponent(assignmentId)}/files/${fileId}`, {
-          method: 'DELETE',
-        });
+        const res = await fetch(
+          `/api/learning-surface-assignments/${encodeURIComponent(assignmentId)}/files/${fileId}`,
+          {
+            method: 'DELETE',
+          },
+        );
         const data = await res.json().catch(() => null);
         if (!res.ok || data?.success === false) {
           notify(zh ? '删除失败' : 'Delete failed', data?.error || `HTTP ${res.status}`, 'error');
@@ -341,7 +344,7 @@ export function AssignmentSubmitDialog({ assignmentId, onClose, onToast, lang = 
     setSubmitting(true);
     setSubmitError(null);
     try {
-      const res = await fetch(`/api/assignments/${encodeURIComponent(assignmentId)}/submit`, {
+      const res = await fetch(`/api/learning-surface-assignments/${encodeURIComponent(assignmentId)}/submit`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

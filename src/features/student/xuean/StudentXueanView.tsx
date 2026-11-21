@@ -7,6 +7,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { getXuean, postActivityProgress, type ActivitySubmission } from '../../../services/lessonActivitiesService.js';
 import { sanitizeRichTextHtml } from '../../../../packages/core/security/html-sanitize';
 import { CoursewareHost } from '../../courseware/CoursewareHost';
+import { LearningSurfaceHost } from '../../learning-surface/LearningSurfaceHost';
 
 type Block = {
   id: string;
@@ -24,6 +25,7 @@ type Activity = {
   title: string;
   required: number;
   visible: number;
+  surface_id?: string | null;
 };
 
 type Progress = {
@@ -335,6 +337,19 @@ function ActivityItem({
               )}
             </div>
             <p className="mt-1 text-sm font-semibold text-main">{activity.title}</p>
+
+            {/* 学习面：活动绑定了 Surface 时，由统一宿主渲染内容 */}
+            {activity.surface_id ? (
+              <div className="mt-2 h-80 rounded-lg overflow-hidden border border-theme/60 bg-surface-secondary/30">
+                <LearningSurfaceHost
+                  surfaceId={activity.surface_id}
+                  lessonId={activity.lesson_id}
+                  hostId={activity.id}
+                  title={activity.title}
+                  className="w-full h-full"
+                />
+              </div>
+            ) : null}
 
             {/* 已提交内容预览 */}
             {existingSubmission && (

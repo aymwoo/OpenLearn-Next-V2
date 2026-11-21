@@ -650,9 +650,51 @@ export const pluginLocalesSchema = z
   )
   .optional();
 
+/**
+ * LearningSurface 插件渲染器（设计见 docs/architecture/learning-surface.md §6.1）。
+ *
+ * 第三方渲染器一律 sandbox：即使声明 inline 也由宿主降级，这里只校验结构。
+ * `view` 必须是插件静态目录下的相对路径，安装期就拒绝穿越与协议注入。
+ */
+const learningSurfaceRendererSchema = z
+  .object({
+    id: z.string().min(1).max(128),
+    label: z.string().min(1).max(120),
+    execution: z.enum(['inline', 'sandbox']).optional(),
+    view: z
+      .string()
+      .min(1)
+      .max(256)
+      .refine((value) => {
+        const trimmed = value.trim();
+        return (
+          !trimmed.includes('..') &&
+          !trimmed.includes('://') &&
+          !trimmed.startsWith('/') &&
+          !trimmed.startsWith('\\') &&
+          /^[a-zA-Z0-9_\-./]+$/.test(trimmed)
+        );
+      }, 'view 必须是插件目录下的相对路径')
+      .optional(),
+    entry: z.string().min(1).max(256).optional(),
+    capabilities: z.array(z.string().min(1).max(40)).max(20).optional(),
+    sourceKinds: z.array(z.enum(['courseware', 'resource', 'assignment', 'activity', 'inline'])).min(1),
+    defaultSize: z
+      .object({ width: z.number().positive().max(10000), height: z.number().positive().max(10000) })
+      .optional(),
+    minSize: z.object({ width: z.number().positive().max(10000), height: z.number().positive().max(10000) }).optional(),
+    aspectRatio: z
+      .string()
+      .regex(/^\d{1,5}:\d{1,5}$/)
+      .optional(),
+  })
+  .strict()
+  .refine((value) => !!value.view || !!value.entry, 'view 与 entry 至少声明一个');
+
 const contributesSchema = z
   .object({
     locales: pluginLocalesSchema,
+    'learning.surface': z.array(learningSurfaceRendererSchema).optional(),
     'classroom.tool': z.array(classroomToolSchema).optional(),
     'teacher.tab': z
       .array(

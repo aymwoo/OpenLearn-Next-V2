@@ -547,6 +547,7 @@ export const BuiltinPlugin = {
       'assignment', // 作业
       'hello-world',
       'html-applet',
+      'learning_surface', // 统一内容 / 活动宿主（阶段 3）
       'code-sandbox',
       'math-graph',
       'presentation',

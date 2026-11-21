@@ -16,6 +16,7 @@ import type { AddressInfo } from 'net';
 import { registerRosterRoutes } from '../routes/roster.js';
 import { registerGradingRoutes } from '../routes/grading.js';
 import { registerAssignmentsRoutes } from '../routes/assignments.js';
+import { registerLearningSurfaceAssignmentRoutes } from '../routes/learning-surface-assignments.js';
 import { registerAssessmentRoutes } from '../routes/assessments.js';
 import { registerCoursewareRoutes } from '../routes/courseware.js';
 import { registerWorkspaceRoutes } from '../routes/workspace.js';
@@ -59,6 +60,7 @@ describe('学生数据越权测试矩阵（Issue #140）', () => {
     registerRosterRoutes({ app, io, loginLimiter: noop } as any);
     registerGradingRoutes({ app } as any);
     registerAssignmentsRoutes({ app } as any);
+    registerLearningSurfaceAssignmentRoutes({ app } as any);
     registerAssessmentRoutes({ app } as any);
     registerCoursewareRoutes({ app, io } as any);
     registerWorkspaceRoutes({ app, io } as any);
@@ -229,7 +231,7 @@ describe('学生数据越权测试矩阵（Issue #140）', () => {
     });
 
     it('外班学生不能向本班作业提交', async () => {
-      const res = await fetch(`${baseUrl}/api/assignments/${assignmentA}/submissions`, {
+      const res = await fetch(`${baseUrl}/api/learning-surface-assignments/${assignmentA}/submissions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...cookie(tokStudentB) },
         body: JSON.stringify({ content: '越权提交' }),

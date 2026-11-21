@@ -1,7 +1,7 @@
 {
   "_comment": "数据库结构金样（自动生成，勿手改）：空库跑完 migrations/ 全部迁移后的表→列快照。启动时 assertSchemaMatchesGolden 以子集校验（实际库缺金样结构即拒绝启动；多出的表/列不报错）。改迁移后请运行 pnpm db:gen-golden 再生成。",
-  "migrationCount": 72,
-  "generatedAt": "2026-11-21T08:17:08.585Z",
+  "migrationCount": 76,
+  "generatedAt": "2026-11-21T12:00:54.699Z",
   "tables": {
     "_academic_year_backfill": ["backfilled_at", "id"],
     "_class_passcode_encryption": ["id", "note"],
@@ -143,6 +143,7 @@
       "actor_id",
       "actor_role",
       "assignment_id",
+      "attempt_id",
       "created_at",
       "id",
       "new_score",
@@ -158,6 +159,7 @@
     "assignment_submissions": [
       "academic_year",
       "assignment_id",
+      "attempt_id",
       "content",
       "feedback",
       "graded_at",
@@ -456,6 +458,36 @@
       "student_id",
       "updated_at"
     ],
+    "learning_surface_attempts": [
+      "attempt_no",
+      "auto_score",
+      "completion",
+      "created_at",
+      "graded_at",
+      "graded_by",
+      "id",
+      "is_preview",
+      "lesson_id",
+      "max_score",
+      "renderer_id",
+      "score",
+      "state_json",
+      "status",
+      "student_id",
+      "submitted_at",
+      "surface_id",
+      "updated_at"
+    ],
+    "learning_surfaces": [
+      "content_ref_json",
+      "created_at",
+      "deleted_at",
+      "id",
+      "kind",
+      "lesson_id",
+      "owner_id",
+      "updated_at"
+    ],
     "lesson_activities": [
       "config_json",
       "created_at",
@@ -471,6 +503,7 @@
       "required",
       "rubric_json",
       "submission_type",
+      "surface_id",
       "title",
       "type",
       "updated_at",
@@ -549,6 +582,7 @@
     "plugin_assignment_files": [
       "asset_id",
       "assignment_id",
+      "attempt_id",
       "deleted_at",
       "id",
       "mime",
@@ -590,6 +624,7 @@
     "plugin_config": ["key", "plugin_id", "scope_id", "scope_type", "updated_at", "value"],
     "plugin_grades": [
       "assignment_id",
+      "attempt_id",
       "calculated_final_score",
       "graded_at",
       "graded_by",
@@ -621,6 +656,7 @@
     "plugin_peer_review_tasks": [
       "anonymous",
       "assignment_id",
+      "attempt_id",
       "created_at",
       "due_at",
       "id",
@@ -631,6 +667,7 @@
     "plugin_peer_reviews": [
       "anonymous",
       "assignment_id",
+      "attempt_id",
       "comment",
       "created_at",
       "id",
@@ -645,6 +682,7 @@
     "plugin_storage": ["key", "plugin_id", "updated_at", "value"],
     "plugin_submission_versions": [
       "assignment_id",
+      "attempt_id",
       "files_json",
       "id",
       "is_late",
@@ -657,6 +695,7 @@
     ],
     "plugin_submissions": [
       "assignment_id",
+      "attempt_id",
       "created_at",
       "file_path",
       "id",

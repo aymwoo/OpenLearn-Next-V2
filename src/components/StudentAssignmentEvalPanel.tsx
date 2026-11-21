@@ -123,7 +123,7 @@ export function StudentAssignmentEvalPanel({ lessonId, studentId, lang, addToast
     try {
       // v0.6.1 数据真实性：改走 lesson 作用域学生提交端点 —— 此前走教师专用
       // /api/commands，学生必 403
-      const res = await fetch(`/api/lessons/${lessonId}/eval-submissions`, {
+      const res = await fetch(`/api/learning-surface-lessons/${lessonId}/eval-submissions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -166,7 +166,7 @@ export function StudentAssignmentEvalPanel({ lessonId, studentId, lang, addToast
     setReviewLoading((prev) => ({ ...prev, [submissionId]: true }));
     try {
       // v0.6.1 数据真实性：互评走 lesson 作用域学生互评端点
-      const res = await fetch(`/api/lessons/${lessonId}/eval-submissions/${submissionId}/reviews`, {
+      const res = await fetch(`/api/learning-surface-lessons/${lessonId}/eval-submissions/${submissionId}/reviews`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

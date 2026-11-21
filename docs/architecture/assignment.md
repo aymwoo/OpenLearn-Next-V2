@@ -3,8 +3,10 @@
 OpenLearn V2 的 **作业中心（Assignment Hub）** 是一节课里「学生交作业 → 老师批 → 同伴互评 → 归档」这条链路的落地面。相关实现分布在三处：
 
 - 前端：`src/features/whiteboard/components/AssignmentSubmitDialog.tsx`（学生提交）、`AssignmentPeerReviewPanel.tsx`（同伴互评）、`src/components/StudentAssignmentEvalPanel.tsx`（评估面板）、`src/components/AssignmentFilePreview.tsx`（附件预览）
-- 服务端：`server/routes/assignment-hub.ts`（路由与鉴权）、`server/services/assignment-service.ts`（领域服务）
+- 服务端：`server/routes/assignment-hub.ts`（读接口与附件下载）、`server/routes/learning-surface-assignments.ts`（阶段 2 起的统一写接口）、`server/services/assignment-service.ts`（领域服务）
 - 内核侧共享规则：`packages/core/assignment/`（前后端共用的纯函数）
+
+> **阶段 2 写入口径**：`/api/assignments/*` 的写端点（创建、上传、提交、互评、分配互评、传统作业提交 / 评分）与 `/api/lessons/:lessonId/eval-submissions*` 的课时级写端点已统一返回 `410 LEGACY_ASSIGNMENT_WRITE_DISABLED`；写请求改走 `/api/learning-surface-assignments/*` 与 `/api/learning-surface-lessons/*`，由 `learning_surface_attempts` 统一承接。读接口与附件下载保持不变。详见 [LearningSurface](learning-surface.md)。
 
 ---
 

@@ -42,6 +42,13 @@ export interface PluginSandboxIframeViewProps {
    * 锁定只锁了白板，`student.classroom.overlay` 这类浮层完全不受影响。
    */
   locked?: boolean;
+  /** LearningSurface 宿主：当前 Surface 与渲染器。 */
+  surfaceId?: string;
+  surfaceRendererId?: string;
+  /** 恢复进度时下发给插件的 state_json（JSON 字符串，用于稳定依赖）。 */
+  surfaceStateJson?: string;
+  /** 插件上报的 surface 事件（已做来源 / 体积 / 形状校验）。 */
+  onSurfaceEvent?: (event: { event: 'progress' | 'submit'; payload: Record<string, unknown> }) => void;
 }
 
 export type PluginViewVariant = 'panel' | 'floating';
@@ -84,10 +91,18 @@ export function PluginSandboxIframeView({
   variant = 'panel',
   style,
   locked = false,
+  surfaceId,
+  surfaceRendererId,
+  surfaceStateJson,
+  onSurfaceEvent,
 }: PluginSandboxIframeViewProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [isLoaded, setIsLoaded] = useState(false);
   const [iframeHeight, setIframeHeight] = useState<number | null>(null);
+  const surfaceRef = useRef({ surfaceId, surfaceRendererId, surfaceStateJson });
+  surfaceRef.current = { surfaceId, surfaceRendererId, surfaceStateJson };
+  const onSurfaceEventRef = useRef(onSurfaceEvent);
+  onSurfaceEventRef.current = onSurfaceEvent;
 
   const lang = useAppStore((s) => s.lang);
   const storeLessonId = useAppStore((s) => s.selectedLesson);
@@ -121,6 +136,21 @@ export function PluginSandboxIframeView({
           lang,
           theme,
           themeMeta,
+          surface: surfaceRef.current.surfaceId
+            ? {
+                surfaceId: surfaceRef.current.surfaceId,
+                rendererId: surfaceRef.current.surfaceRendererId ?? null,
+                state: surfaceRef.current.surfaceStateJson
+                  ? (() => {
+                      try {
+                        return JSON.parse(surfaceRef.current.surfaceStateJson as string);
+                      } catch {
+                        return null;
+                      }
+                    })()
+                  : null,
+              }
+            : null,
         },
       },
       '*',
@@ -157,6 +187,21 @@ export function PluginSandboxIframeView({
       if (data.type === 'resize' && typeof data.height === 'number' && data.height > 0) {
         setIframeHeight(data.height);
         onResize?.(data.height);
+        return;
+      }
+
+      // LearningSurface 渲染器事件：只接受 progress / submit，payload 必须是对象且 ≤ 64KB。
+      if (data.type === 'surface-event') {
+        const eventName = data.event;
+        if (eventName !== 'progress' && eventName !== 'submit') return;
+        const payload = data.payload;
+        if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return;
+        try {
+          if (JSON.stringify(payload).length > 64 * 1024) return;
+        } catch {
+          return;
+        }
+        onSurfaceEventRef.current?.({ event: eventName, payload: payload as Record<string, unknown> });
         return;
       }
 
@@ -296,6 +341,20 @@ export function PluginSandboxIframeView({
     getUnifiedPluginThemePayload,
     isLoaded,
   ]);
+
+  // LearningSurface：attempt.state_json 变化时下发 state.patch 供插件恢复进度。
+  useEffect(() => {
+    if (!isLoaded || !surfaceId || !iframeRef.current?.contentWindow) return;
+    let payload: unknown = {};
+    if (surfaceStateJson) {
+      try {
+        payload = JSON.parse(surfaceStateJson);
+      } catch {
+        payload = {};
+      }
+    }
+    iframeRef.current.contentWindow.postMessage({ channel: PLUGIN_VIEW_CHANNEL, type: 'state.patch', payload }, '*');
+  }, [isLoaded, surfaceId, surfaceStateJson]);
 
   if (!cleanView) {
     return (

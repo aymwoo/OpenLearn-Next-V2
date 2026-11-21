@@ -40,7 +40,20 @@ export interface CoursewareHostProps {
   lazy?: boolean;
   /** 渲染在 iframe 之上的附加浮层（成绩榜、工具栏等） */
   overlay?: React.ReactNode;
+  /**
+   * LMS Bridge 事件回调（已归一化）。
+   *
+   * 白板沿用 WhiteboardEventSlot；LearningSurface 宿主用它把进度 / 提交
+   * 写入统一 attempt 表，两条路径互不影响。
+   */
+  onEvent?: (event: CoursewareHostEvent) => void;
 }
+
+/** CoursewareHost 归一化后的生命周期事件。 */
+export type CoursewareHostEvent =
+  | { type: 'progress'; completion?: number; score?: number; total?: number; attemptId?: string }
+  | { type: 'submit'; completion?: number; score?: number; total?: number; attemptId?: string }
+  | { type: 'finish'; attemptId?: string };
 
 /** `GET /api/courseware/host` 返回的插件宿主信息（只取渲染所需字段）。 */
 interface PluginCoursewareHost {
@@ -79,9 +92,13 @@ export function CoursewareHost({
   title,
   lazy = true,
   overlay,
+  onEvent,
 }: CoursewareHostProps) {
   const containerRef = React.useRef<HTMLDivElement>(null);
   const iframeRef = React.useRef<HTMLIFrameElement>(null);
+  // 事件回调放 ref，避免父组件每次渲染都重绑 postMessage 监听。
+  const onEventRef = React.useRef(onEvent);
+  onEventRef.current = onEvent;
   const mounted = useCoursewareFrameMount(lazy, containerRef);
   const { theme } = useThemeStore();
   const { scale } = useFontSizeStore();
@@ -202,50 +219,64 @@ export function CoursewareHost({
       // LMS Bridge SDK 协议
       if (msg.type === 'LMS_SUBMIT') {
         const payload = (msg.payload ?? {}) as Record<string, unknown>;
+        const attemptId = typeof msg.attempt_id === 'string' ? msg.attempt_id : undefined;
+        const completion = pickNumber(payload.completion ?? payload.progress);
+        const score = pickNumber(payload.score ?? payload.grade);
+        const total = pickNumber(payload.total ?? payload.fullScore);
+        onEventRef.current?.({ type: 'submit', completion, score, total, attemptId });
         whiteboardEventSlot.ingest({
           source: 'iframe.postMessage',
           type: 'courseware.submitted',
           lessonId,
           elementId: shapeId,
           coursewareUuid: uuid,
-          attemptId: typeof msg.attempt_id === 'string' ? msg.attempt_id : undefined,
+          attemptId,
           payload: {
-            score: pickNumber(payload.score ?? payload.grade),
-            total: pickNumber(payload.total ?? payload.fullScore),
-            completion: pickNumber(payload.completion ?? payload.progress),
+            score,
+            total,
+            completion,
             comment: typeof payload.comment === 'string' ? payload.comment : undefined,
           },
           raw: msg,
         });
       } else if (msg.type === 'LMS_SAVE_PROGRESS') {
         const payload = (msg.payload ?? {}) as Record<string, unknown>;
+        const attemptId = typeof msg.attempt_id === 'string' ? msg.attempt_id : undefined;
+        const completion = pickNumber(payload.completion ?? payload.progress);
+        const score = pickNumber(payload.score);
+        onEventRef.current?.({ type: 'progress', completion, score, attemptId });
         whiteboardEventSlot.ingest({
           source: 'iframe.postMessage',
           type: 'courseware.progress_saved',
           lessonId,
           elementId: shapeId,
           coursewareUuid: uuid,
-          attemptId: typeof msg.attempt_id === 'string' ? msg.attempt_id : undefined,
+          attemptId,
           payload: {
-            score: pickNumber(payload.score),
-            completion: pickNumber(payload.completion ?? payload.progress),
+            score,
+            completion,
           },
           raw: msg,
         });
       } else if (msg.type === 'LMS_FINISH') {
+        const attemptId = typeof msg.attempt_id === 'string' ? msg.attempt_id : undefined;
+        onEventRef.current?.({ type: 'finish', attemptId });
         whiteboardEventSlot.ingest({
           source: 'iframe.postMessage',
           type: 'courseware.finished',
           lessonId,
           elementId: shapeId,
           coursewareUuid: uuid,
-          attemptId: typeof msg.attempt_id === 'string' ? msg.attempt_id : undefined,
+          attemptId,
           payload: {},
           raw: msg,
         });
       } else if (msg.type === 'courseware:score' || msg.type === 'openlearn-cw-sdk:score') {
         // v2_plugins/courseware-hub SDK 协议
         const payload = (msg.payload ?? msg) as Record<string, unknown>;
+        const score = pickNumber(payload.score);
+        const total = pickNumber(payload.total);
+        onEventRef.current?.({ type: 'submit', score, total });
         whiteboardEventSlot.ingest({
           source: 'applet.score',
           type: 'courseware.submitted',
@@ -253,8 +284,8 @@ export function CoursewareHost({
           elementId: shapeId,
           coursewareUuid: uuid,
           payload: {
-            score: pickNumber(payload.score),
-            total: pickNumber(payload.total),
+            score,
+            total,
             detail: payload.detail,
             source: typeof msg.source === 'string' ? msg.source : 'openlearn-cw-sdk',
           },

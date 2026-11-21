@@ -117,6 +117,9 @@ import { registerRuntimePolicyRoutes } from './server/routes/runtime-policies.js
 import { registerLessonsRoutes } from './server/routes/lessons.js';
 import { registerLessonActivitiesRoutes } from './server/routes/lesson-activities.js';
 import { registerModePackRoutes } from './server/routes/mode-packs.js';
+import { registerLearningSurfaceRoutes } from './server/routes/learning-surfaces.js';
+import { registerLearningSurfaceAssignmentRoutes } from './server/routes/learning-surface-assignments.js';
+import { registerLearningSurfaceLessonEvalRoutes } from './server/routes/learning-surface-lesson-evals.js';
 import { registerCoursePackageRoutes } from './server/routes/course-packages.js';
 import { registerWorkspaceRoutes } from './server/routes/workspace.js';
 import { registerProcessesRoutes } from './server/routes/processes.js';
@@ -447,6 +450,9 @@ async function startServer() {
   registerLessonsRoutes(ctx);
   registerLessonActivitiesRoutes(ctx);
   registerModePackRoutes(ctx);
+  registerLearningSurfaceRoutes(ctx);
+  registerLearningSurfaceAssignmentRoutes(ctx);
+  registerLearningSurfaceLessonEvalRoutes(ctx);
   registerCoursePackageRoutes(ctx);
   registerWorkspaceRoutes(ctx);
 

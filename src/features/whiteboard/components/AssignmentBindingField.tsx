@@ -117,7 +117,7 @@ export function AssignmentBindingField({
     if (creating || !lessonId) return;
     setCreating(true);
     try {
-      const res = await fetch('/api/assignments', {
+      const res = await fetch('/api/learning-surface-assignments', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

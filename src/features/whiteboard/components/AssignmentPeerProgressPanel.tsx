@@ -98,14 +98,17 @@ export function AssignmentPeerProgressPanel({
     try {
       const parsedCount = Math.max(1, Math.min(10, Math.round(Number(reviewerCount) || 2)));
       const dueAt = dueValue ? new Date(dueValue).getTime() : undefined;
-      const res = await fetch(`/api/assignments/${encodeURIComponent(assignmentId)}/assign-peer-reviews`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          reviewerCount: parsedCount,
-          dueAt: dueAt && Number.isFinite(dueAt) ? dueAt : undefined,
-        }),
-      });
+      const res = await fetch(
+        `/api/learning-surface-assignments/${encodeURIComponent(assignmentId)}/assign-peer-reviews`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            reviewerCount: parsedCount,
+            dueAt: dueAt && Number.isFinite(dueAt) ? dueAt : undefined,
+          }),
+        },
+      );
       const data = await res.json().catch(() => null);
       if (!res.ok || data?.success === false) {
         throw new Error(data?.error || `HTTP ${res.status}`);

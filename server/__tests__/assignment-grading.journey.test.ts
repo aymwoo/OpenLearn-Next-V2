@@ -17,6 +17,7 @@ import { createServer, type Server } from 'http';
 import type { AddressInfo } from 'net';
 
 import { registerAssignmentsRoutes } from '../routes/assignments.js';
+import { registerLearningSurfaceAssignmentRoutes } from '../routes/learning-surface-assignments.js';
 import { registerGradingRoutes } from '../routes/grading.js';
 import { registerRosterRoutes } from '../routes/roster.js';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
@@ -187,6 +188,7 @@ describe('业务黄金旅程场景测试：作业与成绩全生命周期 (Assig
     } as any;
 
     registerAssignmentsRoutes(ctx);
+    registerLearningSurfaceAssignmentRoutes(ctx);
     registerGradingRoutes(ctx);
     registerRosterRoutes(ctx);
 
@@ -237,7 +239,8 @@ describe('业务黄金旅程场景测试：作业与成绩全生命周期 (Assig
   // ══════════════════════════════════════════════════════════════════════════════
   describe('阶段 1: 班级作业发布与查询 (Assignment Creation & Listing)', () => {
     it('教师为班级创建随堂作业 POST /api/classes/:classId/assignments/create-suggested-quiz', async () => {
-      const res = await post(`/api/classes/${classId}/assignments/create-suggested-quiz`, teacherToken, {
+      const res = await post('/api/learning-surface-assignments/create-suggested-quiz', teacherToken, {
+        classId,
         title: '泛型与条件类型实战大作业',
         description: '实现一个 DeepReadonly 工具类型并附带单元测试',
         questions: [{ question: '如何递归映射', answer: '使用条件类型' }],
@@ -276,7 +279,7 @@ describe('业务黄金旅程场景测试：作业与成绩全生命周期 (Assig
   // ══════════════════════════════════════════════════════════════════════════════
   describe('阶段 2: 学生作业提交与防越权代交 (Submission & Security)', () => {
     it('学生 Alice 提交第一版作答草稿 POST /api/assignments/:id/submissions', async () => {
-      const res = await post(`/api/assignments/${assignmentId}/submissions`, studentAliceToken, {
+      const res = await post(`/api/learning-surface-assignments/${assignmentId}/submissions`, studentAliceToken, {
         studentId: studentAliceId,
         content: '版本1：初步完成了 DeepReadonly 的递归映射类型定义。',
       });
@@ -295,7 +298,7 @@ describe('业务黄金旅程场景测试：作业与成绩全生命周期 (Assig
     });
 
     it('学生 Alice 再次提交更新为第二版终版代码，支持幂等更新', async () => {
-      const res = await post(`/api/assignments/${assignmentId}/submissions`, studentAliceToken, {
+      const res = await post(`/api/learning-surface-assignments/${assignmentId}/submissions`, studentAliceToken, {
         studentId: studentAliceId,
         content: '版本2：补齐了函数类型排除与 Symbol 键支持，附带完整 Vitest 样例。',
       });
@@ -310,7 +313,7 @@ describe('业务黄金旅程场景测试：作业与成绩全生命周期 (Assig
     });
 
     it('越权防御：Bob 尝试传入 Alice 的 studentId 冒名代交应被 403 强力拦截', async () => {
-      const res = await post(`/api/assignments/${assignmentId}/submissions`, studentBobToken, {
+      const res = await post(`/api/learning-surface-assignments/${assignmentId}/submissions`, studentBobToken, {
         studentId: studentAliceId, // 冒充 Alice
         content: 'Bob 恶意篡改 Alice 的作答内容',
       });
@@ -321,7 +324,7 @@ describe('业务黄金旅程场景测试：作业与成绩全生命周期 (Assig
     });
 
     it('学生 Bob 正常提交自己的作业内容', async () => {
-      const res = await post(`/api/assignments/${assignmentId}/submissions`, studentBobToken, {
+      const res = await post(`/api/learning-surface-assignments/${assignmentId}/submissions`, studentBobToken, {
         studentId: studentBobId,
         content: 'Bob 的作答：使用条件类型 Distributive Conditional Types 实现。',
       });
@@ -470,7 +473,7 @@ describe('业务黄金旅程场景测试：作业与成绩全生命周期 (Assig
     it('匿名请求作业与成绩端点统一返回 401 Unauthorized', async () => {
       const endpoints = [
         { url: `${baseUrl}/api/classes/${classId}/assignments`, method: 'GET' },
-        { url: `${baseUrl}/api/classes/${classId}/assignments/create-suggested-quiz`, method: 'POST' },
+        { url: `${baseUrl}/api/learning-surface-assignments/create-suggested-quiz`, method: 'POST' },
         { url: `${baseUrl}/api/assignments/${assignmentId}/submissions`, method: 'GET' },
         { url: `${baseUrl}/api/classes/${classId}/grade-weights`, method: 'POST' },
       ];
@@ -483,7 +486,7 @@ describe('业务黄金旅程场景测试：作业与成绩全生命周期 (Assig
 
     it('学生用户越权访问管理端点（创建作业、修改权重、录入考试分）应被 403 阻断', async () => {
       const forbiddenEndpoints = [
-        { url: `${baseUrl}/api/classes/${classId}/assignments/create-suggested-quiz`, body: {} },
+        { url: `${baseUrl}/api/learning-surface-assignments/create-suggested-quiz`, body: {} },
         { url: `${baseUrl}/api/classes/${classId}/grade-weights`, body: { attendance_weight: 1 } },
         { url: `${baseUrl}/api/classes/${classId}/exams`, body: { title: '非法考试' } },
         { url: `${baseUrl}/api/assignments/${assignmentId}/submissions`, method: 'GET' },

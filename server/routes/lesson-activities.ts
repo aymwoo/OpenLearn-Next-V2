@@ -29,6 +29,7 @@
  *   - 活动完成不自动推进课堂门禁（issue 明确要求，与 timeline 并列）
  */
 import type { Request, Response, NextFunction } from 'express';
+import type Database from 'better-sqlite3';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
 import { publishActivityCompleted } from '../../packages/core/events/activity-events.js';
 import { requireScopedAuth } from '../middleware/data-scope.js';
@@ -46,6 +47,12 @@ import {
 import type { ServerContext } from '../context.js';
 import { XUEAN_ACTIVITY_TYPES } from '../../packages/core/activity-contract/index.js';
 import { legacyActivityRouteKey, recordLegacyActivityRouteHit } from '../services/legacy-activity-route-usage.js';
+import {
+  type LearningContentRef,
+  softDeleteLearningSurface,
+  upsertLearningSurface,
+  validateLearningContentRef,
+} from '../services/learning-surface-service.js';
 
 // ── 内部常量 ─────────────────────────────────────────────────────────────
 const VALID_ACTIVITY_TYPES = new Set<string>(XUEAN_ACTIVITY_TYPES);
@@ -70,6 +77,7 @@ interface ActivityRow extends Record<string, unknown> {
   order_index: number;
   peer_review: number;
   title: string;
+  surface_id?: string | null;
 }
 
 interface BlockRow extends Record<string, unknown> {
@@ -156,6 +164,42 @@ function parseActivity(body: unknown): ParseResult<ActivityValue> {
       dueAt: Number.isFinite(dueAt as number) ? Number(dueAt) : null,
     },
   };
+}
+
+type SurfaceInput =
+  { ok: true; value: LearningContentRef | null | undefined } | { ok: false; status: number; error: string };
+
+/** 活动保存请求里的 `surface`：undefined = 不改；null = 解绑；对象 = 绑定 / 更新内容引用。 */
+function parseSurfaceInput(body: unknown): SurfaceInput {
+  const raw = (body as Record<string, unknown> | null)?.surface;
+  if (raw === undefined) return { ok: true, value: undefined };
+  if (raw === null) return { ok: true, value: null };
+  const parsed = validateLearningContentRef(raw);
+  if (!parsed.ok) return { ok: false, status: 400, error: parsed.error };
+  return { ok: true, value: parsed.value };
+}
+
+/** 按活动当前的 `surface` 输入创建 / 更新 / 软删 Surface，并把 surface_id 写回活动行。 */
+function applyActivitySurface(
+  db: Database.Database,
+  input: { lessonId: string; activityId: string; contentRef: LearningContentRef | null },
+): void {
+  if (input.contentRef === null) {
+    const row = db.prepare('SELECT surface_id FROM lesson_activities WHERE id = ?').get(input.activityId) as
+      { surface_id: string | null } | undefined;
+    if (row?.surface_id) softDeleteLearningSurface(db, row.surface_id);
+    db.prepare('UPDATE lesson_activities SET surface_id = NULL WHERE id = ?').run(input.activityId);
+    return;
+  }
+
+  const result = upsertLearningSurface(db, {
+    lessonId: input.lessonId,
+    kind: 'lesson_activity',
+    ownerId: input.activityId,
+    contentRef: input.contentRef,
+  });
+  if (!result.ok) throw new Error(result.error);
+  db.prepare('UPDATE lesson_activities SET surface_id = ? WHERE id = ?').run(result.surface.id, input.activityId);
 }
 
 function parseBlock(body: unknown): ParseResult<BlockValue> {
@@ -269,6 +313,8 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
 
       const parsed = parseActivity(req.body);
       if (!parsed.ok) return res.status(parsed.status).json({ success: false, error: parsed.error });
+      const surfaceInput = parseSurfaceInput(req.body);
+      if (!surfaceInput.ok) return res.status(surfaceInput.status).json({ success: false, error: surfaceInput.error });
 
       // 取当前最大 order_index，新活动追加到末尾
       const maxOrder = (
@@ -279,30 +325,36 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
 
       const id = randomId();
       const nowTs = now();
-      db.prepare(
-        `INSERT INTO lesson_activities
-          (id, lesson_id, order_index, type, title, config_json, required, visible,
-           peer_review, group_mode, submission_type, rubric_json, release_at, due_at,
-           created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      ).run(
-        id,
-        lessonId,
-        maxOrder + 1,
-        parsed.value.type,
-        parsed.value.title,
-        parsed.value.configJson,
-        parsed.value.required,
-        parsed.value.visible,
-        parsed.value.peerReview,
-        parsed.value.groupMode,
-        parsed.value.submissionType,
-        parsed.value.rubricJson,
-        parsed.value.releaseAt,
-        parsed.value.dueAt,
-        nowTs,
-        nowTs,
-      );
+      const tx = db.transaction(() => {
+        db.prepare(
+          `INSERT INTO lesson_activities
+            (id, lesson_id, order_index, type, title, config_json, required, visible,
+             peer_review, group_mode, submission_type, rubric_json, release_at, due_at,
+             created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ).run(
+          id,
+          lessonId,
+          maxOrder + 1,
+          parsed.value.type,
+          parsed.value.title,
+          parsed.value.configJson,
+          parsed.value.required,
+          parsed.value.visible,
+          parsed.value.peerReview,
+          parsed.value.groupMode,
+          parsed.value.submissionType,
+          parsed.value.rubricJson,
+          parsed.value.releaseAt,
+          parsed.value.dueAt,
+          nowTs,
+          nowTs,
+        );
+        if (surfaceInput.value !== undefined) {
+          applyActivitySurface(db, { lessonId, activityId: id, contentRef: surfaceInput.value });
+        }
+      });
+      tx();
 
       res.status(201).json(db.prepare('SELECT * FROM lesson_activities WHERE id = ?').get(id));
     } catch (err: unknown) {
@@ -322,34 +374,42 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
 
       const parsed = parseActivity({ ...existing, ...req.body });
       if (!parsed.ok) return res.status(parsed.status).json({ success: false, error: parsed.error });
+      const surfaceInput = parseSurfaceInput(req.body);
+      if (!surfaceInput.ok) return res.status(surfaceInput.status).json({ success: false, error: surfaceInput.error });
 
       const orderIndex =
         (req.body?.order_index ?? req.body?.orderIndex ?? Number.isFinite(req.body?.order_index))
           ? Number(req.body.order_index)
           : existing.order_index;
 
-      db.prepare(
-        `UPDATE lesson_activities
-         SET type = ?, title = ?, config_json = ?, required = ?, visible = ?,
-             peer_review = ?, group_mode = ?, submission_type = ?, rubric_json = ?,
-             release_at = ?, due_at = ?, order_index = ?, updated_at = ?
-         WHERE id = ?`,
-      ).run(
-        parsed.value.type,
-        parsed.value.title,
-        parsed.value.configJson,
-        parsed.value.required,
-        parsed.value.visible,
-        parsed.value.peerReview,
-        parsed.value.groupMode,
-        parsed.value.submissionType,
-        parsed.value.rubricJson,
-        parsed.value.releaseAt,
-        parsed.value.dueAt,
-        orderIndex,
-        now(),
-        id,
-      );
+      const tx = db.transaction(() => {
+        db.prepare(
+          `UPDATE lesson_activities
+           SET type = ?, title = ?, config_json = ?, required = ?, visible = ?,
+               peer_review = ?, group_mode = ?, submission_type = ?, rubric_json = ?,
+               release_at = ?, due_at = ?, order_index = ?, updated_at = ?
+           WHERE id = ?`,
+        ).run(
+          parsed.value.type,
+          parsed.value.title,
+          parsed.value.configJson,
+          parsed.value.required,
+          parsed.value.visible,
+          parsed.value.peerReview,
+          parsed.value.groupMode,
+          parsed.value.submissionType,
+          parsed.value.rubricJson,
+          parsed.value.releaseAt,
+          parsed.value.dueAt,
+          orderIndex,
+          now(),
+          id,
+        );
+        if (surfaceInput.value !== undefined) {
+          applyActivitySurface(db, { lessonId: existing.lesson_id, activityId: id, contentRef: surfaceInput.value });
+        }
+      });
+      tx();
 
       res.json(db.prepare('SELECT * FROM lesson_activities WHERE id = ?').get(id));
     } catch (err: unknown) {
@@ -377,9 +437,14 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
       if (!existing) return res.status(404).json({ success: false, error: 'Activity not found' });
       if (rejectUnless(res, authorizeLessonStaff(readDb, session, existing.lesson_id))) return;
 
-      // 级联删除 progress 行（activity 被删，progress 失去意义）
-      db.prepare('DELETE FROM activity_progress WHERE activity_id = ?').run(id);
-      db.prepare('DELETE FROM lesson_activities WHERE id = ?').run(id);
+      // 级联删除 progress 行（activity 被删，progress 失去意义）；
+      // Surface 只软删，attempt 仍可追溯（设计文档 §7.5）。
+      const tx = db.transaction(() => {
+        if (existing.surface_id) softDeleteLearningSurface(db, existing.surface_id);
+        db.prepare('DELETE FROM activity_progress WHERE activity_id = ?').run(id);
+        db.prepare('DELETE FROM lesson_activities WHERE id = ?').run(id);
+      });
+      tx();
 
       res.json({ success: true });
     } catch (err: unknown) {
@@ -537,7 +602,13 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
 
       const activities = readDb
         .prepare(
-          'SELECT type, title, config_json, required, visible, peer_review, group_mode, submission_type, rubric_json, release_at, due_at, order_index FROM lesson_activities WHERE lesson_id = ? ORDER BY order_index ASC',
+          `SELECT la.type, la.title, la.config_json, la.required, la.visible, la.peer_review, la.group_mode,
+                  la.submission_type, la.rubric_json, la.release_at, la.due_at, la.order_index,
+                  ls.content_ref_json AS surface_content_ref_json
+             FROM lesson_activities la
+             LEFT JOIN learning_surfaces ls ON ls.id = la.surface_id
+            WHERE la.lesson_id = ?
+            ORDER BY la.order_index ASC`,
         )
         .all(lessonId);
       const blocks = readDb
@@ -575,7 +646,12 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
       }
 
       const tx = db.transaction(() => {
-        // 清空现有活动 + 首页块（级联清理 activity_progress）
+        // 清空现有活动 + 首页块（级联清理 activity_progress）；Surface 只软删。
+        const ts = now();
+        db.prepare(
+          `UPDATE learning_surfaces SET deleted_at = ?, updated_at = ?
+            WHERE kind = 'lesson_activity' AND lesson_id = ? AND deleted_at IS NULL`,
+        ).run(ts, ts, lessonId);
         db.prepare(
           'DELETE FROM activity_progress WHERE activity_id IN (SELECT id FROM lesson_activities WHERE lesson_id = ?)',
         ).run(lessonId);
@@ -584,11 +660,12 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
 
         // 重建活动
         for (const a of activities) {
+          const activityId = randomId();
           db.prepare(
             `INSERT INTO lesson_activities (id, lesson_id, order_index, type, title, config_json, required, visible, peer_review, group_mode, submission_type, rubric_json, release_at, due_at, created_at, updated_at)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           ).run(
-            randomId(),
+            activityId,
             lessonId,
             a.order_index ?? 0,
             a.type ?? 'other',
@@ -605,6 +682,18 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
             now(),
             now(),
           );
+
+          if (typeof a.surface_content_ref_json === 'string' && a.surface_content_ref_json) {
+            try {
+              const contentRef = JSON.parse(a.surface_content_ref_json) as unknown;
+              const parsedRef = validateLearningContentRef(contentRef);
+              if (parsedRef.ok) {
+                applyActivitySurface(db, { lessonId, activityId, contentRef: parsedRef.value });
+              }
+            } catch {
+              // 导入包里的内容引用损坏时跳过该活动的 Surface，不影响其余活动
+            }
+          }
         }
 
         // 重建首页块

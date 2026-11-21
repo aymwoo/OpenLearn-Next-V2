@@ -32,7 +32,10 @@ type Activity = {
   due_at: number | null;
   created_at: number;
   updated_at: number;
+  surface_id?: string | null;
 };
+
+type SurfaceRenderer = { id: string; label: string; sourceKinds: string[] };
 
 const ACTIVITY_TYPES = [
   { value: 'reading', label: '阅读任务' },
@@ -246,6 +249,55 @@ function ActivityEditor({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // 学习面绑定（可选）：阶段 3 起活动可挂一个 Surface 渲染内容。
+  const [renderers, setRenderers] = useState<SurfaceRenderer[]>([]);
+  const [surfaceRendererId, setSurfaceRendererId] = useState('');
+  const [surfaceSourceKind, setSurfaceSourceKind] = useState('courseware');
+  const [surfaceSourceId, setSurfaceSourceId] = useState('');
+  const [surfaceMarkdown, setSurfaceMarkdown] = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/learning-surface-renderers')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((body: { data?: SurfaceRenderer[] } | null) => {
+        if (cancelled || !body?.data) return;
+        const list = body.data.filter((item) => item.sourceKinds.length > 0);
+        setRenderers(list);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!existing?.surface_id) return;
+    let cancelled = false;
+    fetch(`/api/learning-surfaces/${encodeURIComponent(existing.surface_id)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((row: { content_ref_json?: string } | null) => {
+        if (cancelled || !row?.content_ref_json) return;
+        try {
+          const ref = JSON.parse(row.content_ref_json) as {
+            rendererId?: string;
+            source?: { kind?: string; id?: string };
+            config?: { markdown?: string };
+          };
+          if (ref.rendererId) setSurfaceRendererId(ref.rendererId);
+          if (ref.source?.kind) setSurfaceSourceKind(ref.source.kind);
+          if (ref.source?.id) setSurfaceSourceId(ref.source.id);
+          if (ref.config?.markdown) setSurfaceMarkdown(ref.config.markdown);
+        } catch {
+          // 内容引用损坏时保留空白表单，由教师重新绑定
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [existing?.surface_id]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.title.trim()) {
@@ -265,6 +317,21 @@ function ActivityEditor({
       rubricJson: form.rubricJson.trim() || null,
     };
     if (form.submissionType) payload.submissionType = form.submissionType;
+
+    // 有资源才绑定；已有 Surface 但清空了输入则解绑。
+    const isInlineSource = surfaceSourceKind === 'inline';
+    if (surfaceRendererId && (surfaceSourceId.trim() || (isInlineSource && surfaceMarkdown.trim()))) {
+      payload.surface = {
+        rendererId: surfaceRendererId,
+        source: { kind: surfaceSourceKind, ...(isInlineSource ? {} : { id: surfaceSourceId.trim() }) },
+        config: {
+          title: form.title.trim(),
+          ...(isInlineSource && surfaceMarkdown.trim() ? { markdown: surfaceMarkdown } : {}),
+        },
+      };
+    } else if (existing?.surface_id) {
+      payload.surface = null;
+    }
 
     const res = existing
       ? await updateLessonActivity(existing.id, payload)
@@ -402,6 +469,62 @@ function ActivityEditor({
             className="w-full px-3 py-2 text-xs rounded-lg border border-theme bg-surface text-main focus:outline-none focus:ring-2 focus:ring-primary-theme/40 font-mono"
           />
           <p className="text-[10px] text-muted">批阅时参考此量规打分。留空则使用自由分。</p>
+        </div>
+
+        <div className="space-y-2 rounded-lg border border-theme p-3">
+          <p className="text-xs font-bold text-main">学习面内容（可选）</p>
+          <p className="text-[10px] text-muted">绑定后学生端由统一宿主渲染；留空表示不绑定。</p>
+          <select
+            value={surfaceRendererId}
+            onChange={(e) => setSurfaceRendererId(e.target.value)}
+            className="w-full px-3 py-2 text-sm rounded-lg border border-theme bg-surface text-main focus:outline-none focus:ring-2 focus:ring-primary-theme/40"
+          >
+            <option value="">不绑定</option>
+            {renderers.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.label}
+              </option>
+            ))}
+          </select>
+          {surfaceRendererId ? (
+            <div className="space-y-2">
+              <div className="grid grid-cols-2 gap-2">
+                <select
+                  value={surfaceSourceKind}
+                  onChange={(e) => setSurfaceSourceKind(e.target.value)}
+                  className="w-full px-3 py-2 text-sm rounded-lg border border-theme bg-surface text-main focus:outline-none focus:ring-2 focus:ring-primary-theme/40"
+                >
+                  {(renderers.find((item) => item.id === surfaceRendererId)?.sourceKinds ?? ['courseware']).map(
+                    (kind) => (
+                      <option key={kind} value={kind}>
+                        {kind === 'courseware' ? '互动课件' : kind === 'resource' ? '资源库' : '内联 Markdown'}
+                      </option>
+                    ),
+                  )}
+                </select>
+                {surfaceSourceKind === 'inline' ? (
+                  <div className="flex items-center text-[10px] text-muted">在下方填写 Markdown</div>
+                ) : (
+                  <input
+                    type="text"
+                    value={surfaceSourceId}
+                    onChange={(e) => setSurfaceSourceId(e.target.value)}
+                    placeholder={surfaceSourceKind === 'courseware' ? '课件 UUID' : '资源 ID'}
+                    className="w-full px-3 py-2 text-sm rounded-lg border border-theme bg-surface text-main font-mono focus:outline-none focus:ring-2 focus:ring-primary-theme/40"
+                  />
+                )}
+              </div>
+              {surfaceSourceKind === 'inline' ? (
+                <textarea
+                  value={surfaceMarkdown}
+                  onChange={(e) => setSurfaceMarkdown(e.target.value)}
+                  rows={4}
+                  placeholder={'# 第一页\n---\n## 第二页'}
+                  className="w-full px-3 py-2 text-xs rounded-lg border border-theme bg-surface text-main font-mono focus:outline-none focus:ring-2 focus:ring-primary-theme/40"
+                />
+              ) : null}
+            </div>
+          ) : null}
         </div>
 
         {error && <p className="text-xs text-rose-600">{error}</p>}
