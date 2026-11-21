@@ -73,6 +73,7 @@
     "course.card.badge",
     "course.list.toolbar.action",
     "course.wizard.quick_apply",
+    "courseware.host",
     "courseware.viewer.overlay",
     "courseware.viewer.toolbar",
     "editor.header.action",
@@ -147,5 +148,5 @@
     "anchor:whiteboard-toolbar:presentation",
     "anchor:whiteboard-toolbar:rollcall"
   ],
-  "total": 134
+  "total": 135
 }

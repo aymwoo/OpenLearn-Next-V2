@@ -175,6 +175,7 @@ export type ExtensionSlot =
   // ── 课件播放器扩展槽位（P1） ──
   | 'courseware.viewer.toolbar' // 课件播放器工具栏扩展（草稿本/批注/字幕/随堂笔记等）
   | 'courseware.viewer.overlay' // 课件浮层 HUD 扩展（弹幕/防作弊水印/抢答悬浮球等）
+  | 'courseware.host' // 课件宿主接管（替换内置 CoursewareHost，需 replaces: 'builtin'）
   // ── 课表中心扩展槽位 ──
   | 'timetable.tab' // 课表中心扩展 Tab（如：智能排课排班 / 考勤日历同步 / 考务监考编排）
   // ── 管理后台扩展槽位 ──

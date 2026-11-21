@@ -36,6 +36,7 @@
     "classroom.post_class.widget",
     "courseware.viewer.toolbar",
     "courseware.viewer.overlay",
+    "courseware.host",
     "classroom.portal.telemetry",
     "classroom.portal.course_badge",
     "classroom.portal.teaching_mode",
@@ -121,7 +122,7 @@
     "assessment.attempt.toolbar",
     "assessment.stats.card"
   ],
-  "a_total": 73,
+  "a_total": 74,
   "b_total": 43,
   "a_not_in_extension_slot": [
     "ai.persona.provider",

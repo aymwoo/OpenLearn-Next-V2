@@ -105,6 +105,7 @@ export type ExtensionSlot =
   // ── 课件播放器扩展槽位（P1）──
   | 'courseware.viewer.toolbar'
   | 'courseware.viewer.overlay'
+  | 'courseware.host'
   // ── 课表中心与管理后台扩展（双渲染态）──
   | 'timetable.tab'
   | 'admin.tab'
@@ -325,6 +326,7 @@ export type AnyExtensionSlot = ExtensionSlot | AnchorSlot | (string & {});
 | `whiteboard.autosave.action`            | `src/features/teacher/LessonEditorView.tsx`                                                                                             | `{ lessonId, flush }`                                                                                                          |
 | `courseware.viewer.toolbar`             | `src/features/courseware/InteractiveCoursewareViewer.tsx`                                                                               | 无                                                                                                                             |
 | `courseware.viewer.overlay`             | `src/features/courseware/InteractiveCoursewareViewer.tsx`                                                                               | 无                                                                                                                             |
+| `courseware.host`                       | `src/features/courseware/CoursewareHost.tsx`（由 `GET /api/courseware/host` 决议）                                                      | 无（宿主接管：需 `replaces: 'builtin'` + 可选 `priority`；只声明 `entry` 时不接管，回落内置宿主）                              |
 | `peer_review.rubric.dimension`          | `src/features/classroom/peer-review/PeerReviewRubricModal.tsx`、`src/features/classroom/peer-review/PeerReviewRubricStats.tsx`          | 无（仅 `route?`）                                                                                                              |
 | `peer_review.badge`                     | `src/features/classroom/peer-review/PeerReviewMatrixPanel.tsx`                                                                          | 无（仅 `route?`）                                                                                                              |
 | `peer_review.action`                    | `src/features/classroom/peer-review/PeerReviewTelemetryHeader.tsx`、`src/features/classroom/peer-review/PeerReviewLeaderboardPanel.tsx` | 无（仅 `route?`）                                                                                                              |

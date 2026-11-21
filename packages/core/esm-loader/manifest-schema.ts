@@ -293,6 +293,23 @@ const coursewareViewerOverlaySchema = z.object({
   icon: z.string().optional(),
 });
 
+// courseware.host：插件接管课件宿主。安装期即校验「要么 view、要么 entry」，
+// 避免坏配置拖到运行时才发现渲染不出任何东西。
+const coursewareHostSchema = z
+  .object({
+    id: z.string().min(1),
+    label: z.string().min(1),
+    description: z.string().optional(),
+    replaces: z.literal('builtin').optional(),
+    priority: z.number().int().optional(),
+    view: z.string().min(1).optional(),
+    entry: z.string().min(1).optional(),
+    capabilities: z.array(z.string()).optional(),
+  })
+  .refine((value) => !!value.view || !!value.entry, {
+    message: 'courseware.host 需要 view 或 entry',
+  });
+
 const portalTelemetrySchema = z.object({
   id: z.string().min(1),
   label: z.string().min(1),
@@ -555,6 +572,7 @@ const modePackSchema = z.object({
   studentWorkspaceId: z.string().optional(),
   adapterIds: z.array(z.string().min(1)).optional(),
   channels: z.array(z.string().min(1)).optional(),
+  outlineContributionId: z.string().optional(),
 });
 
 /**
@@ -714,6 +732,7 @@ const contributesSchema = z
     'classroom.post_class.widget': z.array(postClassWidgetSchema).optional(),
     'courseware.viewer.toolbar': z.array(coursewareViewerToolbarSchema).optional(),
     'courseware.viewer.overlay': z.array(coursewareViewerOverlaySchema).optional(),
+    'courseware.host': z.array(coursewareHostSchema).optional(),
     'classroom.portal.telemetry': z.array(portalTelemetrySchema).optional(),
     'classroom.portal.course_badge': z.array(portalCourseBadgeSchema).optional(),
     'classroom.portal.teaching_mode': z.array(portalTeachingModeSchema).optional(),

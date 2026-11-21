@@ -140,6 +140,7 @@ export type {
   PostClassWidgetConfig,
   CoursewareViewerToolbarConfig,
   CoursewareViewerOverlayConfig,
+  CoursewareHostConfig,
   PortalTelemetryConfig,
   PortalCourseBadgeConfig,
   PortalTeachingModeConfig,
@@ -226,6 +227,9 @@ export type { Manifest, ManifestV3 } from '../core/esm-loader/manifest-schema.js
 export type { ModePackContribution } from '../core/plugin-host/mode-pack.js';
 export {
   DEFAULT_MODE_PACK_SEGMENT_TYPE,
+  BUILTIN_WHITEBOARD_MODE_PACK_ID,
+  BUILTIN_XUEAN_MODE_PACK_ID,
+  BUILTIN_MODE_PACKS,
   normalizeSegmentType,
   extensionCoversSegmentType,
   modePackCoversSegmentType,

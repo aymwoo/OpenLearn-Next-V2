@@ -4,7 +4,7 @@
  * 由 packages/plugin-sdk/generate-dts.mts 从 packages/core/ 源码抽取。
  * 手写契约请改 openlearn.d.ts —— 本文件会在 build 时被覆盖。
  *
- * 覆盖符号：295 个（入口导出但手写 d.ts 未声明的 295 项及其类型引用闭包）
+ * 覆盖符号：301 个（入口导出但手写 d.ts 未声明的 301 项及其类型引用闭包）
  */
 
 /** @see packages/core/analytics-engine/types.ts */
@@ -212,6 +212,21 @@ interface AttributionActionConfig {
     icon?: string;
     commandType?: string;
 }
+
+/** @see packages/core/plugin-host/mode-pack.ts */
+declare const BUILTIN_MODE_PACKS: readonly ModePackContribution[];
+
+/** @see packages/core/plugin-host/mode-pack.ts */
+declare const BUILTIN_WHITEBOARD_MODE_PACK: ModePackContribution;
+
+/** @see packages/core/plugin-host/mode-pack.ts */
+declare const BUILTIN_WHITEBOARD_MODE_PACK_ID: '@openlearn/mode-whiteboard';
+
+/** @see packages/core/plugin-host/mode-pack.ts */
+declare const BUILTIN_XUEAN_MODE_PACK: ModePackContribution;
+
+/** @see packages/core/plugin-host/mode-pack.ts */
+declare const BUILTIN_XUEAN_MODE_PACK_ID: '@openlearn/mode-xuean';
 
 /** @see packages/core/plugin-host/contribution-registry.ts */
 /** A contribution to the classroom.barometer.metric slot (rhythm barometer metric gauge). */
@@ -619,6 +634,30 @@ interface CourseListToolbarActionConfig {
     label: string;
     icon?: string;
     commandType?: string;
+}
+
+/** @see packages/core/plugin-host/contribution-registry.ts */
+/**
+ * A contribution to the `courseware.host` slot。
+ *
+ * 插件可声明一个「课件宿主」，用于接管内置 `CoursewareHost` 的渲染。
+ * 只有当 `replaces: 'builtin'` 时才参与接管；多个候选按 `priority` 取最高，
+ * 同优先级按插件 id 稳定排序，冲突由服务端记录并回落内置宿主。
+ */
+interface CoursewareHostConfig {
+    id: string;
+    label: string;
+    description?: string;
+    /** 声明接管内置宿主 */
+    replaces?: 'builtin';
+    /** 优先级，数值越大越优先（默认 0） */
+    priority?: number;
+    /** 沙箱入口（插件静态目录下的 HTML） */
+    view?: string;
+    /** 远程模块入口（与 view 二选一） */
+    entry?: string;
+    /** 宿主能力声明，供课程容器做兼容性判断 */
+    capabilities?: string[];
 }
 
 /** @see packages/core/plugin-host/contribution-registry.ts */
@@ -2685,6 +2724,7 @@ export type {
   CourseCardActionConfig,
   CourseCardBadgeConfig,
   CourseListToolbarActionConfig,
+  CoursewareHostConfig,
   CoursewareViewerOverlayConfig,
   CoursewareViewerToolbarConfig,
   CustomIndicatorDefinition,
@@ -2851,6 +2891,9 @@ export type {
   WhiteboardStatus,
 };
 export {
+  BUILTIN_MODE_PACKS,
+  BUILTIN_WHITEBOARD_MODE_PACK_ID,
+  BUILTIN_XUEAN_MODE_PACK_ID,
   CAP,
   CAPABILITIES,
   CAP_AI_PERSONA,
