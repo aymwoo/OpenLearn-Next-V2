@@ -12,6 +12,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Features
 
+- **教学模式包目录与课时级绑定**：新增 `GET /api/mode-packs`，返回内置白板 / 学案包与**已激活**插件 `contributes['mode.pack']`（逐条过 manifest 校验，坏配置与重复 id 不进目录）。课程向导改为按目录渲染交付模式；新建课时额外写入 `lessons.mode_pack_id`（迁移 `071`），读取时优先于 `delivery_mode`。请求的模式包不可用（插件停用/卸载）时回落内置白板，并在创建响应里返回 `modeBinding.reason`、写一条告警日志。旧课无 `mode_pack_id` 时行为不变。
+- **独立课件容器 `CoursewareHost`**：从白板 `HtmlAppletFrame` 抽出的沙箱渲染宿主，统一处理 `coursewareUuid` / `resourceId` / 插件内容源 / 手写 HTML 四种来源、短时访问 token、懒挂载与并发上限、主题与字号广播、LMS Bridge 事件归一化。白板元素仍在其上叠加成绩榜；学案与后续第三方工作区可直接复用。
+- **学案「互动课件」区块**：学案区块新增 `interactive_courseware`，只存内容源描述（`coursewareUuid` / `resourceId` / 可选 `title`），服务端校验并规范化，拒绝空来源与多余字段；学生端用 `CoursewareHost` 在沙箱 iframe 中渲染，不再需要切到白板模式。
+- **课件宿主扩展槽 `courseware.host`**：插件可在 manifest 声明自己的课件宿主，`replaces: 'builtin'` + `priority` 申请接管。服务端按优先级决出唯一生效宿主，冲突记录告警并回落内置；`GET /api/courseware/host` 暴露决议结果。只声明远程 `entry`、没有可 iframe 的 `view` 时不接管，保证安全回落。
 - **课程交付模式**：新建课程时选择学案或白板，两条向导分开，上课也按这门课的模式走。学案课直接使用学案 Mode Pack，不必再开全局 Mode Pack 开关。旧课没有该字段时仍按白板，课堂路径不变。门户上的讲授 / 探究等标签不参与这次选择。
 - **学生课堂页**：进课后按交付模式进入白板页或学案页。白板页以画布为主，学案页以学案正文为主；大纲、课件、作业、签到等收在可关闭的侧栏里。学生不能在本地改全班环节或阶段。
 - **白板课堂减负**：教师端和学生端的白板课默认只留课题、画布、锁定和当前阶段。返回门户、投票、提交、成绩等从「更多」「课堂工具」「课堂面板」或学生「工具」里打开。学案课的教师顶栏不变。
