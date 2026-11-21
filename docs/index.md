@@ -40,6 +40,8 @@ architecture/theming-system
 architecture/service-registry
 architecture/whiteboard-subsystems
 architecture/classroom-runtime
+architecture/activity-contract
+architecture/extension-points
 architecture/resource-runtime
 architecture/assignment
 architecture/assessment-model

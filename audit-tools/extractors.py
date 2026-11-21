@@ -58,9 +58,13 @@ class Extracts:
 DOC_SUBSYSTEM_BY_FILE = {
     "platform-kernel":            ("kernel",                   "subsystem"),
     "command-event-bus":          [("command-bus", "subsystem"),
-                                   ("event-bus", "subsystem")],
+                                   ("event-bus", "subsystem"),
+                                   ("events", "subsystem")],
     "dependency-injection":       ("di",                       "subsystem"),
     "service-registry":           ("service-registry",         "subsystem"),
+    # extension-points.md 描述 packages/core/extension-registry/（文件名避开
+    # docs/plugin/extension-registry.md，防止 duplicate-docs 误报）。
+    "extension-points":           ("extension-registry",       "subsystem"),
     # 注意: capability-gateway.md 一篇同时描述三个子面（能力网关 / 运行时 / 治理）。
     # 早先这里把同一个键写了三遍，Python 字典字面量只保留最后一个，前两个映射被静默
     # 覆盖 —— 直接导致 capability / capability-runtime 被误报成"代码有文档无"。

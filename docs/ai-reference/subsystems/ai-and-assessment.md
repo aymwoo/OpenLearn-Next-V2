@@ -167,14 +167,15 @@ lesson_quiz_submissions  courseware_attempt  courseware_score_config
 ## 6. 活动生态（AI 与插件之外的第三类扩展）
 
 `packages/activity-ecosystem/`（7 文件 / 768 行）提供 `IActivityRegistry`，
-让「研究活动」类扩展注册自己的描述符，供 `/api/activities` 与工作台消费。
+让「研究活动」类扩展注册自己的描述符，供 `/api/activity-providers` 与工作台消费
+（旧 `GET /api/activities` 已降级为带 `Deprecation` 头的 307 兼容别名）。
 
-| 事实     | 说明                                                                                          |
-| -------- | --------------------------------------------------------------------------------------------- |
-| Token 名 | `@openlearn/activity-ecosystem:IActivityRegistry`                                             |
-| 解析方式 | **只能按名字** resolve（对象不在白名单）                                                      |
-| 路由     | `GET /api/activities?role=`（`os.ts` L146）                                                   |
-| 相关表   | `lianyun_research_activities` / `_groups` / `_submissions` / `_reviews`（均在 45 张黑名单内） |
+| 事实     | 说明                                                                                             |
+| -------- | ------------------------------------------------------------------------------------------------ |
+| Token 名 | `@openlearn/activity-ecosystem:IActivityRegistry`                                                |
+| 解析方式 | **只能按名字** resolve（对象不在白名单）                                                         |
+| 路由     | `GET /api/activity-providers?role=`（`activity-providers.ts` L46）；运行为 `/api/activity-runs*` |
+| 相关表   | `lianyun_research_activities` / `_groups` / `_submissions` / `_reviews`（均在 45 张黑名单内）    |
 
 插件若想读取活动的分组信息，正确路径是 `ctx.resolve(IActivityRegistryToken as any)`
 再降级到只读 SQL（示例见 [../examples/lab-seat-walkthrough.md](../examples/lab-seat-walkthrough.md) §6.3）。

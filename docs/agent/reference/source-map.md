@@ -43,13 +43,13 @@
 
 ### 2.1 声明层
 
-| 主题                | 权威文件                                                  | repomix 区间    | 看什么                                                                                                                                  |
-| :------------------ | :-------------------------------------------------------- | :-------------- | :-------------------------------------------------------------------------------------------------------------------------------------- |
-| manifest 全字段 zod | `packages/core/esm-loader/manifest-schema.ts`             | L81517–L82411   | `requiresItemSchema` L82293、`contributesSchema` `.passthrough()` L82236、`network` 子对象 strip L82398、`baseRoute` 注释 L82266–L82275 |
-| 条目解析            | `packages/core/esm-loader/manifest-utils.ts`              | L82412–L82476   | `parseRequiresEntry`：`indexOf('@', indexOf('/'))`                                                                                      |
-| 贡献点注册到前端    | `packages/core/plugin-host/contribution-registry.ts`      | L103691–L104928 | 120 个 `ExtensionSlot` 字面量、`anchor:*`                                                                                               |
-| 统一扩展点注册表    | `packages/core/plugin-host/unified-extension-registry.ts` | L114095–L114284 | 领域扩展点（题型/阶段门禁/互动提供者）                                                                                                  |
-| 内置插件长什么样    | `packages/plugins/builtin.ts`                             | L146787–L148963 | 真实 `ActionDescriptor`、`contributes`、`classroomTools` 用例                                                                           |
+| 主题                | 权威文件                                               | repomix 区间    | 看什么                                                                                                                                  |
+| :------------------ | :----------------------------------------------------- | :-------------- | :-------------------------------------------------------------------------------------------------------------------------------------- |
+| manifest 全字段 zod | `packages/core/esm-loader/manifest-schema.ts`          | L81517–L82411   | `requiresItemSchema` L82293、`contributesSchema` `.passthrough()` L82236、`network` 子对象 strip L82398、`baseRoute` 注释 L82266–L82275 |
+| 条目解析            | `packages/core/esm-loader/manifest-utils.ts`           | L82412–L82476   | `parseRequiresEntry`：`indexOf('@', indexOf('/'))`                                                                                      |
+| 贡献点注册到前端    | `packages/core/plugin-host/contribution-registry.ts`   | L103691–L104928 | 120 个 `ExtensionSlot` 字面量、`anchor:*`                                                                                               |
+| 规范扩展点清单      | `packages/core/extension-registry/extension-points.ts` | —               | `ALL_EXTENSION_POINTS` 派生、strict/warn/lenient 模式、启动对账 `assertExtensionPointsAligned`                                          |
+| 内置插件长什么样    | `packages/plugins/builtin.ts`                          | L146787–L148963 | 真实 `ActionDescriptor`、`contributes`、`classroomTools` 用例                                                                           |
 
 对应参考页：[manifest 规范](manifest.md)、[槽位与贡献](contributes-slots.md)。
 

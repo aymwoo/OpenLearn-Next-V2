@@ -157,6 +157,22 @@ await kernelContainer.eventBus.publish({
 
 ---
 
+## 3. 领域事件 helper：`packages/core/events/`
+
+跨子系统共享的强类型事件出口收敛在 `packages/core/events/`，目前包含
+`activity.completed`（`activity-events.ts`）：
+
+- `ActivityCompletedEvent`：`source` 取值 `ecosystem` / `lesson-activity` /
+  `classroom-interaction` / `lesson-engine`，携带 `activityId`、`lessonId`，可选
+  `sessionId` / `classId` / `studentId`，以及 `completedAt` 与原始载荷 `raw`。
+- `publishActivityCompleted(eventBus, event)`：唯一发布入口，补全 `type`、`completedAt`、
+  事件 id 与 `correlationId`（取 `lessonId`）。发布失败只打印告警，不影响原有完成逻辑。
+
+内核的通配订阅会把事件写入 `events` 表；内存侧 `ActivityCompletedTracker` 另做来源/类型聚合，
+管理员可通过 `GET /api/system/activity-completions` 查看。
+
+---
+
 ## 架构对比总结
 
 | 特性         | CommandBus                                  | EventBus                                                                |

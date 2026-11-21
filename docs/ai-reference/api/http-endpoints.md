@@ -1,7 +1,8 @@
 # HTTP API 总览
 
-> 28 个路由文件，其中 26 个直接注册端点，共 **335 个端点**。
+> 路由文件与端点数量随版本增长，本表为当前快照。
 > 本文件给「路径 → 文件 → 鉴权级别」的映射，不逐条列签名（签名以源码为准）。
+> 活动协议的 canonical 路由、307 兼容别名与观测端点见 §3.1。
 
 ---
 
@@ -20,55 +21,82 @@
 
 ## 2. 端点分布（按文件）
 
-| 文件                          | 端点数      | 主前缀                                                                  | 说明                                      |
-| ----------------------------- | ----------- | ----------------------------------------------------------------------- | ----------------------------------------- |
-| `roster.ts`                   | **54**      | `/api/classes`、`/api/students`、`/api/auth`、`/api/users`、`/api/labs` | 班级/学生/账号/机房，最大的 CRUD 面       |
-| `classroom.ts`                | **37**      | `/api/classroom/sessions`                                               | 课堂会话、倒计时、视图状态、点名、抢答    |
-| `plugins.ts`                  | **37**      | `/api/plugins`、`/api/ai-providers`、`/api/site-settings`               | 插件安装/启停/市场、AI provider、站点设置 |
-| `assessments.ts`              | **35**      | `/api/assessments`、`/api/assessment-attempts`、`/api/question-bank`    | 测评全流程                                |
-| `lessons.ts`                  | **30**      | `/api/lessons`                                                          | 课节 CRUD、时间轴、环节                   |
-| `courseware.ts`               | 16          | `/api/courseware`                                                       | 课件上传/确认/作答                        |
-| `grading.ts`                  | 16          | `/api/classes/:id/*`、`/api/exams`、`/api/schedules`                    | 考勤汇总、成绩权重、考试                  |
-| `os.ts`                       | 18          | `/api/commands`、`/api/agent`、`/api/activities`、`/api/upload`         | **命令入口**、AI Agent、活动生态          |
-| `themes.ts`                   | 12          | `/api/themes`                                                           | 第三方主题包安装/启停/偏好隔离            |
-| `assignment-hub.ts`           | 10          | `/api/assignments`                                                      | 作业 CRUD + 附件 + 提交                   |
-| `schedules.ts`                | 9           | `/api/schedules`、`/api/timetable`                                      | 课表与冲突检测                            |
-| `assignments.ts`              | 7           | `/api/classes/:id/assignments`、`/api/assignments/:id/submissions`      | 作业生成/提交/评分                        |
-| `classroom-peer-review.ts`    | 7           | `/api/classroom/sessions/:id/peer-review`                               | 同伴互评、展示作品、弹幕                  |
-| `admin.ts`                    | 5           | `/api/system/*`、`/api/admin/*`                                         | 加密状态、升级检查、批量导入              |
-| `files.ts`                    | 5           | `/api/files/:assetId`、`/api/admin/file-storage/*`                      | 统一文件读取网关与存储策略                |
-| `processes.ts`                | 5           | `/api/approvals`、`/api/processes`                                      | 高危命令审批、长任务日志                  |
-| `resources.ts`                | 5           | `/api/resources`                                                        | 资源库                                    |
-| `classroom-preset-polls.ts`   | 4           | `/api/lessons/:lessonId/preset-polls`                                   | 预设投票题 CRUD                           |
-| `classroom-teaching-modes.ts` | 4           | `/api/classroom/teaching-modes`                                         | 教学模式配置 CRUD                         |
-| `workspace.ts`                | 4           | `/api/events`、`/api/vfs`、`/api/diagnostics`                           | 事件流、虚拟文件系统、诊断                |
-| `bridge.ts`                   | 3           | `/bridge.js`、`/runtime/:uuid`                                          | LMS 桥与运行时注入                        |
-| `course-packages.ts`          | 3           | `/api/course-packages`                                                  | 课程包导入导出                            |
-| `demo-data.ts`                | 3           | `/api/demo-data`                                                        | 演示数据 seed/cleanup                     |
-| `health.ts`                   | 3           | `/health`、`/health/ready`、`/metrics`                                  | 探针与指标（**无 `/api` 前缀**）          |
-| `classroom-extras.ts`         | 2           | `/api/classroom/:lessonId/*`                                            | 家长通知、掌握度预测                      |
-| `client-errors.ts`            | 1           | `/api/client-errors`                                                    | 前端错误上报                              |
-| `plugin-api-gateway.ts`       | 0（中间件） | `/api/plugins/:id/*`                                                    | 插件 REST 网关，`plugins.ts` L21 挂载     |
-| `shared.ts`                   | 0（工具）   | —                                                                       | 路由公共依赖                              |
+| 文件                          | 端点数      | 主前缀                                                                              | 说明                                      |
+| ----------------------------- | ----------- | ----------------------------------------------------------------------------------- | ----------------------------------------- |
+| `roster.ts`                   | **54**      | `/api/classes`、`/api/students`、`/api/auth`、`/api/users`、`/api/labs`             | 班级/学生/账号/机房，最大的 CRUD 面       |
+| `lesson-activities.ts`        | **47**      | `/api/lesson-activities`、`/api/lessons/:lessonId/*`、`/api/blocks`、`/api/courses` | 学案活动、内容块与课程编排                |
+| `classroom.ts`                | **37**      | `/api/classroom/sessions`                                                           | 课堂会话、倒计时、视图状态、点名、抢答    |
+| `plugins.ts`                  | **37**      | `/api/plugins`、`/api/ai-providers`、`/api/site-settings`                           | 插件安装/启停/市场、AI provider、站点设置 |
+| `assessments.ts`              | **35**      | `/api/assessments`、`/api/assessment-attempts`、`/api/question-bank`                | 测评全流程                                |
+| `lessons.ts`                  | **30**      | `/api/lessons`                                                                      | 课节 CRUD、时间轴、环节                   |
+| `courseware.ts`               | 16          | `/api/courseware`                                                                   | 课件上传/确认/作答                        |
+| `grading.ts`                  | 16          | `/api/classes/:id/*`、`/api/exams`、`/api/schedules`                                | 考勤汇总、成绩权重、考试                  |
+| `os.ts`                       | 18          | `/api/commands`、`/api/agent`、`/api/activities`（兼容别名）、`/api/upload`         | **命令入口**、AI Agent、旧活动别名        |
+| `activity-providers.ts`       | 6           | `/api/activity-providers`、`/api/activity-runs`                                     | 活动定义目录与运行生命周期（canonical）   |
+| `extension-points.ts`         | 3           | `/api/system/*`                                                                     | 扩展点/活动完成/旧别名用量观测（管理员）  |
+| `themes.ts`                   | 12          | `/api/themes`                                                                       | 第三方主题包安装/启停/偏好隔离            |
+| `assignment-hub.ts`           | 10          | `/api/assignments`                                                                  | 作业 CRUD + 附件 + 提交                   |
+| `schedules.ts`                | 9           | `/api/schedules`、`/api/timetable`                                                  | 课表与冲突检测                            |
+| `assignments.ts`              | 7           | `/api/classes/:id/assignments`、`/api/assignments/:id/submissions`                  | 作业生成/提交/评分                        |
+| `classroom-peer-review.ts`    | 7           | `/api/classroom/sessions/:id/peer-review`                                           | 同伴互评、展示作品、弹幕                  |
+| `admin.ts`                    | 5           | `/api/system/*`、`/api/admin/*`                                                     | 加密状态、升级检查、批量导入              |
+| `files.ts`                    | 5           | `/api/files/:assetId`、`/api/admin/file-storage/*`                                  | 统一文件读取网关与存储策略                |
+| `processes.ts`                | 5           | `/api/approvals`、`/api/processes`                                                  | 高危命令审批、长任务日志                  |
+| `resources.ts`                | 5           | `/api/resources`                                                                    | 资源库                                    |
+| `classroom-preset-polls.ts`   | 4           | `/api/lessons/:lessonId/preset-polls`                                               | 预设投票题 CRUD                           |
+| `classroom-teaching-modes.ts` | 4           | `/api/classroom/teaching-modes`                                                     | 教学模式配置 CRUD                         |
+| `workspace.ts`                | 4           | `/api/events`、`/api/vfs`、`/api/diagnostics`                                       | 事件流、虚拟文件系统、诊断                |
+| `bridge.ts`                   | 3           | `/bridge.js`、`/runtime/:uuid`                                                      | LMS 桥与运行时注入                        |
+| `course-packages.ts`          | 3           | `/api/course-packages`                                                              | 课程包导入导出                            |
+| `demo-data.ts`                | 3           | `/api/demo-data`                                                                    | 演示数据 seed/cleanup                     |
+| `health.ts`                   | 3           | `/health`、`/health/ready`、`/metrics`                                              | 探针与指标（**无 `/api` 前缀**）          |
+| `classroom-extras.ts`         | 2           | `/api/classroom/:lessonId/*`                                                        | 家长通知、掌握度预测                      |
+| `client-errors.ts`            | 1           | `/api/client-errors`                                                                | 前端错误上报                              |
+| `plugin-api-gateway.ts`       | 0（中间件） | `/api/plugins/:id/*`                                                                | 插件 REST 网关，`plugins.ts` L21 挂载     |
+| `shared.ts`                   | 0（工具）   | —                                                                                   | 路由公共依赖                              |
 
 ---
 
 ## 3. 关键端点（有代表性的 12 个）
 
-| 端点                                                | 文件:行          | 鉴权                                     | 说明                         |
-| --------------------------------------------------- | ---------------- | ---------------------------------------- | ---------------------------- |
-| `POST /api/commands`                                | `os.ts` L112     | `requireAuth('teacher','administrator')` | **唯一命令入口**，10s 超时   |
-| `GET /api/commands/registered`                      | `os.ts` L134     | `requireScopedAuth('authenticated')`     | 列出全部 ActionDescriptor    |
-| `GET /api/activities`                               | `os.ts` L146     | `authenticated`                          | 活动生态描述符               |
-| `POST /api/agent/chat`                              | `os.ts` L278     | `self` + `aiLimiter`                     | AI 对话（流式）              |
-| `GET /api/agent/personas`                           | `os.ts` L270     | `authenticated`                          | AI 人格列表                  |
-| `POST /api/classroom/sessions/:lessonId/init`       | `classroom.ts`   | 班级权限                                 | 初始化课堂会话               |
-| `POST /api/classroom/sessions/:lessonId/view-state` | `classroom.ts`   | 班级权限                                 | 视图状态同步（**独立限流**） |
-| `POST /api/courseware/upload`                       | `courseware.ts`  | 教师                                     | 课件上传（大 body 解析器）   |
-| `POST /api/plugins/install-from-url`                | `plugins.ts`     | 管理员                                   | 插件安装                     |
-| `POST /api/approvals/:id/approve`                   | `processes.ts`   | 管理员                                   | 批准高危命令                 |
-| `GET /health/ready`                                 | `health.ts` L148 | 无                                       | 就绪探针，失败返回 503       |
-| `GET /metrics`                                      | `health.ts` L169 | `METRICS_TOKEN` 或管理员                 | Prometheus                   |
+| 端点                                                | 文件:行                     | 鉴权                                     | 说明                         |
+| --------------------------------------------------- | --------------------------- | ---------------------------------------- | ---------------------------- |
+| `POST /api/commands`                                | `os.ts` L169                | `requireAuth('teacher','administrator')` | **唯一命令入口**，10s 超时   |
+| `GET /api/commands/registered`                      | `os.ts` L199                | `requireScopedAuth('authenticated')`     | 列出全部 ActionDescriptor    |
+| `GET /api/activity-providers`                       | `activity-providers.ts` L46 | `authenticated`                          | 活动定义目录（`role` 过滤）  |
+| `POST /api/agent/chat`                              | `os.ts` L278                | `self` + `aiLimiter`                     | AI 对话（流式）              |
+| `GET /api/agent/personas`                           | `os.ts` L270                | `authenticated`                          | AI 人格列表                  |
+| `POST /api/classroom/sessions/:lessonId/init`       | `classroom.ts`              | 班级权限                                 | 初始化课堂会话               |
+| `POST /api/classroom/sessions/:lessonId/view-state` | `classroom.ts`              | 班级权限                                 | 视图状态同步（**独立限流**） |
+| `POST /api/courseware/upload`                       | `courseware.ts`             | 教师                                     | 课件上传（大 body 解析器）   |
+| `POST /api/plugins/install-from-url`                | `plugins.ts`                | 管理员                                   | 插件安装                     |
+| `POST /api/approvals/:id/approve`                   | `processes.ts`              | 管理员                                   | 批准高危命令                 |
+| `GET /health/ready`                                 | `health.ts` L148            | 无                                       | 就绪探针，失败返回 503       |
+| `GET /metrics`                                      | `health.ts` L169            | `METRICS_TOKEN` 或管理员                 | Prometheus                   |
+
+---
+
+### 3.1 活动协议路由族（canonical / 别名 / 观测）
+
+canonical 入口（前端与插件应使用这些路径）：
+
+| 端点                                                                                                                                                           | 文件:行                          | 鉴权                                             | 说明                                                  |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------- | ------------------------------------------------ | ----------------------------------------------------- |
+| `GET /api/activity-providers`                                                                                                                                  | `activity-providers.ts` L46      | `authenticated`                                  | 活动定义目录，`role=all` 或具体角色                   |
+| `POST /api/activity-providers/:providerId/runs`                                                                                                                | `activity-providers.ts` L61      | `authenticated`                                  | 启动运行，成功 201；`PERMISSION_DENIED` → 403         |
+| `GET /api/activity-runs`                                                                                                                                       | `activity-providers.ts` L87      | `authenticated`                                  | `active=1` 只列 running/paused；`state=` 可查任意状态 |
+| `POST /api/activity-runs/:runId/{pause,resume,finish}`                                                                                                         | `activity-providers.ts` L102     | `authenticated`                                  | 非法状态迁移返回 409                                  |
+| `PUT/DELETE /api/lesson-activities/:id`、`POST .../progress`、`.../progress/verify`、`.../nudge`、`.../peer-review`、`GET/POST .../{peer-reviews,discussions}` | `lesson-activities.ts` L331-1056 | `class-staff` / `class-member` / `authenticated` | 学案活动内容与作答（按端点区分鉴权）                  |
+| `GET /api/system/extension-points`                                                                                                                             | `extension-points.ts` L25        | `admin`                                          | 未知扩展槽与当前 strict/warn/lenient 模式             |
+| `GET /api/system/activity-completions`                                                                                                                         | `extension-points.ts` L35        | `admin`                                          | `activity.completed` 来源/类型聚合与最近 20 条        |
+| `GET /api/system/legacy-activity-routes`                                                                                                                       | `extension-points.ts` L39        | `admin`                                          | 旧别名按 `METHOD + 路由模式` 的调用计数               |
+
+兼容别名（**307**，仅过渡期保留）：
+
+- 响应头固定带 `Deprecation: true` 与 `Link: <canonical>; rel="successor-version"`。
+- `GET /api/activities` → `/api/activity-providers`；`GET /api/activities/running` → `/api/activity-runs?active=1`；`POST /api/activities/:id/start` → `/api/activity-providers/:id/runs`；`pause` / `resume` / `finish` 先解析该 provider 的最近活跃运行，再重定向到 `/api/activity-runs/:runId/*`。
+- 学案 item 级旧路径 `/api/activities/:id/*` 由 `lesson-activities.ts` 按方法静态分派；无法归类时 `app.all('/api/activities/:id')` 兜底：不存在返回 404，既像 provider 又像 lesson-activity 返回 409 并要求改用显式路径。
+- 别名命中计入 `GET /api/system/legacy-activity-routes`；前端已无调用，摘除前以此数据评估外部客户端依赖。
 
 ---
 

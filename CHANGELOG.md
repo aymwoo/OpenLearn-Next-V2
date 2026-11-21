@@ -47,7 +47,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - 学生平行学案 tab：flag 开默认隐藏，调试入口 `__OPENLEARN_DEBUG_XUEAN_TAB__`。
   - 新增第三方 Mode Pack 接入指南 `docs/tutorials/mode-pack-third-party.md`。
 
+- **活动扩展协议收敛（canonical 路由 + 兼容别名）**：
+  - 活动定义与运行拆分为 `GET /api/activity-providers`、`POST /api/activity-providers/:providerId/runs`、`GET /api/activity-runs` 与 `POST /api/activity-runs/:runId/{pause,resume,finish}`；学案内容走 `/api/lesson-activities/*`。旧 `/api/activities*` 保留为 **307** 兼容别名，响应带 `Deprecation: true` 与 `Link: rel="successor-version"`；前端已全部迁移到新路径。
+  - 新增统一 `activity.completed` 事件（`ecosystem` / `lesson-activity` / `classroom-interaction` 三类来源），内核事件总线照常入库；新增内存聚合器与管理员只读接口 `GET /api/system/activity-completions`。课堂全景学情简报追加按课节聚合的 `activityCompletions` 字段，既有字段保持不变。
+  - 服务重启后未完成的 `running/paused` 运行恢复为 `interrupted` 终态，不再伪装成可继续；管理弹层显示「已中断」并隐藏恢复/结束操作，避免稳定触发 409。
+  - 新增 `GET /api/system/extension-points`（未知扩展槽与当前 strict/warn/lenient 模式）与 `GET /api/system/legacy-activity-routes`（旧别名按 `METHOD + 路由模式` 的调用计数），为后续摘除别名提供数据。
+
 ### Docs
+
+- **活动协议参考同步**：`docs/ai-reference/api/http-endpoints.md` 新增「活动协议路由族」小节，记录 `/api/activity-providers`、`/api/activity-runs`、`/api/lesson-activities` 的 canonical 路径、鉴权与 307 别名映射，以及 `/api/system/extension-points`、`/api/system/activity-completions`、`/api/system/legacy-activity-routes` 三个管理员观测端点；`docs/ai-reference/subsystems/ai-and-assessment.md` 同步活动生态入口口径，不再把 `/api/activities` 当作规范路径。
 
 - **仓库平台模型切换为 Gitee 单平台**：Gitee 成为本仓库 **Issue / PR / 分支 / 合并 的唯一入口**，GitHub 仓库降级为归档副本（其 Actions 仍跑自动化 CI，但不参与协作流程）。
   - `AGENTS.md`：协作规范由「双平台（GitHub 主仓 / Gitee 镜像）」改写为「Gitee 单平台」；Issue / PR / 合并的命令行口径由 `gh issue create` / `gh pr create` / `gh pr merge` 统一改为 `gitee` CLI；补充「Gitee 侧合并不触发 GitHub Actions（未接入 Gitee Go 流水线），**本地全套质量门禁是唯一自动化防线**」的显式告警。
