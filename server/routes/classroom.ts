@@ -2472,7 +2472,12 @@ export function registerClassroomRoutes(
           3000,
         );
 
-        res.json(report);
+        // activity.completed 覆盖度：只读聚合，追加在缓存对象之外，
+        // 既不改变既有字段，也不让内存计数污染 3s 的 DB 统计缓存。
+        res.json({
+          ...report,
+          activityCompletions: ctx.activityCompletedTracker?.snapshotForLesson(lessonId) ?? null,
+        });
       } catch (e: any) {
         sendSafeError(res, e, 500);
       }

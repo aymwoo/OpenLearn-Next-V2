@@ -47,6 +47,43 @@ describe('ActivityCompletedTracker（activity.completed 消费者）', () => {
     tracker.dispose();
   });
 
+  it('按课节聚合快照，未出现的课节返回零值形状', async () => {
+    const bus = new EventBus();
+    const tracker = new ActivityCompletedTracker(bus);
+
+    publishActivityCompleted(bus, {
+      source: 'classroom-interaction',
+      activityId: 'classroom-legacy:exit-ticket',
+      lessonId: 'L1',
+      studentId: 'stu-1',
+    });
+    publishActivityCompleted(bus, {
+      source: 'ecosystem',
+      activityId: 'provider:official_quiz',
+      lessonId: 'L2',
+    });
+    await waitForDispatch();
+
+    const l1 = tracker.snapshotForLesson('L1');
+    expect(l1).toMatchObject({ lessonId: 'L1', total: 1, lastCompletedAt: expect.any(Number) });
+    expect(l1.bySource).toEqual({ 'classroom-interaction': 1 });
+    expect(l1.byKind).toEqual({ 'classroom-legacy': 1 });
+    expect(l1.recent).toHaveLength(1);
+
+    // 分课节隔离：L2 的事件不进入 L1
+    expect(tracker.snapshotForLesson('L2').total).toBe(1);
+    expect(tracker.snapshotForLesson('L3')).toEqual({
+      lessonId: 'L3',
+      total: 0,
+      bySource: {},
+      byKind: {},
+      lastCompletedAt: null,
+      recent: [],
+    });
+
+    tracker.dispose();
+  });
+
   it('dispose 后不再接收事件', async () => {
     const bus = new EventBus();
     const tracker = new ActivityCompletedTracker(bus);

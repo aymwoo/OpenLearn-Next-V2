@@ -414,6 +414,7 @@ async function startServer() {
     runGeminiAgentChat,
     runOpenAIAgentChat,
     activityRegistry,
+    activityCompletedTracker,
   } as unknown as ServerContext;
 
   // SEC-NET-01: HTTP server + Socket.IO setup (CORS 对齐统一配置)

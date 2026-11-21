@@ -22,7 +22,27 @@ export interface ActivityCompletedSnapshot {
   recent: ActivityCompletedRecentItem[];
 }
 
+/** 单节课的活动完成聚合（供课堂全景学情简报按课节追加只读覆盖）。 */
+export interface ActivityCompletedLessonSnapshot {
+  lessonId: string;
+  total: number;
+  bySource: Record<string, number>;
+  byKind: Record<string, number>;
+  lastCompletedAt: number | null;
+  recent: ActivityCompletedRecentItem[];
+}
+
 const RECENT_LIMIT = 20;
+/** 按课节聚合最多保留的课节数（长进程内防止无界增长）。 */
+const LESSON_LIMIT = 200;
+
+interface LessonAggregate {
+  total: number;
+  bySource: Record<string, number>;
+  byKind: Record<string, number>;
+  lastCompletedAt: number | null;
+  recent: ActivityCompletedRecentItem[];
+}
 
 /**
  * `activity.completed` 聚合消费者（Phase 2 后续）。
@@ -39,6 +59,7 @@ export class ActivityCompletedTracker {
   private lastCompletedAt: number | null = null;
   private lastEvent: ActivityCompletedRecentItem | null = null;
   private recent: ActivityCompletedRecentItem[] = [];
+  private readonly byLesson = new Map<string, LessonAggregate>();
   private unsubscribe?: () => void;
 
   constructor(private readonly eventBus: ActivityCompletedTrackerBus) {
@@ -57,6 +78,22 @@ export class ActivityCompletedTracker {
       lastCompletedAt: this.lastCompletedAt,
       lastEvent: this.lastEvent ? { ...this.lastEvent } : null,
       recent: this.recent.map((item) => ({ ...item })),
+    };
+  }
+
+  /** 指定课节的聚合快照；该课节尚无完成事件时返回零值（形状稳定，便于前端直接渲染）。 */
+  public snapshotForLesson(lessonId: string): ActivityCompletedLessonSnapshot {
+    const agg = this.byLesson.get(lessonId);
+    if (!agg) {
+      return { lessonId, total: 0, bySource: {}, byKind: {}, lastCompletedAt: null, recent: [] };
+    }
+    return {
+      lessonId,
+      total: agg.total,
+      bySource: { ...agg.bySource },
+      byKind: { ...agg.byKind },
+      lastCompletedAt: agg.lastCompletedAt,
+      recent: agg.recent.map((item) => ({ ...item })),
     };
   }
 
@@ -87,5 +124,25 @@ export class ActivityCompletedTracker {
     this.lastCompletedAt = completedAt;
     this.lastEvent = item;
     this.recent = [...this.recent, item].slice(-RECENT_LIMIT);
+    this.recordLesson(item, kind);
+  }
+
+  private recordLesson(item: ActivityCompletedRecentItem, kind: string): void {
+    if (!item.lessonId) return;
+    let agg = this.byLesson.get(item.lessonId);
+    if (!agg) {
+      if (this.byLesson.size >= LESSON_LIMIT) {
+        // 达到上限时淘汰最早建立的课节桶，保持内存有界
+        const oldest = this.byLesson.keys().next().value;
+        if (oldest !== undefined) this.byLesson.delete(oldest);
+      }
+      agg = { total: 0, bySource: {}, byKind: {}, lastCompletedAt: null, recent: [] };
+      this.byLesson.set(item.lessonId, agg);
+    }
+    agg.total += 1;
+    agg.bySource[item.source] = (agg.bySource[item.source] ?? 0) + 1;
+    agg.byKind[kind] = (agg.byKind[kind] ?? 0) + 1;
+    agg.lastCompletedAt = item.completedAt;
+    agg.recent = [...agg.recent, item].slice(-RECENT_LIMIT);
   }
 }

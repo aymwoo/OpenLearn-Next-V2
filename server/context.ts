@@ -1,6 +1,7 @@
 import express from 'express';
 import type { Server } from 'socket.io';
 import type { ActivityRegistry } from '../packages/activity-ecosystem/index.js';
+import type { ActivityCompletedTracker } from './services/activity-completed-tracker.js';
 
 // ── Shared AI-agent types (previously declared at the top of server.ts) ──
 export type AgentChatAttachment = { name: string; content: string };
@@ -55,6 +56,11 @@ export interface ServerContext {
   studentLookupLimiter?: express.RequestHandler;
   aiLimiter: any;
   activityRegistry: ActivityRegistry;
+  /**
+   * `activity.completed` 内存聚合器（可选）。
+   * 未注入时依赖它的只读接口退化为 null，不影响任何既有字段。
+   */
+  activityCompletedTracker?: ActivityCompletedTracker;
   lessonActiveSegments: Map<string, string>;
   buildAgentSystemInstruction: (lang: 'zh' | 'en', currentLessonId?: string | null) => string;
   buildAgentFinalMessage: (message: string, attachments?: AgentChatAttachment[]) => string;
