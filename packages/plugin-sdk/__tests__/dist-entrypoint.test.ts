@@ -106,7 +106,6 @@ describe('@openlearn/plugin-sdk 构建产物', () => {
       'PluginContextAdapter',
       'PluginLifecycleManager',
       'PluginCapabilityGateway',
-      'UnifiedExtensionRegistry',
       'PluginDistributionManager',
     ]) {
       expect(code, `${name} 落在 d.ts 的值导出块，但 dist/index.js 里并没有这个运行时导出`).not.toMatch(

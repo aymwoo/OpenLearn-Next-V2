@@ -936,16 +936,6 @@ interface CapabilityMetadata {
   readonly stability?: 'experimental' | 'stable' | 'deprecated';
 }
 
-interface ExtensionItemMetadata {
-  readonly id: string;
-  readonly category: string;
-  readonly name?: string;
-  readonly version?: string;
-  readonly providerId?: string;
-  readonly description?: string;
-  readonly impl?: unknown;
-}
-
 /** 统一插件生命周期管理器（EU-01）：包装 PluginHost 状态机与钩子的协调层 */
 interface IPluginLifecycleManager {
   readonly pluginHost: PluginHost;
@@ -970,28 +960,16 @@ interface IPluginCapabilityGateway {
   metadata(): IntegrationDescriptor;
 }
 
-/**
- * 统一扩展注册表：所有平台扩展点（widget / command / AI action / activity 等）的单一管理层
- * @deprecated [SDK 3.9.0] 宿主内部实现门面，非插件开发者 API，计划于 SDK 4.0.0 移除。扩展注册请使用 `ContributionRegistry`。
- */
-interface IUnifiedExtensionRegistry {
-  registerExtension(category: string, id: string, impl: unknown, meta?: Partial<ExtensionItemMetadata>): void;
-  hasExtension(category: string, id: string): boolean;
-  getExtension<T = unknown>(category: string, id: string): T | undefined;
-  listExtensions(category?: string): ReadonlyArray<ExtensionItemMetadata>;
-  /**
-   * 注销某个 provider（插件）注册的全部扩展项（审计 D-2 / M-3）。
-   *
-   * 此前该注册表只增不减：插件停用或卸载后，其扩展项永久留存。
-   * 需要成批按 providerId 清理时使用。
-   *
-   * @param providerId 注册时的 providerId（贡献同步路径为 pluginId）
-   * @returns 被移除的扩展项数量
-   */
-  unregisterProvider(providerId: string): number;
-  listCategories(): ReadonlyArray<string>;
-  health(): IntegrationHealthStatus;
-  metadata(): IntegrationDescriptor;
+interface IExtensionCatalog {
+  listSlots(): ReadonlyArray<{ slot: string; pluginId: string; id: string }>;
+  listActivities(kind?: 'provider' | 'xuean' | 'lesson-engine' | 'classroom-legacy'): ReadonlyArray<unknown>;
+  listHooks(): ReadonlyArray<{ name: string; count: number }>;
+  getDeprecations(): ReadonlyArray<{
+    id: string;
+    since: string;
+    removedIn?: string;
+    replacement?: string;
+  }>;
 }
 
 interface PluginPackageMetadata {
@@ -1364,6 +1342,7 @@ declare const ICapabilityGovernanceServiceToken: Token<ICapabilityGovernanceServ
 declare const IPlatformServiceRegistryToken: Token<IPlatformServiceRegistryService>;
 declare const ICapabilityRegistryToken: Token<CapabilityRegistry>;
 declare const IPluginLifecycleManagerToken: Token<IPluginLifecycleManager>;
+declare const IExtensionCatalogToken: Token<IExtensionCatalog>;
 /**
  * @deprecated 自 SDK 3.8.0 起不再从 `@openlearn/plugin-sdk` 导出。
  * F-3 / M-10：kernel 注册但零 resolve。已从 SDK 导出面移除。
@@ -1736,10 +1715,9 @@ export type {
   IPlatformServiceRegistryService,
   IAICapability,
   CapabilityMetadata,
-  ExtensionItemMetadata,
   IPluginLifecycleManager,
   IPluginCapabilityGateway,
-  IUnifiedExtensionRegistry,
+  IExtensionCatalog,
   PluginPackageMetadata,
   IPluginRepositoryAdapter,
   PluginUpdateOptions,
@@ -1856,6 +1834,7 @@ export {
   IPlatformServiceRegistryToken,
   ICapabilityRegistryToken,
   IPluginLifecycleManagerToken,
+  IExtensionCatalogToken,
   IPluginDistributionManagerToken,
   ICoursewareRuntimeScriptRegistryToken,
   IClassroomLifecycleServiceToken,

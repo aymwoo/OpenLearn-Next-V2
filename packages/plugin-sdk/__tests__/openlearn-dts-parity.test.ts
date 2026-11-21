@@ -64,7 +64,6 @@ describe('openlearn.d.ts ↔ index.ts Token parity', () => {
   const WITHDRAWN_TOKENS = new Set([
     'ICapabilityGovernanceServiceToken', // M-9 / F-2：capability-governance 子系统整体零 resolve
     'IPluginRuntimeCompositionToken', // M-10 / F-3
-    'IUnifiedExtensionRegistryToken', // M-10 / F-3
     'IPluginCapabilityGatewayToken', // M-10 / F-3
   ]);
   const { declared, exported } = extractTokenSurfaceFromDts();

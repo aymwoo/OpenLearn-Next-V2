@@ -4,7 +4,7 @@
  * 由 packages/plugin-sdk/generate-dts.mts 从 packages/core/ 源码抽取。
  * 手写契约请改 openlearn.d.ts —— 本文件会在 build 时被覆盖。
  *
- * 覆盖符号：284 个（入口导出但手写 d.ts 未声明的 284 项及其类型引用闭包）
+ * 覆盖符号：295 个（入口导出但手写 d.ts 未声明的 295 项及其类型引用闭包）
  */
 
 /** @see packages/core/analytics-engine/types.ts */
@@ -86,6 +86,9 @@ interface Activity {
     metadata?: Record<string, unknown>;
 }
 
+/** @see packages/core/activity-contract/types.ts */
+type ActivityActorRole = 'teacher' | 'student' | 'administrator' | 'assistant';
+
 /** @see packages/core/lesson-engine/types.ts */
 interface ActivityConfig {
     autoAdvance?: boolean;
@@ -106,6 +109,37 @@ interface ActivityDefinition {
     onPause?: (activity: Activity, context: TeachingContextData) => void | Promise<void>;
     onEnd?: (activity: Activity, context: TeachingContextData) => void | Promise<void>;
 }
+
+/** @see packages/core/activity-contract/types.ts */
+/** 所有活动体系共享的“定义”元数据。 */
+interface ActivityDescriptorBase {
+    readonly kind: ActivityKind;
+    readonly activityId: ActivityId;
+    readonly title: string;
+    readonly category: string;
+    readonly icon?: string;
+    readonly description?: string;
+    readonly roles?: ReadonlyArray<ActivityActorRole>;
+    readonly capabilities?: ReadonlyArray<string>;
+    readonly deprecated?: {
+        readonly since: string;
+        readonly removedIn?: string;
+        readonly replacement?: string;
+    };
+}
+
+/** @see packages/core/activity-contract/types.ts */
+/** 形如 `provider:official_quiz` / `xuean:9f3c...` / `lesson-engine:quiz` */
+type ActivityId = `${ActivityKind}:${string}`;
+
+/** @see packages/core/activity-contract/types.ts */
+/**
+ * OpenLearn Activity Contract — 跨活动体系的共享类型与 ID 命名空间。
+ *
+ * 该包只允许包含类型与纯函数，禁止 import `server/`、`packages/core/` 的运行时模块，
+ * 以免在 kernel / plugin-host / activity-ecosystem 之间形成环。
+ */
+type ActivityKind = 'provider' | 'xuean' | 'lesson-engine' | 'classroom-legacy';
 
 /** @see packages/core/lesson-engine/types.ts */
 type ActivityStatus = 'idle' | 'active' | 'paused' | 'completed' | 'skipped';
@@ -716,6 +750,46 @@ interface EventActor {
 interface EventTarget {
     readonly id: string;
     readonly type: string;
+}
+
+/** @see packages/core/plugin-host/extension-catalog.ts */
+declare class ExtensionCatalog implements IExtensionCatalog {
+  constructor(sources: ExtensionCatalogSources);
+  attachActivitySource(source: () => ReadonlyArray<ActivityDescriptorBase>): void;
+  listSlots(): ReadonlyArray<ExtensionSlotRef>;
+  listHooks(): ReadonlyArray<ExtensionHookRef>;
+  listActivities(kind?: ActivityKind): ReadonlyArray<ActivityDescriptorBase>;
+  getDeprecations(): ReadonlyArray<ExtensionDeprecationRef>;
+  readonly sources: ExtensionCatalogSources;
+}
+
+/** @see packages/core/plugin-host/extension-catalog.ts */
+interface ExtensionCatalogSources {
+    /** ContributionRegistry.listAll() 的扁平化只读投影。 */
+    listSlots?: () => ReadonlyArray<ExtensionSlotRef>;
+    /** RuntimeHooksManager.listHooks() 的只读投影。 */
+    listHooks?: () => ReadonlyArray<ExtensionHookRef>;
+}
+
+/** @see packages/core/activity-contract/types.ts */
+interface ExtensionDeprecationRef {
+    readonly id: string;
+    readonly since: string;
+    readonly removedIn?: string;
+    readonly replacement?: string;
+}
+
+/** @see packages/core/activity-contract/types.ts */
+interface ExtensionHookRef {
+    readonly name: string;
+    readonly count: number;
+}
+
+/** @see packages/core/activity-contract/types.ts */
+interface ExtensionSlotRef {
+    readonly slot: string;
+    readonly pluginId: string;
+    readonly id: string;
 }
 
 /** @see packages/core/lesson-engine/types.ts */
@@ -2341,46 +2415,6 @@ interface TopbarPillConfig {
     icon?: string;
 }
 
-/**
- * @deprecated [SDK 3.9.0] 宿主内部实现门面，当前零生产 resolve；非插件开发者 API，计划于 SDK 4.0.0 移除。若接入真实消费者请移除标记。
- */
-/** @see packages/core/plugin-host/unified-extension-registry.ts */
-declare class UnifiedExtensionRegistry implements IUnifiedExtensionRegistry {
-  readonly id: any;
-  readonly name: any;
-  readonly version: any;
-  registerExtension(category: string, id: string, impl: unknown, meta?: Partial<ExtensionItemMetadata>): void;
-  hasExtension(category: string, id: string): boolean;
-  getExtension<T = unknown>(category: string, id: string): T | undefined;
-  listExtensions(category?: string): ReadonlyArray<ExtensionItemMetadata>;
-  listCategories(): ReadonlyArray<string>;
-  unregisterProvider(providerId: string): number;
-  syncContributionRegistry(contributionRegistry: {
-    listAll(): Array<{
-        slot: string;
-        pluginId: string;
-        configs: Array<{
-            id: string;
-            name?: string;
-            label?: string;
-            description?: string;
-        }>;
-    }>;
-}): void;
-  syncActivityRegistry(activityRegistry: {
-    listProviders(): ReadonlyArray<{
-        descriptor: {
-            id: string;
-            name: string;
-            provider: string;
-            description?: string;
-        };
-    }>;
-}): void;
-  health(): IntegrationHealthStatus;
-  metadata(): IntegrationDescriptor;
-}
-
 /** @see packages/core/plugin-host/orphan-data.ts */
 interface UninstallPluginOptions {
     /** 默认 `keep`：保留数据；`purge` 需显式指定且调用方必须已完成二次确认。 */
@@ -2521,6 +2555,8 @@ declare function buildRedactOptions(env: NodeJS.ProcessEnv): {
     censor: string;
 } | false;
 
+declare function classroomLegacyDescriptors(): ActivityDescriptorBase[];
+
 declare function computeSha256(input: Buffer | string): {
     hex: string;
     base64: string;
@@ -2543,6 +2579,8 @@ declare function isRedactionEnabled(env: NodeJS.ProcessEnv): boolean;
 
 /** @see packages/core/observability/logger.ts */
 declare const logger: any; // 初始化器非字面量，未收敛
+
+declare function makeActivityId(kind: ActivityKind, localId: string): ActivityId;
 
 /** @see packages/core/esm-loader/manifest-schema.ts */
 declare const manifestSchemaV3: z.ZodObject<{ id: z.ZodString; name: z.ZodString; version: z.ZodString; main: z.ZodString; icon: z.ZodOptional<z.ZodString>; description: z.ZodOptional<z.ZodString>; requires: z.ZodOptional<z.ZodArray<z.ZodString>>; optional: z.ZodOptional<z.ZodArray<z.ZodString>>; capabilitiesProposed: z.ZodOptional<z.ZodArray<z.ZodString>>; network: z.ZodOptional<z.ZodObject<{ outbound: z.ZodOptional<z.ZodArray<z.ZodString>>; }, z.core.$strip>>; }, z.core.$loose>;
@@ -2575,6 +2613,8 @@ declare function verifySignature(integrity: string, signature: string, publicKey
 };
 
 declare function writeBufferToTempZip(buffer: Buffer, prefix: any): string;
+
+declare function xueanDescriptors(): ActivityDescriptorBase[];
 
 export type {
   AIAnalyticsModel,
@@ -2660,6 +2700,7 @@ export type {
   EntityRole,
   EntityType,
   EventSubscriber,
+  ExtensionCatalogSources,
   Flow,
   FocusState,
   GlobalSettingConfig,
@@ -2802,7 +2843,6 @@ export type {
   TimetableImportSourceConfig,
   TimetableToolbarActionConfig,
   TopbarPillConfig,
-  UnifiedExtensionRegistry,
   UserParticipant,
   WhiteboardAnalyticsModel,
   WhiteboardAutosaveActionConfig,
@@ -2817,6 +2857,7 @@ export {
   CAP_STUDENT_DATA_READ,
   CAP_STUDENT_DATA_WRITE,
   DEFAULT_MODE_PACK_SEGMENT_TYPE,
+  ExtensionCatalog,
   KNOWN_CAPABILITIES,
   ServiceScope,
   assertValidManifestCapabilities,

@@ -48,7 +48,7 @@ import {
   ICapabilityRegistryToken,
   IPluginLifecycleManagerToken,
   IPluginCapabilityGatewayToken,
-  IUnifiedExtensionRegistryToken,
+  IExtensionCatalogToken,
   IPluginDistributionManagerToken,
   IPluginRuntimeCompositionToken,
   ICoursewareRuntimeScriptRegistryToken,
@@ -184,7 +184,7 @@ function createServices(registry: ServiceRegistry, db: Database.Database): void 
   registry.register(ICapabilityRegistryToken, simpleMock('cap-reg') as any);
   registry.register(IPluginLifecycleManagerToken, simpleMock('lifecycle') as any);
   registry.register(IPluginCapabilityGatewayToken, simpleMock('cap-gw') as any);
-  registry.register(IUnifiedExtensionRegistryToken, simpleMock('ext-reg') as any);
+  registry.register(IExtensionCatalogToken, simpleMock('ext-reg') as any);
   registry.register(IPluginDistributionManagerToken, simpleMock('dist-mgr') as any);
   registry.register(IPluginRuntimeCompositionToken, simpleMock('runtime-comp') as any);
   registry.register(ICoursewareRuntimeScriptRegistryToken, simpleMock('courseware-script') as any);

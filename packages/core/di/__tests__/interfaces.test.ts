@@ -26,14 +26,14 @@ import {
   IPluginLifecycleManagerToken,
   IPluginDistributionManagerToken,
   IPluginRuntimeCompositionToken,
-  IUnifiedExtensionRegistryToken,
+  IExtensionCatalogToken,
   IPluginCapabilityGatewayToken,
   ICapabilityRegistryToken,
 } from '../interfaces.js';
 import { PluginLifecycleManager } from '../../plugin-host/plugin-lifecycle-manager.js';
 import { PluginDistributionManager } from '../../plugin-host/plugin-distribution-manager.js';
 import { PluginRuntimeComposition } from '../../plugin-host/plugin-runtime-composition.js';
-import { UnifiedExtensionRegistry } from '../../plugin-host/unified-extension-registry.js';
+import { ExtensionCatalog } from '../../plugin-host/extension-catalog.js';
 import { PluginCapabilityGateway } from '../../plugin-host/plugin-capability-gateway.js';
 import { CapabilityRegistry } from '../../ai-capability/registry/capability-registry.js';
 import { createPluginsDir, cleanupPluginsDir } from '../../plugin-host/__tests__/helpers/plugins-dir.js';
@@ -123,7 +123,7 @@ describe('Kernel IService 注册', () => {
       kernel.pluginDistributionManager,
     );
     expect(await kernel.serviceRegistry.resolve(IPluginRuntimeCompositionToken)).toBe(kernel.pluginRuntimeComposition);
-    expect(await kernel.serviceRegistry.resolve(IUnifiedExtensionRegistryToken)).toBe(kernel.unifiedExtensionRegistry);
+    expect(await kernel.serviceRegistry.resolve(IExtensionCatalogToken)).toBe(kernel.extensionCatalog);
     expect(await kernel.serviceRegistry.resolve(IPluginCapabilityGatewayToken)).toBe(kernel.pluginCapabilityGateway);
     expect(await kernel.serviceRegistry.resolve(ICapabilityRegistryToken)).toBe(kernel.capabilityRegistry);
   });
@@ -136,9 +136,7 @@ describe('Kernel IService 注册', () => {
     expect(await kernel.serviceRegistry.resolve(IPluginRuntimeCompositionToken)).toBeInstanceOf(
       PluginRuntimeComposition,
     );
-    expect(await kernel.serviceRegistry.resolve(IUnifiedExtensionRegistryToken)).toBeInstanceOf(
-      UnifiedExtensionRegistry,
-    );
+    expect(await kernel.serviceRegistry.resolve(IExtensionCatalogToken)).toBeInstanceOf(ExtensionCatalog);
     expect(await kernel.serviceRegistry.resolve(IPluginCapabilityGatewayToken)).toBeInstanceOf(PluginCapabilityGateway);
     expect(await kernel.serviceRegistry.resolve(ICapabilityRegistryToken)).toBeInstanceOf(CapabilityRegistry);
   });

@@ -79,7 +79,7 @@ export const TOKEN_SWEEP = [
   'ICapabilityRegistryToken',
   'IPluginLifecycleManagerToken',
   'IPluginCapabilityGatewayToken',
-  'IUnifiedExtensionRegistryToken',
+  'IExtensionCatalogToken',
   'IPluginDistributionManagerToken',
   'IPluginRuntimeCompositionToken',
   'ICoursewareRuntimeScriptRegistryToken',

@@ -437,7 +437,7 @@ import type { PluginHost } from '../plugin-host/index.js';
 import type { PluginRuntimeComposition } from '../plugin-host/plugin-runtime-composition.js';
 import type { PluginDistributionManager } from '../plugin-host/plugin-distribution-manager.js';
 import type { PluginCapabilityGateway } from '../plugin-host/plugin-capability-gateway.js';
-import type { UnifiedExtensionRegistry } from '../plugin-host/unified-extension-registry.js';
+import type { ExtensionCatalog } from '../plugin-host/extension-catalog.js';
 import type { PluginLifecycleManager } from '../plugin-host/plugin-lifecycle-manager.js';
 import type { CapabilityRegistry } from '../ai-capability/registry/capability-registry.js';
 
@@ -472,12 +472,10 @@ export const IPluginRuntimeCompositionToken = new Token<PluginRuntimeComposition
 );
 
 /**
- * Token for Unified Extension Registry (P7-A2 Stage 3).
- * Identifier: @openlearn/core:IUnifiedExtensionRegistry
+ * Token for the read-only Extension Catalog.
+ * Identifier: @openlearn/core:IExtensionCatalog
  */
-export const IUnifiedExtensionRegistryToken = new Token<UnifiedExtensionRegistry>(
-  '@openlearn/core:IUnifiedExtensionRegistry',
-);
+export const IExtensionCatalogToken = new Token<ExtensionCatalog>('@openlearn/core:IExtensionCatalog');
 
 /**
  * Token for Plugin Capability Gateway (P7-A2 Stage 3).

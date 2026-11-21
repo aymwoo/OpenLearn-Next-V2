@@ -868,7 +868,6 @@ const WITHDRAWN_FROM_SDK = Object.freeze([
   // M-10 / F-3：kernel/index.ts:224-226 注册，零生产 resolve。
   // 全仓唯一提及是 index.ts 顶部注释示例；v2_plugins/ 与 assets/ 零命中。
   'IPluginRuntimeCompositionToken',
-  'IUnifiedExtensionRegistryToken',
   'IPluginCapabilityGatewayToken',
   // M-9 / F-2：capability-governance 子系统（529 行）整体零 resolve。
   'ICapabilityGovernanceServiceToken',

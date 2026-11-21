@@ -47,10 +47,9 @@ export type {
   IUnifiedPluginContext,
   IPluginLifecycleManager,
   IPluginCapabilityGateway,
-  IUnifiedExtensionRegistry,
+  IExtensionCatalog,
   IPluginDistributionManager,
   CapabilityMetadata,
-  ExtensionItemMetadata,
 } from '../core/plugin-host/index.js';
 
 // ⚠️ 7 个宿主内部类：**只以类型形式**对外暴露（3.7.2 起）。
@@ -96,7 +95,7 @@ export type { PluginCapabilityGateway } from '../core/plugin-host/plugin-capabil
  * @deprecated [SDK 3.9.0] 宿主内部实现门面，非插件开发者 API，计划于 SDK 4.0.0 移除。
  * 扩展注册请使用 `ContributionRegistry`（`IContributionRegistryToken`）；内核侧请从 `packages/core/plugin-host/` 导入。
  */
-export type { UnifiedExtensionRegistry } from '../core/plugin-host/unified-extension-registry.js';
+export type { ExtensionCatalog, ExtensionCatalogSources } from '../core/plugin-host/extension-catalog.js';
 export type { PluginDistributionManager } from '../core/plugin-host/plugin-distribution-manager.js';
 
 // ── Configuration Service (V3.2) ────────────────────────────────────────
@@ -288,6 +287,7 @@ export {
   ICapabilityRuntimeServiceToken,
   IPlatformServiceRegistryToken,
   IPluginLifecycleManagerToken,
+  IExtensionCatalogToken,
   IPluginDistributionManagerToken,
   ICapabilityRegistryToken,
   IAuthSessionBridgeToken,
@@ -301,7 +301,7 @@ export {
 // 但**零生产 resolve** —— 全仓唯一的提及是本文件顶部的一段注释示例。
 // D-2/D-6 决策：标 `@deprecated` 并移出导出。
 //
-// 影响面已核实：`grep -rlE "IUnifiedExtensionRegistry|IPluginCapabilityGateway|
+// 影响面已核实：`grep -rlE "IPluginCapabilityGateway|
 // IPluginRuntimeComposition" v2_plugins/ assets/` 零命中，三个脚手架模板也都没用到。
 //
 // 内核侧引用不受影响（走 packages/core 相对路径）。若将来接入真实消费者，把它们

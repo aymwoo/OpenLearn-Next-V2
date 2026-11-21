@@ -56,7 +56,7 @@ import {
   IPluginLifecycleManagerToken,
   IPluginDistributionManagerToken,
   IPluginRuntimeCompositionToken,
-  IUnifiedExtensionRegistryToken,
+  IExtensionCatalogToken,
   IPluginCapabilityGatewayToken,
   ICapabilityRegistryToken,
   IAuthSessionBridgeToken,
@@ -103,7 +103,7 @@ import { ServiceRegistryKernel } from '../service-registry/index.js';
 import { PluginRuntimeComposition } from '../plugin-host/plugin-runtime-composition.js';
 import { PluginDistributionManager } from '../plugin-host/plugin-distribution-manager.js';
 import { PluginCapabilityGateway } from '../plugin-host/plugin-capability-gateway.js';
-import { UnifiedExtensionRegistry } from '../plugin-host/unified-extension-registry.js';
+import { ExtensionCatalog } from '../plugin-host/extension-catalog.js';
 import { PluginLifecycleManager } from '../plugin-host/plugin-lifecycle-manager.js';
 import { CapabilityRegistry } from '../ai-capability/registry/capability-registry.js';
 import path from 'path';
@@ -134,7 +134,7 @@ export class Kernel {
   public readonly pluginRuntimeComposition: PluginRuntimeComposition;
   public readonly pluginLifecycleManager: PluginLifecycleManager;
   public readonly pluginDistributionManager: PluginDistributionManager;
-  public readonly unifiedExtensionRegistry: UnifiedExtensionRegistry;
+  public readonly extensionCatalog: ExtensionCatalog;
   public readonly capabilityRegistry: CapabilityRegistry;
   public readonly pluginCapabilityGateway: PluginCapabilityGateway;
   public readonly lessonRuntime: LessonRuntime;
@@ -240,7 +240,17 @@ export class Kernel {
     this.pluginRuntimeComposition = new PluginRuntimeComposition(this.pluginHost, this.workerManager);
     this.pluginLifecycleManager = new PluginLifecycleManager(this.pluginHost);
     this.pluginDistributionManager = new PluginDistributionManager(this.pluginHost);
-    this.unifiedExtensionRegistry = new UnifiedExtensionRegistry();
+    this.extensionCatalog = new ExtensionCatalog({
+      listSlots: () =>
+        this.pluginHost.contributions.listAll().flatMap((entry) =>
+          entry.configs.map((config) => ({
+            slot: entry.slot,
+            pluginId: entry.pluginId,
+            id: config.id,
+          })),
+        ),
+      listHooks: () => this.classroomRuntime.hooksManager.listHooks(),
+    });
     this.capabilityRegistry = capabilityRegistry;
     this.pluginCapabilityGateway = new PluginCapabilityGateway(capabilityRegistry);
 
@@ -261,7 +271,7 @@ export class Kernel {
     this.serviceRegistry.register(IPluginLifecycleManagerToken, this.pluginLifecycleManager);
     this.serviceRegistry.register(IPluginDistributionManagerToken, this.pluginDistributionManager);
     this.serviceRegistry.register(IPluginRuntimeCompositionToken, this.pluginRuntimeComposition);
-    this.serviceRegistry.register(IUnifiedExtensionRegistryToken, this.unifiedExtensionRegistry);
+    this.serviceRegistry.register(IExtensionCatalogToken, this.extensionCatalog);
     this.serviceRegistry.register(IPluginCapabilityGatewayToken, this.pluginCapabilityGateway);
     this.serviceRegistry.register(ICapabilityRegistryToken, this.capabilityRegistry);
     this.serviceRegistry.register(ISemesterGradeServiceToken, new SemesterGradeService(this.db as any));

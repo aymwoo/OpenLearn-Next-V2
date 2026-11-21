@@ -10,7 +10,6 @@ import {
 // 内核侧改从规范源导入。
 import {
   IPluginRuntimeCompositionToken,
-  IUnifiedExtensionRegistryToken,
   IPluginCapabilityGatewayToken,
 } from '../../../core/di/interfaces.js';
 // Concrete host-runtime classes live in core/plugin-host; the SDK package only
@@ -21,7 +20,6 @@ import { PluginRuntimeComposition } from '../plugin-runtime-composition.js';
 import { PluginContextAdapter } from '../plugin-context-adapter.js';
 import { PluginLifecycleManager } from '../plugin-lifecycle-manager.js';
 import { PluginCapabilityGateway } from '../plugin-capability-gateway.js';
-import { UnifiedExtensionRegistry } from '../unified-extension-registry.js';
 
 describe('Plugin SDK Compatibility Layer (P7-B6 EU-01)', () => {
   it('should export legacy DI tokens and Token class', () => {
@@ -37,7 +35,6 @@ describe('Plugin SDK Compatibility Layer (P7-B6 EU-01)', () => {
     expect(PluginContextAdapter).toBeDefined();
     expect(PluginLifecycleManager).toBeDefined();
     expect(PluginCapabilityGateway).toBeDefined();
-    expect(UnifiedExtensionRegistry).toBeDefined();
   });
 
   it('P7-A2: should surface unified plugin facade DI tokens (consumable via ctx.resolve)', () => {
@@ -45,7 +42,6 @@ describe('Plugin SDK Compatibility Layer (P7-B6 EU-01)', () => {
     expect(IPluginLifecycleManagerToken.name).toBe('@openlearn/core:IPluginLifecycleManager');
     expect(IPluginDistributionManagerToken).toBeDefined();
     expect(IPluginRuntimeCompositionToken).toBeDefined();
-    expect(IUnifiedExtensionRegistryToken).toBeDefined();
     expect(IPluginCapabilityGatewayToken).toBeDefined();
   });
 });
