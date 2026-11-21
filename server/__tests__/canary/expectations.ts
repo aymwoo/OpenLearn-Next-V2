@@ -54,7 +54,7 @@ export const MODE_DIFFS = {
   },
 } as const;
 
-/** 33 个 DI Token 扫描清单 */
+/** 34 个 DI Token 扫描清单 */
 export const TOKEN_SWEEP = [
   'ICommandBusServiceToken',
   'IEventBusServiceToken',
@@ -84,6 +84,7 @@ export const TOKEN_SWEEP = [
   'IPluginRuntimeCompositionToken',
   'ICoursewareRuntimeScriptRegistryToken',
   'IClassroomLifecycleServiceToken',
+  'IClassroomActivityCatalogToken',
   'IInteractionRuntimeServiceToken',
   'IActivityRegistryToken',
   'IAuthSessionBridgeToken',
