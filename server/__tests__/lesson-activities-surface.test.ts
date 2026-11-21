@@ -226,6 +226,52 @@ describe('学案活动 LearningSurface 放置（阶段 3）', () => {
     expect(row?.deleted_at).toBeTruthy();
   });
 
+  it('互动课件首页块创建 / 更新同步 lesson_block Surface', async () => {
+    const created = await fetchJson<{ id: string; surface_id: string | null }>(
+      `${baseUrl}/api/lessons/${lessonId}/blocks`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...teacherCookie },
+        body: JSON.stringify({
+          blockType: 'interactive_courseware',
+          content: { coursewareUuid: 'cw-block-1', title: '学案课件' },
+        }),
+      },
+    );
+    expect(created.status).toBe(201);
+    expect(created.body.surface_id).toBeTruthy();
+
+    const surface = await fetchJson<{ kind: string; owner_id: string; content_ref_json: string }>(
+      `${baseUrl}/api/learning-surfaces/${created.body.surface_id}`,
+      { headers: teacherCookie },
+    );
+    expect(surface.body.kind).toBe('lesson_block');
+    expect(surface.body.owner_id).toBe(created.body.id);
+    expect(JSON.parse(surface.body.content_ref_json)).toMatchObject({
+      rendererId: 'html_courseware',
+      source: { kind: 'courseware', id: 'cw-block-1' },
+    });
+
+    const updated = await fetchJson<{ surface_id: string | null }>(`${baseUrl}/api/blocks/${created.body.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', ...teacherCookie },
+      body: JSON.stringify({
+        blockType: 'interactive_courseware',
+        content: { resourceId: 'res-block-2', title: '学案资源' },
+      }),
+    });
+    expect(updated.status).toBe(200);
+    expect(updated.body.surface_id).toBe(created.body.surface_id);
+
+    const after = await fetchJson<{ content_ref_json: string }>(
+      `${baseUrl}/api/learning-surfaces/${created.body.surface_id}`,
+      { headers: teacherCookie },
+    );
+    expect(JSON.parse(after.body.content_ref_json)).toMatchObject({
+      source: { kind: 'resource', id: 'res-block-2' },
+    });
+  });
+
   it('非法内容引用被拒绝，且不产生活动', async () => {
     const before = (
       db.prepare('SELECT COUNT(*) AS c FROM lesson_activities WHERE lesson_id = ?').get(lessonId) as {

@@ -15,7 +15,13 @@ import type Database from 'better-sqlite3';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
 import { randomId } from '../utils/id.js';
 
-export const LEARNING_SURFACE_KINDS = ['whiteboard_element', 'lesson_activity', 'assignment', 'lesson_eval'] as const;
+export const LEARNING_SURFACE_KINDS = [
+  'whiteboard_element',
+  'lesson_activity',
+  'lesson_block',
+  'assignment',
+  'lesson_eval',
+] as const;
 export type LearningSurfaceKind = (typeof LEARNING_SURFACE_KINDS)[number];
 
 export const LEARNING_CONTENT_SOURCE_KINDS = ['courseware', 'resource', 'assignment', 'activity', 'inline'] as const;

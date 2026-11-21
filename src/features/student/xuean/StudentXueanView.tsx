@@ -15,6 +15,7 @@ type Block = {
   block_type: string;
   order_index: number;
   content_json: string;
+  surface_id?: string | null;
 };
 
 type Activity = {
@@ -184,6 +185,21 @@ function BlockCard({ block }: { block: Block }) {
   const renderContent = () => {
     if (block.block_type === 'interactive_courseware' && content && typeof content === 'object') {
       const record = content as Record<string, unknown>;
+      // 阶段 5：优先走统一 Surface；未迁移的存量块回退旧 CoursewareHost。
+      if (block.surface_id) {
+        return (
+          <div className="h-[420px] w-full overflow-hidden rounded-lg border border-theme">
+            <LearningSurfaceHost
+              surfaceId={block.surface_id}
+              lessonId={block.lesson_id}
+              hostId={block.id}
+              title={typeof record.title === 'string' ? record.title : undefined}
+              lazy={false}
+              className="w-full h-full"
+            />
+          </div>
+        );
+      }
       const coursewareUuid = typeof record.coursewareUuid === 'string' ? record.coursewareUuid : null;
       const resourceId = typeof record.resourceId === 'string' ? record.resourceId : null;
       if (coursewareUuid || resourceId) {

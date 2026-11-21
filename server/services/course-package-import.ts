@@ -23,6 +23,7 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
+import crypto from 'node:crypto';
 import { v7 as uuidv7 } from 'uuid';
 import type Database from 'better-sqlite3';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
@@ -37,6 +38,7 @@ import {
 } from './course-package-assets.js';
 import { resolveCoursePackageIdentity, type CoursePackageIdentity } from './course-package-identity.js';
 import { isSupportedElementType, type CoursePackage } from './course-package.js';
+import { upsertLearningSurface } from './learning-surface-service.js';
 
 /** 导入结果摘要（回给前端展示）。 */
 export interface ImportCoursePackageResult {
@@ -121,6 +123,82 @@ export interface ImportCoursePackageOptions {
    * 而不是让幂等变成无法绕过的墙。
    */
   allowDuplicate?: boolean;
+}
+
+/** 与 CoursewareService.saveInlineCourseware 相同的命名 / 去重规则（导入事务内直接写）。 */
+function saveInlineHtml(db: Database.Database, code: string): string | null {
+  const trimmed = code.trim();
+  if (!trimmed) return null;
+  const hash = crypto.createHash('sha256').update(code).digest('hex').slice(0, 16);
+  const id = `inline-${hash}`;
+  db.prepare('INSERT OR IGNORE INTO system_resources (id, name, type, content, created_at) VALUES (?, ?, ?, ?, ?)').run(
+    id,
+    'index.html',
+    'html',
+    code,
+    Date.now(),
+  );
+  return id;
+}
+
+/**
+ * 课程包里的 `html-applet` 元素在导入时直接落成 `learning_surface` 元素 + Surface。
+ *
+ * 这样新导入的数据不会再产生阶段 5 要迁移的存量；导出端仍还原为 html-applet，
+ * 保证旧版本课程包可继续导入。
+ */
+function toLearningSurfaceElement(
+  db: Database.Database,
+  lessonId: string,
+  element: { type: string; data: string },
+): { id: string; type: string; data: string } {
+  const elementId = uuidv7();
+  if (element.type !== 'html-applet') {
+    return { id: elementId, type: element.type, data: element.data };
+  }
+
+  let raw: Record<string, unknown>;
+  try {
+    const parsed: unknown = JSON.parse(element.data);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return { id: elementId, type: element.type, data: element.data };
+    }
+    raw = parsed as Record<string, unknown>;
+  } catch {
+    return { id: elementId, type: element.type, data: element.data };
+  }
+
+  const coursewareUuid = typeof raw.coursewareUuid === 'string' ? raw.coursewareUuid : null;
+  const resourceId = typeof raw.resourceId === 'string' ? raw.resourceId : null;
+  const inlineId = !coursewareUuid && !resourceId && typeof raw.code === 'string' ? saveInlineHtml(db, raw.code) : null;
+
+  const sourceKind = resourceId ? 'resource' : 'courseware';
+  const sourceId = coursewareUuid ?? resourceId ?? inlineId;
+  if (!sourceId) {
+    return { id: elementId, type: element.type, data: element.data };
+  }
+
+  const result = upsertLearningSurface(db, {
+    lessonId,
+    kind: 'whiteboard_element',
+    ownerId: elementId,
+    contentRef: {
+      rendererId: 'html_courseware',
+      source: { kind: sourceKind, id: sourceId },
+      ...(typeof raw.title === 'string' && raw.title ? { config: { title: raw.title } } : {}),
+    },
+  });
+  if (!result.ok) {
+    return { id: elementId, type: element.type, data: element.data };
+  }
+
+  const next: Record<string, unknown> = { ...raw, surfaceId: result.surface.id };
+  delete next.coursewareUuid;
+  delete next.resourceId;
+  delete next.code;
+  delete next.sourceType;
+  delete next.sourceId;
+  return { id: elementId, type: 'learning_surface', data: JSON.stringify(next) };
 }
 
 /**
@@ -256,7 +334,8 @@ export async function importCoursePackage(
         identity.packageId,
       );
       for (const element of elements) {
-        insertElement.run(uuidv7(), lessonId, element.type, element.data, now);
+        const converted = toLearningSurfaceElement(db, lessonId, element);
+        insertElement.run(converted.id, lessonId, converted.type, converted.data, now);
       }
     });
 

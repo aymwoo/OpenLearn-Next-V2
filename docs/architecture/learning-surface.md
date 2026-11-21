@@ -1,6 +1,6 @@
 # LearningSurface 教学内容 / 活动容器设计
 
-> 状态：设计稿（阶段 1 状态底座、阶段 2 作业域迁移、阶段 3 宿主与放置、阶段 4 内置渲染器已实施）
+> 状态：设计稿（阶段 1 状态底座、阶段 2 作业域迁移、阶段 3 宿主与放置、阶段 4 内置渲染器、阶段 5 存量迁移已实施）
 > 日期：2026-11-21
 > 范围：白板、学案、作业与第三方渲染插件的统一内容/活动容器
 
@@ -63,15 +63,15 @@ LearningSurfaceRenderer   渲染插件：inline 或 sandbox
 
 Surface 的稳定身份。容器删除后只做软删，attempt 仍可追溯。
 
-| 字段                        | 类型             | 说明                                                                    |
-| --------------------------- | ---------------- | ----------------------------------------------------------------------- |
-| `id`                        | TEXT PK          | Surface id                                                              |
-| `lesson_id`                 | TEXT NOT NULL    | 所属课时；班级级作业为空字符串（阶段 2 已确认）                         |
-| `kind`                      | TEXT NOT NULL    | `whiteboard_element` / `lesson_activity` / `assignment` / `lesson_eval` |
-| `owner_id`                  | TEXT NOT NULL    | 白板元素 id、学案活动 id、作业定义 id，或课时 id（`lesson_eval`）       |
-| `content_ref_json`          | TEXT NOT NULL    | `LearningContentRef`                                                    |
-| `deleted_at`                | INTEGER NULL     | 软删时间                                                                |
-| `created_at` / `updated_at` | INTEGER NOT NULL | 时间戳                                                                  |
+| 字段                        | 类型             | 说明                                                                                     |
+| --------------------------- | ---------------- | ---------------------------------------------------------------------------------------- |
+| `id`                        | TEXT PK          | Surface id                                                                               |
+| `lesson_id`                 | TEXT NOT NULL    | 所属课时；班级级作业为空字符串（阶段 2 已确认）                                          |
+| `kind`                      | TEXT NOT NULL    | `whiteboard_element` / `lesson_activity` / `lesson_block` / `assignment` / `lesson_eval` |
+| `owner_id`                  | TEXT NOT NULL    | 白板元素 id、学案活动 id、作业定义 id，或课时 id（`lesson_eval`）                        |
+| `content_ref_json`          | TEXT NOT NULL    | `LearningContentRef`                                                                     |
+| `deleted_at`                | INTEGER NULL     | 软删时间                                                                                 |
+| `created_at` / `updated_at` | INTEGER NOT NULL | 时间戳                                                                                   |
 
 索引与约束：
 
@@ -82,6 +82,7 @@ Surface 的稳定身份。容器删除后只做软删，attempt 仍可追溯。
 
 - 白板元素：`type = 'learning_surface'`，`data = { surfaceId }`，尺寸/位置仍由白板元素自身字段承载。
 - 学案活动：`lesson_activities.surface_id`（迁移 `075`），并加部分唯一索引（一个活动最多一个 Surface）。历史活动保持未绑定，由活动保存时的 `surface` 字段按需创建。
+- 学案首页块：`lesson_activity_blocks.surface_id`（迁移 `077`），Surface `kind='lesson_block'`。首页块不是活动，保留独立 `order_index` 与展示语义，不转成 `lesson_activities`。
 
 ### 4.3 `learning_surface_attempts`
 
@@ -323,8 +324,12 @@ host → iframe: { channel: 'ol-plugin-view', type: 'state.patch', payload }
 
 ### 阶段 5：存量内容迁移
 
-- 一次性迁移白板 `html-applet` 与学案 `interactive_courseware` 到 `LearningContentRef`。
-- 同事务完成映射，失败整批回滚。
+- 迁移 `076`：白板 `html-applet` 元素原地改为 `learning_surface`，`data` 只保留 `surfaceId` 与几何 / 分页字段；元素 id 不变，快照行同步迁移，分页、层级、协同与 `resetWhiteboard` 不受影响。
+- 来源映射：`coursewareUuid` → `courseware`；`resourceId` → `resource`；手写 `code` → 幂等落到 `system_resources`（`inline-mig-*`）后按 `courseware` 引用。无来源的空元素保持原样。
+- 迁移 `077`：学案首页 `interactive_courseware` 块建 `kind='lesson_block'` 的 Surface，并写 `surface_id`；`content_json` 保持原样便于回退。
+- 导入路径直接落新模型：课程包里的 `html-applet` 与学案包里的 `interactive_courseware` 在导入时即创建 Surface，避免产生新的存量。
+- 导出路径保持兼容：`learning_surface` 元素导出时还原为 `html-applet`；内联 HTML 还原为 `code`，不把 `inline-mig-*` 约定泄漏给旧版本。
+- 回滚：DOWN 从 Surface 的 `content_ref_json` 反序列化回旧结构；迁移前按项目流程执行 `pnpm db:backup` 整体备份。
 
 ### 阶段 6：验收与清理
 

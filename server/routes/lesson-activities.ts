@@ -202,6 +202,58 @@ function applyActivitySurface(
   db.prepare('UPDATE lesson_activities SET surface_id = ? WHERE id = ?').run(result.surface.id, input.activityId);
 }
 
+/** 解析学案互动课件块的内容引用；非法或缺少来源时返回 null。 */
+function buildBlockContentRef(contentJson: unknown): LearningContentRef | null {
+  try {
+    const parsed = JSON.parse(String(contentJson ?? '{}')) as Record<string, unknown>;
+    const coursewareUuid = typeof parsed.coursewareUuid === 'string' ? parsed.coursewareUuid : null;
+    const resourceId = typeof parsed.resourceId === 'string' ? parsed.resourceId : null;
+    const sourceId = coursewareUuid ?? resourceId;
+    if (!sourceId) return null;
+    const validated = validateLearningContentRef({
+      rendererId: 'html_courseware',
+      source: { kind: coursewareUuid ? 'courseware' : 'resource', id: sourceId },
+      ...(typeof parsed.title === 'string' && parsed.title ? { config: { title: parsed.title } } : {}),
+    });
+    return validated.ok ? validated.value : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 学案首页块 ↔ Surface 同步（阶段 5）。
+ *
+ * 只有 `interactive_courseware` 需要 Surface；改成其它块类型时软删并清空 surface_id。
+ */
+function syncBlockSurface(
+  db: Database.Database,
+  input: { lessonId: string; blockId: string; blockType: string; contentJson: unknown },
+): void {
+  const row = db.prepare('SELECT surface_id FROM lesson_activity_blocks WHERE id = ?').get(input.blockId) as
+    { surface_id: string | null } | undefined;
+
+  if (input.blockType !== 'interactive_courseware') {
+    if (row?.surface_id) {
+      softDeleteLearningSurface(db, row.surface_id);
+      db.prepare('UPDATE lesson_activity_blocks SET surface_id = NULL WHERE id = ?').run(input.blockId);
+    }
+    return;
+  }
+
+  const contentRef = buildBlockContentRef(input.contentJson);
+  if (!contentRef) return;
+  const result = upsertLearningSurface(db, {
+    lessonId: input.lessonId,
+    kind: 'lesson_block',
+    ownerId: input.blockId,
+    contentRef,
+  });
+  if (result.ok) {
+    db.prepare('UPDATE lesson_activity_blocks SET surface_id = ? WHERE id = ?').run(result.surface.id, input.blockId);
+  }
+}
+
 function parseBlock(body: unknown): ParseResult<BlockValue> {
   const { blockType, content } = (body || {}) as Record<string, unknown>;
   if (typeof blockType !== 'string' || !VALID_BLOCK_TYPES.has(blockType)) {
@@ -535,11 +587,20 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
 
       const id = randomId();
       const nowTs = now();
-      db.prepare(
-        `INSERT INTO lesson_activity_blocks
-          (id, lesson_id, block_type, order_index, content_json, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      ).run(id, lessonId, parsed.value.blockType, maxOrder + 1, parsed.value.contentJson, nowTs, nowTs);
+      const tx = db.transaction(() => {
+        db.prepare(
+          `INSERT INTO lesson_activity_blocks
+            (id, lesson_id, block_type, order_index, content_json, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        ).run(id, lessonId, parsed.value.blockType, maxOrder + 1, parsed.value.contentJson, nowTs, nowTs);
+        syncBlockSurface(db, {
+          lessonId,
+          blockId: id,
+          blockType: parsed.value.blockType,
+          contentJson: parsed.value.contentJson,
+        });
+      });
+      tx();
 
       res.status(201).json(db.prepare('SELECT * FROM lesson_activity_blocks WHERE id = ?').get(id));
     } catch (err: unknown) {
@@ -564,11 +625,20 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
           ? Number(req.body.order_index)
           : existing.order_index;
 
-      db.prepare(
-        `UPDATE lesson_activity_blocks
-         SET block_type = ?, content_json = ?, order_index = ?, updated_at = ?
-         WHERE id = ?`,
-      ).run(parsed.value.blockType, parsed.value.contentJson, orderIndex, now(), id);
+      const tx = db.transaction(() => {
+        db.prepare(
+          `UPDATE lesson_activity_blocks
+           SET block_type = ?, content_json = ?, order_index = ?, updated_at = ?
+           WHERE id = ?`,
+        ).run(parsed.value.blockType, parsed.value.contentJson, orderIndex, now(), id);
+        syncBlockSurface(db, {
+          lessonId: existing.lesson_id,
+          blockId: id,
+          blockType: parsed.value.blockType,
+          contentJson: parsed.value.contentJson,
+        });
+      });
+      tx();
 
       res.json(db.prepare('SELECT * FROM lesson_activity_blocks WHERE id = ?').get(id));
     } catch (err: unknown) {
@@ -650,7 +720,7 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
         const ts = now();
         db.prepare(
           `UPDATE learning_surfaces SET deleted_at = ?, updated_at = ?
-            WHERE kind = 'lesson_activity' AND lesson_id = ? AND deleted_at IS NULL`,
+            WHERE kind IN ('lesson_activity', 'lesson_block') AND lesson_id = ? AND deleted_at IS NULL`,
         ).run(ts, ts, lessonId);
         db.prepare(
           'DELETE FROM activity_progress WHERE activity_id IN (SELECT id FROM lesson_activities WHERE lesson_id = ?)',
@@ -698,10 +768,19 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
 
         // 重建首页块
         for (const b of blocks) {
+          const blockId = randomId();
           db.prepare(
             `INSERT INTO lesson_activity_blocks (id, lesson_id, block_type, content_json, order_index, created_at, updated_at)
              VALUES (?, ?, ?, ?, ?, ?, ?)`,
-          ).run(randomId(), lessonId, b.block_type ?? 'free', b.content_json ?? '{}', b.order_index ?? 0, now(), now());
+          ).run(blockId, lessonId, b.block_type ?? 'free', b.content_json ?? '{}', b.order_index ?? 0, now(), now());
+
+          // 阶段 5：互动课件块直接建 kind='lesson_block' 的 Surface，避免新导入产生存量。
+          syncBlockSurface(db, {
+            lessonId,
+            blockId,
+            blockType: b.block_type ?? 'free',
+            contentJson: b.content_json ?? '{}',
+          });
         }
       });
 

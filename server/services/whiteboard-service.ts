@@ -106,7 +106,21 @@ export class WhiteboardService {
         );
         for (const el of snapshotElements) {
           const originalId = el.id.startsWith('snapshot-') ? el.id.substring('snapshot-'.length) : el.id;
-          insertStmt.run(originalId, lessonId, el.type, el.data, el.created_at);
+          // 阶段 5：快照里的 learning_surface 持有快照专属 surfaceId（owner=snapshot-*）。
+          // 恢复后元素 id 变回原 id，surfaceId 必须指向主元素的 Surface，
+          // 否则 attempt 会写到快照副本上，与主元素成绩分裂。
+          let data = el.data;
+          try {
+            const parsed = JSON.parse(el.data) as Record<string, unknown>;
+            const surfaceId = typeof parsed.surfaceId === 'string' ? parsed.surfaceId : '';
+            if (surfaceId.startsWith('lsm_wb_snapshot-')) {
+              parsed.surfaceId = `lsm_wb_${originalId}`;
+              data = JSON.stringify(parsed);
+            }
+          } catch {
+            // 非 JSON data 保持原样（历史元素）
+          }
+          insertStmt.run(originalId, lessonId, el.type, data, el.created_at);
         }
       });
       revertTx();

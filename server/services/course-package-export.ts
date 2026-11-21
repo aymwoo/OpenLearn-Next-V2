@@ -114,6 +114,48 @@ interface PendingAsset {
 }
 
 /**
+ * 把 `learning_surface` 元素还原为旧版 `html-applet` 数据。
+ *
+ * 导出面向旧版本的课程包，因此只还原 html_courseware；其它渲染器
+ * （presentation / assignment_submission / 插件）暂不作为白板元素导出。
+ * 内联 HTML 会还原成 code，避免把 `inline-mig-*` 的宿主约定泄漏给旧版本。
+ */
+function restoreHtmlAppletFromSurface(
+  db: Database.Database,
+  elementData: Record<string, unknown>,
+): Record<string, unknown> | null {
+  const surfaceId = typeof elementData.surfaceId === 'string' ? elementData.surfaceId : '';
+  if (!surfaceId) return null;
+
+  const row = db.prepare('SELECT content_ref_json FROM learning_surfaces WHERE id = ?').get(surfaceId) as
+    { content_ref_json: string } | undefined;
+  if (!row) return null;
+
+  let ref: { rendererId?: string; source?: { kind?: string; id?: string }; config?: { title?: string } };
+  try {
+    ref = JSON.parse(row.content_ref_json) as typeof ref;
+  } catch {
+    return null;
+  }
+  if (ref.rendererId !== 'html_courseware' || !ref.source?.id) return null;
+
+  const restored: Record<string, unknown> = {};
+  if (ref.source.kind === 'resource') {
+    restored.resourceId = ref.source.id;
+  } else if (ref.source.id.startsWith('inline-')) {
+    const inline = db
+      .prepare("SELECT content FROM system_resources WHERE id = ? AND type = 'html'")
+      .get(ref.source.id) as { content: string } | undefined;
+    if (inline?.content) restored.code = inline.content;
+    else restored.coursewareUuid = ref.source.id;
+  } else {
+    restored.coursewareUuid = ref.source.id;
+  }
+  if (ref.config?.title) restored.title = ref.config.title;
+  return restored;
+}
+
+/**
  * 导出指定课程为课程包。
  *
  * @param lessonId 课程 id
@@ -154,6 +196,25 @@ export async function exportLessonAsCoursePackage(
 
   for (const row of elementRows) {
     if (!isSupportedElementType(row.type)) {
+      // 阶段 5：learning_surface 元素导出时还原为 html-applet，保证旧版本可导入。
+      const elementData = safeJsonParse(row.data);
+      if (
+        row.type === 'learning_surface' &&
+        elementData &&
+        typeof elementData === 'object' &&
+        !Array.isArray(elementData)
+      ) {
+        const restored = restoreHtmlAppletFromSurface(db, elementData as Record<string, unknown>);
+        if (restored) {
+          collectPreferredFilenames(restored, preferredFilenames);
+          elements.push({
+            type: 'html-applet',
+            ...liftElementGeometry(elementData as Record<string, unknown>),
+            data: restored,
+          });
+          continue;
+        }
+      }
       stats.skippedElements += 1;
       continue;
     }
