@@ -22,7 +22,7 @@ export async function createLessonActivity(lessonId: string, payload: Record<str
 }
 
 export async function updateLessonActivity(id: string, payload: Record<string, unknown>) {
-  const res = await fetch(`/api/activities/${id}`, {
+  const res = await fetch(`/api/lesson-activities/${id}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -32,7 +32,7 @@ export async function updateLessonActivity(id: string, payload: Record<string, u
 }
 
 export async function deleteLessonActivity(id: string) {
-  const res = await fetch(`/api/activities/${id}`, { method: 'DELETE' });
+  const res = await fetch(`/api/lesson-activities/${id}`, { method: 'DELETE' });
   if (!res.ok) return { ok: false, error: await res.json().catch(() => ({})) };
   return { ok: true, data: await res.json() };
 }
@@ -101,7 +101,7 @@ export async function postActivityProgress(
     selfEval?: { score: number; comment: string };
   },
 ) {
-  const res = await fetch(`/api/activities/${activityId}/progress`, {
+  const res = await fetch(`/api/lesson-activities/${activityId}/progress`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -115,7 +115,7 @@ export async function verifyActivityProgress(
   activityId: string,
   payload: { studentId: string; status?: string; score?: number },
 ) {
-  const res = await fetch(`/api/activities/${activityId}/progress/verify`, {
+  const res = await fetch(`/api/lesson-activities/${activityId}/progress/verify`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -126,7 +126,7 @@ export async function verifyActivityProgress(
 
 // ── 一键催办（教师端）─────────────────────────────────────────────
 export async function nudgeActivity(activityId: string, studentId: string) {
-  const res = await fetch(`/api/activities/${activityId}/nudge`, {
+  const res = await fetch(`/api/lesson-activities/${activityId}/nudge`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ studentId }),
