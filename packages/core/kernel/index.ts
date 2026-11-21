@@ -104,6 +104,8 @@ import { PluginRuntimeComposition } from '../plugin-host/plugin-runtime-composit
 import { PluginDistributionManager } from '../plugin-host/plugin-distribution-manager.js';
 import { PluginCapabilityGateway } from '../plugin-host/plugin-capability-gateway.js';
 import { ExtensionCatalog } from '../plugin-host/extension-catalog.js';
+import { CONTRIBUTES_SLOT_KEYS } from '../esm-loader/manifest-schema.js';
+import { assertExtensionPointsAligned } from '../extension-registry/extension-points.js';
 import { PluginLifecycleManager } from '../plugin-host/plugin-lifecycle-manager.js';
 import { CapabilityRegistry } from '../ai-capability/registry/capability-registry.js';
 import path from 'path';
@@ -581,6 +583,13 @@ export class Kernel {
     } catch (err) {
       console.error('[Kernel] Failed to restore active plugins:', err);
     }
+
+    // Phase 1.4：扩展点单一事实源对账。恢复完插件后，registry 中的 slot 必须
+    // 全部属于 manifest schema 的 canonical 名单，否则启动 fail-fast。
+    assertExtensionPointsAligned(
+      this.pluginHost.contributions.listAll().map((entry) => entry.slot),
+      CONTRIBUTES_SLOT_KEYS,
+    );
   }
 
   /**
