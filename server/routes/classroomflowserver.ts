@@ -406,6 +406,13 @@ export function registerClassroomFlowServerRoutes(app: Express): void {
       const lessonId = typeof req.query.lessonId === 'string' ? req.query.lessonId : undefined;
       const classId = typeof req.query.classId === 'string' ? req.query.classId : undefined;
       const modeId = typeof req.query.modeId === 'string' ? req.query.modeId : undefined;
+      const adapterIds =
+        typeof req.query.adapterIds === 'string'
+          ? req.query.adapterIds
+              .split(',')
+              .map((id) => id.trim())
+              .filter(Boolean)
+          : undefined;
       if (!lessonId && !classId) {
         return res.status(400).json({ success: false, error: 'lessonId or classId required' });
       }
@@ -420,7 +427,12 @@ export function registerClassroomFlowServerRoutes(app: Express): void {
       }
       const staff = isTeacher(session) || isAdministrator(session);
       const result = await agg.list(
-        { lessonId, classId, studentId: staff ? undefined : viewerIdOf(session) || undefined },
+        {
+          lessonId,
+          classId,
+          studentId: staff ? undefined : viewerIdOf(session) || undefined,
+          adapterIds,
+        },
         modeId,
       );
       return res.json({ success: true, ...result });

@@ -12,7 +12,7 @@ import { XUEAN_MODE_PACK } from './xueanPack';
 
 const BUILTIN_PACKS = [WHITEBOARD_MODE_PACK, XUEAN_MODE_PACK];
 
-export type OutlineKind = 'whiteboard-pages' | 'xuean-activities';
+export type OutlineKind = 'whiteboard-pages' | 'xuean-activities' | 'extension';
 
 export function resolveOutlineContribution(input: {
   segmentType?: string | null;
@@ -21,8 +21,16 @@ export function resolveOutlineContribution(input: {
   const pack = resolveModePackForSegment(input.packs ?? BUILTIN_PACKS, normalizeSegmentType(input.segmentType));
   const outlineContributionId =
     pack?.outlineContributionId ?? WHITEBOARD_MODE_PACK.outlineContributionId ?? 'outline-whiteboard-pages';
-  const kind: OutlineKind =
-    outlineContributionId === XUEAN_MODE_PACK.outlineContributionId ? 'xuean-activities' : 'whiteboard-pages';
+
+  let kind: OutlineKind;
+  if (outlineContributionId === XUEAN_MODE_PACK.outlineContributionId) {
+    kind = 'xuean-activities';
+  } else if (outlineContributionId === WHITEBOARD_MODE_PACK.outlineContributionId) {
+    kind = 'whiteboard-pages';
+  } else {
+    kind = 'extension';
+  }
+
   return {
     kind,
     outlineContributionId,

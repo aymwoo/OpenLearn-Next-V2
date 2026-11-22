@@ -15,7 +15,15 @@ const CATALOG_RESPONSE = {
       label: '探究实验室',
       labelEn: 'Inquiry Lab',
       source: 'plugin',
-      segmentTypes: ['inquiry'],
+      pluginId: 'ext-lab',
+      pluginName: '探究实验室插件',
+      segmentTypes: ['inquiry', 'inquiry:sim'],
+      prepContributionId: 'prep-lab',
+      outlineContributionId: 'outline-lab',
+      teacherWorkspaceId: 'mode-lab-teacher',
+      studentWorkspaceId: 'mode-lab-student',
+      adapterIds: ['lab-adapter'],
+      channels: ['lab:task'],
     },
   ],
 };
@@ -39,7 +47,15 @@ describe('useModePackCatalog', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(first).toHaveLength(3);
     expect(second).toBe(first);
-    expect(first.find((entry) => entry.id === 'ext-lab:mode-inquiry')?.source).toBe('plugin');
+    const lab = first.find((entry) => entry.id === 'ext-lab:mode-inquiry');
+    expect(lab?.source).toBe('plugin');
+    expect(lab?.pluginId).toBe('ext-lab');
+    expect(lab?.segmentTypes).toEqual(['inquiry', 'inquiry:sim']);
+    expect(lab?.prepContributionId).toBe('prep-lab');
+    expect(lab?.outlineContributionId).toBe('outline-lab');
+    expect(lab?.teacherWorkspaceId).toBe('mode-lab-teacher');
+    expect(lab?.adapterIds).toEqual(['lab-adapter']);
+    expect(lab?.channels).toEqual(['lab:task']);
   });
 
   it('目录拉取失败时返回空目录且不抛错', async () => {

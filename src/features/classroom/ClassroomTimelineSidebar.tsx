@@ -13,9 +13,11 @@ import {
   LayoutGrid,
 } from 'lucide-react';
 import { ExtensionPointRenderer } from '../../plugin-host/extension-point-renderer';
+import { useOptionalPluginHost } from '../../plugin-host/plugin-host-context';
 import type { WhiteboardPageItem } from '../whiteboard/InteractiveWhiteboard';
 import { isModePacksEnabled } from './mode-pack/flags';
 import { resolveOutlineContribution } from './mode-pack/outlineContribution';
+import { useModePackCatalog } from './mode-pack/useModePackCatalog';
 
 export interface TimelineSegmentItem {
   id: string;
@@ -80,6 +82,9 @@ export function ClassroomTimelineSidebar({
   onStartSegment,
   getPagesForSegment,
 }: ClassroomTimelineSidebarProps) {
+  const modePacks = useModePackCatalog();
+  const pluginHost = useOptionalPluginHost();
+
   return (
     <div className="w-[280px] shrink-0 bg-surface border-r border-theme flex flex-col min-h-0 select-none shadow-xs">
       {/* 顶栏控制：标题、统计与快捷操作 */}
@@ -277,8 +282,40 @@ export function ClassroomTimelineSidebar({
                         const outline = isModePacksEnabled()
                           ? resolveOutlineContribution({
                               segmentType: typeof seg.type === 'string' ? seg.type : null,
+                              packs: modePacks,
                             })
                           : { kind: 'whiteboard-pages' as const, outlineContributionId: 'outline-whiteboard-pages' };
+                        if (outline.kind === 'extension') {
+                          const outlineExtensions = pluginHost?.getExtensions('classroom.outline' as never) ?? [];
+                          const hasExtension = outlineExtensions.some((ext) => {
+                            const cfg = (ext as { slotProps?: Record<string, unknown> }).slotProps ?? {};
+                            const declared = cfg.outlineContributionId;
+                            return (
+                              typeof declared !== 'string' || !declared || declared === outline.outlineContributionId
+                            );
+                          });
+                          if (hasExtension) {
+                            return (
+                              <div
+                                data-testid="mode-pack-outline-extension"
+                                data-outline-id={outline.outlineContributionId}
+                                className="flex flex-col gap-1"
+                              >
+                                <ExtensionPointRenderer
+                                  slot="classroom.outline"
+                                  slotProps={{
+                                    packId: outline.packId,
+                                    outlineContributionId: outline.outlineContributionId,
+                                    segment: seg,
+                                    lessonId: selectedLesson,
+                                    lang,
+                                  }}
+                                />
+                              </div>
+                            );
+                          }
+                          // 没有任何贡献时回退白板页面大纲（阶段 8 决策）。
+                        }
                         if (outline.kind === 'xuean-activities') {
                           return (
                             <div

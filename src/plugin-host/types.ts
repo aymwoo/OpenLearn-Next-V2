@@ -250,6 +250,8 @@ export type ExtensionSlot =
   // ── 课堂教学环节主工作区接管槽位 ──
   | 'classroom.active_segment.main' // 当前活跃教学环节主工作区自定义接管面板（探究仿真实验、代码竞技等）
   | 'classroom.active_segment.student_main' // 学生端对称的活跃环节主工作区接管（与教师端按 segment.type 路由，学案/Moodle 学生视图）
+  | 'classroom.prep' // 第三方 Mode Pack 的备课面（按 prepContributionId / segment.type 分发）
+  | 'classroom.outline' // 第三方 Mode Pack 的课中侧栏大纲（按 outlineContributionId / segment.type 分发）
   // ── 学生端学业对比扩展槽位 ──
   | 'student.academic_year.metric_card' // 学生端多学年综合学业对比自定义指标卡扩展
   // ── 环节节点与学生端徽标微扩展槽位 ──

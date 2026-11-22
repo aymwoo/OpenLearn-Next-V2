@@ -105,6 +105,20 @@ describe('SubmissionAggregator', () => {
     expect((await agg.list({}, 'none')).submissions).toHaveLength(0);
   });
 
+  it('按模式包 adapterIds 过滤适配器', async () => {
+    const reg = new SubmissionRegistry();
+    reg.register(makeAdapter('lab-adapter', 'ext-lab', [makeSubmission()]));
+    reg.register(makeAdapter('xuean-adapter', 'ext-xuean', [makeSubmission({ id: 'xuean:1' })]));
+    const agg = new SubmissionAggregator(reg, gradeWriter);
+
+    const onlyLab = await agg.list({ adapterIds: ['lab-adapter'] });
+    expect(onlyLab.submissions.map((item) => item.id)).toEqual(['ext-xuean:sub-1']);
+    expect(onlyLab.total).toBe(1);
+
+    expect((await agg.list({ adapterIds: ['missing'] })).submissions).toHaveLength(0);
+    expect((await agg.list({ adapterIds: [] })).submissions).toHaveLength(2);
+  });
+
   it('成绩写回走 grade-writer，无映射/找不到提交被拒', async () => {
     const reg = new SubmissionRegistry();
     reg.register(makeAdapter('a1', 'ext-x', [makeSubmission()], { gradeMapping: true }));

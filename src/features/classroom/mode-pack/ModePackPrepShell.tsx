@@ -6,17 +6,21 @@
  * （白板 → LessonEditorView；学案 → XueanEditor）。
  * 顶部环节条始终可见，保证混排课时可在单一壳内切换白板/学案环节。
  */
-import { lazy, Suspense, useEffect, useMemo } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useRef } from 'react';
 import { Loader2 } from 'lucide-react';
 import { useOptionalAppData } from '../../../context/AppDataContext';
+import { ExtensionPointRenderer } from '../../../plugin-host/extension-point-renderer';
+import { useOptionalPluginHost } from '../../../plugin-host/plugin-host-context';
 import {
   DEFAULT_MODE_PACK_SEGMENT_TYPE,
   normalizeSegmentType,
   resolveModePackForSegment,
+  type ModePackContribution,
 } from '../../../../packages/core/plugin-host/mode-pack';
 import { isModePacksEnabled } from './flags';
+import { useModePackCatalog } from './useModePackCatalog';
 import { WHITEBOARD_MODE_PACK, WHITEBOARD_MODE_PACK_ID } from './whiteboardPack';
-import { XUEAN_MODE_PACK, XUEAN_MODE_PACK_ID } from './xueanPack';
+import { XUEAN_MODE_PACK } from './xueanPack';
 import { registerWhiteboardModePack, unregisterWhiteboardModePack } from './registerWhiteboardModePack';
 import { registerXueanModePack, unregisterXueanModePack } from './registerXueanModePack';
 
@@ -88,14 +92,48 @@ export function ModePackPrepShell() {
     };
   }, []);
 
+  const catalog = useModePackCatalog();
+  const pluginHost = useOptionalPluginHost();
+  const lessonId = (appData?.selectedLesson as string | null | undefined) ?? null;
+  const lang = appData?.lang === 'en' ? 'en' : 'zh';
+
+  const packs = useMemo(() => {
+    const merged = new Map<string, ModePackContribution>();
+    for (const pack of BUILTIN_PACKS) merged.set(pack.id, pack);
+    for (const pack of catalog) {
+      if (!merged.has(pack.id)) merged.set(pack.id, pack);
+    }
+    return Array.from(merged.values());
+  }, [catalog]);
+
   const activeSegment = timelineSegments.find((s) => s.id === activeSegmentId);
   const pack = useMemo(
-    () => resolveModePackForSegment(BUILTIN_PACKS, normalizeSegmentType(activeSegment?.type)),
-    [activeSegment?.type],
+    () => resolveModePackForSegment(packs, normalizeSegmentType(activeSegment?.type)),
+    [packs, activeSegment?.type],
   );
 
   const prepId = pack?.prepContributionId ?? WHITEBOARD_MODE_PACK.prepContributionId;
-  const isXuean = pack?.id === XUEAN_MODE_PACK_ID || prepId === XUEAN_MODE_PACK.prepContributionId;
+  const isXuean = prepId === XUEAN_MODE_PACK.prepContributionId;
+  const isWhiteboard = prepId === WHITEBOARD_MODE_PACK.prepContributionId;
+  const hasPrepExtension =
+    !isXuean &&
+    !isWhiteboard &&
+    (pluginHost?.getExtensions('classroom.prep' as never) ?? []).some((ext) => {
+      const cfg = (ext as { slotProps?: Record<string, unknown> }).slotProps ?? {};
+      const declared = cfg.prepContributionId;
+      return typeof declared !== 'string' || !declared || declared === prepId;
+    });
+
+  const warnedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (isXuean || isWhiteboard || hasPrepExtension) {
+      warnedRef.current = null;
+      return;
+    }
+    if (!prepId || warnedRef.current === pack?.id) return;
+    warnedRef.current = pack?.id ?? '';
+    console.warn(`[mode-pack] 备课面贡献未注册，回退白板：pack=${pack?.id} prep=${prepId}`);
+  }, [pack?.id, prepId, isXuean, isWhiteboard, hasPrepExtension]);
 
   return (
     <div
@@ -118,7 +156,22 @@ export function ModePackPrepShell() {
           </div>
         }
       >
-        {isXuean ? <XueanEditor /> : <LessonEditorView />}
+        {isXuean ? (
+          <XueanEditor />
+        ) : isWhiteboard || !hasPrepExtension ? (
+          <LessonEditorView />
+        ) : (
+          <ExtensionPointRenderer
+            slot="classroom.prep"
+            slotProps={{
+              packId: pack?.id,
+              prepContributionId: prepId,
+              segment: activeSegment,
+              lessonId,
+              lang,
+            }}
+          />
+        )}
       </Suspense>
     </div>
   );

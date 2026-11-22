@@ -63,10 +63,12 @@ export class SubmissionAggregator {
     private gradeWriter: GradeWriterPort,
   ) {}
 
-  /** 聚合所有（或指定 mode 的）适配器提交，去重 + 排序 */
+  /** 聚合所有（或指定 mode / adapter 的）适配器提交，去重 + 排序 */
   async list(filter: SubmissionFilter, modeId?: string): Promise<AggregatedSubmissionsResult> {
+    const wantedAdapters = filter.adapterIds && filter.adapterIds.length > 0 ? new Set(filter.adapterIds) : null;
     const all = this.registry
       .list()
+      .filter((a) => !wantedAdapters || wantedAdapters.has(a.descriptor.id))
       .filter(
         (a) =>
           !a.descriptor.modeIds ||

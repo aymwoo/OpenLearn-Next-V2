@@ -42,6 +42,8 @@ export interface SubmissionFilter {
   classId?: string;
   studentId?: string;
   kinds?: SubmissionKind[];
+  /** 只聚合这些适配器（模式包声明 `adapterIds` 时由宿主传入）。 */
+  adapterIds?: string[];
   since?: number;
   limit?: number;
 }

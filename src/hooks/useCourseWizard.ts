@@ -18,6 +18,8 @@ export interface WizardModePackChoice {
   source: 'builtin' | 'plugin';
   /** 包认领的环节类型，用于判断是否走学案流程 */
   segmentTypes: string[];
+  /** 服务端能力诊断：声明了但未注册的 adapter / channel。 */
+  warnings?: string[];
 }
 
 const DEFAULT_MODE_PACK_CHOICES: WizardModePackChoice[] = BUILTIN_MODE_PACKS.map((pack) => ({
@@ -162,6 +164,9 @@ export function useCourseWizard(options: UseCourseWizardOptions) {
             segmentTypes: Array.isArray(row.segmentTypes)
               ? row.segmentTypes.filter((type): type is string => typeof type === 'string')
               : [],
+            warnings: Array.isArray(row.warnings)
+              ? row.warnings.filter((warning): warning is string => typeof warning === 'string')
+              : undefined,
           });
         }
         if (!cancelled && choices.length > 0) setModePackChoices(choices);

@@ -133,12 +133,14 @@ export function CourseWizardModal(props: CourseWizardModalProps) {
   const modeChoices = (modePackChoices && modePackChoices.length > 0 ? modePackChoices : FALLBACK_MODE_CHOICES).map(
     (pack) => {
       const meta = BUILTIN_MODE_CHOICE_META[pack.id];
+      const warningZh = pack.warnings?.length ? `（${pack.warnings.join('；')}）` : '';
+      const warningEn = pack.warnings?.length ? ` (${pack.warnings.join('; ')})` : '';
       return {
         id: pack.id,
         zh: meta?.zh ?? pack.label,
         en: meta?.en ?? pack.labelEn ?? pack.label,
-        hintZh: meta?.hintZh ?? '由插件提供的教学模式。',
-        hintEn: meta?.hintEn ?? 'Teaching mode contributed by a plugin.',
+        hintZh: meta?.hintZh ?? `由插件提供的教学模式。${warningZh}`,
+        hintEn: meta?.hintEn ?? `Teaching mode contributed by a plugin.${warningEn}`,
       };
     },
   );

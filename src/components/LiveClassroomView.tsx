@@ -603,8 +603,22 @@ export function LiveClassroomView({
 
   const host = useOptionalPluginHost();
   const segmentMainExtensions = host?.getExtensions('classroom.active_segment.main') || [];
-  const hasSegmentMainExtension = segmentMainExtensions.length > 0;
   const currentActiveSegment = timelineSegments.find((s) => s.id === activeSegmentId);
+  const currentSegmentType = isModePacksEnabled()
+    ? normalizeSegmentType((currentActiveSegment as { type?: string } | undefined)?.type)
+    : (currentActiveSegment as { type?: string } | undefined)?.type;
+  // 只统计覆盖当前环节类型的贡献：别的包注册了工作区，不应让白板课出现空的中栏 tab。
+  const hasSegmentMainExtension = currentSegmentType
+    ? segmentMainExtensions.some((ext) => {
+        const e = ext as { targetType?: string; slotProps?: Record<string, unknown> };
+        const cfg = e.slotProps ?? {};
+        const declared = e.targetType ?? cfg.segmentType ?? cfg.targetType;
+        return extensionCoversSegmentType(
+          typeof declared === 'string' ? declared : declared == null ? null : String(declared),
+          currentSegmentType,
+        );
+      })
+    : segmentMainExtensions.length > 0;
 
   // Mode Pack 灰度：仅 flag 开启时注册内置白板/学案工作区；关闭时卸载，保持既有路径。
   useEffect(() => {

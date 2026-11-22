@@ -180,6 +180,8 @@ export type ExtensionSlot =
   // ── 课堂主工作区接管与课表导入 ──
   | 'classroom.active_segment.main'
   | 'classroom.active_segment.student_main'
+  | 'classroom.prep'
+  | 'classroom.outline'
   | 'timetable.import.source'
   | 'timetable.entry.action'
   // ── 全局壳层后台任务 ──
@@ -386,6 +388,8 @@ export type AnyExtensionSlot = ExtensionSlot | AnchorSlot | (string & {});
 | `student.academic_year.metric_card`     | `src/features/student/StudentAcademicYearComparison.tsx`                                                                                | `{ studentId, comparisonData, selectedYears, lang }`                                                                           |
 | `classroom.active_segment.main`         | `src/components/LiveClassroomView.tsx`（活跃环节主工作区，含兜底分支）                                                                  | `{ segment, lessonId, classId, lang, onRefresh, flow }`                                                                        |
 | `classroom.active_segment.student_main` | `src/features/student/StudentLessonView.tsx`（学生端对称工作区，按 segment.type 路由）                                                  | `{ segment, lessonId, classId, lang, flow }`                                                                                   |
+| `classroom.prep`                        | `src/features/classroom/mode-pack/ModePackPrepShell.tsx`（第三方模式包备课面；未注册时回退白板备课面）                                  | `{ packId, prepContributionId, segment, lessonId, lang }`                                                                      |
+| `classroom.outline`                     | `src/features/classroom/ClassroomTimelineSidebar.tsx`（第三方模式包课中大纲；未注册时回退白板页面大纲）                                 | `{ packId, outlineContributionId, segment, lessonId, lang }`                                                                   |
 | `timetable.import.source`               | `src/components/timetable/sub-views/TimetableOcrView.tsx`                                                                               | `{ lang, onImportEntries }`                                                                                                    |
 | `timetable.entry.action`                | `src/components/timetable/sub-views/TimetableCalendarView.tsx`（周历卡片 + 列表行两处）                                                 | `{ schedule, lang, onEdit }`                                                                                                   |
 | `header.async_task.item`                | `src/components/AppHeader.tsx`                                                                                                          | `{ lang, activeRole, teacherTab, setTeacherTab }`                                                                              |
@@ -1341,6 +1345,8 @@ export default function SandboxConfig({ segmentType, segment, readOnly, onPatch 
 **`classroom.active_segment.student_main`** 是它的**学生端对称槽**：渲染在 `StudentLessonView` 的主内容区。两槽都按 `segment.type` 分发——注册扩展时声明 `targetType`（或在 `slotProps.segmentType`），经 `extensionCoversSegmentType` 做**精确或前缀**匹配（如声明 `xuean` 可覆盖 `xuean:study`）；未声明者对所有环节可见（向后兼容）。注入的 `flow` 是 `ClassroomFlowController`（`snapshot` 只读快照 + `setActiveSegment`/`advanceStage`/`sendMessage`/`refresh` 动作），插件复用它驱动流程而不自建引擎。若扩展声明 `primary: true`，命中该环节时主视图自动切到工作区（教师端）/替代原生内容面板（学生端），实现「不用白板」的 Mode Pack 接管。灰度见 `docs/reference/classroom-flow-server.md` §1.1。
 
 > 不要把主工作区做成 `h-screen` 全屏——容器是受限高度的 `flex-grow` 区域。需要全屏就用 `ctx.ui.registerFullscreenRenderer`（§5）。
+
+**`classroom.prep` / `classroom.outline`** 是第三方 Mode Pack 的备课面与课中大纲槽位，按 `prepContributionId` / `outlineContributionId` 过滤贡献。宿主找不到匹配贡献时不会留白：备课面回退 `LessonEditorView`，大纲回退白板页面列表。
 
 **`timetable.import.source`** —— 课表「AI 识别导入」子页，识别按钮下方的外部导入区。`{ lang, onImportEntries }`。插件解析完 Excel/CSV/第三方教务 API 后调 `onImportEntries(entries)`，宿主把结果灌进识别结果表格交给教师审核——**插件不要自己写库**，统一走审核后导入。
 

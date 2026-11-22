@@ -10,13 +10,14 @@ import {
   resolveLessonModePackDeliveryMode,
   type CourseDeliveryMode,
 } from '../../../../packages/core/plugin-host/course-delivery-mode';
+import type { ModePackContribution } from '../../../../packages/core/plugin-host/mode-pack';
 
-export interface ModePackCatalogEntry {
-  id: string;
-  label: string;
-  labelEn?: string;
+export interface ModePackCatalogEntry extends ModePackContribution {
   source: 'builtin' | 'plugin';
-  segmentTypes: string[];
+  pluginId?: string;
+  pluginName?: string;
+  /** 服务端能力诊断：声明了但未注册的 adapter / channel。 */
+  warnings?: string[];
 }
 
 export interface LessonModeView {
@@ -36,10 +37,26 @@ function parseEntry(row: Record<string, unknown>): ModePackCatalogEntry | null {
     id: row.id,
     label: row.label,
     labelEn: typeof row.labelEn === 'string' ? row.labelEn : undefined,
-    source: row.source === 'plugin' ? 'plugin' : 'builtin',
     segmentTypes: Array.isArray(row.segmentTypes)
       ? row.segmentTypes.filter((type): type is string => typeof type === 'string')
       : [],
+    isDefault: row.isDefault === true,
+    prepContributionId: typeof row.prepContributionId === 'string' ? row.prepContributionId : undefined,
+    outlineContributionId: typeof row.outlineContributionId === 'string' ? row.outlineContributionId : undefined,
+    teacherWorkspaceId: typeof row.teacherWorkspaceId === 'string' ? row.teacherWorkspaceId : undefined,
+    studentWorkspaceId: typeof row.studentWorkspaceId === 'string' ? row.studentWorkspaceId : undefined,
+    adapterIds: Array.isArray(row.adapterIds)
+      ? row.adapterIds.filter((id): id is string => typeof id === 'string')
+      : undefined,
+    channels: Array.isArray(row.channels)
+      ? row.channels.filter((id): id is string => typeof id === 'string')
+      : undefined,
+    source: row.source === 'plugin' ? 'plugin' : 'builtin',
+    pluginId: typeof row.pluginId === 'string' ? row.pluginId : undefined,
+    pluginName: typeof row.pluginName === 'string' ? row.pluginName : undefined,
+    warnings: Array.isArray(row.warnings)
+      ? row.warnings.filter((warning): warning is string => typeof warning === 'string')
+      : undefined,
   };
 }
 

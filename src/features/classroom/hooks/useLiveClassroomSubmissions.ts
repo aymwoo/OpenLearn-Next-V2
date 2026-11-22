@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { listFromEnvelope } from '../../../utils/listEnvelope.js';
 import { onSocketInstance } from '../../../services/socket-service';
-import { isModePacksEnabled } from '../mode-pack';
+import { isModePacksEnabled, getActiveModePackId } from '../mode-pack';
+import { useModePackCatalog } from '../mode-pack/useModePackCatalog';
 import { normalizeSegmentType } from '../../../../packages/core/plugin-host/mode-pack';
 import { FINISHED_STATUSES, IN_PROGRESS_STATUSES } from '../LiveSubmissionsPanel';
 import type { TeacherMiddleTab } from '../map-teacher-middle-tab';
@@ -39,6 +40,8 @@ export function useLiveClassroomSubmissions(options: {
     addToast,
     fetchStudents,
   } = options;
+
+  const modePacks = useModePackCatalog();
 
   const [attempts, setAttempts] = useState<any[]>([]);
   const [pluginSubmissions, setPluginSubmissions] = useState<PluginSubmissionRow[]>([]);
@@ -97,6 +100,8 @@ export function useLiveClassroomSubmissions(options: {
         const seg = timelineSegments.find((s) => s.id === activeSegmentId) as { type?: string } | undefined;
         const t = normalizeSegmentType(seg?.type);
         if (t === 'xuean' || t.startsWith('xuean:')) params.set('modeId', 'xuean');
+        const activePack = modePacks.find((pack) => pack.id === getActiveModePackId());
+        if (activePack?.adapterIds?.length) params.set('adapterIds', activePack.adapterIds.join(','));
       }
       const res = await fetch(`/api/classroomflowserver/submissions?${params.toString()}`);
       if (res.ok) {
@@ -106,7 +111,7 @@ export function useLiveClassroomSubmissions(options: {
     } catch {
       // 提交适配器未启用时保持空列表
     }
-  }, [selectedLesson, liveClassSelectedClassId, activeSegmentId, timelineSegments]);
+  }, [selectedLesson, liveClassSelectedClassId, activeSegmentId, timelineSegments, modePacks]);
 
   const handleGradePluginSubmission = useCallback(
     async (adapterId: string, submissionId: string, score: number) => {

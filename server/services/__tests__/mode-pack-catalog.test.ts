@@ -81,6 +81,55 @@ describe('collectModePacks', () => {
     expect(warn).toHaveBeenCalled();
     warn.mockRestore();
   });
+
+  it('声明的 adapter / channel 未注册时返回 warnings', () => {
+    const packs = collectModePacks(
+      [
+        plugin({
+          manifest: manifest({
+            contributes: {
+              'mode.pack': [
+                {
+                  id: 'ext-demo:mode-lab',
+                  label: '实验模式',
+                  segmentTypes: ['lab'],
+                  adapterIds: ['lab-adapter'],
+                  channels: ['lab:task'],
+                },
+              ],
+            },
+          }),
+        }),
+      ],
+      { adapterIds: new Set(['other-adapter']), channelNames: new Set(['other:channel']) },
+    );
+    const demo = packs.find((pack) => pack.id === 'ext-demo:mode-lab');
+    expect(demo?.warnings).toEqual(['适配器未注册：lab-adapter', '消息通道未注册：lab:task']);
+  });
+
+  it('能力已注册时不产生 warnings', () => {
+    const packs = collectModePacks(
+      [
+        plugin({
+          manifest: manifest({
+            contributes: {
+              'mode.pack': [
+                {
+                  id: 'ext-demo:mode-lab',
+                  label: '实验模式',
+                  segmentTypes: ['lab'],
+                  adapterIds: ['lab-adapter'],
+                  channels: ['lab:task'],
+                },
+              ],
+            },
+          }),
+        }),
+      ],
+      { adapterIds: new Set(['lab-adapter']), channelNames: new Set(['lab:task']) },
+    );
+    expect(packs.find((pack) => pack.id === 'ext-demo:mode-lab')?.warnings).toBeUndefined();
+  });
 });
 
 describe('resolveLessonModeBinding', () => {

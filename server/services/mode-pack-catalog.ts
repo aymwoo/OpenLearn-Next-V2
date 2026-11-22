@@ -33,6 +33,14 @@ export interface ModePackDescriptor extends ModePackContribution {
   pluginId?: string;
   /** 第三方插件展示名（source === 'plugin' 时存在） */
   pluginName?: string;
+  /** 声明了但当前未注册的 adapter / channel（仅诊断，不阻止目录返回）。 */
+  warnings?: string[];
+}
+
+/** 宿主当前已注册的能力，用于诊断模式包声明。 */
+export interface ModePackCapabilities {
+  adapterIds: ReadonlySet<string>;
+  channelNames: ReadonlySet<string>;
 }
 
 /** `listPlugins()` 返回值中本模块关心的字段（便于单元测试传入最小夹具）。 */
@@ -72,7 +80,10 @@ function isActivePlugin(record: ModePackPluginRecord): boolean {
 /**
  * 从插件列表构建模式包目录（纯函数，便于测试）。
  */
-export function collectModePacks(plugins: readonly ModePackPluginRecord[]): ModePackDescriptor[] {
+export function collectModePacks(
+  plugins: readonly ModePackPluginRecord[],
+  capabilities?: ModePackCapabilities,
+): ModePackDescriptor[] {
   const descriptors: ModePackDescriptor[] = BUILTIN_MODE_PACKS.map((pack) => ({
     ...pack,
     source: 'builtin' as const,
@@ -95,11 +106,21 @@ export function collectModePacks(plugins: readonly ModePackPluginRecord[]): Mode
         continue;
       }
       seen.add(pack.id);
+      const warnings: string[] = [];
+      if (capabilities) {
+        for (const adapterId of pack.adapterIds ?? []) {
+          if (!capabilities.adapterIds.has(adapterId)) warnings.push(`适配器未注册：${adapterId}`);
+        }
+        for (const channel of pack.channels ?? []) {
+          if (!capabilities.channelNames.has(channel)) warnings.push(`消息通道未注册：${channel}`);
+        }
+      }
       descriptors.push({
         ...(pack as ModePackContribution),
         source: 'plugin',
         pluginId: parsed.data.id,
         pluginName: parsed.data.name,
+        ...(warnings.length > 0 ? { warnings } : {}),
       });
     }
   }
@@ -110,8 +131,8 @@ export function collectModePacks(plugins: readonly ModePackPluginRecord[]): Mode
 /**
  * 读取当前可用模式包目录。插件宿主不可用（单测 / 早期启动）时只返回内置包。
  */
-export function listModePacks(): ModePackDescriptor[] {
-  return collectModePacks(readActivePluginRecords());
+export function listModePacks(capabilities?: ModePackCapabilities): ModePackDescriptor[] {
+  return collectModePacks(readActivePluginRecords(), capabilities);
 }
 
 function readActivePluginRecords(): readonly ModePackPluginRecord[] {

@@ -505,6 +505,20 @@ export function ExtensionPointRenderer({
     }
   }
 
+  if (slot === 'classroom.prep' || slot === 'classroom.outline') {
+    const wanted =
+      slot === 'classroom.outline'
+        ? (slotProps?.outlineContributionId as string | undefined)
+        : (slotProps?.prepContributionId as string | undefined);
+    if (wanted) {
+      extensions = extensions.filter((ext) => {
+        const cfg = (ext.slotProps ?? {}) as Record<string, unknown>;
+        const declared = slot === 'classroom.outline' ? cfg.outlineContributionId : cfg.prepContributionId;
+        return typeof declared !== 'string' || !declared || declared === wanted;
+      });
+    }
+  }
+
   if (extensions.length === 0) return null;
 
   const renderTabPanelContent = (activeExt: any, extraProps: Record<string, any>, fallbackText: string) => {
