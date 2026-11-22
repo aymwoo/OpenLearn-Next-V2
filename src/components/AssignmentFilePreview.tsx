@@ -18,7 +18,7 @@
  *
  * ## 安全口径
  *
- * - 所有内容都走**带鉴权**的 `/api/assignments/:assignmentId/files/:fileId`，
+ * - 所有内容都走**带鉴权**的 `/api/learning-surface-assignments/:assignmentId/files/:fileId`，
  *   不经过任何静态目录（`storage/` 从未被 `express.static` 暴露）。
  * - 文本内容以 `text/plain` 拉取并用 `<pre>` 渲染 —— 本组件**不做**任何原始 HTML
  *   注入（React 的 innerHTML 类 API 一次都不出现），学生上传的 `.html` 文件
@@ -78,7 +78,7 @@ export const AssignmentFilePreview: React.FC<AssignmentFilePreviewProps> = ({
   const fileName = file.original_name || file.name || 'attachment';
   const strategy = useMemo(() => resolvePreviewStrategy({ name: fileName }), [fileName]);
 
-  const baseUrl = `/api/assignments/${encodeURIComponent(assignmentId)}/files/${encodeURIComponent(file.id)}`;
+  const baseUrl = `/api/learning-surface-assignments/${encodeURIComponent(assignmentId)}/files/${encodeURIComponent(file.id)}`;
   const inlineUrl = `${baseUrl}?disposition=inline`;
   const downloadUrl = baseUrl;
 

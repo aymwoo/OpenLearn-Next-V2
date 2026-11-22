@@ -15,8 +15,8 @@ import { sanitizeHref } from '../../../../packages/core/security/url-safety.js';
 /**
  * 学生端互评面板。
  *
- * 数据来自 `GET /api/assignments/:id` 的 `peerReviewTasks`（服务端已做双盲处理：
- * 只给被评作业内容，不给作者身份），提交走 `POST /api/assignments/:id/peer-review`
+ * 数据来自 `GET /api/learning-surface-assignments/:id` 的 `peerReviewTasks`（服务端已做双盲处理：
+ * 只给被评作业内容，不给作者身份），提交走 `POST /api/learning-surface-assignments/:id/peer-review`
  * （reviewerId 由服务端会话决定，前端无法冒充他人）。
  */
 
@@ -347,7 +347,7 @@ export function AssignmentPeerReviewPanel({
                         <span className="text-[11px] text-muted shrink-0">{formatBytes(file.size)}</span>
                       </button>
                       <a
-                        href={`/api/assignments/${encodeURIComponent(assignmentId)}/files/${encodeURIComponent(file.id)}`}
+                        href={`/api/learning-surface-assignments/${encodeURIComponent(assignmentId)}/files/${encodeURIComponent(file.id)}`}
                         target="_blank"
                         rel="noreferrer"
                         className="shrink-0 text-muted hover:text-orange-600"

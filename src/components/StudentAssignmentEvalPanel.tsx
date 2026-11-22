@@ -52,7 +52,7 @@ function describeSubmission(sub: any): string {
 /** 附件下载地址：作业中心的文件存在 `plugin_assignment_files`，必须走带权限的下载端点 */
 function fileHref(sub: any, file: any): string | null {
   if (!file?.fileId || !sub?.assignment_id) return null;
-  return `/api/assignments/${sub.assignment_id}/files/${file.fileId}`;
+  return `/api/learning-surface-assignments/${sub.assignment_id}/files/${file.fileId}`;
 }
 
 export function StudentAssignmentEvalPanel({ lessonId, studentId, lang, addToast }: StudentAssignmentEvalPanelProps) {

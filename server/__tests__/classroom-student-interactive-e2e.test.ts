@@ -477,7 +477,7 @@ describe('课堂学生互动与教师采集全链路自动化测试 (End-to-End 
 
     it('教师端拉取全部提交，批改并记录成绩与评语', async () => {
       // 教师端获取作业提交列表
-      const listRes = await get(`/api/assignments/${assignmentId}/submissions`, teacherToken);
+      const listRes = await get(`/api/learning-surface-assignments/${assignmentId}/submissions`, teacherToken);
       expect(listRes.status).toBe(200);
       const list: any[] = await listRes.json();
       expect(list.length).toBeGreaterThanOrEqual(2);

@@ -25,7 +25,11 @@ import { useAppStore } from '../../store/appStore';
 import { useAppData } from '../../context/AppDataContext';
 import { ExtensionPointRenderer } from '../../plugin-host/extension-point-renderer';
 import { extractCourseSummary } from '../../utils/courseSummary';
-import { resolveCourseDeliveryMode } from '../../../packages/core/plugin-host/course-delivery-mode';
+import {
+  resolveLessonDeliveryMode,
+  resolveLessonModeBadge,
+  useModePackCatalog,
+} from '../classroom/mode-pack/useModePackCatalog';
 
 interface CourseStats {
   whiteboardCount: number;
@@ -76,6 +80,7 @@ export function CourseManagement() {
 
   const [filterMyLessons, setFilterMyLessons] = useState(false);
   const [filterDeliveryMode, setFilterDeliveryMode] = useState<'all' | 'whiteboard' | 'xuean'>('all');
+  const modePacks = useModePackCatalog();
   const [deleteTarget, setDeleteTarget] = useState<Lesson | null>(null);
   const [deleteStats, setDeleteStats] = useState<CourseStats | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
@@ -326,10 +331,7 @@ export function CourseManagement() {
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
               {filteredLessons
                 .filter((lesson) => {
-                  if (
-                    filterDeliveryMode !== 'all' &&
-                    resolveCourseDeliveryMode(lesson.delivery_mode) !== filterDeliveryMode
-                  ) {
+                  if (filterDeliveryMode !== 'all' && resolveLessonDeliveryMode(lesson) !== filterDeliveryMode) {
                     return false;
                   }
                   if (!filterMyLessons) return true;
@@ -346,6 +348,7 @@ export function CourseManagement() {
                     lesson.creator_id === effectiveSession?.userId ||
                     lesson.creator_id === effectiveSession?.username;
                   const canManage = isAdmin || isOwner;
+                  const modeBadge = resolveLessonModeBadge(lesson, modePacks, lang);
 
                   return (
                     <div
@@ -365,19 +368,14 @@ export function CourseManagement() {
                           <ExtensionPointRenderer slot="course.card.badge" slotProps={{ course: lesson }} />
                           <span
                             data-testid="course-delivery-mode-badge"
+                            title={modeBadge.title}
                             className={`text-xs font-medium px-1.5 py-0.5 rounded border ${
-                              resolveCourseDeliveryMode(lesson.delivery_mode) === 'xuean'
+                              modeBadge.mode === 'xuean'
                                 ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
                                 : 'bg-sky-50 text-sky-800 border-sky-200'
                             }`}
                           >
-                            {resolveCourseDeliveryMode(lesson.delivery_mode) === 'xuean'
-                              ? lang === 'zh'
-                                ? '学案'
-                                : 'Guided study'
-                              : lang === 'zh'
-                                ? '白板'
-                                : 'Whiteboard'}
+                            {modeBadge.label}
                           </span>
                           {lesson.creator_name ? (
                             <span

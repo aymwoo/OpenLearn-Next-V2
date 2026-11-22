@@ -337,8 +337,8 @@ describe('业务黄金旅程场景测试：作业与成绩全生命周期 (Assig
   // 阶段 3: 教师批改、评分与评语落库 (Teacher Grading & Feedback)
   // ══════════════════════════════════════════════════════════════════════════════
   describe('阶段 3: 教师批改与打分 (Teacher Grading & Feedback)', () => {
-    it('教师拉取作业全部学生提交列表 GET /api/assignments/:id/submissions', async () => {
-      const res = await get(`/api/assignments/${assignmentId}/submissions`, teacherToken);
+    it('教师拉取作业全部学生提交列表 GET /api/learning-surface-assignments/:id/submissions', async () => {
+      const res = await get(`/api/learning-surface-assignments/${assignmentId}/submissions`, teacherToken);
       expect(res.status).toBe(200);
       const submissions = await res.json();
       expect(submissions.length).toBe(2);
@@ -474,7 +474,7 @@ describe('业务黄金旅程场景测试：作业与成绩全生命周期 (Assig
       const endpoints = [
         { url: `${baseUrl}/api/classes/${classId}/assignments`, method: 'GET' },
         { url: `${baseUrl}/api/learning-surface-assignments/create-suggested-quiz`, method: 'POST' },
-        { url: `${baseUrl}/api/assignments/${assignmentId}/submissions`, method: 'GET' },
+        { url: `${baseUrl}/api/learning-surface-assignments/${assignmentId}/submissions`, method: 'GET' },
         { url: `${baseUrl}/api/classes/${classId}/grade-weights`, method: 'POST' },
       ];
 
@@ -489,7 +489,7 @@ describe('业务黄金旅程场景测试：作业与成绩全生命周期 (Assig
         { url: `${baseUrl}/api/learning-surface-assignments/create-suggested-quiz`, body: {} },
         { url: `${baseUrl}/api/classes/${classId}/grade-weights`, body: { attendance_weight: 1 } },
         { url: `${baseUrl}/api/classes/${classId}/exams`, body: { title: '非法考试' } },
-        { url: `${baseUrl}/api/assignments/${assignmentId}/submissions`, method: 'GET' },
+        { url: `${baseUrl}/api/learning-surface-assignments/${assignmentId}/submissions`, method: 'GET' },
       ];
 
       for (const ep of forbiddenEndpoints) {

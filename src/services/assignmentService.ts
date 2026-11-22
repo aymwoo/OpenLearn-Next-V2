@@ -6,7 +6,7 @@
  */
 
 export async function getAssignmentSubmissions(assignmentId: string): Promise<{ ok: boolean; data?: any }> {
-  const res = await fetch(`/api/assignments/${assignmentId}/submissions`);
+  const res = await fetch(`/api/learning-surface-assignments/${assignmentId}/submissions`);
   if (!res.ok) return { ok: false };
   return { ok: true, data: await res.json() };
 }

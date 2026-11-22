@@ -39,7 +39,7 @@ describe('AssignmentFilePreview', () => {
   it('图片 → <img>，地址带鉴权且走 inline 端点', () => {
     renderPreview('照片.png');
     const img = screen.getByTestId('assignment-file-preview-image') as HTMLImageElement;
-    expect(img.src).toContain(`/api/assignments/${assignmentId}/files/af-preview-0001`);
+    expect(img.src).toContain(`/api/learning-surface-assignments/${assignmentId}/files/af-preview-0001`);
     expect(img.src).toContain('disposition=inline');
   });
 
@@ -72,7 +72,9 @@ describe('AssignmentFilePreview', () => {
     renderPreview('方案.docx');
     expect(screen.getByTestId('assignment-file-preview-unsupported')).toBeTruthy();
     const download = document.querySelector('a[download], a[href*="/files/"]') as HTMLAnchorElement;
-    expect(download?.getAttribute('href')).toContain(`/api/assignments/${assignmentId}/files/af-preview-0001`);
+    expect(download?.getAttribute('href')).toContain(
+      `/api/learning-surface-assignments/${assignmentId}/files/af-preview-0001`,
+    );
   });
 
   it('扩展插槽：只有声明能处理该类型的插件才出现', () => {

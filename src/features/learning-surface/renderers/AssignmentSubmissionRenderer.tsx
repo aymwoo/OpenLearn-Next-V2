@@ -50,7 +50,7 @@ export function AssignmentSubmissionRenderer({ contentRef, lessonId, preview }: 
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/assignments/${encodeURIComponent(sourceId)}`);
+      const res = await fetch(`/api/learning-surface-assignments/${encodeURIComponent(sourceId)}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       setDetail((await res.json()) as AssignmentDetail);
     } catch (err: unknown) {

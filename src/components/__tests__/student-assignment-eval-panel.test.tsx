@@ -76,7 +76,7 @@ describe('StudentAssignmentEvalPanel 空 file_path', () => {
     expect(screen.getByText('这是我的机器人设计方案说明。')).toBeDefined();
     // 附件走带权限的下载端点
     const link = nameNodes.map((n) => n.closest('a')).find((a) => a !== null) as HTMLAnchorElement;
-    expect(link.getAttribute('href')).toBe('/api/assignments/asg-eval-1/files/file-eval-1');
+    expect(link.getAttribute('href')).toBe('/api/learning-surface-assignments/asg-eval-1/files/file-eval-1');
     // 版本号仍要展示
     expect(screen.getByText('V2')).toBeDefined();
   });

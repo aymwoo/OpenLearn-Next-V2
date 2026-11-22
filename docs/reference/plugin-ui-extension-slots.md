@@ -1177,7 +1177,7 @@ export interface AssignmentFilePreviewSlotProps {
 
 ### 安全口径
 
-1. 所有内容都走**带鉴权**的 `/api/assignments/:assignmentId/files/:fileId`，
+1. 所有内容都走**带鉴权**的 `/api/learning-surface-assignments/:assignmentId/files/:fileId`，
    不经过任何静态目录（`storage/` 从未被 `express.static` 暴露）。
 2. 服务端按**扩展名**推导 Content-Type，绝不采信上传时客户端自报的 mime。
 3. `text/html` / `image/svg+xml` 这类**可执行文档**一律强制下载（`attachment`），

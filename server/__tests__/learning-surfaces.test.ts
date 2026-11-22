@@ -126,6 +126,8 @@ describe('learning-surface 路由（阶段 1 状态底座）', () => {
 
   afterAll(async () => {
     const db = kernelContainer.db;
+    db.prepare('DELETE FROM student_lesson_progress WHERE lesson_id = ?').run(lessonId);
+    db.prepare('DELETE FROM whiteboard_elements WHERE lesson_id = ?').run(lessonId);
     db.prepare('DELETE FROM learning_surface_attempts WHERE lesson_id = ?').run(lessonId);
     db.prepare('DELETE FROM learning_surfaces WHERE lesson_id = ?').run(lessonId);
     db.prepare('DELETE FROM lessons WHERE id = ?').run(lessonId);
@@ -360,5 +362,77 @@ describe('learning-surface 路由（阶段 1 状态底座）', () => {
       body: JSON.stringify({ surfaceId }),
     });
     expect(recreate.status).toBe(404);
+  });
+
+  it('课时级 Surface 汇总：排除预览、取最新 attempt、按满分归一并列出未交名单', async () => {
+    const db = kernelContainer.db;
+
+    const insertProgress = db.prepare(
+      'INSERT OR REPLACE INTO student_lesson_progress (student_id, lesson_id, completed, progress_percent, assigned_at) VALUES (?, ?, ?, ?, ?)',
+    );
+    insertProgress.run(studentA, lessonId, 0, 0, Date.now());
+    insertProgress.run(studentB, lessonId, 0, 0, Date.now());
+
+    const surface = await createSurface(teacherToken, { ownerId: 'wb-el-summary', title: '课中汇总' });
+    expect(surface.status).toBe(201);
+    const surfaceId = surface.body.id as string;
+
+    db.prepare(
+      "INSERT OR REPLACE INTO whiteboard_elements (id, lesson_id, type, data, created_at) VALUES (?, ?, 'learning_surface', ?, ?)",
+    ).run(
+      'wb-el-summary',
+      lessonId,
+      JSON.stringify({ surfaceId, segmentId: 'seg-summary', x: 0, y: 0, width: 400, height: 300 }),
+      Date.now(),
+    );
+
+    // 学生 A：提交并带自动分；学生 B：只开始未提交。
+    const attemptA = await api('/api/learning-surface-attempts', {
+      method: 'POST',
+      headers: cookie(tokenA),
+      body: JSON.stringify({ surfaceId }),
+    });
+    await api(`/api/learning-surface-attempts/${attemptA.body.id}`, {
+      method: 'PATCH',
+      headers: cookie(tokenA),
+      body: JSON.stringify({ completion: 0.8, autoScore: 8, maxScore: 10 }),
+    });
+    await api(`/api/learning-surface-attempts/${attemptA.body.id}/submit`, {
+      method: 'POST',
+      headers: cookie(tokenA),
+      body: JSON.stringify({ autoScore: 8, maxScore: 10 }),
+    });
+
+    const attemptB = await api('/api/learning-surface-attempts', {
+      method: 'POST',
+      headers: cookie(tokenB),
+      body: JSON.stringify({ surfaceId }),
+    });
+    await api(`/api/learning-surface-attempts/${attemptB.body.id}`, {
+      method: 'PATCH',
+      headers: cookie(tokenB),
+      body: JSON.stringify({ completion: 0.4 }),
+    });
+
+    const summary = await api(`/api/lessons/${lessonId}/learning-surface-summary`, {
+      headers: cookie(teacherToken),
+    });
+    expect(summary.status).toBe(200);
+    const row = (summary.body.surfaces as Array<Record<string, any>>).find((item) => item.surfaceId === surfaceId);
+    expect(row).toBeDefined();
+    expect(row?.title).toBe('课中汇总');
+    expect(row?.segmentId).toBe('seg-summary');
+    expect(row?.rosterCount).toBe(2);
+    expect(row?.startedCount).toBe(2);
+    expect(row?.submittedCount).toBe(1);
+    // 提交后 completion 归 1；B 停留在 0.4，均值 0.7。
+    expect(row?.avgCompletion).toBeCloseTo(0.7, 5);
+    expect(row?.avgScorePercent).toBeCloseTo(80, 5);
+    expect((row?.pendingStudents as Array<{ studentId: string }>).map((item) => item.studentId)).toEqual([studentB]);
+
+    const forbidden = await api(`/api/lessons/${lessonId}/learning-surface-summary`, {
+      headers: cookie(tokenA),
+    });
+    expect(forbidden.status).toBe(403);
   });
 });

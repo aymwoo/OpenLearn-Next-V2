@@ -497,6 +497,30 @@ describe('assignment-hub 路由（上传 / 下载 / 提交）', () => {
     expect(scopedRow.submission.version).toBe(1);
   });
 
+  it('读路径收口：新旧端点返回同一份列表，旧端点带 Deprecation 头', async () => {
+    resetAssignmentState();
+    await submitWork(studentToken, { textContent: '读路径收口' });
+
+    const legacy = await fetch(`${baseUrl}/api/assignments?lessonId=lesson-hub-0001`, {
+      headers: cookie(studentToken),
+    });
+    expect(legacy.status).toBe(200);
+    expect(legacy.headers.get('deprecation')).toBe('true');
+    expect(legacy.headers.get('link') || '').toContain('/api/learning-surface-assignments?lessonId=lesson-hub-0001');
+
+    const canonical = await fetch(`${baseUrl}/api/learning-surface-assignments?lessonId=lesson-hub-0001`, {
+      headers: cookie(studentToken),
+    });
+    expect(canonical.status).toBe(200);
+    expect(canonical.headers.get('deprecation')).toBeNull();
+
+    const legacyBody: any = await legacy.json();
+    const canonicalBody: any = await canonical.json();
+    expect((canonicalBody.assignments || []).map((a: any) => a.id)).toEqual(
+      (legacyBody.assignments || []).map((a: any) => a.id),
+    );
+  });
+
   it('教师新建作业：不挂班级也能创建（POST /api/assignments 返回 assignmentId 供白板绑定）', async () => {
     // 回归：`assignment.create` 由 assignment-eval 独家注册（不再有 management.ts 的
     // `core-assignment-create` 竞争），其描述符不要求 classId，只挂课时的作业必须能创建。

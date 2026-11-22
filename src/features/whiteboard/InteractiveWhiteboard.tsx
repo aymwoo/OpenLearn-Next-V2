@@ -2579,7 +2579,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                           void (async () => {
                             try {
                               const res = await fetch(
-                                `/api/assignments?lessonId=${encodeURIComponent(lessonId || '')}`,
+                                `/api/learning-surface-assignments?lessonId=${encodeURIComponent(lessonId || '')}`,
                               );
                               const payload = await res.json().catch(() => null);
                               const list: any[] = Array.isArray(payload?.assignments) ? payload.assignments : [];

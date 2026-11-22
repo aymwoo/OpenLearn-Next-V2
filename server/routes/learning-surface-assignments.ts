@@ -16,8 +16,17 @@
  *   POST   /api/learning-surface-assignments/:id/submissions/:studentId/grade 传统作业评分
  *   GET    /api/learning-surface-assignments/:id/attempts          教师查看全班 attempt
  *
- * 旧读 API（GET /api/assignments*）保持不变；新写入完成后由桥接服务把
- * legacy 行同步回 attempt 并回填 attempt_id，读侧口径一致。
+ * 阶段 7.2 起读路由也走这里（实现见 `assignment-read.ts`，新旧路径共用）：
+ *
+ *   GET    /api/learning-surface-assignments                       列表
+ *   GET    /api/learning-surface-assignments/:id                   详情
+ *   GET    /api/learning-surface-assignments/:id/files             附件列表
+ *   GET    /api/learning-surface-assignments/:id/files/:fileId     附件预览 / 下载
+ *   GET    /api/learning-surface-assignments/:id/submissions       教师查看传统提交
+ *   GET    /api/classes/:classId/learning-surface-assignments      班级作业列表
+ *
+ * 旧读 API（GET /api/assignments*）保留为兼容入口并带 Deprecation 头；新写入完成后
+ * 由桥接服务把 legacy 行同步回 attempt 并回填 attempt_id，读侧口径一致。
  */
 import express from 'express';
 import type Database from 'better-sqlite3';
@@ -39,6 +48,7 @@ import {
   syncAttemptFromHubSubmission,
   syncAttemptFromTraditionalSubmission,
 } from '../services/assignment-attempt-bridge.js';
+import { registerAssignmentReadRoutes, registerClassAssignmentsReadRoute } from './assignment-read.js';
 
 function requestSession(req: unknown): AccessSession | undefined {
   return (req as { session?: AccessSession }).session;
@@ -65,6 +75,10 @@ export function registerLearningSurfaceAssignmentRoutes(ctx: ServerContext): voi
   const { app } = ctx;
   const db: Database.Database = kernelContainer.db;
   const assignmentService = new AssignmentService();
+
+  // 读路由：与旧 `/api/assignments*` 共用 `assignment-read.ts` 的实现。
+  registerAssignmentReadRoutes(app, { basePath: '/api/learning-surface-assignments' });
+  registerClassAssignmentsReadRoute(app, { path: '/api/classes/:classId/learning-surface-assignments' });
 
   const sendHubError = (res: express.Response, e: unknown) => {
     const status = (e as { status?: unknown })?.status;

@@ -396,6 +396,7 @@ export function LiveClassroomMiddleWorkspace(props: LiveClassroomMiddleWorkspace
               lang={lang as LiveSubmissionsPanelProps['lang']}
               selectedLesson={selectedLesson}
               liveClassSelectedClassId={liveClassSelectedClassId}
+              activeSegmentId={activeSegmentId}
               setMiddleTab={setMiddleTab}
             />
           ) : middleTab === 'top_performers' ? (

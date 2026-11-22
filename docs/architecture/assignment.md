@@ -3,10 +3,10 @@
 OpenLearn V2 的 **作业中心（Assignment Hub）** 是一节课里「学生交作业 → 老师批 → 同伴互评 → 归档」这条链路的落地面。相关实现分布在三处：
 
 - 前端：`src/features/whiteboard/components/AssignmentSubmitDialog.tsx`（学生提交）、`AssignmentPeerReviewPanel.tsx`（同伴互评）、`src/components/StudentAssignmentEvalPanel.tsx`（评估面板）、`src/components/AssignmentFilePreview.tsx`（附件预览）
-- 服务端：`server/routes/assignment-hub.ts`（读接口与附件下载）、`server/routes/learning-surface-assignments.ts`（阶段 2 起的统一写接口）、`server/services/assignment-service.ts`（领域服务）
+- 服务端：`server/routes/assignment-read.ts`（新旧路径共用的作业读接口与附件下载）、`server/routes/assignment-hub.ts`（旧写端点 410 与附件 GC）、`server/routes/learning-surface-assignments.ts`（阶段 2 起的统一写接口、阶段 7.2 起的读接口）、`server/services/assignment-service.ts`（领域服务）
 - 内核侧共享规则：`packages/core/assignment/`（前后端共用的纯函数）
 
-> **阶段 2 写入口径**：`/api/assignments/*` 的写端点（创建、上传、提交、互评、分配互评、传统作业提交 / 评分）与 `/api/lessons/:lessonId/eval-submissions*` 的课时级写端点已统一返回 `410 LEGACY_ASSIGNMENT_WRITE_DISABLED`；写请求改走 `/api/learning-surface-assignments/*` 与 `/api/learning-surface-lessons/*`，由 `learning_surface_attempts` 统一承接。读接口与附件下载保持不变。详见 [LearningSurface](learning-surface.md)。
+> **阶段 2 写入口径**：`/api/assignments/*` 的写端点（创建、上传、提交、互评、分配互评、传统作业提交 / 评分）与 `/api/lessons/:lessonId/eval-submissions*` 的课时级写端点已统一返回 `410 LEGACY_ASSIGNMENT_WRITE_DISABLED`；写请求改走 `/api/learning-surface-assignments/*` 与 `/api/learning-surface-lessons/*`，由 `learning_surface_attempts` 统一承接。**阶段 7.2 起读接口也默认走 `/api/learning-surface-assignments/*`**，旧 `GET /api/assignments*` 仅作为带 `Deprecation` / `Link` 头的兼容委托。详见 [LearningSurface](learning-surface.md)。
 
 ---
 
@@ -18,9 +18,9 @@ OpenLearn V2 的 **作业中心（Assignment Hub）** 是一节课里「学生�
 
 ```mermaid
 graph LR
-  S[学生提交作业] -->|POST /api/assignments/:id/files| Hub[作业中心路由]
+  S[学生提交作业] -->|POST /api/learning-surface-assignments/:id/files| Hub[作业读路由]
   Hub -->|原始二进制体| Store[(storage/assignments/<作业>/<学生>/<uuid>.<ext>)]
-  S -->|POST /api/assignments/:id/submit| Ver[不可变提交版本]
+  S -->|POST /api/learning-surface-assignments/:id/submit| Ver[不可变提交版本]
   Ver --> PL[同伴互评]
   Ver --> TL[教师批改]
   Store --> Prev[附件预览]
@@ -71,7 +71,7 @@ graph LR
   见 `server/utils/assignment-upload-policy.ts`。
 - **归属由服务端按会话确定**：普通学生一律写到自己名下，教师代交需显式指定学生。
 - **读取**：所有附件都走带鉴权的
-  `GET /api/assignments/:assignmentId/files/:fileId`。`storage/` 从未被
+  `GET /api/learning-surface-assignments/:assignmentId/files/:fileId`。`storage/` 从未被
   `express.static` 暴露 —— 附件只能经这条路由读，且服务端会校验
   「本人 / 同学 / 教师」的可见性（IDOR 防护）。
 

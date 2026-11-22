@@ -14,6 +14,7 @@
  *   POST   /api/learning-surface-attempts/:id/submit        提交（幂等）
  *   POST   /api/learning-surface-attempts/:id/attempts      显式开启下一次尝试
  *   GET    /api/lessons/:lessonId/learning-surface-attempts 教师查看全班
+ *   GET    /api/lessons/:lessonId/learning-surface-summary  教师查看课时级 Surface 汇总
  *
  * 权限复用 class-access：
  *   - 学生：只能读写自己的 attempt，且必须能参与该课节；
@@ -29,6 +30,7 @@ import { requireScopedAuth } from '../middleware/data-scope.js';
 import {
   type AccessSession,
   actorUserId,
+  authorizeClass,
   authorizeLessonParticipation,
   authorizeLessonStaff,
   isAdministrator,
@@ -63,6 +65,7 @@ import {
   findAssignmentLocator,
   findAssignmentSurface,
 } from '../services/assignment-attempt-bridge.js';
+import { summarizeLessonSurfaces } from '../services/learning-surface-summary.js';
 
 function requestSession(req: Request): AccessSession {
   return (req as Request & { session?: AccessSession }).session!;
@@ -401,6 +404,24 @@ export function registerLearningSurfaceRoutes(ctx: ServerContext): void {
 
         const rows = listLessonAttempts(db, lessonId, { includePreview: req.query.includePreview === '1' });
         res.json(rows);
+      } catch (err: unknown) {
+        sendSafeError(res, err);
+      }
+    },
+  );
+
+  // ── 教师：课时级 Surface 学习分析（课堂内面板）────────────────────────
+  app.get(
+    '/api/lessons/:lessonId/learning-surface-summary',
+    requireScopedAuth('class-staff'),
+    (req: Request, res: Response) => {
+      try {
+        const session = requestSession(req);
+        const lessonId = req.params.lessonId;
+        if (rejectUnless(res, authorizeLessonStaff(db, session, lessonId))) return;
+        const classId = typeof req.query.classId === 'string' && req.query.classId ? req.query.classId : null;
+        if (classId && rejectUnless(res, authorizeClass(db, session, classId, 'staff'))) return;
+        res.json(summarizeLessonSurfaces(db, { lessonId, classId }));
       } catch (err: unknown) {
         sendSafeError(res, err);
       }

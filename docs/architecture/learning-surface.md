@@ -1,7 +1,7 @@
 # LearningSurface 教学内容 / 活动容器设计
 
-> 状态：已实现（阶段 1–6 均已完成）
-> 日期：2026-11-21
+> 状态：已实现（阶段 1–7）
+> 日期：2026-11-22
 > 范围：白板、学案、作业与第三方渲染插件的统一内容/活动容器
 
 本文定义 `LearningSurface`：一个可以承载演示文稿、HTML 课件、作业提交等内容或活动的统一宿主。它替换当前分散在 `html-applet`、学案 `interactive_courseware` 区块和作业业务组件里的多套渲染路径。
@@ -283,6 +283,23 @@ host → iframe: { channel: 'ol-plugin-view', type: 'state.patch', payload }
 
 新 API 逐步替换旧作业接口；迁移完成前旧读接口保持不变。
 
+阶段 7.2 追加作业读通道（前端唯一入口；旧 `GET /api/assignments*` 保留为带 `Deprecation` / `Link` 头的委托，阶段 8 再下线）：
+
+| 方法 | 路径                                                            | 说明                                                         |
+| ---- | --------------------------------------------------------------- | ------------------------------------------------------------ |
+| GET  | `/api/learning-surface-assignments`                             | 作业列表（同旧 `lessonId/classId/elementId/studentId` 查询） |
+| GET  | `/api/learning-surface-assignments/:assignmentId`               | 作业详情（教师附带互评进度）                                 |
+| GET  | `/api/learning-surface-assignments/:assignmentId/files`         | 附件列表                                                     |
+| GET  | `/api/learning-surface-assignments/:assignmentId/files/:fileId` | 附件预览 / 下载（inline 白名单与旧路径一致）                 |
+| GET  | `/api/learning-surface-assignments/:assignmentId/submissions`   | 教师查看传统班级提交                                         |
+| GET  | `/api/classes/:classId/learning-surface-assignments`            | 班级作业列表                                                 |
+
+阶段 7.3 追加课堂内聚合：
+
+| 方法 | 路径                                                       | 说明                                                                                                   |
+| ---- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| GET  | `/api/lessons/:lessonId/learning-surface-summary?classId=` | 教师查看课时级 Surface 完成率 / 均分 / 未交名单（`class-staff`）；排除教师预览，每个学生取最新 attempt |
+
 ---
 
 ## 9. 迁移与实施顺序
@@ -340,24 +357,34 @@ host → iframe: { channel: 'ol-plugin-view', type: 'state.patch', payload }
 - 作品展示改为从 Surface 读取课件引用，并保留旧 `html-applet` 兼容分支。
 - 验收：白板一页多 Surface、学案活动与首页块、作业提交 / 评分 / 互评、断网草稿、教师预览、快照恢复、课程包往返；全量门禁、docs 构建与 audit 通过。
 
+### 阶段 7：运行时统一与读路径收口
+
+- **7.1 模式包运行时统一**：新增前端 `mode-pack/useModePackCatalog.ts` 缓存 `GET /api/mode-packs`；`LiveClassroomView` 的 compact 判定与 `CourseManagement` 的筛选 / 徽标改用 `resolveLessonModePackDeliveryMode(mode_pack_id, delivery_mode)`，不再直读 `delivery_mode`。课程卡片徽标优先显示模式包目录的 `label`，未知或已卸载的包回落到「白板 / 学案」并给出说明。
+- **7.2 作业读路径收口**：抽出 `assignment-read` 共享读取与鉴权逻辑，新增 `/api/learning-surface-assignments/*` 与 `/api/classes/:classId/learning-surface-assignments` 读端点，前端调用全部切换。旧 `GET /api/assignments*` 改为委托新逻辑并返回 `Deprecation` / `Link` 头，阶段 8 再下线；写端点已在阶段 2 返回 410。
+- **7.3 课堂内 Surface 学习面板**：新增 `learning-surface-summary` 聚合（排除教师预览、每个学生取最新 attempt、已交 = `submitted` / `graded`、分数按满分归一），由 `GET /api/lessons/:lessonId/learning-surface-summary?classId=` 提供。教师课堂的「学生提交数据」面板顶部增加可折叠 Surface 概览：按当前环节筛选，展开时轮询，收起即停。白板 Surface 通过 `owner_id = 元素 id` 反查 `whiteboard_elements.data.segmentId`；学案活动与首页块归入本课。
+- **7.4 验收**：全量门禁、docs 构建与 audit；CHANGELOG 记录三条变更。
+
 ---
 
 ## 10. 并行 P0：课堂运行时统一 `mode_pack_id`
 
-`LearningSurface` 的工作区放置依赖模式包决议。当前课堂运行时仍有多处读取 `delivery_mode`：
+`LearningSurface` 的工作区放置依赖模式包决议。阶段 6 之前课堂运行时有多处直接读取 `delivery_mode`：
 
 - `LiveClassroomView` 顶栏/中栏 compact
 - `TimelineRail` 新建环节默认类型
 - `CourseManagement` 筛选与徽标
 - `ModePackPrepShell` 的备课面
 
-需要统一为：
+统一口径为：
 
 ```text
 lesson.mode_pack_id → lesson.delivery_mode → whiteboard
 ```
 
-并让上述消费点读取解析后的包能力（工作区、环节类型、备课面、adapter/channel），而不是只读两值枚举。
+阶段 7.1 已收口：`LiveClassroomView` 与 `CourseManagement` 改走 `resolveLessonModePackDeliveryMode`，
+课程徽标优先显示 `/api/mode-packs` 目录里的包名（前端缓存见 `mode-pack/useModePackCatalog.ts`）；
+`TimelineRail` 与 `StudentLessonView` 此前已通过解析后的活动模式决议。`delivery_mode` 仅作为
+无法解析模式包时的兼容回落。
 
 ---
 

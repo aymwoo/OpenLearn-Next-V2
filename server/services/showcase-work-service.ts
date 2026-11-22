@@ -85,7 +85,7 @@ export function getUnifiedShowcaseWorks(
   try {
     const evalRows = db
       .prepare(
-        `SELECT ps.id as sub_id, ps.lesson_id, ps.student_id, ps.file_path, ps.version,
+        `SELECT ps.id as sub_id, ps.assignment_id, ps.lesson_id, ps.student_id, ps.file_path, ps.version,
                 ps.created_at, ps.updated_at,
                 s.name as student_name,
                 v.files_json, v.text_content, v.link_url, v.submitted_at
@@ -108,7 +108,11 @@ export function getUnifiedShowcaseWorks(
             fileId: f.fileId ?? f.id,
             name: f.name || f.filename || '作业附件',
             mime: f.mime || f.mimeType,
-            url: f.url || (f.fileId ? `/api/assignments/files/${encodeURIComponent(f.fileId)}` : ''),
+            url:
+              f.url ||
+              (f.fileId && r.assignment_id
+                ? `/api/learning-surface-assignments/${encodeURIComponent(r.assignment_id)}/files/${encodeURIComponent(f.fileId)}`
+                : ''),
             size: f.size,
           }));
         }
