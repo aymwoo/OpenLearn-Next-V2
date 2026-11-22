@@ -114,13 +114,12 @@ interface PendingAsset {
 }
 
 /**
- * 把 `learning_surface` 元素还原为旧版 `html-applet` 数据。
+ * 把 `learning_surface` 元素导出为可移植的内容引用。
  *
- * 导出面向旧版本的课程包，因此只还原 html_courseware；其它渲染器
- * （presentation / assignment_submission / 插件）暂不作为白板元素导出。
- * 内联 HTML 会还原成 code，避免把 `inline-mig-*` 的宿主约定泄漏给旧版本。
+ * 包格式 v2 起原生承载 Surface：导出 `contentRef` 而不是本机 `surfaceId`，
+ * 导入端据此在新环境重建 Surface。旧版本包仍以 `html-applet` 导入。
  */
-function restoreHtmlAppletFromSurface(
+function exportSurfaceElement(
   db: Database.Database,
   elementData: Record<string, unknown>,
 ): Record<string, unknown> | null {
@@ -131,28 +130,13 @@ function restoreHtmlAppletFromSurface(
     { content_ref_json: string } | undefined;
   if (!row) return null;
 
-  let ref: { rendererId?: string; source?: { kind?: string; id?: string }; config?: { title?: string } };
   try {
-    ref = JSON.parse(row.content_ref_json) as typeof ref;
+    const contentRef = JSON.parse(row.content_ref_json) as Record<string, unknown>;
+    const title = typeof elementData.title === 'string' && elementData.title ? elementData.title : undefined;
+    return { contentRef, ...(title ? { title } : {}) };
   } catch {
     return null;
   }
-  if (ref.rendererId !== 'html_courseware' || !ref.source?.id) return null;
-
-  const restored: Record<string, unknown> = {};
-  if (ref.source.kind === 'resource') {
-    restored.resourceId = ref.source.id;
-  } else if (ref.source.id.startsWith('inline-')) {
-    const inline = db
-      .prepare("SELECT content FROM system_resources WHERE id = ? AND type = 'html'")
-      .get(ref.source.id) as { content: string } | undefined;
-    if (inline?.content) restored.code = inline.content;
-    else restored.coursewareUuid = ref.source.id;
-  } else {
-    restored.coursewareUuid = ref.source.id;
-  }
-  if (ref.config?.title) restored.title = ref.config.title;
-  return restored;
 }
 
 /**
@@ -195,35 +179,34 @@ export async function exportLessonAsCoursePackage(
   const preferredFilenames = new Map<string, string>();
 
   for (const row of elementRows) {
-    if (!isSupportedElementType(row.type)) {
-      // 阶段 5：learning_surface 元素导出时还原为 html-applet，保证旧版本可导入。
-      const elementData = safeJsonParse(row.data);
-      if (
-        row.type === 'learning_surface' &&
-        elementData &&
-        typeof elementData === 'object' &&
-        !Array.isArray(elementData)
-      ) {
-        const restored = restoreHtmlAppletFromSurface(db, elementData as Record<string, unknown>);
-        if (restored) {
-          collectPreferredFilenames(restored, preferredFilenames);
-          elements.push({
-            type: 'html-applet',
-            ...liftElementGeometry(elementData as Record<string, unknown>),
-            data: restored,
-          });
-          continue;
-        }
-      }
-      stats.skippedElements += 1;
-      continue;
-    }
     const data = safeJsonParse(row.data);
     if (!data || typeof data !== 'object' || Array.isArray(data)) {
       stats.skippedElements += 1;
       continue;
     }
     const elementData = data as Record<string, unknown>;
+
+    // v2：Surface 原生导出为 contentRef（surfaceId 是本机 id，不能带出）。
+    if (row.type === 'learning_surface') {
+      const exported = exportSurfaceElement(db, elementData);
+      if (!exported) {
+        stats.skippedElements += 1;
+        continue;
+      }
+      collectPreferredFilenames(exported, preferredFilenames);
+      elements.push({
+        type: 'learning_surface',
+        ...liftElementGeometry(elementData),
+        data: exported,
+      });
+      continue;
+    }
+
+    if (!isSupportedElementType(row.type)) {
+      stats.skippedElements += 1;
+      continue;
+    }
+
     collectPreferredFilenames(elementData, preferredFilenames);
     elements.push({
       type: row.type,

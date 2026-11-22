@@ -38,7 +38,7 @@ import {
 } from './course-package-assets.js';
 import { resolveCoursePackageIdentity, type CoursePackageIdentity } from './course-package-identity.js';
 import { isSupportedElementType, type CoursePackage } from './course-package.js';
-import { upsertLearningSurface } from './learning-surface-service.js';
+import { upsertLearningSurface, validateLearningContentRef } from './learning-surface-service.js';
 
 /** 导入结果摘要（回给前端展示）。 */
 export interface ImportCoursePackageResult {
@@ -144,8 +144,8 @@ function saveInlineHtml(db: Database.Database, code: string): string | null {
 /**
  * 课程包里的 `html-applet` 元素在导入时直接落成 `learning_surface` 元素 + Surface。
  *
- * 这样新导入的数据不会再产生阶段 5 要迁移的存量；导出端仍还原为 html-applet，
- * 保证旧版本课程包可继续导入。
+ * 包格式 v2 直接携带 contentRef；v1 的 `html-applet` 仍按内容引用转换，
+ * 保证旧课程包继续可导入。
  */
 function toLearningSurfaceElement(
   db: Database.Database,
@@ -153,6 +153,38 @@ function toLearningSurfaceElement(
   element: { type: string; data: string },
 ): { id: string; type: string; data: string } {
   const elementId = uuidv7();
+
+  // 包格式 v2：原生 Surface，data.contentRef → 新建 Surface（surfaceId 不可跨环境复用）。
+  if (element.type === 'learning_surface') {
+    let raw: Record<string, unknown>;
+    try {
+      const parsed: unknown = JSON.parse(element.data);
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        return { id: elementId, type: element.type, data: element.data };
+      }
+      raw = parsed as Record<string, unknown>;
+    } catch {
+      return { id: elementId, type: element.type, data: element.data };
+    }
+
+    const contentRef = validateLearningContentRef(raw.contentRef);
+    if (!contentRef.ok) {
+      return { id: elementId, type: element.type, data: element.data };
+    }
+    const result = upsertLearningSurface(db, {
+      lessonId,
+      kind: 'whiteboard_element',
+      ownerId: elementId,
+      contentRef: contentRef.value,
+    });
+    if (!result.ok) {
+      return { id: elementId, type: element.type, data: element.data };
+    }
+    const next: Record<string, unknown> = { ...raw, surfaceId: result.surface.id };
+    delete next.contentRef;
+    return { id: elementId, type: 'learning_surface', data: JSON.stringify(next) };
+  }
+
   if (element.type !== 'html-applet') {
     return { id: elementId, type: element.type, data: element.data };
   }

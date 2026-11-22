@@ -665,6 +665,9 @@ export const BuiltinPlugin = {
           data: { type: 'STRING', description: '元素配置的 JSON 字符串' },
           segmentId: { type: 'STRING', description: '关联的课堂环节 ID（可选）' },
           page: { type: 'NUMBER', description: '元素所属页码（可选，默认 0）' },
+          // 内部使用：服务端把已废弃的 html-applet 转成 learning_surface 时预生成元素 id，
+          // 保证 Surface.owner_id 与元素 id 一致。
+          elementId: { type: 'STRING', description: '内部使用：预生成的元素 id（可选）' },
         },
         required: ['lessonId', 'type', 'data'],
       },
@@ -685,7 +688,8 @@ export const BuiltinPlugin = {
           throw new Error(`不支持的元素类型 "${payload.type}"。${hint}`);
         }
 
-        const elementId = uuidv7();
+        // 服务端把 html-applet 转成 learning_surface 时会预生成 id；其余调用方仍由这里生成。
+        const elementId = typeof payload.elementId === 'string' && payload.elementId ? payload.elementId : uuidv7();
 
         // 方案 C：在 whiteboard.draw 层面补齐 segmentId 和 page 元数据。
         // 优先使用调用方显式传入的值，否则尝试从现有上下文中推导。

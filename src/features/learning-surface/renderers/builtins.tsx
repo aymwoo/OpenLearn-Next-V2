@@ -1,4 +1,5 @@
 import { CoursewareHost, type CoursewareHostEvent } from '../../courseware/CoursewareHost';
+import { CoursewareScoresOverlay } from '../../courseware/CoursewareScoresOverlay';
 import { PresentationRenderer } from './PresentationRenderer';
 import { AssignmentSubmissionRenderer } from './AssignmentSubmissionRenderer';
 import { registerSurfaceRenderer } from './registry';
@@ -42,6 +43,7 @@ function HtmlCoursewareRenderer({ contentRef, lessonId, hostId, onProgress, onSu
         elementId={hostId}
         title={displayTitle}
         className="w-full h-full"
+        overlay={<CoursewareScoresOverlay coursewareUuid={sourceId} />}
         onEvent={handleEvent}
       />
     );

@@ -20,7 +20,6 @@ const WIDGET_ELEMENT_TYPES = [
   'rollcall',
   'quiz',
   'assignment',
-  'html-applet',
   'learning_surface',
   'code-sandbox',
   'math-graph',
@@ -61,11 +60,6 @@ export interface WhiteboardPropertiesSidebarProps {
   lessonId: string;
   classId?: string | null;
   fullscreenBroadcastClassId?: string | null;
-  coursewares: any[];
-  fetchCoursewares: (opts?: any) => Promise<any>;
-  setZipCandidates: (candidates: any[]) => void;
-  setZipUploadInfo: (info: { uuid: string; name: string }) => void;
-  setShowEntrySelector: (show: boolean) => void;
   handleAddOption: () => void;
   handleRemoveOption: (idx: number) => void;
   handleOptionChangeLocal: (idx: number, val: string) => void;
@@ -94,11 +88,6 @@ export const WhiteboardPropertiesSidebar: React.FC<WhiteboardPropertiesSidebarPr
   lessonId,
   classId,
   fullscreenBroadcastClassId,
-  coursewares,
-  fetchCoursewares,
-  setZipCandidates,
-  setZipUploadInfo,
-  setShowEntrySelector,
   handleAddOption,
   handleRemoveOption,
   handleOptionChangeLocal,
@@ -527,107 +516,20 @@ export const WhiteboardPropertiesSidebar: React.FC<WhiteboardPropertiesSidebarPr
           />
         )}
 
-        {/* 3. CODE SANDBOX 和 HTML APPLET 和 Sandbox */}
-        {(selectedEl.type === 'code-sandbox' || selectedEl.type === 'html-applet') && (
+        {/* 3. CODE SANDBOX */}
+        {selectedEl.type === 'code-sandbox' && (
           <div className="bg-surface p-3 rounded-xl border border-theme shadow-sm space-y-3">
-            <h4 className="font-bold text-main text-xs border-b border-theme pb-1.5 flex justify-between items-center">
-              <span>动态运行代码定制</span>
-              {selectedEl.type === 'html-applet' && (
-                <span className="text-xs bg-primary-theme-light text-primary-theme px-1.5 py-0.5 rounded-full font-bold">
-                  HTML Applet
-                </span>
-              )}
-            </h4>
-
-            {selectedEl.type === 'html-applet' && (
-              <div className="space-y-3 border-b border-theme pb-3">
-                <div>
-                  <label className="block text-xs text-primary-theme font-bold mb-1">
-                    选择互动网络课件 (ZIP/HTML):
-                  </label>
-                  <select
-                    value={editingProperties.coursewareUuid || ''}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      handlePropsUpdate({ coursewareUuid: val, resourceId: '' });
-                    }}
-                    className="w-full text-xs p-2 bg-surface-secondary border border-theme hover:border-primary-theme rounded-lg text-main focus:outline-none focus:ring-1 focus:ring-primary-theme transition-all font-semibold"
-                  >
-                    <option value="">-- 使用自定义沙箱代码 --</option>
-                    {coursewares.map((c) => (
-                      <option key={c.id} value={c.uuid}>
-                        📁 [互动课件] {c.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="bg-surface-secondary p-2.5 rounded-xl border border-theme text-xs text-muted space-y-2">
-                  <span className="font-bold text-main block">上传新课件 (自动生成独立运行实例):</span>
-                  <label className="w-full flex flex-col items-center justify-center p-3 bg-indigo-50 hover:bg-indigo-100 border border-dashed border-indigo-300 hover:border-indigo-400 rounded-lg cursor-pointer text-center transition-all">
-                    <span className="font-bold text-indigo-700 text-xs">✨ 上传互动网络课件 (.zip / .html)</span>
-                    <span className="text-xs text-indigo-500 mt-0.5">
-                      支持多文件打包 ZIP 或单页 HTML，自动接入 LMS Bridge
-                    </span>
-                    <input
-                      type="file"
-                      accept=".zip,.html,.htm"
-                      className="hidden"
-                      onChange={async (e) => {
-                        const file = e.target.files?.[0];
-                        if (!file) return;
-
-                        const reader = new FileReader();
-                        reader.onload = async (event) => {
-                          const result = event.target?.result as string;
-                          try {
-                            const res = await fetch('/api/courseware/upload', {
-                              method: 'POST',
-                              headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify({
-                                name: file.name.replace(/\.[^/.]+$/, ''),
-                                filename: file.name,
-                                base64Data: result,
-                              }),
-                            });
-                            if (res.ok) {
-                              const data = await res.json();
-                              if (data.need_select_entry) {
-                                setZipCandidates(data.candidates);
-                                setZipUploadInfo({ uuid: data.uuid, name: data.name });
-                                setShowEntrySelector(true);
-                              } else {
-                                handlePropsUpdate({ coursewareUuid: data.uuid, resourceId: '' });
-                                fetchCoursewares({ force: true });
-                              }
-                            } else {
-                              const errData = await res.json();
-                              alert('上传失败: ' + (errData.error || res.statusText));
-                            }
-                          } catch (err) {
-                            console.error('Courseware upload failed:', err);
-                          }
-                        };
-                        reader.readAsDataURL(file);
-                      }}
-                    />
-                  </label>
-                </div>
-              </div>
-            )}
-
-            {(!editingProperties.coursewareUuid || selectedEl.type === 'code-sandbox') && (
-              <div>
-                <label className="block text-xs text-slate-400 font-semibold mb-1">沙箱程序代码 (Source Code)</label>
-                <textarea
-                  value={editingProperties.code || ''}
-                  onChange={(e) => handleLocalPropChange('code', e.target.value)}
-                  onBlur={(e) => handlePropBlur('code', e.target.value)}
-                  className="w-full h-48 p-3 border border-slate-300 rounded-lg text-xs font-mono focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-slate-900 text-slate-100 resize-none leading-relaxed"
-                  placeholder="// 编写交互沙箱代码..."
-                />
-              </div>
-            )}
+            <h4 className="font-bold text-main text-xs border-b border-theme pb-1.5">动态运行代码定制</h4>
+            <div>
+              <label className="block text-xs text-slate-400 font-semibold mb-1">沙箱程序代码 (Source Code)</label>
+              <textarea
+                value={editingProperties.code || ''}
+                onChange={(e) => handleLocalPropChange('code', e.target.value)}
+                onBlur={(e) => handlePropBlur('code', e.target.value)}
+                className="w-full h-48 p-3 border border-slate-300 rounded-lg text-xs font-mono focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-slate-900 text-slate-100 resize-none leading-relaxed"
+                placeholder="// 编写交互沙箱代码..."
+              />
+            </div>
           </div>
         )}
 

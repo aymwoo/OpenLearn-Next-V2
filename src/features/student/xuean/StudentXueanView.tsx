@@ -6,7 +6,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { getXuean, postActivityProgress, type ActivitySubmission } from '../../../services/lessonActivitiesService.js';
 import { sanitizeRichTextHtml } from '../../../../packages/core/security/html-sanitize';
-import { CoursewareHost } from '../../courseware/CoursewareHost';
 import { LearningSurfaceHost } from '../../learning-surface/LearningSurfaceHost';
 
 type Block = {
@@ -196,24 +195,6 @@ function BlockCard({ block }: { block: Block }) {
               title={typeof record.title === 'string' ? record.title : undefined}
               lazy={false}
               className="w-full h-full"
-            />
-          </div>
-        );
-      }
-      const coursewareUuid = typeof record.coursewareUuid === 'string' ? record.coursewareUuid : null;
-      const resourceId = typeof record.resourceId === 'string' ? record.resourceId : null;
-      if (coursewareUuid || resourceId) {
-        return (
-          <div className="h-[420px] w-full overflow-hidden rounded-lg border border-theme">
-            <CoursewareHost
-              source={{
-                coursewareUuid: coursewareUuid ?? undefined,
-                resourceId: resourceId ?? undefined,
-                title: typeof record.title === 'string' ? record.title : undefined,
-              }}
-              lessonId={block.lesson_id}
-              elementId={block.id}
-              lazy={false}
             />
           </div>
         );

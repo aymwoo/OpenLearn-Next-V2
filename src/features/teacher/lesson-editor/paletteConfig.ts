@@ -1,14 +1,4 @@
-import {
-  Terminal,
-  Activity,
-  Presentation,
-  Puzzle,
-  Globe,
-  ClipboardList,
-  Shuffle,
-  Sparkles,
-  Layers,
-} from 'lucide-react';
+import { Terminal, Activity, Presentation, Puzzle, ClipboardList, Shuffle, Sparkles, Layers } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
 export type PaletteColorKey = 'slate' | 'blue' | 'violet' | 'amber' | 'rose' | 'emerald' | 'cyan' | 'pink' | 'indigo';
@@ -221,52 +211,6 @@ export const PALETTE_ITEMS: PaletteItemConfig[] = [
         labelEn: 'Equation',
         kind: 'input',
         placeholderZh: '如 Math.sin(x)',
-      },
-    ],
-  },
-  {
-    type: 'html-applet',
-    labelZh: '交互网页课件',
-    labelEn: 'Interactive Courseware',
-    descriptionZh: '可交互 HTML/ZIP 网页',
-    descriptionEn: 'Interactive web/ZIP applet',
-    icon: Globe,
-    color: 'emerald',
-    group: 'present',
-    defaultData: {
-      title: 'Interactive Web Courseware',
-      code: `<!-- Interactive Web Courseware -->\n<div style='padding:20px; text-align:center;'>\n  <h2>Interactive Web Courseware</h2>\n  <p>在属性栏中配置本地 ZIP/HTML 部署包。</p>\n</div>`,
-    },
-    editFields: [
-      {
-        key: 'title',
-        labelZh: '标题',
-        labelEn: 'Title',
-        kind: 'input',
-        placeholderZh: '课件标题',
-        placeholderEn: 'Courseware title',
-      },
-      {
-        key: 'coursewareUuid',
-        labelZh: '互动课件 (Courseware)',
-        labelEn: 'Courseware',
-        kind: 'select',
-        loadOptions: async () => {
-          try {
-            const res = await fetch('/api/courseware');
-            const data = (await res.json()) as Array<{ uuid: string; name: string }>;
-            return data.map((c) => ({ value: c.uuid, label: c.name }));
-          } catch {
-            return [];
-          }
-        },
-      },
-      {
-        key: 'code',
-        labelZh: 'HTML 代码',
-        labelEn: 'HTML Code',
-        kind: 'textarea',
-        placeholderZh: '<div>…</div>',
       },
     ],
   },

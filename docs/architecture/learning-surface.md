@@ -1,6 +1,6 @@
 # LearningSurface 教学内容 / 活动容器设计
 
-> 状态：设计稿（阶段 1 状态底座、阶段 2 作业域迁移、阶段 3 宿主与放置、阶段 4 内置渲染器、阶段 5 存量迁移已实施）
+> 状态：已实现（阶段 1–6 均已完成）
 > 日期：2026-11-21
 > 范围：白板、学案、作业与第三方渲染插件的统一内容/活动容器
 
@@ -328,14 +328,17 @@ host → iframe: { channel: 'ol-plugin-view', type: 'state.patch', payload }
 - 来源映射：`coursewareUuid` → `courseware`；`resourceId` → `resource`；手写 `code` → 幂等落到 `system_resources`（`inline-mig-*`）后按 `courseware` 引用。无来源的空元素保持原样。
 - 迁移 `077`：学案首页 `interactive_courseware` 块建 `kind='lesson_block'` 的 Surface，并写 `surface_id`；`content_json` 保持原样便于回退。
 - 导入路径直接落新模型：课程包里的 `html-applet` 与学案包里的 `interactive_courseware` 在导入时即创建 Surface，避免产生新的存量。
-- 导出路径保持兼容：`learning_surface` 元素导出时还原为 `html-applet`；内联 HTML 还原为 `code`，不把 `inline-mig-*` 约定泄漏给旧版本。
+- 导出路径：包格式 `version: 2` 起原生导出 `learning_surface`（携带 `contentRef`，不导出本机 `surfaceId`）；导入端在新环境重建 Surface。v1 的 `html-applet` 包仍按内容引用转换导入。
 - 回滚：DOWN 从 Surface 的 `content_ref_json` 反序列化回旧结构；迁移前按项目流程执行 `pnpm db:backup` 整体备份。
 
 ### 阶段 6：验收与清理
 
-- 删除旧渲染路径与兼容代码。
-- 浏览器验收：白板一页多 Surface、学案一活动一 Surface、提交/评分、断网草稿、教师预览。
-- 全量门禁、docs 构建与 `audit-tools` 漂移检查。
+- 删除旧渲染与编辑路径：`HtmlAppletFrame`、`CoursewarePropertiesModal`、`CoursewareEntrySelectorModal`、白板 `html-applet` 渲染 / 属性分支、调色板项、拖放默认数据、全屏旧分支与学案旧回退。
+- 课件成绩浮层迁出为 `CoursewareScoresOverlay`，由 `html_courseware` 渲染器叠加，功能不随旧组件删除而丢失。
+- `whiteboard.draw` 收到 `html-applet` 时由服务端自动转成 `learning_surface`（手写 HTML 幂等落到 `system_resources`），对 AI / 旧插件透明；无来源时返回 400。
+- 保留：`CoursewareHost`（Surface 渲染器依赖）、课程包 v1 导入兼容（`html-applet` 自动转换）、迁移 DOWN（回滚）。课程包 v2 原生导出 Surface。
+- 作品展示改为从 Surface 读取课件引用，并保留旧 `html-applet` 兼容分支。
+- 验收：白板一页多 Surface、学案活动与首页块、作业提交 / 评分 / 互评、断网草稿、教师预览、快照恢复、课程包往返；全量门禁、docs 构建与 audit 通过。
 
 ---
 

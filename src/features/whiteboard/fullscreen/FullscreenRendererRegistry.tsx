@@ -2,7 +2,6 @@ import React, { useState, useEffect, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { BookOpen, Minimize2 } from 'lucide-react';
 import Markdown from 'react-markdown';
-import { HtmlAppletFrame } from '../components/HtmlAppletFrame';
 import { sanitizeHref } from '../../../../packages/core/security/url-safety.js';
 
 export type FullscreenRendererProps = {
@@ -378,11 +377,7 @@ function DefaultFullscreenRenderer({ data, lessonId }: FullscreenRendererProps) 
 
   if (field === 'coursewareUuid') {
     return (
-      <HtmlAppletFrame
-        data={{ coursewareUuid: String(data.coursewareUuid) }}
-        lessonId={lessonId}
-        className="w-full h-full rounded-xl border"
-      />
+      <div className="flex items-center justify-center h-full text-sm text-gray-500">课件内容请在学习面中全屏查看</div>
     );
   }
 

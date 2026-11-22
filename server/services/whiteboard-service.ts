@@ -6,7 +6,10 @@
  * 独立于 Express HTTP 传输层，可直接注入 mock/db 进行无状态单元测试。
  */
 import type Database from 'better-sqlite3';
+import crypto from 'node:crypto';
+import { v7 as uuidv7 } from 'uuid';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
+import { upsertLearningSurface, type LearningContentRef } from './learning-surface-service.js';
 
 export interface WhiteboardElementItem {
   id: string;
@@ -135,16 +138,95 @@ export class WhiteboardService {
   // ── 3. 命令总线代理操作 (Command Execution) ──────────────────────────────────
 
   /**
+   * 把已废弃的 `html-applet` 创建请求转成 `learning_surface`（阶段 6）。
+   *
+   * AI Agent / 旧插件仍可能传 html-applet；服务端在命令入口统一转换，
+   * 元素 id 预先生成并随命令下发，保证 Surface.owner_id 与元素 id 一致。
+   */
+  private convertLegacyHtmlApplet(
+    lessonId: string,
+    rawData: unknown,
+  ): { elementId: string; data: Record<string, unknown> } | null {
+    let data: Record<string, unknown>;
+    try {
+      const parsed = typeof rawData === 'string' ? JSON.parse(rawData) : rawData;
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
+      data = parsed as Record<string, unknown>;
+    } catch {
+      return null;
+    }
+
+    const coursewareUuid = typeof data.coursewareUuid === 'string' ? data.coursewareUuid : null;
+    const resourceId = typeof data.resourceId === 'string' ? data.resourceId : null;
+    const code = typeof data.code === 'string' ? data.code : '';
+    const inlineId = !coursewareUuid && !resourceId && code.trim() ? this.saveInlineHtml(code) : null;
+    const sourceId = coursewareUuid ?? resourceId ?? inlineId;
+    if (!sourceId) return null;
+
+    const elementId = uuidv7();
+    const contentRef: LearningContentRef = {
+      rendererId: 'html_courseware',
+      source: { kind: resourceId ? 'resource' : 'courseware', id: sourceId },
+      ...(typeof data.title === 'string' && data.title ? { config: { title: data.title } } : {}),
+    };
+    const result = upsertLearningSurface(this.db, {
+      lessonId,
+      kind: 'whiteboard_element',
+      ownerId: elementId,
+      contentRef,
+    });
+    if (!result.ok) return null;
+
+    const next: Record<string, unknown> = { ...data, surfaceId: result.surface.id };
+    delete next.coursewareUuid;
+    delete next.resourceId;
+    delete next.code;
+    delete next.sourceType;
+    delete next.sourceId;
+    return { elementId, data: next };
+  }
+
+  /** 与 CoursewareService.saveInlineCourseware 相同的命名 / 去重规则。 */
+  private saveInlineHtml(code: string): string {
+    const hash = crypto.createHash('sha256').update(code).digest('hex').slice(0, 16);
+    const id = `inline-${hash}`;
+    this.db
+      .prepare('INSERT OR IGNORE INTO system_resources (id, name, type, content, created_at) VALUES (?, ?, ?, ?, ?)')
+      .run(id, 'index.html', 'html', code, Date.now());
+    return id;
+  }
+
+  /**
    * 绘制/新增白板元素
    */
   public async drawElement(params: { lessonId: string; type: string; data: any; actorId?: string }): Promise<any> {
-    const { lessonId, type, data, actorId = 'user-frontend' } = params;
+    const { lessonId, actorId = 'user-frontend' } = params;
+    let type = params.type;
+    let data = params.data;
+    let elementId: string | undefined;
+
+    // 阶段 6：html-applet 已废弃，统一转换为 learning_surface 后写入。
+    if (type === 'html-applet') {
+      const converted = this.convertLegacyHtmlApplet(lessonId, data);
+      if (!converted) {
+        const err: any = new Error(
+          'html-applet 已废弃：请提供 coursewareUuid / resourceId / code，或改用 learning_surface。',
+        );
+        err.status = 400;
+        throw err;
+      }
+      type = 'learning_surface';
+      data = converted.data;
+      elementId = converted.elementId;
+    }
+
     const cmd = this.commandBus.createCommand(
       'whiteboard.draw',
       {
         lessonId,
         type,
         data: typeof data === 'string' ? data : JSON.stringify(data),
+        ...(elementId ? { elementId } : {}),
       },
       actorId,
       { approved: true },

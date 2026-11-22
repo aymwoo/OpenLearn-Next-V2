@@ -27,6 +27,10 @@ export interface CoursewareSource {
   resourceId?: string;
   code?: string;
   title?: string;
+  /** 插件自定义内容源类型（配合 coursewareSourceRegistry） */
+  sourceType?: string;
+  /** 插件自定义内容源 id（配合 coursewareSourceRegistry） */
+  sourceId?: string;
 }
 
 export interface CoursewareHostProps {

@@ -1,10 +1,10 @@
-import type { HtmlAppletPayload } from '../types/payloads';
+import type { CoursewareSource } from '../../courseware/CoursewareHost';
 
 /**
- * 课件内容源 loader —— 允许第三方插件为 html-applet 接入自定义内容后端。
+ * 课件内容源 loader —— 允许第三方插件为学习面接入自定义内容后端。
  *
  * 例如：OAuth 授权的第三方课件平台、私有资源网关等。插件在 `activate(ctx)`
- * 内通过 `ctx.ui.registerCoursewareSource(loader)` 注册；`HtmlAppletFrame`
+ * 内通过 `ctx.ui.registerCoursewareSource(loader)` 注册；`CoursewareHost`
  * 在渲染时会依次询问所有已注册 loader，返回第一个非空 URL 作为 iframe src。
  *
  * 优先级：coursewareUuid > resourceId > 自定义内容源 > code(srcDoc)。
@@ -13,7 +13,7 @@ export interface CoursewareSourceLoader {
   /** 全局唯一 id（建议使用插件命名空间前缀，如 `ext-moodle/courseware`） */
   id: string;
   /** 解析 data 为 iframe src URL；无法处理时返回 null */
-  resolve(data: HtmlAppletPayload, context: { lessonId: string }): string | null;
+  resolve(data: CoursewareSource, context: { lessonId: string }): string | null;
 }
 
 class CoursewareSourceRegistry {
@@ -38,7 +38,7 @@ class CoursewareSourceRegistry {
     }
   }
 
-  resolve(data: HtmlAppletPayload, context: { lessonId: string }): string | null {
+  resolve(data: CoursewareSource, context: { lessonId: string }): string | null {
     for (const { impl } of this.loaders.values()) {
       try {
         const url = impl.resolve(data, context);
