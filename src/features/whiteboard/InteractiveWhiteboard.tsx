@@ -71,6 +71,7 @@ import { CodeSandboxWrapper } from './widgets/CodeSandboxWrapper';
 import { MathGraphWrapper } from './widgets/MathGraphWrapper';
 import { HelloWorldWrapper } from './widgets/HelloWorldWrapper';
 import { LearningSurfaceHost } from '../learning-surface/LearningSurfaceHost';
+import { isTypingTarget } from '../learning-surface/keyboard';
 import { WhiteboardToolbar } from './components/WhiteboardToolbar';
 import { WhiteboardPageBar } from './components/WhiteboardPageBar';
 import { WhiteboardDialog } from './components/WhiteboardDialog';
@@ -1604,7 +1605,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
         // i3 Autotiling 风格快捷键：
         // 1. Alt + Shift + 方向键 / HJKL: 物理方向对调平铺组件（Swap Window）
         // 2. Alt + 方向键 / HJKL: 物理方向转移聚焦组件（Focus Window）
-        if (autoTileEnabled && selectedShapeId && !isEditingText && e.altKey) {
+        if (autoTileEnabled && selectedShapeId && !isEditingText && e.altKey && !isTypingTarget(e.target)) {
           let direction: TilingDirection | null = null;
           if (e.key === 'ArrowLeft' || e.key === 'h' || e.key === 'H') direction = 'left';
           else if (e.key === 'ArrowRight' || e.key === 'l' || e.key === 'L') direction = 'right';

@@ -82,6 +82,7 @@ import {
   FileText,
   AlertCircle,
 } from 'lucide-react';
+import { shouldHandleSurfaceShortcut } from '../../learning-surface/keyboard';
 
 export function RevealPresentationWrapper({
   elementId,
@@ -389,22 +390,48 @@ export function RevealPresentationWrapper({
 
   // Keyboard navigation effect
   useEffect(() => {
+    const isSurface = data?.isSurface === true;
     const handleKeyDown = (e: KeyboardEvent) => {
       if (isStudent && isFullscreenSynced && isFullscreenForced) return;
-      if (e.key === 'ArrowRight' || e.key === ' ') {
-        e.preventDefault();
-        handleSlideChange(slideIndex + 1);
-      } else if (e.key === 'ArrowLeft') {
-        e.preventDefault();
-        handleSlideChange(slideIndex - 1);
-      } else if (e.key === 'Escape' && isContainerFullscreen) {
+
+      // 全屏退出是全局的：原生全屏下 Esc 由浏览器接管，降级模式仍需这里兜底。
+      if (e.key === 'Escape' && isContainerFullscreen) {
         e.preventDefault();
         handleToggleFullscreen(false);
+        return;
+      }
+
+      const activeElement = typeof document !== 'undefined' ? document.activeElement : null;
+      if (!shouldHandleSurfaceShortcut({ key: e.key, isSurface, scopeId: elementId, activeElement })) {
+        return;
+      }
+
+      if (e.key === 'ArrowRight' || e.key === 'PageDown' || e.key === ' ') {
+        e.preventDefault();
+        handleSlideChange(slideIndex + 1);
+      } else if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
+        e.preventDefault();
+        handleSlideChange(slideIndex - 1);
+      } else if (e.key === 'Home') {
+        e.preventDefault();
+        handleSlideChange(0);
+      } else if (e.key === 'End') {
+        e.preventDefault();
+        handleSlideChange(totalSlides - 1);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [slideIndex, isContainerFullscreen, isStudent, isFullscreenSynced, isFullscreenForced, totalSlides]);
+  }, [
+    slideIndex,
+    isContainerFullscreen,
+    isStudent,
+    isFullscreenSynced,
+    isFullscreenForced,
+    totalSlides,
+    elementId,
+    data?.isSurface,
+  ]);
 
   const handleSlideChange = (index: number) => {
     if (isStudent && isFullscreenSynced && isFullscreenForced) return;

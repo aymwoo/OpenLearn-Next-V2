@@ -67,6 +67,7 @@ describe('LearningSurfaceHost', () => {
     const iframe = await screen.findByTitle('课件一');
     expect(iframe.tagName).toBe('IFRAME');
     expect(container.querySelector('iframe')?.getAttribute('src')).toContain('/runtime/cw-1/');
+    expect(container.querySelector('[data-surface-scope="element-1"]')).toBeTruthy();
   });
 
   it('presentation 内联 Markdown 进入演示文稿渲染器', async () => {
@@ -90,6 +91,11 @@ describe('LearningSurfaceHost', () => {
     render(<LearningSurfaceHost surfaceId="surface-1" lessonId="lesson-1" />);
 
     expect(await screen.findByTestId('learning-surface-presentation')).toBeTruthy();
+    const presentation = screen.getByTestId('learning-surface-presentation');
+    expect(presentation.getAttribute('data-surface-scope')).toBe('surface-1');
+    expect(presentation.getAttribute('tabindex')).toBe('0');
+    expect(presentation.getAttribute('role')).toBe('group');
+    expect(screen.getByRole('button', { name: '全屏查看' }).getAttribute('aria-pressed')).toBe('false');
   });
 
   it('插件渲染器按目录项落到 sandbox', async () => {
@@ -142,6 +148,7 @@ describe('LearningSurfaceHost', () => {
 
     const placeholder = await screen.findByTestId('learning-surface-placeholder');
     expect(placeholder.getAttribute('data-renderer')).toBe('missing-renderer');
+    expect(placeholder.getAttribute('role')).toBe('status');
   });
 
   it('Surface 读取失败时显示错误态', async () => {
@@ -154,6 +161,7 @@ describe('LearningSurfaceHost', () => {
 
     const placeholder = await screen.findByTestId('learning-surface-placeholder');
     expect(placeholder.textContent).toContain('HTTP 404');
+    expect(placeholder.getAttribute('role')).toBe('alert');
   });
 
   it('内容引用损坏时显示错误态', async () => {
@@ -175,5 +183,18 @@ describe('LearningSurfaceHost', () => {
 
     const placeholder = await screen.findByTestId('learning-surface-placeholder');
     expect(placeholder.textContent).toContain('内容引用损坏');
+  });
+
+  it('加载中暴露 status 与 aria-busy', () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => new Promise<Response>(() => {})),
+    );
+
+    render(<LearningSurfaceHost surfaceId="surface-1" lessonId="lesson-1" />);
+
+    const status = screen.getByRole('status');
+    expect(status.getAttribute('aria-busy')).toBe('true');
+    expect(status.textContent).toContain('内容加载中');
   });
 });

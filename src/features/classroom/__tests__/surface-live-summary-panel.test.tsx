@@ -65,11 +65,15 @@ describe('SurfaceLiveSummaryPanel', () => {
     render(<SurfaceLiveSummaryPanel lessonId="lesson-1" classId="class-1" activeSegmentId="seg-1" lang="zh" />);
 
     expect(screen.getByRole('button', { name: /Surface 完成概览/ })).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: /Surface 完成概览/ }));
+    const toggle = screen.getByRole('button', { name: /Surface 完成概览/ });
+    expect(toggle.getAttribute('aria-controls')).toBeTruthy();
+    fireEvent.click(toggle);
 
     await screen.findByText('本环节课件');
     expect(screen.queryByText('课后作业')).toBeNull();
     expect(screen.getAllByText('未交同学').length).toBeGreaterThan(0);
+    expect(screen.getByRole('group', { name: '统计范围' })).toBeTruthy();
+    expect(screen.getByRole('list', { name: '各 Surface 完成情况' })).toBeTruthy();
     expect(fetchMock).toHaveBeenCalledWith('/api/lessons/lesson-1/learning-surface-summary?classId=class-1');
 
     fireEvent.click(screen.getByRole('button', { name: '本课' }));

@@ -5,7 +5,7 @@
  * 的已交、完成率、均分与未交名单。数据来自
  * `GET /api/lessons/:lessonId/learning-surface-summary`，展开时 20 秒轮询，收起即停。
  */
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useState } from 'react';
 import { ChevronDown, ChevronUp, Gauge, RefreshCw, Users } from 'lucide-react';
 
 interface SurfaceSummaryStudent {
@@ -76,6 +76,7 @@ export function SurfaceLiveSummaryPanel({
   const [data, setData] = useState<LessonSurfaceSummary | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const panelId = useId();
 
   const load = useCallback(async () => {
     if (!lessonId) return;
@@ -124,11 +125,13 @@ export function SurfaceLiveSummaryPanel({
     <section
       className="shrink-0 rounded-xl border border-theme bg-surface-secondary/40 mb-3"
       aria-label={zh ? 'Surface 完成概览' : 'Surface completion overview'}
+      aria-busy={loading}
     >
       <button
         type="button"
         onClick={() => setExpanded((value) => !value)}
         aria-expanded={expanded}
+        aria-controls={panelId}
         className="w-full flex items-center justify-between gap-2 px-3 py-2 text-left cursor-pointer"
       >
         <span className="flex items-center gap-1.5 min-w-0">
@@ -152,9 +155,13 @@ export function SurfaceLiveSummaryPanel({
       </button>
 
       {expanded ? (
-        <div className="px-3 pb-3 space-y-2">
+        <div id={panelId} className="px-3 pb-3 space-y-2">
           <div className="flex items-center justify-between gap-2">
-            <div className="inline-flex p-0.5 bg-surface border border-theme rounded-lg text-[11px] font-semibold">
+            <div
+              role="group"
+              aria-label={zh ? '统计范围' : 'Summary scope'}
+              className="inline-flex p-0.5 bg-surface border border-theme rounded-lg text-[11px] font-semibold"
+            >
               {(
                 [
                   { id: 'segment', label: zh ? '本环节' : 'This segment' },
@@ -200,7 +207,10 @@ export function SurfaceLiveSummaryPanel({
                   : 'No surfaces in this lesson.'}
             </p>
           ) : (
-            <ul className="space-y-1.5 max-h-52 overflow-y-auto scrollbar-thin">
+            <ul
+              aria-label={zh ? '各 Surface 完成情况' : 'Surface completion details'}
+              className="space-y-1.5 max-h-52 overflow-y-auto scrollbar-thin"
+            >
               {visible.map((item) => (
                 <li key={item.surfaceId} className="rounded-lg border border-theme bg-surface px-2 py-1.5">
                   <div className="flex items-start justify-between gap-2">
@@ -240,7 +250,7 @@ export function SurfaceLiveSummaryPanel({
           )}
 
           {data && visible.length > 0 ? (
-            <p className="text-[10px] text-muted">
+            <p role="status" aria-live="polite" className="text-[10px] text-muted">
               {zh
                 ? `本课名单 ${data.rosterCount} 人 · 未交 ${pendingCount} 项 · 更新于 ${new Date(
                     data.generatedAt,

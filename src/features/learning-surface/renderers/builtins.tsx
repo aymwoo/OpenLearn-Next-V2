@@ -37,33 +37,52 @@ function HtmlCoursewareRenderer({ contentRef, lessonId, hostId, onProgress, onSu
 
   if (contentRef.source.kind === 'courseware' && sourceId) {
     return (
-      <CoursewareHost
-        source={{ coursewareUuid: sourceId, title: displayTitle }}
-        lessonId={lessonId}
-        elementId={hostId}
-        title={displayTitle}
-        className="w-full h-full"
-        overlay={<CoursewareScoresOverlay coursewareUuid={sourceId} />}
-        onEvent={handleEvent}
-      />
+      <div
+        data-surface-scope={hostId}
+        tabIndex={0}
+        role="group"
+        aria-label={displayTitle || 'HTML 课件'}
+        className="w-full h-full min-h-0 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-primary-theme/50"
+      >
+        <CoursewareHost
+          source={{ coursewareUuid: sourceId, title: displayTitle }}
+          lessonId={lessonId}
+          elementId={hostId}
+          title={displayTitle}
+          className="w-full h-full"
+          overlay={<CoursewareScoresOverlay coursewareUuid={sourceId} />}
+          onEvent={handleEvent}
+        />
+      </div>
     );
   }
 
   if (contentRef.source.kind === 'resource' && sourceId) {
     return (
-      <CoursewareHost
-        source={{ resourceId: sourceId, title: displayTitle }}
-        lessonId={lessonId}
-        elementId={hostId}
-        title={displayTitle}
-        className="w-full h-full"
-        onEvent={handleEvent}
-      />
+      <div
+        data-surface-scope={hostId}
+        tabIndex={0}
+        role="group"
+        aria-label={displayTitle || 'HTML 课件'}
+        className="w-full h-full min-h-0 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-primary-theme/50"
+      >
+        <CoursewareHost
+          source={{ resourceId: sourceId, title: displayTitle }}
+          lessonId={lessonId}
+          elementId={hostId}
+          title={displayTitle}
+          className="w-full h-full"
+          onEvent={handleEvent}
+        />
+      </div>
     );
   }
 
   return (
-    <div className="w-full h-full flex items-center justify-center p-6 text-center text-xs text-gray-400 bg-slate-50 rounded-xl">
+    <div
+      role="status"
+      className="w-full h-full flex items-center justify-center p-6 text-center text-xs text-gray-400 bg-slate-50 rounded-xl"
+    >
       HTML 课件需要绑定课件或资源引用
     </div>
   );

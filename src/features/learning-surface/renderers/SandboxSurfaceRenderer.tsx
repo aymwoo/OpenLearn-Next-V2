@@ -70,7 +70,15 @@ export function SandboxSurfaceRenderer({
   };
 
   return (
-    <div className="w-full h-full min-h-0" data-testid="learning-surface-sandbox" data-suppress-autosave="true">
+    <div
+      data-testid="learning-surface-sandbox"
+      data-suppress-autosave="true"
+      data-surface-scope={hostId}
+      tabIndex={0}
+      role="group"
+      aria-label={contentRef.config?.title || renderer.id}
+      className="w-full h-full min-h-0 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-primary-theme/50"
+    >
       <PluginSandboxIframeView
         pluginId={pluginId}
         view={view}

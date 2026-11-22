@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect, useMemo, useState } from 'react';
+import { Suspense, lazy, useEffect, useId, useMemo, useRef, useState } from 'react';
 import type { SurfaceRendererProps } from '../types';
 
 const LazyPresentation = lazy(() =>
@@ -59,6 +59,8 @@ export function PresentationRenderer({
   const inlineMarkdown = contentRef.config?.markdown ?? '';
   const [fetchedMarkdown, setFetchedMarkdown] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const hintId = useId();
 
   // 资源库 Markdown：取正文后交给 wrapper；其他类型由 wrapper 直接按 URL 加载。
   useEffect(() => {
@@ -82,7 +84,10 @@ export function PresentationRenderer({
 
   if (loadError) {
     return (
-      <div className="w-full h-full flex items-center justify-center p-6 text-center text-xs text-rose-500 bg-slate-50 rounded-xl">
+      <div
+        role="alert"
+        className="w-full h-full flex items-center justify-center p-6 text-center text-xs text-rose-500 bg-slate-50 rounded-xl"
+      >
         {loadError}
       </div>
     );
@@ -90,7 +95,10 @@ export function PresentationRenderer({
 
   if (!inlineMarkdown && !resourceId) {
     return (
-      <div className="w-full h-full flex flex-col items-center justify-center gap-1 p-6 text-center bg-slate-50 rounded-xl">
+      <div
+        role="status"
+        className="w-full h-full flex flex-col items-center justify-center gap-1 p-6 text-center bg-slate-50 rounded-xl"
+      >
         <p className="text-sm font-semibold text-gray-700">演示文稿未配置内容</p>
         <p className="text-xs text-gray-400">请绑定资源库文件，或填写内联 Markdown</p>
       </div>
@@ -99,7 +107,11 @@ export function PresentationRenderer({
 
   if (fileType === 'md' && !inlineMarkdown && fetchedMarkdown === null) {
     return (
-      <div className="w-full h-full flex items-center justify-center text-xs text-gray-400 bg-slate-50 rounded-xl">
+      <div
+        role="status"
+        aria-live="polite"
+        className="w-full h-full flex items-center justify-center text-xs text-gray-400 bg-slate-50 rounded-xl"
+      >
         演示文稿加载中…
       </div>
     );
@@ -108,10 +120,33 @@ export function PresentationRenderer({
   const slideX = restoredSlide(attempt?.state_json);
 
   return (
-    <div data-testid="learning-surface-presentation" className="w-full h-full min-h-0">
+    <div
+      ref={containerRef}
+      data-testid="learning-surface-presentation"
+      data-surface-scope={hostId}
+      tabIndex={0}
+      role="group"
+      aria-label={contentRef.config?.title || '演示文稿'}
+      aria-describedby={hintId}
+      onPointerDown={(event) => {
+        const target = event.target as HTMLElement | null;
+        if (target?.closest('button, a, input, textarea, select, [contenteditable="true"], [role="textbox"]')) {
+          return;
+        }
+        containerRef.current?.focus();
+      }}
+      className="w-full h-full min-h-0 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-primary-theme/50"
+    >
+      <span id={hintId} className="sr-only">
+        点击内容区后使用左右方向键翻页，Home/End 跳到首尾页。
+      </span>
       <Suspense
         fallback={
-          <div className="w-full h-full flex items-center justify-center text-xs text-gray-400 bg-slate-50 rounded-xl">
+          <div
+            role="status"
+            aria-live="polite"
+            className="w-full h-full flex items-center justify-center text-xs text-gray-400 bg-slate-50 rounded-xl"
+          >
             演示文稿加载中…
           </div>
         }

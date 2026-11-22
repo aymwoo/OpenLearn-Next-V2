@@ -9,11 +9,13 @@
  *
  * 具体渲染器见 `renderers/`；插件事件协议见 `docs/architecture/learning-surface.md`。
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { Maximize2, Minimize2 } from 'lucide-react';
 import './renderers/builtins';
 import { getSurfaceRenderer, loadSurfaceRendererDirectory, sandboxRendererFromDescriptor } from './renderers/registry';
 import { SandboxSurfaceRenderer } from './renderers/SandboxSurfaceRenderer';
 import { useLearningSurfaceAttempt } from './useLearningSurfaceAttempt';
+import { useSurfaceFullscreen } from './useSurfaceFullscreen';
 import type {
   LearningContentRef,
   LearningSurfaceRow,
@@ -66,6 +68,8 @@ export function LearningSurfaceHost({
   preview = false,
 }: LearningSurfaceHostProps) {
   const [state, setState] = useState<HostState>({ status: 'loading' });
+  const surfaceRef = useRef<HTMLDivElement>(null);
+  const fullscreen = useSurfaceFullscreen(surfaceRef);
 
   useEffect(() => {
     let cancelled = false;
@@ -98,7 +102,12 @@ export function LearningSurfaceHost({
   if (state.status === 'loading') {
     return (
       <div className={wrapClass(className)}>
-        <div className="w-full h-full flex items-center justify-center text-xs text-gray-400 bg-slate-50 rounded-xl">
+        <div
+          role="status"
+          aria-live="polite"
+          aria-busy="true"
+          className="w-full h-full flex items-center justify-center text-xs text-gray-400 bg-slate-50 rounded-xl"
+        >
           内容加载中…
         </div>
       </div>
@@ -108,13 +117,29 @@ export function LearningSurfaceHost({
   if (state.status === 'error') {
     return (
       <div className={wrapClass(className)}>
-        <SurfacePlaceholder title={title ?? '内容暂不可用'} message={state.message} />
+        <SurfacePlaceholder title={title ?? '内容暂不可用'} message={state.message} tone="alert" />
       </div>
     );
   }
 
   return (
-    <div className={wrapClass(className)}>
+    <div
+      ref={surfaceRef}
+      data-surface-fullscreen={fullscreen.isFullscreen || undefined}
+      className={`${wrapClass(className)} ${fullscreen.isFullscreen ? 'fixed inset-0 z-[120] bg-surface p-4' : ''}`}
+      role="region"
+      aria-label={title ?? state.contentRef.config?.title ?? state.contentRef.rendererId}
+    >
+      <button
+        type="button"
+        onClick={fullscreen.toggle}
+        aria-pressed={fullscreen.isFullscreen}
+        aria-label={fullscreen.isFullscreen ? '退出全屏' : '全屏查看'}
+        title={fullscreen.isFullscreen ? '退出全屏' : '全屏查看'}
+        className="absolute right-2 top-2 z-10 inline-flex items-center justify-center rounded-lg border border-theme bg-surface/90 p-1.5 text-muted shadow-xs transition-colors hover:text-main focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-theme/50"
+      >
+        {fullscreen.isFullscreen ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
+      </button>
       <SurfaceBody
         surface={state.surface}
         contentRef={state.contentRef}
@@ -249,11 +274,23 @@ function wrapClass(className?: string): string {
   return (className ?? 'w-full h-full') + ' relative';
 }
 
-function SurfacePlaceholder({ title, message, rendererId }: { title: string; message: string; rendererId?: string }) {
+function SurfacePlaceholder({
+  title,
+  message,
+  rendererId,
+  tone = 'status',
+}: {
+  title: string;
+  message: string;
+  rendererId?: string;
+  tone?: 'status' | 'alert';
+}) {
   return (
     <div
       data-testid="learning-surface-placeholder"
       data-renderer={rendererId}
+      role={tone}
+      aria-live={tone === 'alert' ? 'assertive' : 'polite'}
       className="w-full h-full flex flex-col items-center justify-center gap-1.5 p-6 text-center bg-slate-50 rounded-xl"
     >
       <p className="text-sm font-semibold text-gray-700">{title}</p>

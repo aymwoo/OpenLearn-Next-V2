@@ -86,7 +86,11 @@ export function AssignmentSubmissionRenderer({ contentRef, lessonId, preview }: 
 
   if (loading && !detail) {
     return (
-      <div className="w-full h-full flex items-center justify-center gap-2 text-xs text-gray-400 bg-slate-50 rounded-xl">
+      <div
+        role="status"
+        aria-live="polite"
+        className="w-full h-full flex items-center justify-center gap-2 text-xs text-gray-400 bg-slate-50 rounded-xl"
+      >
         <Loader2 size={14} className="animate-spin" />
         作业加载中…
       </div>
@@ -111,7 +115,11 @@ export function AssignmentSubmissionRenderer({ contentRef, lessonId, preview }: 
           </button>
         </div>
 
-        {error ? <p className="text-xs text-rose-600">{error}</p> : null}
+        {error ? (
+          <p role="alert" className="text-xs text-rose-600">
+            {error}
+          </p>
+        ) : null}
 
         {assignment?.description ? (
           <p className="text-xs text-main/80 whitespace-pre-wrap leading-relaxed">{assignment.description}</p>
@@ -175,7 +183,10 @@ export function AssignmentSubmissionRenderer({ contentRef, lessonId, preview }: 
 
 function SurfaceNotice({ title, message }: { title: string; message: string }) {
   return (
-    <div className="w-full h-full flex flex-col items-center justify-center gap-1.5 p-6 text-center bg-slate-50 rounded-xl">
+    <div
+      role="status"
+      className="w-full h-full flex flex-col items-center justify-center gap-1.5 p-6 text-center bg-slate-50 rounded-xl"
+    >
       <p className="text-sm font-semibold text-gray-700">{title}</p>
       <p className="text-xs text-gray-400">{message}</p>
     </div>

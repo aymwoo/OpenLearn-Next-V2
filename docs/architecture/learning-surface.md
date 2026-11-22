@@ -244,6 +244,13 @@ host → iframe: { channel: 'ol-plugin-view', type: 'state.patch', payload }
 - 删除课时：沿用现有课时级联删除，清理 Surface 与 attempt。
 - 教师历史视图仍可读取已删除 Surface 的成绩。
 
+### 7.6 键盘与焦点（阶段 9.1）
+
+- Surface 容器可聚焦（`tabIndex=0`），并带 `data-surface-scope={hostId}`；点击内容区时焦点进入本 Surface。
+- 演示文稿只在焦点位于本 Surface 内时响应 `←/→`、`PageUp/PageDown`、`Space`、`Home/End`；`input` / `textarea` / `select` / `contentEditable` 内不抢键。
+- 白板内的演示文稿组件（非 Surface）保持原有全局方向键行为，避免旧交互回退。
+- 同一页多个 Surface 各自独立，不会出现「按一次方向键所有演示文稿一起翻页」。
+
 ---
 
 ## 8. API 草案
@@ -364,6 +371,20 @@ host → iframe: { channel: 'ol-plugin-view', type: 'state.patch', payload }
 - **7.3 课堂内 Surface 学习面板**：新增 `learning-surface-summary` 聚合（排除教师预览、每个学生取最新 attempt、已交 = `submitted` / `graded`、分数按满分归一），由 `GET /api/lessons/:lessonId/learning-surface-summary?classId=` 提供。教师课堂的「学生提交数据」面板顶部增加可折叠 Surface 概览：按当前环节筛选，展开时轮询，收起即停。白板 Surface 通过 `owner_id = 元素 id` 反查 `whiteboard_elements.data.segmentId`；学案活动与首页块归入本课。
 - **7.4 验收**：全量门禁、docs 构建与 audit；CHANGELOG 记录三条变更。
 
+### 阶段 9：Surface 快捷键与焦点隔离
+
+- 新增 `src/features/learning-surface/keyboard.ts`：统一判断输入目标与 Surface 焦点范围。
+- 演示文稿在 Surface 内只响应本 Surface 焦点下的 `←/→`、`PageUp/PageDown`、`Space`、`Home/End`；白板内组件保持原有全局方向键行为。
+- 课件与沙箱容器可聚焦并标记 `data-surface-scope`，避免同一页多个 Surface 串键。
+- 本阶段只覆盖键盘与焦点；宿主级全屏与更完整的无障碍约定留待后续。
+
+### 阶段 10：Surface 无障碍与宿主级全屏
+
+- `LearningSurfaceHost`：加载态 `role="status"` / `aria-live` / `aria-busy`，错误态 `role="alert"`，就绪态 `role="region"` + 标题标签。
+- 渲染器空态/错误态补齐语义；课堂 `SurfaceLiveSummaryPanel` 增加 `aria-live` / `aria-busy` / `aria-controls`。
+- 新增 `useSurfaceFullscreen`：宿主级全屏、`fullscreenchange` 反向同步、原生被拒时 Esc 降级退出、退出后焦点回到触发按钮。
+- `LearningSurfaceHost` 提供统一全屏按钮，覆盖课件、演示文稿与沙箱；演示文稿内部全屏保留以兼容白板。
+
 ---
 
 ## 10. 并行 P0：课堂运行时统一 `mode_pack_id`
@@ -419,5 +440,5 @@ lesson.mode_pack_id → lesson.delivery_mode → whiteboard
 
 - 作业明细表清单与逐表迁移顺序（阶段 0 产出）。
 - 匿名互评、小组作业与 Surface attempt 的映射方式。
-- 无障碍与全屏、快捷键的统一约定。
+- 无障碍与全屏：快捷键 / 焦点隔离（9.1）与宿主级全屏、加载/错误态 aria（阶段 10）已覆盖核心范围。
 - 课程级（`courses`）内容复用的优先级与时机。
