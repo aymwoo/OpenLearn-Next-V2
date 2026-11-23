@@ -1,9 +1,9 @@
 /**
  * 作业中心（Assignment Hub）路由
  *
- * 读路由已抽到 `assignment-read.ts`，与 `/api/learning-surface-assignments/*`
- * 共用同一份鉴权与读取逻辑。本文件保留白板作业对象入口的旧写端点（统一 410）
- * 与附件 GC 调度。
+ * 读路由已抽到 `assignment-read.ts`；阶段 11.2 起旧读端点只返回 410，
+ * 读取统一走 `/api/learning-surface-assignments/*`。本文件保留白板作业对象入口的
+ * 旧写端点（统一 410）与附件 GC 调度。
  */
 import type Database from 'better-sqlite3';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
@@ -52,10 +52,11 @@ export function registerAssignmentHubRoutes(ctx: ServerContext) {
   // M4: 启动软删除文件物理 GC（立即一次 + 每 24h）
   scheduleAssignmentFileGC(assignmentService);
 
-  // 读路由：与本文件的写端点分开维护，新旧路径共用 `assignment-read.ts`。
+  // 读路由：阶段 11.2 起旧路径下线，只返回 410 + Link；读逻辑由新路径提供。
   registerAssignmentReadRoutes(app, {
     basePath: '/api/assignments',
     successorBasePath: '/api/learning-surface-assignments',
+    retired: true,
   });
 
   // ── 旧写端点：统一 410，指向 learning-surface 通道 ───────────────────────

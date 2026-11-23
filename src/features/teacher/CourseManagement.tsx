@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { Suspense, lazy, useState } from 'react';
 import { copyToClipboard } from '../../utils/clipboard';
 import {
   BookOpen,
@@ -30,6 +30,15 @@ import {
   resolveLessonModeBadge,
   useModePackCatalog,
 } from '../classroom/mode-pack/useModePackCatalog';
+import { isModePacksEnabled } from '../classroom/mode-pack/flags';
+import { resolveLessonModePackDeliveryMode } from '../../../packages/core/plugin-host/course-delivery-mode';
+
+// 课程编辑页内展开：按课时交付模式懒加载白板/学案备课面，不再切换系统导航。
+const LessonEditorView = lazy(() => import('./LessonEditorView').then((m) => ({ default: m.LessonEditorView })));
+const XueanEditor = lazy(() => import('./xuean/XueanEditor').then((m) => ({ default: m.XueanEditor })));
+const ModePackPrepShell = lazy(() =>
+  import('../classroom/mode-pack/ModePackPrepShell').then((m) => ({ default: m.ModePackPrepShell })),
+);
 
 interface CourseStats {
   whiteboardCount: number;
@@ -80,6 +89,12 @@ export function CourseManagement() {
 
   const [filterMyLessons, setFilterMyLessons] = useState(false);
   const [filterDeliveryMode, setFilterDeliveryMode] = useState<'all' | 'whiteboard' | 'xuean'>('all');
+  const [editingLessonId, setEditingLessonId] = useState<string | null>(null);
+  const editingLesson = editingLessonId ? lessons.find((item) => item.id === editingLessonId) : undefined;
+  const openCourseEditor = (lessonId: string) => {
+    onViewCourse(lessonId);
+    setEditingLessonId(lessonId);
+  };
   const modePacks = useModePackCatalog();
   const [deleteTarget, setDeleteTarget] = useState<Lesson | null>(null);
   const [deleteStats, setDeleteStats] = useState<CourseStats | null>(null);
@@ -133,6 +148,45 @@ export function CourseManagement() {
       setDeleteLoading(false);
     }
   };
+
+  // 课程编辑在「课程管理」页内展开：白板课与学案课都走同一入口，不再切换导航。
+  if (editingLesson) {
+    const deliveryMode = resolveLessonModePackDeliveryMode(editingLesson.mode_pack_id, editingLesson.delivery_mode);
+    return (
+      <div className="flex-1 flex flex-col gap-3 h-full min-h-0">
+        <div className="flex items-center gap-3 shrink-0">
+          <button
+            type="button"
+            onClick={() => setEditingLessonId(null)}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 transition-colors"
+          >
+            ← {lang === 'zh' ? '返回课程管理' : 'Back to Courses'}
+          </button>
+          <span className="text-sm font-medium text-gray-600 truncate" title={editingLesson.title}>
+            {editingLesson.title}
+          </span>
+        </div>
+        <div className="flex-1 min-h-0 overflow-hidden">
+          <Suspense
+            fallback={
+              <div className="flex items-center justify-center h-full text-sm text-gray-400 gap-2">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                {lang === 'zh' ? '加载课程编辑器…' : 'Loading course editor…'}
+              </div>
+            }
+          >
+            {isModePacksEnabled() ? (
+              <ModePackPrepShell />
+            ) : deliveryMode === 'xuean' ? (
+              <XueanEditor />
+            ) : (
+              <LessonEditorView />
+            )}
+          </Suspense>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex-1 flex flex-col gap-6 h-full overflow-y-auto">
@@ -360,7 +414,7 @@ export function CourseManagement() {
                           data-testid="course-title"
                           className="font-semibold text-gray-800 text-lg truncate cursor-pointer hover:text-indigo-600 transition-colors"
                           title={lesson.title}
-                          onClick={() => onViewCourse(lesson.id)}
+                          onClick={() => openCourseEditor(lesson.id)}
                         >
                           {lesson.title}
                         </div>
@@ -436,7 +490,7 @@ export function CourseManagement() {
                         </button>
                         <div className="flex items-center gap-0.5">
                           <button
-                            onClick={() => onViewCourse(lesson.id)}
+                            onClick={() => openCourseEditor(lesson.id)}
                             className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors cursor-pointer"
                             title={
                               canManage

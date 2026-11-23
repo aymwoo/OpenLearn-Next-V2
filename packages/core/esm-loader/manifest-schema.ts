@@ -593,6 +593,35 @@ const frontendSlotEntrySchema = z
   })
   .passthrough();
 
+/**
+ * 学案活动类型扩展（`xuean.activity.type`）。
+ *
+ * 插件可声明新的活动形式；服务端会校验 id 是否带 `<manifest.id>:` 命名空间前缀。
+ */
+const xueanActivityTypeSchema = z
+  .object({
+    id: z.string().min(1).max(128),
+    label: z.string().min(1).max(120),
+    labelEn: z.string().max(120).optional(),
+    description: z.string().max(500).optional(),
+    icon: z.string().max(128).optional(),
+  })
+  .passthrough();
+
+/**
+ * 学案活动编辑器 / 学生端渲染器扩展（`xuean.activity.editor` / `xuean.activity.student`）。
+ *
+ * 按 `activityType` 与活动行匹配；`view` 沿用插件沙箱视图约定。
+ */
+const xueanActivityRendererSchema = z
+  .object({
+    id: z.string().min(1).max(128),
+    activityType: z.string().min(1).max(128),
+    label: z.string().max(120).optional(),
+    view: z.string().min(1).max(256).optional(),
+  })
+  .passthrough();
+
 const frontendSlotsShape = {
   'header.action': z.array(frontendSlotEntrySchema).optional(),
   'statusbar.item': z.array(frontendSlotEntrySchema).optional(),
@@ -641,6 +670,10 @@ const frontendSlotsShape = {
   'assessment.list.card': z.array(frontendSlotEntrySchema).optional(),
   'assessment.attempt.toolbar': z.array(frontendSlotEntrySchema).optional(),
   'assessment.stats.card': z.array(frontendSlotEntrySchema).optional(),
+  // ── 学案编辑器扩展槽：插件可新增活动类型并提供编辑 / 学生端渲染 ──
+  'xuean.activity.type': z.array(xueanActivityTypeSchema).optional(),
+  'xuean.activity.editor': z.array(xueanActivityRendererSchema).optional(),
+  'xuean.activity.student': z.array(xueanActivityRendererSchema).optional(),
 } as const;
 
 export const pluginLocalesSchema = z

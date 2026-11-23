@@ -283,6 +283,13 @@ export interface ExtensionPointRendererProps {
    * 仅对 iframe 视图生效，内建 React 组件自行处理锁定。
    */
   locked?: boolean;
+  /**
+   * 隐藏指定插件的全部贡献（学生端可见性策略）。
+   * 只在调用点显式传入时生效，不影响其他角色/槽位。
+   */
+  excludePluginIds?: string[];
+  /** 隐藏指定扩展（`pluginId/extensionId`），用于更细粒度的学生端收敛。 */
+  excludeExtensionIds?: string[];
 }
 
 /**
@@ -444,6 +451,8 @@ export function ExtensionPointRenderer({
   slotProps,
   placement,
   locked = false,
+  excludePluginIds,
+  excludeExtensionIds,
 }: ExtensionPointRendererProps) {
   // 熔断降级告警去重（每个组件实例只告警一次/插件）
   const warnedPluginsRef = React.useRef<Set<string>>(new Set());
@@ -458,6 +467,16 @@ export function ExtensionPointRenderer({
 
   if (!host) return fallback ?? null;
   let extensions = host.getExtensions(slot as ExtensionSlot);
+
+  // 学生端可见性策略：在槽位分发前统一剔除被教师隐藏的插件/扩展。
+  if (excludePluginIds && excludePluginIds.length > 0) {
+    const hidden = new Set(excludePluginIds);
+    extensions = extensions.filter((ext) => !hidden.has(ext.pluginId));
+  }
+  if (excludeExtensionIds && excludeExtensionIds.length > 0) {
+    const hidden = new Set(excludeExtensionIds);
+    extensions = extensions.filter((ext) => !hidden.has(`${ext.pluginId}/${ext.id}`));
+  }
 
   // v0.2.6: anchor slot placement filtering —— 宿主在锚点按钮前后各渲染一次，
   // 本侧只渲染与 placement 匹配的扩展（未声明的默认视为 'after'）。
@@ -1150,6 +1169,20 @@ export function ExtensionPointRenderer({
         })}
       </>
     );
+  }
+
+  // xuean.activity.editor / xuean.activity.student —— 学案插件活动按 activityType 分发。
+  // 一个只实现了「虚拟实验」的编辑器不应出现在「阅读任务」的编辑弹窗里。
+  if (slot === 'xuean.activity.editor' || slot === 'xuean.activity.student') {
+    const wanted = String(slotProps?.activityType ?? slotProps?.activity?.type ?? '');
+    if (!wanted) return null;
+    const activeExt = extensions.find((ext) => {
+      const cfg = (ext.slotProps ?? {}) as Record<string, unknown>;
+      const declared = (ext as { activityType?: string }).activityType ?? cfg.activityType ?? ext.targetType;
+      return declared === wanted || ext.id === wanted;
+    });
+    if (!activeExt) return null;
+    return renderTabPanelContent(activeExt, { activity: slotProps?.activity }, '活动扩展加载失败');
   }
 
   return (

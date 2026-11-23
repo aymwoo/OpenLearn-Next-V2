@@ -388,6 +388,9 @@ export class LessonService {
       if (tableExists('lesson_checkins')) {
         this.db.prepare('DELETE FROM lesson_checkins WHERE lesson_id = ?').run(lessonId);
       }
+      if (tableExists('student_ui_policies')) {
+        this.db.prepare("DELETE FROM student_ui_policies WHERE scope_type = 'lesson' AND scope_id = ?").run(lessonId);
+      }
 
       // 8. 课节主体删除
       return this.db.prepare('DELETE FROM lessons WHERE id = ?').run(lessonId);

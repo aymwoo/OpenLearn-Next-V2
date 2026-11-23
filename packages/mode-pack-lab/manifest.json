@@ -1,0 +1,20 @@
+{
+  "id": "ext-mode-pack-lab",
+  "name": "探究学习模式包示例",
+  "version": "1.0.0",
+  "description": "第三方模式包安装链路示例：声明 inquiry-lab 环节类型，用于验证 ZIP 安装与目录收录",
+  "main": "index.js",
+  "engines": {
+    "openlearn": ">=0.3.0"
+  },
+  "contributes": {
+    "mode.pack": [
+      {
+        "id": "ext-mode-pack-lab:inquiry",
+        "label": "探究学习",
+        "labelEn": "Inquiry Learning",
+        "segmentTypes": ["inquiry-lab"]
+      }
+    ]
+  }
+}

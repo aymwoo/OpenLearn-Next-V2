@@ -481,6 +481,9 @@ export class RosterService {
         this.db.prepare('DELETE FROM student_rollcalls WHERE class_id = ?').run(classId);
       } catch {}
       this.db.prepare('DELETE FROM class_groups WHERE class_id = ?').run(classId);
+      if (tableExists('student_ui_policies')) {
+        this.db.prepare("DELETE FROM student_ui_policies WHERE scope_type = 'class' AND scope_id = ?").run(classId);
+      }
       this.db.prepare('DELETE FROM classes WHERE id = ?').run(classId);
 
       // 2. 孤儿 GC：本班学生中删选课后已不属于任何班级的，仅清其无归属全局残留

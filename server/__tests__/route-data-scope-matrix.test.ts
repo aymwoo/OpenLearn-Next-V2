@@ -225,9 +225,9 @@ describe('学生数据越权测试矩阵（Issue #140）', () => {
 
   describe('assignments', () => {
     it('班级作业列表：本班学生 200，外班学生/外班教师 403', async () => {
-      expect((await get(`/api/classes/${classA}/assignments`, tokStudentA)).status).toBe(200);
-      expect((await get(`/api/classes/${classA}/assignments`, tokStudentB)).status).toBe(403);
-      expect((await get(`/api/classes/${classA}/assignments`, tokTeacherB)).status).toBe(403);
+      expect((await get(`/api/classes/${classA}/learning-surface-assignments`, tokStudentA)).status).toBe(200);
+      expect((await get(`/api/classes/${classA}/learning-surface-assignments`, tokStudentB)).status).toBe(403);
+      expect((await get(`/api/classes/${classA}/learning-surface-assignments`, tokTeacherB)).status).toBe(403);
     });
 
     it('外班学生不能向本班作业提交', async () => {

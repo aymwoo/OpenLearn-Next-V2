@@ -1,8 +1,9 @@
 /**
  * 班级作业路由。
  *
- * 读路由（班级作业列表）已抽到 `assignment-read.ts`，与
- * `/api/classes/:classId/learning-surface-assignments` 共用；本文件只保留
+ * 读路由（班级作业列表）已抽到 `assignment-read.ts`；阶段 12.3 起旧路径
+ * `/api/classes/:classId/assignments` 只返回 410，读取统一走
+ * `/api/classes/:classId/learning-surface-assignments`。本文件只保留
  * 阶段 2 起统一 410 的旧写端点。
  */
 import { requireAuth } from '../middleware/auth.js';
@@ -17,6 +18,7 @@ export function registerAssignmentsRoutes(ctx: ServerContext) {
   registerClassAssignmentsReadRoute(app, {
     path: '/api/classes/:classId/assignments',
     successorPath: '/api/classes/:classId/learning-surface-assignments',
+    retired: true,
   });
 
   app.post('/api/classes/:classId/assignments/generate', requireAuth('teacher', 'administrator'), (_req, res) => {

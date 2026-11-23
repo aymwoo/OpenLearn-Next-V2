@@ -9,6 +9,7 @@ import { createServer, type Server } from 'http';
 import type { AddressInfo } from 'net';
 import { registerRosterRoutes } from '../routes/roster.js';
 import { registerAssignmentsRoutes } from '../routes/assignments.js';
+import { registerLearningSurfaceAssignmentRoutes } from '../routes/learning-surface-assignments.js';
 import { registerGradingRoutes } from '../routes/grading.js';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
 
@@ -42,6 +43,7 @@ describe('班级与作业对象级授权', () => {
     const noop = (_req: any, _res: any, next: any) => next();
     registerRosterRoutes({ app, io: undefined, loginLimiter: noop } as any);
     registerAssignmentsRoutes({ app } as any);
+    registerLearningSurfaceAssignmentRoutes({ app } as any);
     registerGradingRoutes({ app } as any);
     server = createServer(app);
     await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
@@ -130,21 +132,29 @@ describe('班级与作业对象级授权', () => {
   });
 
   it('外班学生与外班教师读取作业、仪表盘、成绩返回 403', async () => {
-    expect((await get(`/api/classes/${classA}/assignments`, tokStudentB)).status).toBe(403);
+    expect((await get(`/api/classes/${classA}/learning-surface-assignments`, tokStudentB)).status).toBe(403);
     expect((await get(`/api/classes/${classA}/dashboard`, tokStudentB)).status).toBe(403);
     expect((await get(`/api/students/${studentA}/dashboard`, tokStudentB)).status).toBe(403);
     expect((await get(`/api/students/${studentA}/academic-year-comparison`, tokStudentB)).status).toBe(403);
-    expect((await get(`/api/classes/${classA}/assignments`, tokTeacherB)).status).toBe(403);
+    expect((await get(`/api/classes/${classA}/learning-surface-assignments`, tokTeacherB)).status).toBe(403);
     expect((await get(`/api/classes/${classA}/dashboard`, tokTeacherB)).status).toBe(403);
     expect((await get(`/api/students/${studentA}/academic-year-comparison`, tokTeacherB)).status).toBe(403);
     expect((await get(`/api/exams/${examId}/scores`, tokStudentB)).status).toBe(403);
 
     expect((await get(`/api/classes/${classA}/semester-grades`, tokTeacherB)).status).toBe(403);
-    expect((await get('/api/classes/cls-objauth-missing/assignments', tokTeacherA)).status).toBe(404);
+    expect((await get('/api/classes/cls-objauth-missing/learning-surface-assignments', tokTeacherA)).status).toBe(404);
+
+    // 旧读端点已下线：鉴权通过后只返回 410 + 替代路径
+    const legacy = await get(`/api/classes/${classA}/assignments`, tokTeacherA);
+    expect(legacy.status).toBe(410);
+    expect(((await legacy.json()) as any).replacement).toBe(`/api/classes/${classA}/learning-surface-assignments`);
+    expect(legacy.headers.get('link') || '').toContain(
+      `</api/classes/${classA}/learning-surface-assignments>; rel="successor-version"`,
+    );
   });
 
   it('本班学生只能看到自己的作业且不含答案与班级口令', async () => {
-    const list = await get(`/api/classes/${classA}/assignments`, tokStudentA);
+    const list = await get(`/api/classes/${classA}/learning-surface-assignments`, tokStudentA);
     expect(list.status).toBe(200);
     const rows: any[] = await list.json();
     expect(rows).toHaveLength(1);
@@ -170,7 +180,7 @@ describe('班级与作业对象级授权', () => {
   });
 
   it('管理该班的教师和管理员可以读取作业全文', async () => {
-    const teacher = await get(`/api/classes/${classA}/assignments`, tokTeacherA);
+    const teacher = await get(`/api/classes/${classA}/learning-surface-assignments`, tokTeacherA);
     expect(teacher.status).toBe(200);
     const teacherRows: any[] = await teacher.json();
     expect(JSON.parse(teacherRows[0].content).questions[0].correctAnswer).toBe('2');

@@ -102,7 +102,9 @@ async function ensureAssignment(baseUrl: string, headers: Record<string, string>
   const kind: FixtureKind = 'assignment';
 
   try {
-    const listRes = await fetch(`${baseUrl}/api/assignments?classId=${DEMO_IDS.primaryClass}`, { headers });
+    const listRes = await fetch(`${baseUrl}/api/learning-surface-assignments?classId=${DEMO_IDS.primaryClass}`, {
+      headers,
+    });
     if (listRes.ok) {
       const body = (await listRes.json()) as AssignmentListResponse;
       const items: AssignmentSummary[] = Array.isArray(body) ? body : (body.assignments ?? body.data ?? []);
@@ -111,7 +113,7 @@ async function ensureAssignment(baseUrl: string, headers: Record<string, string>
       }
     }
 
-    const res = await fetch(`${baseUrl}/api/assignments`, {
+    const res = await fetch(`${baseUrl}/api/learning-surface-assignments`, {
       method: 'POST',
       headers: { ...headers, 'content-type': 'application/json' },
       body: JSON.stringify({

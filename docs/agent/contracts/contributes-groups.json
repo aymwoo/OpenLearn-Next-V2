@@ -121,10 +121,13 @@
     "ai_sidebar.tab",
     "assessment.list.card",
     "assessment.attempt.toolbar",
-    "assessment.stats.card"
+    "assessment.stats.card",
+    "xuean.activity.type",
+    "xuean.activity.editor",
+    "xuean.activity.student"
   ],
   "a_total": 75,
-  "b_total": 43,
+  "b_total": 46,
   "a_not_in_extension_slot": [
     "ai.persona.provider",
     "learning.surface",

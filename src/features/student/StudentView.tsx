@@ -5,7 +5,8 @@ import type { StudentType, Lesson } from '../../types/app';
 import { useAppData } from '../../context/AppDataContext';
 import type { ToastType } from '../../hooks/useToast';
 import { StudentDashboardPanel } from './StudentDashboardPanel';
-import { useStudentActiveSessionPolling } from './useStudentActiveSession';
+import { useStudentActiveSession, useStudentActiveSessionPolling } from './useStudentActiveSession';
+import { useStudentUiPolicy } from './useStudentUiPolicy';
 import { useThemeStore } from '../../store/themeStore';
 
 const StudentLessonView = lazy(() => import('./StudentLessonView').then((m) => ({ default: m.StudentLessonView })));
@@ -69,6 +70,11 @@ export function StudentView() {
   // Issue #109: 学生端全局轮询「自己班级正在进行的课堂会话」，
   // 供看板横幅 / 顶部导航 / 悬浮菜单复用（模块级 store 单例，只发一次请求）
   useStudentActiveSessionPolling(activeStudentId || null);
+
+  // Gitee Issue IKW5KV：教师按班级/课节收敛学生首屏可见性。
+  // 课节层的取数依赖进行中课堂，因此与 activeSession 联动。
+  const activeSession = useStudentActiveSession((s) => s.activeSession);
+  const studentUiPolicy = useStudentUiPolicy(activeStudentId, activeSession?.lessonId ?? null);
 
   const studentLayout = useThemeStore((s) => s.resolvedLayouts.student);
 
@@ -173,6 +179,7 @@ export function StudentView() {
               setQuizStudentAnswers={setQuizStudentAnswers}
               setSubAssignmentTab={(tab: any) => setSubAssignmentTab(tab)}
               onOpenAssessments={() => setAssessmentsOpen(true)}
+              studentUiPolicy={studentUiPolicy}
             />
           )}
         </Suspense>

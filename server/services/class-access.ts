@@ -255,7 +255,7 @@ export function authorizeLessonParticipation(
 }
 
 /** 该课节关联的班级集合（排课 / 课堂会话 / 作业三个来源）。 */
-function lessonLinkedClassIds(db: Database.Database, lessonId: string): string[] {
+export function lessonLinkedClassIds(db: Database.Database, lessonId: string): string[] {
   const rows = db
     .prepare(
       `SELECT class_id FROM schedules WHERE lesson_id = ? AND class_id IS NOT NULL

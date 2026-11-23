@@ -267,7 +267,11 @@ export type ExtensionSlot =
   | 'classroom.showcase_diff.action' // 「多屏对比投屏批注」模态窗顶栏动作扩展
   | 'classroom.macro_runner.action' // 「课堂宏动作编排中枢」动作区扩展
   | 'classroom.hardware_bridge.addon' // 「硬件教具生态网关」设置与监控面板扩展
-  | 'classroom.sessions.action'; // 「课堂会话与档案管理」顶栏动作扩展
+  | 'classroom.sessions.action' // 「课堂会话与档案管理」顶栏动作扩展
+  // ── 学案编辑器扩展槽位：第三方插件新增活动形式 ──
+  | 'xuean.activity.type' // 声明新的学案活动类型（并进入教师端活动类型下拉）
+  | 'xuean.activity.editor' // 该类型活动的教师端编辑器（按 activityType 分发）
+  | 'xuean.activity.student'; // 该类型活动的学生端渲染器（按 activityType 分发）
 
 /**
  * Anchor slot — 锚点扩展槽（v0.2.6）。

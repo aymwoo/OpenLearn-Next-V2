@@ -32,11 +32,10 @@ describe('Navigation Registry（教师工作区侧边栏 SSOT）', () => {
     expect([...positions].sort((a, b) => a - b)).toEqual(positions);
   });
 
-  it('内置入口覆盖教师工作区的全部 10 个 tab', () => {
+  it('内置入口覆盖教师工作区的全部 9 个 tab（不再提供备课入口）', () => {
     const tabs = BUILTIN_NAV_ITEMS.map((i) => i.tab);
     expect(tabs).toEqual([
       'courses',
-      'xuean_editor',
       'live_class',
       'classes',
       'assessments',
@@ -46,6 +45,8 @@ describe('Navigation Registry（教师工作区侧边栏 SSOT）', () => {
       'admin_directory',
       'help',
     ]);
+    expect(tabs).not.toContain('lesson_editor');
+    expect(tabs).not.toContain('xuean_editor');
   });
 
   it('每个内置入口的 tab 与 id 一一对应且不重复', () => {
@@ -91,10 +92,10 @@ describe('Navigation Registry（教师工作区侧边栏 SSOT）', () => {
     expect(coursesZh?.labelEn).toBe('Courses');
     expect(coursesEn?.labelZh).toBe('课程管理');
 
-    const xueanZh = zh.find((i) => i.tab === 'xuean_editor');
-    const xueanEn = en.find((i) => i.tab === 'xuean_editor');
-    expect(xueanZh).toMatchObject({ label: '学案编辑器', labelEn: 'Xuean Editor', group: 'teaching' });
-    expect(xueanEn).toMatchObject({ label: 'Xuean Editor', labelZh: '学案编辑器', group: 'teaching' });
+    const liveZh = zh.find((i) => i.tab === 'live_class');
+    const liveEn = en.find((i) => i.tab === 'live_class');
+    expect(liveZh).toMatchObject({ label: '互动课堂', labelEn: 'Live Class', group: 'teaching' });
+    expect(liveEn).toMatchObject({ label: 'Live Class', labelZh: '互动课堂', group: 'teaching' });
   });
 
   it('分组标题可按语言解析', () => {
@@ -109,15 +110,13 @@ describe('Navigation Registry（教师工作区侧边栏 SSOT）', () => {
     expect(items.find((i) => i.tab === 'courses')?.highlight).toBe(false);
   });
 
-  it('Mode Pack flag 开时学案入口并入统一备课（lesson_editor）', () => {
-    setModePacksEnabledForTests(true);
-    try {
+  it('无论 Mode Pack 开关如何，导航都不再出现备课/学案编辑器入口', () => {
+    for (const enabled of [true, false]) {
+      setModePacksEnabledForTests(enabled);
       const zh = resolveBuiltinNavigationItems('teacher', 'zh');
-      expect(zh.some((i) => i.tab === 'xuean_editor')).toBe(false);
-      const prep = zh.find((i) => i.tab === 'lesson_editor');
-      expect(prep).toMatchObject({ label: '备课', labelEn: 'Lesson Prep', group: 'teaching' });
-    } finally {
-      setModePacksEnabledForTests(null);
+      expect(zh.some((i) => i.tab === 'lesson_editor' || i.tab === 'xuean_editor')).toBe(false);
+      expect(zh.some((i) => i.label === '备课')).toBe(false);
     }
+    setModePacksEnabledForTests(null);
   });
 });

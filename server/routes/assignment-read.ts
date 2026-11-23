@@ -2,9 +2,9 @@
  * 作业读路由（新旧路径共用）。
  *
  * 阶段 7.2 起，旧 `/api/assignments/*` 作为兼容入口，与
- * `/api/learning-surface-assignments/*` 共用同一份鉴权与读取逻辑：
- * - 旧路径响应带 `Deprecation` / `Link` 头，阶段 8 再下线；
- * - 新路径是前端唯一调用入口；
+ * `/api/learning-surface-assignments/*` 共用同一份鉴权与读取逻辑；
+ * 阶段 11.2 起旧路径正式下线（410 + `Link`），新路径是唯一入口：
+ * - 旧路径保留鉴权，未登录仍先得到 401/403，认证通过后返回 410；
  * - 写端点不在这里，仍由 `/api/learning-surface-assignments/*` 处理。
  */
 import express from 'express';
@@ -87,11 +87,30 @@ function markDeprecated(req: express.Request, res: express.Response, fromBase: s
   res.setHeader('Link', `<${req.originalUrl.replace(fromBase, toBase)}>; rel="successor-version"`);
 }
 
+/**
+ * 旧读端点下线响应（阶段 11.2）。
+ *
+ * 不再读取数据，只告诉调用方新路径在哪；鉴权仍由外层中间件先行拦截。
+ */
+function rejectRetiredRead(req: express.Request, res: express.Response, fromBase: string, toBase?: string): void {
+  if (toBase) {
+    res.setHeader('Link', `<${req.originalUrl.replace(fromBase, toBase)}>; rel="successor-version"`);
+  }
+  res.status(410).json({
+    success: false,
+    code: 'LEGACY_ASSIGNMENT_READ_DISABLED',
+    error: 'This assignment read endpoint has been retired. Use the learning-surface assignment API instead.',
+    replacement: toBase ?? null,
+  });
+}
+
 export interface AssignmentReadRoutesOptions {
   /** 读路由基路径，如 `/api/learning-surface-assignments`。 */
   basePath: string;
   /** 旧路径迁移目标；提供后响应带 Deprecation / Link 头。 */
   successorBasePath?: string;
+  /** 旧路径正式下线：注册 410 处理器而不是读取逻辑。 */
+  retired?: boolean;
 }
 
 /**
@@ -107,9 +126,20 @@ export function registerAssignmentReadRoutes(
   options: AssignmentReadRoutesOptions,
 ): AssignmentService {
   const assignmentService = new AssignmentService();
-  const { basePath, successorBasePath } = options;
+  const { basePath, successorBasePath, retired } = options;
   const deprecated = (req: express.Request, res: express.Response) =>
     markDeprecated(req, res, basePath, successorBasePath);
+
+  if (retired) {
+    const gone = (req: express.Request, res: express.Response) =>
+      rejectRetiredRead(req, res, basePath, successorBasePath);
+    app.get(basePath, requireScopedAuth('class-member'), gone);
+    app.get(`${basePath}/:assignmentId`, requireScopedAuth('class-member'), gone);
+    app.get(`${basePath}/:assignmentId/files`, requireScopedAuth('class-member'), gone);
+    app.get(`${basePath}/:assignmentId/files/:fileId`, requireScopedAuth('class-member'), gone);
+    app.get(`${basePath}/:assignmentId/submissions`, requireScopedAuth('class-staff'), gone);
+    return assignmentService;
+  }
 
   app.get(basePath, requireScopedAuth('class-member'), async (req, res) => {
     deprecated(req, res);
@@ -272,6 +302,8 @@ export interface ClassAssignmentsReadRouteOptions {
   path: string;
   /** 旧路径迁移目标；提供后响应带 Deprecation / Link 头。 */
   successorPath?: string;
+  /** 旧路径正式下线：只返回 410 与替代路径，不再读取数据。 */
+  retired?: boolean;
 }
 
 /** 班级作业列表读路由（新旧路径共用）。 */
@@ -280,7 +312,21 @@ export function registerClassAssignmentsReadRoute(
   options: ClassAssignmentsReadRouteOptions,
 ): AssignmentService {
   const assignmentService = new AssignmentService();
-  const { path, successorPath } = options;
+  const { path, successorPath, retired } = options;
+
+  if (retired) {
+    app.get(path, requireScopedAuth('class-member'), (req, res) => {
+      const replacement = successorPath?.replace(':classId', String(req.params.classId ?? '')) ?? null;
+      if (replacement) res.setHeader('Link', `<${replacement}>; rel="successor-version"`);
+      res.status(410).json({
+        success: false,
+        code: 'LEGACY_ASSIGNMENT_READ_DISABLED',
+        error: 'This assignment read endpoint has been retired. Use the learning-surface assignment API instead.',
+        replacement,
+      });
+    });
+    return assignmentService;
+  }
 
   app.get(path, requireScopedAuth('class-member'), (req, res) => {
     markDeprecated(req, res, path, successorPath);

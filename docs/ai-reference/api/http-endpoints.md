@@ -37,7 +37,7 @@
 | `themes.ts`                   | 12          | `/api/themes`                                                                       | 第三方主题包安装/启停/偏好隔离                        |
 | `assignment-hub.ts`           | 10          | `/api/assignments`                                                                  | 旧写端点 410 + 附件 GC；读路由见 `assignment-read.ts` |
 | `schedules.ts`                | 9           | `/api/schedules`、`/api/timetable`                                                  | 课表与冲突检测                                        |
-| `assignments.ts`              | 6           | `/api/classes/:id/assignments`、`/api/assignments/:id/submissions`                  | 班级作业列表 + 旧写端点 410                           |
+| `assignments.ts`              | 6           | `/api/classes/:id/assignments`、`/api/assignments/:id/submissions`                  | 班级作业列表（旧路径 410）+ 旧写端点 410              |
 | `classroom-peer-review.ts`    | 7           | `/api/classroom/sessions/:id/peer-review`                                           | 同伴互评、展示作品、弹幕                              |
 | `admin.ts`                    | 5           | `/api/system/*`、`/api/admin/*`                                                     | 加密状态、升级检查、批量导入                          |
 | `files.ts`                    | 5           | `/api/files/:assetId`、`/api/admin/file-storage/*`                                  | 统一文件读取网关与存储策略                            |

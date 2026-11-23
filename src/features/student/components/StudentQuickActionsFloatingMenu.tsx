@@ -11,10 +11,7 @@ import {
   Sparkles,
   CheckCircle2,
   Clock,
-  BookOpen,
   ChevronRight,
-  ExternalLink,
-  HelpCircle,
   Minimize2,
   Maximize2,
 } from 'lucide-react';
@@ -25,6 +22,26 @@ import { StudentQuickActionItem, studentQuickActionsRegistry, QuickActionBadgeVa
 import { useStudentActiveSession } from '../useStudentActiveSession';
 
 export type { StudentQuickActionItem, QuickActionBadgeVariant };
+
+/** 看板数据里本组件实际消费的字段（服务端结构比这里宽）。 */
+interface QuickActionAssignment {
+  id: string;
+  title?: string;
+  submission_status?: string;
+  score?: number;
+}
+
+interface QuickActionRollcall {
+  id: string;
+  lesson_title?: string;
+}
+
+/** 宿主桥接在 `window.openlearn` 上暴露的最小子集。 */
+interface OpenLearnBridge {
+  commandBus?: {
+    execute: (input: { type: string; payload?: unknown; actorId?: string | null }) => unknown;
+  };
+}
 
 export interface StudentQuickActionsFloatingMenuProps {
   studentDashboardData: any;
@@ -78,6 +95,14 @@ export interface StudentQuickActionsFloatingMenuProps {
    * Whether to listen to global third-party plugin action registry (default: true)
    */
   enablePluginRegistry?: boolean;
+
+  /** Gitee Issue IKW5KV：教师收敛提示文案时不渲染头部/底部说明。 */
+  hideGuidance?: boolean;
+  /** 被教师隐藏的内置快捷指令项。 */
+  hiddenQuickActionKeys?: ReadonlyArray<'join-live-session' | 'view-assignments' | 'check-notifications'>;
+  /** 被教师隐藏的插件贡献。 */
+  hiddenPluginIds?: string[];
+  hiddenExtensionIds?: string[];
 }
 
 /**
@@ -86,7 +111,8 @@ export interface StudentQuickActionsFloatingMenuProps {
 function renderActionIcon(icon: string | React.ReactNode | undefined) {
   if (!icon) return <Sparkles size={18} />;
   if (typeof icon !== 'string') return icon;
-  const IconComp = (Icons as any)[icon];
+  const iconRegistry = Icons as unknown as Record<string, React.ComponentType<{ size?: number }> | undefined>;
+  const IconComp = iconRegistry[icon];
   if (IconComp) return <IconComp size={18} />;
   return <span className="text-sm font-bold">{icon}</span>;
 }
@@ -130,12 +156,17 @@ export function StudentQuickActionsFloatingMenu({
   onCompactChange,
   customFabRenderer,
   enablePluginRegistry = true,
+  hideGuidance = false,
+  hiddenQuickActionKeys,
+  hiddenPluginIds,
+  hiddenExtensionIds,
 }: StudentQuickActionsFloatingMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'menu' | 'notifications'>('menu');
   const [userCompactOverride, setUserCompactOverride] = useState<boolean | null>(null);
   const [registryActions, setRegistryActions] = useState<StudentQuickActionItem[]>([]);
   const menuRef = useRef<HTMLDivElement>(null);
+  const hiddenKeys = hiddenQuickActionKeys ?? [];
 
   // Monitor screen resizing via useScreenResize hook
   const screenInfo = useScreenResize({
@@ -200,14 +231,19 @@ export function StudentQuickActionsFloatingMenu({
   });
 
   const schedules = studentDashboardData?.schedules || [];
-  const assignments = studentDashboardData?.assignments || [];
-  const rollcalls = studentDashboardData?.rollcalls || [];
+  // 这两个数组直接作为 useMemo 依赖，先按 studentDashboardData 收敛引用，
+  // 否则每次渲染都会生成新数组，导致下方的 filter 无法命中缓存。
+  const assignments = useMemo(() => studentDashboardData?.assignments || [], [studentDashboardData]);
+  const rollcalls = useMemo(() => studentDashboardData?.rollcalls || [], [studentDashboardData]);
   const unreadRollcalls = useMemo(
-    () => rollcalls.filter((r: any) => !readNotifications.has(r.id)),
+    () => rollcalls.filter((r: QuickActionRollcall) => !readNotifications.has(r.id)),
     [rollcalls, readNotifications],
   );
 
-  const pendingAssignments = useMemo(() => assignments.filter((a: any) => !a.submission_status), [assignments]);
+  const pendingAssignments = useMemo(
+    () => assignments.filter((a: QuickActionAssignment) => !a.submission_status),
+    [assignments],
+  );
 
   // Issue #109: 只使用服务端真实进行中的会话，不再从排课投影/进度里猜测课节
   const activeSession = useStudentActiveSession((s) => s.activeSession);
@@ -310,7 +346,7 @@ export function StudentQuickActionsFloatingMenu({
   };
 
   // 2b. Direct Jump into first pending assignment
-  const handleDirectOpenAssignment = (ast: any) => {
+  const handleDirectOpenAssignment = (ast: QuickActionAssignment) => {
     setSelectedAssignment(ast);
     setStudentViewStatus('assignment');
     setIsOpen(false);
@@ -356,7 +392,8 @@ export function StudentQuickActionsFloatingMenu({
       });
     } else if (action.commandType) {
       try {
-        (window as any).openlearn?.commandBus?.execute({
+        const bridge = (window as unknown as { openlearn?: OpenLearnBridge }).openlearn;
+        bridge?.commandBus?.execute({
           type: action.commandType,
           payload: action.commandPayload,
           actorId: activeStudentId,
@@ -402,9 +439,11 @@ export function StudentQuickActionsFloatingMenu({
                       </span>
                     )}
                   </div>
-                  <p className="text-2xs text-slate-400 truncate">
-                    {lang === 'zh' ? '一键直达课堂、作业与插件扩展' : 'Fast navigation & plugin actions'}
-                  </p>
+                  {!hideGuidance && (
+                    <p className="text-2xs text-slate-400 truncate">
+                      {lang === 'zh' ? '一键直达课堂、作业与插件扩展' : 'Fast navigation & plugin actions'}
+                    </p>
+                  )}
                 </div>
               </div>
               <div className="flex items-center gap-1 shrink-0 ml-2">
@@ -440,7 +479,7 @@ export function StudentQuickActionsFloatingMenu({
             {activeTab === 'menu' ? (
               <div className="p-3.5 flex flex-col gap-2.5 max-h-[460px] overflow-y-auto">
                 {/* 1. Action Card: Join Live Session（Issue #109：无进行中会话时不渲染，避免猜测错误课节） */}
-                {activeSessionSchedule && (
+                {activeSessionSchedule && !hiddenKeys.includes('join-live-session') && (
                   <div
                     id="qa-action-join-live"
                     onClick={handleJoinLiveSession}
@@ -476,43 +515,45 @@ export function StudentQuickActionsFloatingMenu({
                 )}
 
                 {/* 2. Action Card: View Latest Assignments */}
-                <div
-                  id="qa-action-view-assignments"
-                  onClick={handleViewLatestAssignments}
-                  className="group/item flex items-center justify-between p-3 rounded-xl border border-slate-200/80 bg-slate-50/70 hover:bg-teal-50/60 hover:border-teal-300 transition-all cursor-pointer shadow-3xs"
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-teal-500 to-emerald-400 text-white flex items-center justify-center shrink-0 shadow-xs">
-                      <ClipboardList size={18} />
-                    </div>
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-xs font-black text-slate-800 tracking-tight group-hover/item:text-teal-900 transition-colors">
-                          {lang === 'zh' ? '查看待办作业' : 'View Latest Assignments'}
-                        </span>
-                        {pendingAssignments.length > 0 && (
-                          <span className="text-2xs font-extrabold px-1.5 py-0.2 rounded bg-amber-100 text-amber-800">
-                            {pendingAssignments.length} {lang === 'zh' ? '待提交' : 'pending'}
-                          </span>
-                        )}
+                {!hiddenKeys.includes('view-assignments') && (
+                  <div
+                    id="qa-action-view-assignments"
+                    onClick={handleViewLatestAssignments}
+                    className="group/item flex items-center justify-between p-3 rounded-xl border border-slate-200/80 bg-slate-50/70 hover:bg-teal-50/60 hover:border-teal-300 transition-all cursor-pointer shadow-3xs"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-teal-500 to-emerald-400 text-white flex items-center justify-center shrink-0 shadow-xs">
+                        <ClipboardList size={18} />
                       </div>
-                      <p className="text-2xs text-slate-500 truncate mt-0.5">
-                        {pendingAssignments.length > 0
-                          ? `${pendingAssignments[0].title} · ${lang === 'zh' ? '未提交' : 'pending'}`
-                          : lang === 'zh'
-                            ? '全部作业已完成或待批改'
-                            : 'All assignments submitted'}
-                      </p>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs font-black text-slate-800 tracking-tight group-hover/item:text-teal-900 transition-colors">
+                            {lang === 'zh' ? '查看待办作业' : 'View Latest Assignments'}
+                          </span>
+                          {pendingAssignments.length > 0 && (
+                            <span className="text-2xs font-extrabold px-1.5 py-0.2 rounded bg-amber-100 text-amber-800">
+                              {pendingAssignments.length} {lang === 'zh' ? '待提交' : 'pending'}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-2xs text-slate-500 truncate mt-0.5">
+                          {pendingAssignments.length > 0
+                            ? `${pendingAssignments[0].title} · ${lang === 'zh' ? '未提交' : 'pending'}`
+                            : lang === 'zh'
+                              ? '全部作业已完成或待批改'
+                              : 'All assignments submitted'}
+                        </p>
+                      </div>
                     </div>
+                    <ChevronRight
+                      size={16}
+                      className="text-slate-400 group-hover/item:text-teal-600 group-hover/item:translate-x-0.5 transition-all shrink-0"
+                    />
                   </div>
-                  <ChevronRight
-                    size={16}
-                    className="text-slate-400 group-hover/item:text-teal-600 group-hover/item:translate-x-0.5 transition-all shrink-0"
-                  />
-                </div>
+                )}
 
                 {/* Quick direct access to pending assignment */}
-                {pendingAssignments.length > 0 && (
+                {!hiddenKeys.includes('view-assignments') && pendingAssignments.length > 0 && (
                   <div className="bg-amber-50/70 border border-amber-200/70 rounded-xl p-2.5 flex items-center justify-between text-2xs">
                     <div className="flex items-center gap-1.5 text-amber-900 font-semibold truncate mr-2">
                       <Clock size={12} className="text-amber-600 shrink-0" />
@@ -530,51 +571,53 @@ export function StudentQuickActionsFloatingMenu({
                 )}
 
                 {/* 3. Action Card: Check Notifications */}
-                <div
-                  id="qa-action-check-notifications"
-                  onClick={() => setActiveTab('notifications')}
-                  className="group/item flex items-center justify-between p-3 rounded-xl border border-slate-200/80 bg-slate-50/70 hover:bg-blue-50/60 hover:border-blue-300 transition-all cursor-pointer shadow-3xs"
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-500 to-indigo-500 text-white flex items-center justify-center shrink-0 shadow-xs relative">
-                      <Bell size={18} />
-                      {unreadRollcalls.length > 0 && (
-                        <span className="absolute -top-1 -right-1 flex h-3 w-3 items-center justify-center rounded-full bg-rose-500 text-white text-[9px] font-black">
-                          {unreadRollcalls.length}
-                        </span>
-                      )}
-                    </div>
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-xs font-black text-slate-800 tracking-tight group-hover/item:text-blue-900 transition-colors">
-                          {lang === 'zh' ? '检查消息与点名' : 'Check Notifications'}
-                        </span>
-                        {unreadRollcalls.length > 0 ? (
-                          <span className="text-2xs font-extrabold px-1.5 py-0.2 rounded bg-rose-100 text-rose-700 animate-pulse">
-                            {lang === 'zh' ? '提问点名待应答' : 'Roll Call Alarm'}
-                          </span>
-                        ) : (
-                          <span className="text-2xs font-medium text-slate-400">
-                            {lang === 'zh' ? '无未读' : 'All clear'}
+                {!hiddenKeys.includes('check-notifications') && (
+                  <div
+                    id="qa-action-check-notifications"
+                    onClick={() => setActiveTab('notifications')}
+                    className="group/item flex items-center justify-between p-3 rounded-xl border border-slate-200/80 bg-slate-50/70 hover:bg-blue-50/60 hover:border-blue-300 transition-all cursor-pointer shadow-3xs"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-500 to-indigo-500 text-white flex items-center justify-center shrink-0 shadow-xs relative">
+                        <Bell size={18} />
+                        {unreadRollcalls.length > 0 && (
+                          <span className="absolute -top-1 -right-1 flex h-3 w-3 items-center justify-center rounded-full bg-rose-500 text-white text-[9px] font-black">
+                            {unreadRollcalls.length}
                           </span>
                         )}
                       </div>
-                      <p className="text-2xs text-slate-500 truncate mt-0.5">
-                        {unreadRollcalls.length > 0
-                          ? lang === 'zh'
-                            ? `有 ${unreadRollcalls.length} 条课堂点名提问等待回应`
-                            : `${unreadRollcalls.length} active roll-call alarms`
-                          : lang === 'zh'
-                            ? '查看历史点名出勤与批改反馈'
-                            : 'View notifications & alerts'}
-                      </p>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs font-black text-slate-800 tracking-tight group-hover/item:text-blue-900 transition-colors">
+                            {lang === 'zh' ? '检查消息与点名' : 'Check Notifications'}
+                          </span>
+                          {unreadRollcalls.length > 0 ? (
+                            <span className="text-2xs font-extrabold px-1.5 py-0.2 rounded bg-rose-100 text-rose-700 animate-pulse">
+                              {lang === 'zh' ? '提问点名待应答' : 'Roll Call Alarm'}
+                            </span>
+                          ) : (
+                            <span className="text-2xs font-medium text-slate-400">
+                              {lang === 'zh' ? '无未读' : 'All clear'}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-2xs text-slate-500 truncate mt-0.5">
+                          {unreadRollcalls.length > 0
+                            ? lang === 'zh'
+                              ? `有 ${unreadRollcalls.length} 条课堂点名提问等待回应`
+                              : `${unreadRollcalls.length} active roll-call alarms`
+                            : lang === 'zh'
+                              ? '查看历史点名出勤与批改反馈'
+                              : 'View notifications & alerts'}
+                        </p>
+                      </div>
                     </div>
+                    <ChevronRight
+                      size={16}
+                      className="text-slate-400 group-hover/item:text-blue-600 group-hover/item:translate-x-0.5 transition-all shrink-0"
+                    />
                   </div>
-                  <ChevronRight
-                    size={16}
-                    className="text-slate-400 group-hover/item:text-blue-600 group-hover/item:translate-x-0.5 transition-all shrink-0"
-                  />
-                </div>
+                )}
 
                 {/* 4. Third-Party Plugin Contributed Quick Actions */}
                 {combinedPluginActions.length > 0 && (
@@ -642,6 +685,8 @@ export function StudentQuickActionsFloatingMenu({
                 {/* Third-party Plugin Extension Slot: student.quick_actions.item */}
                 <ExtensionPointRenderer
                   slot="student.quick_actions.item"
+                  excludePluginIds={hiddenPluginIds}
+                  excludeExtensionIds={hiddenExtensionIds}
                   slotProps={{
                     studentId: activeStudentId,
                     lessonId: activeSessionSchedule?.lesson_id,
@@ -654,6 +699,8 @@ export function StudentQuickActionsFloatingMenu({
                 {/* Third-party Plugin Extension Slot: student.quick_actions.action */}
                 <ExtensionPointRenderer
                   slot="student.quick_actions.action"
+                  excludePluginIds={hiddenPluginIds}
+                  excludeExtensionIds={hiddenExtensionIds}
                   slotProps={{
                     studentId: activeStudentId,
                     lang,
@@ -683,7 +730,7 @@ export function StudentQuickActionsFloatingMenu({
                     <span className="text-2xs font-bold text-rose-600 uppercase tracking-wider">
                       {lang === 'zh' ? '🔴 紧急课堂点名' : 'Urgent Roll Calls'}
                     </span>
-                    {unreadRollcalls.map((rc: any) => (
+                    {unreadRollcalls.map((rc: QuickActionRollcall) => (
                       <div
                         key={rc.id}
                         className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-2.5 flex flex-col gap-2"
@@ -720,7 +767,7 @@ export function StudentQuickActionsFloatingMenu({
                   <span className="text-2xs font-bold text-slate-450 uppercase tracking-wider block">
                     {lang === 'zh' ? '最新作业评定情况' : 'Recent Graded Work'}
                   </span>
-                  {assignments.slice(0, 3).map((ast: any) => (
+                  {assignments.slice(0, 3).map((ast: QuickActionAssignment) => (
                     <div
                       key={ast.id}
                       className="flex items-center justify-between text-2xs p-2 rounded-lg bg-slate-50 border border-slate-200/60"
@@ -742,10 +789,12 @@ export function StudentQuickActionsFloatingMenu({
             )}
 
             {/* Footer Tip */}
-            <div className="px-4 py-2 bg-slate-50 border-t border-slate-100 flex items-center justify-between text-2xs text-slate-450">
-              <span>{lang === 'zh' ? '快捷键 Esc 退出菜单' : 'Press Esc to close'}</span>
-              <span className="font-mono text-indigo-600 font-bold">OpenLearn</span>
-            </div>
+            {!hideGuidance && (
+              <div className="px-4 py-2 bg-slate-50 border-t border-slate-100 flex items-center justify-between text-2xs text-slate-450">
+                <span>{lang === 'zh' ? '快捷键 Esc 退出菜单' : 'Press Esc to close'}</span>
+                <span className="font-mono text-indigo-600 font-bold">OpenLearn</span>
+              </div>
+            )}
           </motion.div>
         )}
       </AnimatePresence>
@@ -755,6 +804,8 @@ export function StudentQuickActionsFloatingMenu({
         {/* Third-party Plugin Slot for FAB Addons (e.g. mini notification badges or auxiliary actions) */}
         <ExtensionPointRenderer
           slot="student.quick_actions.fab"
+          excludePluginIds={hiddenPluginIds}
+          excludeExtensionIds={hiddenExtensionIds}
           slotProps={{
             isCompact,
             isOpen,

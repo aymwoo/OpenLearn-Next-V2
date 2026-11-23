@@ -283,7 +283,7 @@ export async function runHttpStressTest(options = {}) {
             signal: AbortSignal.timeout(5000),
           });
         } else if (action === 'write_medium') {
-          res = await fetch(`${baseUrl}/api/assignments/${availableAssignId}/submissions`, {
+          res = await fetch(`${baseUrl}/api/learning-surface-assignments/${availableAssignId}/submissions`, {
             method: 'POST',
             headers,
             body: JSON.stringify({

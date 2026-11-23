@@ -34,6 +34,7 @@ architecture/observability
 architecture/dependency-injection
 architecture/presence-collaboration
 architecture/security-permissions
+architecture/student-ui-policy
 architecture/database-and-migrations
 architecture/adr-001-tenant-and-db-abstraction
 architecture/theming-system

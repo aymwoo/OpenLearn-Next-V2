@@ -581,7 +581,7 @@ export const SWEEP_SCENARIOS: SweepScenario[] = [
       {
         label: '教师取回自动生成的作业（最新一条）',
         role: 'teacher',
-        api: { method: 'GET', path: '/api/classes/demo-class/assignments' },
+        api: { method: 'GET', path: '/api/classes/demo-class/learning-surface-assignments' },
         capture: { name: 'assignmentId', path: '0.id' },
         expect: { path: '0.id', notEmpty: true },
       },

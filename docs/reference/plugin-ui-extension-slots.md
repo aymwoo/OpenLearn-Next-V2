@@ -194,7 +194,11 @@ export type ExtensionSlot =
   | 'classroom.showcase_diff.action' // 「多屏对比投屏批注」模态窗顶栏动作扩展
   | 'classroom.macro_runner.action' // 「课堂宏动作编排中枢」动作区扩展
   | 'classroom.hardware_bridge.addon' // 「硬件教具生态网关」设置与监控面板扩展
-  | 'classroom.sessions.action'; // 「课堂会话与档案管理」顶栏动作扩展
+  | 'classroom.sessions.action' // 「课堂会话与档案管理」顶栏动作扩展
+  // ── 学案编辑器活动类型扩展 ──
+  | 'xuean.activity.type' // 声明新的学案活动类型（进入教师端类型下拉）
+  | 'xuean.activity.editor' // 活动类型的教师端编辑器（按 activityType 分发）
+  | 'xuean.activity.student'; // 活动类型的学生端渲染器（按 activityType 分发）
 
 // v0.2.6: 锚点槽位（开放命名空间）
 export type AnchorSlot = `anchor:${string}`;
@@ -403,6 +407,8 @@ export type AnyExtensionSlot = ExtensionSlot | AnchorSlot | (string & {});
 | `classroom.macro_runner.action`         | `src/features/classroom/ecosystem/macro-engine/ClassroomMacroRunnerModal.tsx`                                                           | `{ selectedMacroId, status, lessonId, classId }`                                                                               |
 | `classroom.hardware_bridge.addon`       | `src/features/classroom/ecosystem/hardware-bridge/HardwareBridgeSettingsModal.tsx`                                                      | `{ simEnabled, eventCount }`                                                                                                   |
 | `classroom.sessions.action`             | `src/features/classroom/ClassroomSessionManager.tsx`                                                                                    | `{ totalSessions, lang }`                                                                                                      |
+| `xuean.activity.editor`                 | `src/features/teacher/xuean/XueanActivitiesPanel.tsx`（活动编辑弹窗内，仅当 `activityType` 命中插件类型）                               | `{ activityType, activity, lessonId, onSaved }`                                                                                |
+| `xuean.activity.student`                | `src/features/student/xuean/StudentXueanView.tsx`（学生学案活动卡片，仅当 `activity.type` 命中插件类型）                                | `{ activity, activityType, lessonId }`                                                                                         |
 
 #### 1.1 锚点槽位（`anchor:*`，8 个）
 
@@ -1498,20 +1504,66 @@ ctx.ui.registerExtensionPoint('classroom.sessions.action', {
 });
 ```
 
+### 12.9 学案活动类型扩展（`xuean.activity.*`）
+
+第三方插件可以给学案编辑器增加新的活动形式，三个槽位分工如下：
+
+| 槽位                     | 消费端                                           | 作用                                                                              |
+| ------------------------ | ------------------------------------------------ | --------------------------------------------------------------------------------- |
+| `xuean.activity.type`    | 服务端 `server/services/xuean-activity-types.ts` | 声明活动类型（`id` / `label`），进入教师端「活动类型」下拉并与白名单合并          |
+| `xuean.activity.editor`  | `XueanActivitiesPanel.tsx`（活动编辑弹窗）       | 该类型活动的教师端配置面板，props `{ activityType, activity, lessonId, onSaved }` |
+| `xuean.activity.student` | `StudentXueanView.tsx`（学生活动卡片）           | 该类型活动的学生端渲染器，props `{ activity, activityType, lessonId }`            |
+
+**命名空间约束**：`xuean.activity.type.id` 必须写成 `<manifest.id>:<suffix>`（例如 `@acme/virtual-lab:experiment`），否则服务端直接丢弃并打告警。这样可以避免与内置类型（`reading` / `quiz` 等）或其它插件冲突。
+
+```json
+{
+  "contributes": {
+    "xuean.activity.type": [{ "id": "@acme/virtual-lab:experiment", "label": "虚拟实验", "icon": "flask" }],
+    "xuean.activity.editor": [
+      { "id": "editor", "activityType": "@acme/virtual-lab:experiment", "label": "虚拟实验配置" }
+    ],
+    "xuean.activity.student": [{ "id": "student", "activityType": "@acme/virtual-lab:experiment", "label": "虚拟实验" }]
+  }
+}
+```
+
+运行时注册方式相同，渲染器按 `activityType` 精确匹配，一个类型只会渲染一个编辑器 / 学生端组件：
+
+```tsx
+ctx.ui.registerExtensionPoint('xuean.activity.editor', {
+  id: 'ext-virtual-lab/editor',
+  label: '虚拟实验配置',
+  component: () => import('./ExperimentEditor'),
+  // 组件收到: { activityType, activity, lessonId, onSaved }
+});
+
+ctx.ui.registerExtensionPoint('xuean.activity.student', {
+  id: 'ext-virtual-lab/student',
+  label: '虚拟实验',
+  component: () => import('./ExperimentRunner'),
+  // 组件收到: { activity, activityType, lessonId }
+});
+```
+
+**保存仍走宿主接口**：活动行本身（标题 / 必做 / 可见 / 截止时间 / `config_json`）由 `POST /api/lessons/:lessonId/activities` 与 `PUT /api/lesson-activities/:id` 落库。插件编辑器应通过宿主注入的 `onSaved()` 通知刷新，并用 `ctx.services.actionRegistry` / 自定义 REST 端点保存自己的业务数据（`activity.id` 作为外键），不要把大块业务数据塞进 `lesson_activities.config_json`。
+
+**缺省回退**：服务端目录接口 `GET /api/xuean/activity-types` 返回内置 + 已激活插件的类型；插件停用后其类型不再出现在下拉中（历史活动仍保留在库里，学生端渲染区域会提示插件未加载）。
+
 ---
 
 ## 13. 统计口径
 
 | 指标                                                           | 数值                                              |
 | -------------------------------------------------------------- | ------------------------------------------------- |
-| `ExtensionSlot` 联合类型成员                                   | **133**                                           |
-| 生产调用点（`src/**/*.tsx`，排除 `__tests__`）上的固定名槽位值 | **129**（`99` / `98` / `116` / `121` 为历史记录） |
-| 其中属于 `ExtensionSlot` 联合类型                              | **129**                                           |
+| `ExtensionSlot` 联合类型成员                                   | **140**                                           |
+| 生产调用点（`src/**/*.tsx`，排除 `__tests__`）上的固定名槽位值 | **133**（`99` / `98` / `116` / `121` 为历史记录） |
+| 其中属于 `ExtensionSlot` 联合类型                              | **133**                                           |
 | 不在联合类型内但有渲染器的字符串槽位                           | **0**                                             |
 | 已挂载的 `anchor:*` 锚点槽位                                   | **8**                                             |
-| 无渲染器的 `ExtensionSlot` 成员（数据型 / 服务端消费）         | **4**（见 §12.7、§11.6）                          |
+| 无渲染器的 `ExtensionSlot` 成员（数据型 / 服务端消费）         | **7**（见 §12.7、§11.6、§12.9）                   |
 | `ExtensionPointRenderer` 唯一槽位值总数（固定名 + 锚点）       | 随版本增长（含 8 个 `anchor:*` 锚点）             |
-| 在本页有使用说明的槽位（含 props 表 / 专项小节 / 代码示例）    | **141 / 141**                                     |
+| 在本页有使用说明的槽位（含 props 表 / 专项小节 / 代码示例）    | **148 / 148**                                     |
 
 > 复核命令：`python3 audit-tools/extract_slots.py --repo .`（槽位清单真值）与 `python3 audit-tools/slots_coverage.py --repo .`（文档覆盖分级）。两者均已接入 `bash audit-tools/run.sh`：**L0（文档中完全不存在）计为 drift 并阻断门禁**，L1/L2 仅作提示输出。
 >
@@ -1521,3 +1573,4 @@ ctx.ui.registerExtensionPoint('classroom.sessions.action', {
 > 2026-10-26 复核（v0.7.4）：`assignment.file.preview` 于 v0.7.4 加入 `ExtensionSlot`，成员数由 119 增至 **120**。该槽位见 §10.1。
 > 2026-11-14 更新：白板域新增 `whiteboard.selection.toolbar`、`whiteboard.context_menu`、`whiteboard.pagebar.action`、`whiteboard.page_drawer.action`、`whiteboard.properties.addon` 5 个扩展槽位，`ExtensionSlot` 成员数由 120 增至 **125**（总槽位数含 8 个锚点共 **133** 个），详见 §10。
 > 2026-11-15 更新：互动课堂顶栏与高级弹窗新增 `classroom.toolbar.quick_action`、`classroom.monitor.header_action`、`classroom.submissions.toolbar`、`classroom.top_performers.action`、`classroom.showcase_diff.action`、`classroom.macro_runner.action`、`classroom.hardware_bridge.addon`、`classroom.sessions.action` 8 个增量扩展槽位，`ExtensionSlot` 成员数由 125 增至 **133**（总槽位数含 8 个锚点共 **141** 个），详见 §12.8。
+> 2026-11-22 更新：学案编辑器新增 `xuean.activity.type`（服务端数据型）、`xuean.activity.editor`、`xuean.activity.student` 3 个扩展槽位，`ExtensionSlot` 成员数由 137 增至 **140**（总槽位数含 8 个锚点共 **148** 个），详见 §12.9。

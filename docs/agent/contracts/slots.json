@@ -138,7 +138,10 @@
     "whiteboard.pagebar.action",
     "whiteboard.properties.addon",
     "whiteboard.renderer",
-    "whiteboard.selection.toolbar"
+    "whiteboard.selection.toolbar",
+    "xuean.activity.editor",
+    "xuean.activity.student",
+    "xuean.activity.type"
   ],
   "anchor_slots": [
     "anchor:classroom-attribution:awards",
@@ -150,5 +153,5 @@
     "anchor:whiteboard-toolbar:presentation",
     "anchor:whiteboard-toolbar:rollcall"
   ],
-  "total": 137
+  "total": 140
 }

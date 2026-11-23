@@ -114,6 +114,7 @@ import { registerResourcesRoutes } from './server/routes/resources.js';
 import { registerCoursewareRoutes } from './server/routes/courseware.js';
 import { registerBridgeRoutes } from './server/routes/bridge.js';
 import { registerRuntimePolicyRoutes } from './server/routes/runtime-policies.js';
+import { registerStudentUiPolicyRoutes } from './server/routes/student-ui-policy.js';
 import { registerLessonsRoutes } from './server/routes/lessons.js';
 import { registerLessonActivitiesRoutes } from './server/routes/lesson-activities.js';
 import { registerModePackRoutes } from './server/routes/mode-packs.js';
@@ -447,6 +448,7 @@ async function startServer() {
   registerCoursewareRoutes(ctx);
   registerBridgeRoutes(ctx);
   registerRuntimePolicyRoutes(ctx);
+  registerStudentUiPolicyRoutes(ctx);
   registerLessonsRoutes(ctx);
   registerLessonActivitiesRoutes(ctx);
   registerModePackRoutes(ctx);

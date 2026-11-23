@@ -260,14 +260,14 @@ describe('业务黄金旅程场景测试：作业与成绩全生命周期 (Assig
       expect(asgRow.title).toBe('泛型与条件类型实战大作业');
     });
 
-    it('教师与学生均可查询班级作业列表 GET /api/classes/:classId/assignments', async () => {
-      const teacherRes = await get(`/api/classes/${classId}/assignments`, teacherToken);
+    it('教师与学生均可查询班级作业列表 GET /api/classes/:classId/learning-surface-assignments', async () => {
+      const teacherRes = await get(`/api/classes/${classId}/learning-surface-assignments`, teacherToken);
       expect(teacherRes.status).toBe(200);
       const list = await teacherRes.json();
       expect(Array.isArray(list)).toBe(true);
       expect(list.some((a: any) => a.id === assignmentId)).toBe(true);
 
-      const studentRes = await get(`/api/classes/${classId}/assignments`, studentAliceToken);
+      const studentRes = await get(`/api/classes/${classId}/learning-surface-assignments`, studentAliceToken);
       expect(studentRes.status).toBe(200);
       const sList = await studentRes.json();
       expect(sList.some((a: any) => a.id === assignmentId)).toBe(true);
@@ -472,7 +472,7 @@ describe('业务黄金旅程场景测试：作业与成绩全生命周期 (Assig
   describe('阶段 5: 权限边界与安全加固 (Security Hardening)', () => {
     it('匿名请求作业与成绩端点统一返回 401 Unauthorized', async () => {
       const endpoints = [
-        { url: `${baseUrl}/api/classes/${classId}/assignments`, method: 'GET' },
+        { url: `${baseUrl}/api/classes/${classId}/learning-surface-assignments`, method: 'GET' },
         { url: `${baseUrl}/api/learning-surface-assignments/create-suggested-quiz`, method: 'POST' },
         { url: `${baseUrl}/api/learning-surface-assignments/${assignmentId}/submissions`, method: 'GET' },
         { url: `${baseUrl}/api/classes/${classId}/grade-weights`, method: 'POST' },

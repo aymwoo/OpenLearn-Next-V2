@@ -9,10 +9,12 @@ export interface StudentDashboardHeaderProps {
   activeSession?: StudentActiveSession | null;
   onReturnToClass?: () => void;
   lang?: 'zh' | 'en';
+  /** Gitee Issue IKW5KV：教师收敛提示文案时不渲染副标题。 */
+  hideGuidance?: boolean;
 }
 
 export function StudentDashboardHeader(props: StudentDashboardHeaderProps) {
-  const { students, activeStudentId, activeSession, onReturnToClass, lang = 'zh' } = props;
+  const { students, activeStudentId, activeSession, onReturnToClass, lang = 'zh', hideGuidance = false } = props;
   const zh = lang === 'zh';
   return (
     <div className="flex flex-wrap items-center gap-3 border-b border-gray-200 pb-3 sm:gap-4 sm:pb-4">
@@ -26,7 +28,7 @@ export function StudentDashboardHeader(props: StudentDashboardHeaderProps) {
         <h2 className="text-lg font-bold text-gray-800 sm:text-2xl">
           Welcome, {students.find((s) => s.id === activeStudentId)?.name}
         </h2>
-        <p className="text-xs text-gray-500 sm:text-base">Here is your learning summary.</p>
+        {!hideGuidance && <p className="text-xs text-gray-500 sm:text-base">Here is your learning summary.</p>}
       </div>
 
       {/* Issue #109: 顶部导航常驻返回入口，不依赖看板卡片布局 */}

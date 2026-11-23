@@ -7,13 +7,18 @@
  */
 import { useCallback, useEffect, useState } from 'react';
 import {
+  bindAssessmentActivity,
   createLessonActivity,
   deleteLessonActivity,
   getLessonActivities,
+  getLessonLinkedClasses,
   reorderLessonActivities,
   updateLessonActivity,
 } from '../../../services/lessonActivitiesService.js';
+import { assessmentApi, type AssessmentSummary } from '../../assessment/api';
 import { useOptionalAppData } from '../../../context/AppDataContext.js';
+import { CoursewarePicker } from './CoursewarePicker';
+import { ExtensionPointRenderer } from '../../../plugin-host/extension-point-renderer';
 
 type Activity = {
   id: string;
@@ -37,10 +42,10 @@ type Activity = {
 
 type SurfaceRenderer = { id: string; label: string; sourceKinds: string[] };
 
-const ACTIVITY_TYPES = [
+const BUILTIN_ACTIVITY_TYPES = [
   { value: 'reading', label: '阅读任务' },
   { value: 'submission', label: '作品提交' },
-  { value: 'quiz', label: '测验' },
+  { value: 'quiz', label: '试题（引用试卷）' },
   { value: 'discussion', label: '讨论' },
   { value: 'courseware', label: '网页课件' },
   { value: 'scratch', label: '图形化编程' },
@@ -48,18 +53,57 @@ const ACTIVITY_TYPES = [
   { value: 'other', label: '其他' },
 ];
 
+type ActivityTypeOption = { value: string; label: string };
+
+/** 插件活动类型的命名空间约定：`<pluginId>:<suffix>`。 */
+function isPluginActivityType(type: string): boolean {
+  return type.includes(':');
+}
+
 export function XueanActivitiesPanel() {
   const appData = useOptionalAppData();
   const lessonId = appData?.selectedLesson ?? '';
   const [activities, setActivities] = useState<Activity[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [reorderError, setReorderError] = useState<string | null>(null);
   const [editing, setEditing] = useState<Activity | null>(null);
   const [showNewForm, setShowNewForm] = useState(false);
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [overIndex, setOverIndex] = useState<number | null>(null);
+  const [typeOptions, setTypeOptions] = useState<ActivityTypeOption[]>(BUILTIN_ACTIVITY_TYPES);
+
+  // 合并插件声明的活动类型；接口失败时保留内置类型（不影响主流程）。
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/xuean/activity-types')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((body: Array<{ id?: string; label?: string }> | null) => {
+        if (cancelled || !Array.isArray(body)) return;
+        const merged: ActivityTypeOption[] = [...BUILTIN_ACTIVITY_TYPES];
+        const seen = new Set(merged.map((item) => item.value));
+        for (const item of body) {
+          if (!item?.id || seen.has(item.id)) continue;
+          seen.add(item.id);
+          merged.push({ value: item.id, label: item.label || item.id });
+        }
+        setTypeOptions(merged);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const refresh = useCallback(async () => {
     if (!lessonId) return;
     const res = await getLessonActivities(lessonId);
-    if (res.ok && res.data) setActivities(res.data as Activity[]);
+    if (res.ok && res.data) {
+      setActivities(res.data as Activity[]);
+      setLoadError(null);
+    } else {
+      setLoadError('活动加载失败，请稍后重试');
+    }
     setLoading(false);
   }, [lessonId]);
 
@@ -67,13 +111,37 @@ export function XueanActivitiesPanel() {
     refresh();
   }, [refresh]);
 
+  const commitOrder = async (ordered: Activity[]) => {
+    setActivities(ordered);
+    const res = await reorderLessonActivities(
+      lessonId,
+      ordered.map((a) => a.id),
+    );
+    if (!res.ok) {
+      setReorderError('排序保存失败，已恢复原顺序');
+      await refresh();
+    } else {
+      setReorderError(null);
+    }
+  };
+
   const handleMove = async (index: number, direction: -1 | 1) => {
     const newIndex = index + direction;
     if (newIndex < 0 || newIndex >= activities.length) return;
-    const ids = activities.map((a) => a.id);
-    [ids[index], ids[newIndex]] = [ids[newIndex], ids[index]];
-    const res = await reorderLessonActivities(lessonId, ids);
-    if (res.ok) await refresh();
+    const next = activities.slice();
+    [next[index], next[newIndex]] = [next[newIndex], next[index]];
+    await commitOrder(next);
+  };
+
+  const handleDrop = async (targetIndex: number) => {
+    const from = dragIndex;
+    setDragIndex(null);
+    setOverIndex(null);
+    if (from == null || from === targetIndex) return;
+    const next = activities.slice();
+    const [moved] = next.splice(from, 1);
+    next.splice(targetIndex, 0, moved);
+    await commitOrder(next);
   };
 
   const handleDelete = async (id: string) => {
@@ -100,7 +168,16 @@ export function XueanActivitiesPanel() {
 
       <div className="flex-1 overflow-y-auto p-3 space-y-2">
         {loading && <div className="text-center text-muted py-8">加载中…</div>}
-        {!loading && activities.length === 0 && (
+        {loadError && (
+          <div className="text-center text-rose-600 text-sm py-8">
+            {loadError}
+            <button type="button" onClick={refresh} className="ml-3 text-xs underline">
+              重试
+            </button>
+          </div>
+        )}
+        {reorderError && <div className="text-center text-amber-600 text-xs py-1">{reorderError}</div>}
+        {!loading && !loadError && activities.length === 0 && (
           <div className="text-center text-muted py-16 border-2 border-dashed border-theme rounded-xl">
             <p className="text-sm">还没有活动</p>
             <p className="text-xs mt-1">点击上方「+ 新增活动」开始编排学案</p>
@@ -113,7 +190,17 @@ export function XueanActivitiesPanel() {
             activity={act}
             index={i}
             total={activities.length}
+            dragging={dragIndex === i}
+            dragOver={overIndex === i && dragIndex !== i}
+            onDragStart={() => setDragIndex(i)}
+            onDragOver={() => setOverIndex(i)}
+            onDragEnd={() => {
+              setDragIndex(null);
+              setOverIndex(null);
+            }}
+            onDrop={() => handleDrop(i)}
             onMove={(dir) => handleMove(i, dir)}
+            types={typeOptions}
             onEdit={() => setEditing(act)}
             onDelete={() => handleDelete(act.id)}
           />
@@ -123,6 +210,7 @@ export function XueanActivitiesPanel() {
       {showNewForm && (
         <ActivityEditor
           lessonId={lessonId}
+          types={typeOptions}
           onClose={() => setShowNewForm(false)}
           onSaved={async () => {
             setShowNewForm(false);
@@ -134,6 +222,7 @@ export function XueanActivitiesPanel() {
         <ActivityEditor
           lessonId={lessonId}
           existing={editing}
+          types={typeOptions}
           onClose={() => setEditing(null)}
           onSaved={async () => {
             setEditing(null);
@@ -145,26 +234,82 @@ export function XueanActivitiesPanel() {
   );
 }
 
+/** 活动卡片上的紧凑预览：只展示对教师编排最有用的配置摘要。 */
+function summarizeActivity(activity: Activity): string[] {
+  const summary: string[] = [];
+  if (activity.type === 'quiz') {
+    try {
+      const config = JSON.parse(activity.config_json ?? '{}') as Record<string, unknown>;
+      summary.push(config.assignmentId ? '已布置试卷' : '未绑定试卷');
+    } catch {
+      summary.push('试卷配置异常');
+    }
+  }
+  if (activity.surface_id) summary.push('已绑定学习面');
+  if (activity.rubric_json) summary.push('含评价量规');
+  if (activity.due_at) summary.push(`截止 ${new Date(activity.due_at).toLocaleString()}`);
+  return summary;
+}
+
 function ActivityCard({
   activity,
   index,
   total,
+  dragging,
+  dragOver,
+  onDragStart,
+  onDragOver,
+  onDragEnd,
+  onDrop,
   onMove,
+  types,
   onEdit,
   onDelete,
 }: {
   activity: Activity;
   index: number;
   total: number;
+  dragging: boolean;
+  dragOver: boolean;
+  onDragStart: () => void;
+  onDragOver: () => void;
+  onDragEnd: () => void;
+  onDrop: () => void;
   onMove: (dir: -1 | 1) => void;
+  types: ActivityTypeOption[];
   onEdit: () => void;
   onDelete: () => void;
 }) {
-  const typeLabel = ACTIVITY_TYPES.find((t) => t.value === activity.type)?.label ?? activity.type;
+  const typeLabel = types.find((t) => t.value === activity.type)?.label ?? activity.type;
+  const summary = summarizeActivity(activity);
   return (
-    <div className="flex items-start gap-2 p-3 rounded-xl border border-theme bg-surface hover:border-primary-theme/40 transition">
-      {/* 重排按钮（可访问，键盘友好；拖拽手柄后续增强） */}
-      <div className="flex flex-col gap-0.5 pt-0.5 shrink-0">
+    <div
+      draggable
+      onDragStart={(e) => {
+        e.dataTransfer.effectAllowed = 'move';
+        onDragStart();
+      }}
+      onDragOver={(e) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        onDragOver();
+      }}
+      onDragEnd={onDragEnd}
+      onDrop={(e) => {
+        e.preventDefault();
+        onDrop();
+      }}
+      className={
+        'flex items-start gap-2 p-3 rounded-xl border bg-surface transition ' +
+        (dragging ? 'opacity-50 border-primary-theme/60 ' : 'border-theme hover:border-primary-theme/40 ') +
+        (dragOver ? 'ring-2 ring-primary-theme/40 border-primary-theme/60' : '')
+      }
+    >
+      {/* 拖拽手柄 + 可访问的上下移动按钮 */}
+      <div className="flex flex-col items-center gap-0.5 pt-0.5 shrink-0">
+        <span className="text-muted cursor-grab select-none" aria-hidden="true" title="拖拽排序">
+          ⋮⋮
+        </span>
         <button
           type="button"
           onClick={() => onMove(-1)}
@@ -202,6 +347,11 @@ function ActivityCard({
           ) : null}
         </div>
         <p className="mt-1 text-sm font-semibold text-main truncate">{activity.title}</p>
+        {summary.length > 0 && (
+          <p className="mt-0.5 text-[11px] text-muted truncate" title={summary.join(' · ')}>
+            {summary.join(' · ')}
+          </p>
+        )}
       </div>
 
       <div className="flex gap-1 shrink-0">
@@ -227,11 +377,13 @@ function ActivityCard({
 function ActivityEditor({
   lessonId,
   existing,
+  types,
   onClose,
   onSaved,
 }: {
   lessonId: string;
   existing?: Activity;
+  types: ActivityTypeOption[];
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -249,12 +401,49 @@ function ActivityEditor({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // 试题活动：引用现有试卷 + 课时关联班级
+  const existingAssessmentConfig = (() => {
+    if (!existing?.config_json) return {} as Record<string, unknown>;
+    try {
+      const parsed = JSON.parse(existing.config_json) as unknown;
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : {};
+    } catch {
+      return {};
+    }
+  })();
+  const [assessments, setAssessments] = useState<AssessmentSummary[]>([]);
+  const [linkedClasses, setLinkedClasses] = useState<Array<{ id: string; name: string }>>([]);
+  const [assessmentId, setAssessmentId] = useState(String(existingAssessmentConfig.assessmentId ?? ''));
+  const [classId, setClassId] = useState(String(existingAssessmentConfig.classId ?? ''));
+
+  useEffect(() => {
+    if (form.type !== 'quiz') return;
+    let cancelled = false;
+    assessmentApi
+      .list()
+      .then((res) => {
+        if (!cancelled) setAssessments(res.items);
+      })
+      .catch(() => {});
+    getLessonLinkedClasses(lessonId).then((res) => {
+      if (!cancelled && res.ok && res.data) {
+        const list = res.data;
+        setLinkedClasses(list);
+        setClassId((current) => current || list[0]?.id || '');
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [form.type, lessonId]);
+
   // 学习面绑定（可选）：阶段 3 起活动可挂一个 Surface 渲染内容。
   const [renderers, setRenderers] = useState<SurfaceRenderer[]>([]);
   const [surfaceRendererId, setSurfaceRendererId] = useState('');
   const [surfaceSourceKind, setSurfaceSourceKind] = useState('courseware');
   const [surfaceSourceId, setSurfaceSourceId] = useState('');
   const [surfaceMarkdown, setSurfaceMarkdown] = useState('');
+  const [coursewarePickerOpen, setCoursewarePickerOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -306,6 +495,30 @@ function ActivityEditor({
     }
     setSaving(true);
     setError(null);
+
+    if (form.type === 'quiz') {
+      if (!assessmentId || !classId) {
+        setSaving(false);
+        setError('请选择试卷与班级');
+        return;
+      }
+      const bound = await bindAssessmentActivity(lessonId, {
+        assessmentId,
+        classId,
+        activityId: existing?.id,
+        title: form.title.trim(),
+        required: form.required,
+        visible: form.visible,
+      });
+      setSaving(false);
+      if (!bound.ok) {
+        setError((bound.error as { error?: string })?.error ?? '保存失败');
+        return;
+      }
+      onSaved();
+      return;
+    }
+
     const payload: Record<string, unknown> = {
       type: form.type,
       title: form.title.trim(),
@@ -378,13 +591,62 @@ function ActivityEditor({
             onChange={(e) => setForm({ ...form, type: e.target.value })}
             className="w-full px-3 py-2 text-sm rounded-lg border border-theme bg-surface text-main focus:outline-none focus:ring-2 focus:ring-primary-theme/40"
           >
-            {ACTIVITY_TYPES.map((t) => (
+            {types.map((t) => (
               <option key={t.value} value={t.value}>
                 {t.label}
               </option>
             ))}
           </select>
         </div>
+
+        {/* 插件活动：编辑能力由插件提供；未加载时仍可保存通用字段。 */}
+        {isPluginActivityType(form.type) ? (
+          <div className="space-y-2 rounded-lg border border-theme p-3">
+            <p className="text-xs font-bold text-main">插件活动配置</p>
+            <p className="text-[10px] text-muted">该活动类型由第三方插件提供。</p>
+            <ExtensionPointRenderer
+              slot="xuean.activity.editor"
+              slotProps={{ activityType: form.type, activity: existing ?? null, lessonId, onSaved }}
+              fallback={<p className="text-[11px] text-amber-600">插件未加载，暂时只能编辑下方的通用字段。</p>}
+            />
+          </div>
+        ) : null}
+
+        {form.type === 'quiz' ? (
+          <div className="space-y-2 rounded-lg border border-theme p-3">
+            <p className="text-xs font-bold text-main">引用试卷</p>
+            <p className="text-[10px] text-muted">保存时复用已有的试卷布置，没有则自动发布到所选班级。</p>
+            <label className="block text-xs font-semibold text-muted">试卷</label>
+            <select
+              value={assessmentId}
+              onChange={(e) => setAssessmentId(e.target.value)}
+              className="w-full px-3 py-2 text-sm rounded-lg border border-theme bg-surface text-main focus:outline-none focus:ring-2 focus:ring-primary-theme/40"
+            >
+              <option value="">请选择试卷</option>
+              {assessments.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.title} · {item.status} · {item.itemCount} 题
+                </option>
+              ))}
+            </select>
+            <label className="block text-xs font-semibold text-muted">班级</label>
+            <select
+              value={classId}
+              onChange={(e) => setClassId(e.target.value)}
+              className="w-full px-3 py-2 text-sm rounded-lg border border-theme bg-surface text-main focus:outline-none focus:ring-2 focus:ring-primary-theme/40"
+            >
+              <option value="">请选择班级</option>
+              {linkedClasses.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.name}
+                </option>
+              ))}
+            </select>
+            {assessments.length === 0 && (
+              <p className="text-[10px] text-amber-600">还没有可用试卷，请先在测评中心创建。</p>
+            )}
+          </div>
+        ) : null}
 
         <div className="space-y-2">
           <label className="block text-xs font-semibold text-muted">标题</label>
@@ -504,16 +766,36 @@ function ActivityEditor({
                 </select>
                 {surfaceSourceKind === 'inline' ? (
                   <div className="flex items-center text-[10px] text-muted">在下方填写 Markdown</div>
+                ) : surfaceSourceKind === 'courseware' ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      // 展开课件选择器（与首页块共用同一组件）
+                      setCoursewarePickerOpen((v) => !v);
+                    }}
+                    className="w-full px-3 py-2 text-sm rounded-lg border border-theme bg-surface text-main text-left hover:bg-surface-secondary"
+                  >
+                    {surfaceSourceId ? '已选择课件，点击更换' : '选择互动课件'}
+                  </button>
                 ) : (
                   <input
                     type="text"
                     value={surfaceSourceId}
                     onChange={(e) => setSurfaceSourceId(e.target.value)}
-                    placeholder={surfaceSourceKind === 'courseware' ? '课件 UUID' : '资源 ID'}
+                    placeholder="资源 ID"
                     className="w-full px-3 py-2 text-sm rounded-lg border border-theme bg-surface text-main font-mono focus:outline-none focus:ring-2 focus:ring-primary-theme/40"
                   />
                 )}
               </div>
+              {surfaceSourceKind === 'courseware' && coursewarePickerOpen ? (
+                <CoursewarePicker
+                  value={surfaceSourceId}
+                  onChange={(uuid) => {
+                    setSurfaceSourceId(uuid);
+                    setCoursewarePickerOpen(false);
+                  }}
+                />
+              ) : null}
               {surfaceSourceKind === 'inline' ? (
                 <textarea
                   value={surfaceMarkdown}

@@ -143,7 +143,7 @@ export function TeacherView(_props: TeacherViewProps = {}) {
             <Dashboard />
           ) : teacherTab === 'lesson_editor' || teacherTab === 'xuean_editor' ? (
             isModePacksEnabled() ? (
-              <ModePackPrepShell />
+              <ModePackPrepShell requestedTab={teacherTab} />
             ) : teacherTab === 'lesson_editor' ? (
               <LessonEditorView />
             ) : (

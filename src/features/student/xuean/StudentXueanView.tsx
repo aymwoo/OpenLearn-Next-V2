@@ -7,6 +7,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { getXuean, postActivityProgress, type ActivitySubmission } from '../../../services/lessonActivitiesService.js';
 import { sanitizeRichTextHtml } from '../../../../packages/core/security/html-sanitize';
 import { LearningSurfaceHost } from '../../learning-surface/LearningSurfaceHost';
+import { AssessmentActivityCard } from './AssessmentActivityCard';
+import { ExtensionPointRenderer } from '../../../plugin-host/extension-point-renderer';
 
 type Block = {
   id: string;
@@ -25,6 +27,7 @@ type Activity = {
   title: string;
   required: number;
   visible: number;
+  config_json?: string | null;
   surface_id?: string | null;
 };
 
@@ -61,7 +64,7 @@ const BLOCK_TYPE_LABELS: Record<string, string> = {
 const ACTIVITY_TYPE_LABELS: Record<string, string> = {
   reading: '阅读',
   submission: '作品提交',
-  quiz: '测验',
+  quiz: '试题',
   discussion: '讨论',
   courseware: '课件',
   scratch: '编程',
@@ -288,6 +291,39 @@ function ActivityItem({
   };
 
   const activityTypeLabel = ACTIVITY_TYPE_LABELS[activity.type] ?? activity.type;
+
+  // 试题活动：引用试卷，交给内嵌 AssessmentRunner 作答。
+  if (activity.type === 'quiz') {
+    let hasAssignment = false;
+    try {
+      hasAssignment = Boolean(JSON.parse(activity.config_json ?? '{}')?.assignmentId);
+    } catch {
+      hasAssignment = false;
+    }
+    if (hasAssignment) {
+      return <AssessmentActivityCard activity={activity} onProgressUpdated={onProgressUpdated} />;
+    }
+  }
+
+  // 插件活动：由第三方插件通过 `xuean.activity.student` 提供学生端渲染。
+  if (activity.type.includes(':')) {
+    return (
+      <div className="rounded-xl border border-theme bg-surface p-4">
+        <div className="flex items-center gap-2 flex-wrap mb-2">
+          <span className="text-xs font-mono text-muted">#{index + 1}</span>
+          <span className="text-xs px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-600 border border-indigo-500/20">
+            插件活动
+          </span>
+          <span className="text-sm font-semibold text-main">{activity.title}</span>
+        </div>
+        <ExtensionPointRenderer
+          slot="xuean.activity.student"
+          slotProps={{ activity, activityType: activity.type, lessonId: activity.lesson_id }}
+          fallback={<p className="text-[11px] text-amber-600">插件未加载，暂时无法显示此活动。</p>}
+        />
+      </div>
+    );
+  }
 
   // 解析已有提交内容
   let existingSubmission: ActivitySubmission | null = null;

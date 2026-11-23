@@ -33,6 +33,8 @@ export interface DashboardWidgetCardProps {
   onDrop?: (e: React.DragEvent, id: DashboardWidgetId) => void;
   isDragging?: boolean;
   headerRightExtra?: React.ReactNode;
+  /** Gitee Issue IKW5KV：教师收敛提示文案时隐藏组件副标题。 */
+  hideSubtitle?: boolean;
 }
 
 export function DashboardWidgetCard({
@@ -55,6 +57,7 @@ export function DashboardWidgetCard({
   onDrop,
   isDragging = false,
   headerRightExtra,
+  hideSubtitle = false,
 }: DashboardWidgetCardProps) {
   const [isDragOver, setIsDragOver] = useState(false);
 
@@ -117,7 +120,7 @@ export function DashboardWidgetCard({
                 </span>
               )}
             </h3>
-            {subtitle && <p className="text-2xs text-slate-450 truncate">{subtitle}</p>}
+            {subtitle && !hideSubtitle && <p className="text-2xs text-slate-450 truncate">{subtitle}</p>}
           </div>
         </div>
 

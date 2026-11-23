@@ -11,7 +11,9 @@ const state = vi.hoisted(() => ({
     { id: 'seg-xa', title: '学案自学', type: 'xuean:study' },
     { id: 'seg-lab', title: '探究实验', type: 'inquiry' },
   ] as Array<Record<string, unknown>>,
-  activeSegmentId: 'seg-xa',
+  activeSegmentId: 'seg-xa' as string | null,
+  lessonModePackId: null as string | null,
+  lessonDeliveryMode: null as string | null,
 }));
 
 vi.mock('../../../../context/AppDataContext', () => ({
@@ -20,6 +22,13 @@ vi.mock('../../../../context/AppDataContext', () => ({
     activeSegmentId: state.activeSegmentId,
     setActiveSegmentId: vi.fn(),
     selectedLesson: 'lesson-1',
+    lessons: [
+      {
+        id: 'lesson-1',
+        mode_pack_id: state.lessonModePackId,
+        delivery_mode: state.lessonDeliveryMode,
+      },
+    ],
     lang: 'zh',
   }),
 }));
@@ -71,6 +80,8 @@ describe('ModePackPrepShell', () => {
     state.packs = [];
     state.prepExtensions = [];
     state.activeSegmentId = 'seg-xa';
+    state.lessonModePackId = null;
+    state.lessonDeliveryMode = null;
   });
 
   afterEach(() => {
@@ -86,6 +97,23 @@ describe('ModePackPrepShell', () => {
     expect(shell.getAttribute('data-prep-id')).toBe('prep-xuean');
     expect(await screen.findByTestId('xuean-editor-mock')).toBeTruthy();
     expect(screen.getByTestId('mode-pack-prep-segment-bar')).toBeTruthy();
+  });
+
+  it('无活动环节时按课时模式包进入学案编辑器', async () => {
+    state.activeSegmentId = null;
+    state.lessonModePackId = '@openlearn/mode-xuean';
+
+    render(<ModePackPrepShell />);
+    expect(await screen.findByTestId('xuean-editor-mock')).toBeTruthy();
+    expect(screen.getByTestId('mode-pack-prep-shell').getAttribute('data-prep-id')).toBe('prep-xuean');
+  });
+
+  it('无环节且无模式包时按 delivery_mode 兜底', async () => {
+    state.activeSegmentId = null;
+    state.lessonDeliveryMode = 'xuean';
+
+    render(<ModePackPrepShell />);
+    expect(await screen.findByTestId('xuean-editor-mock')).toBeTruthy();
   });
 
   it('第三方包命中 classroom.prep 时渲染扩展备课面', async () => {

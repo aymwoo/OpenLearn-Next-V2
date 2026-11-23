@@ -14,11 +14,11 @@ import { useOptionalPluginHost } from '../../../plugin-host/plugin-host-context'
 import {
   DEFAULT_MODE_PACK_SEGMENT_TYPE,
   normalizeSegmentType,
-  resolveModePackForSegment,
   type ModePackContribution,
 } from '../../../../packages/core/plugin-host/mode-pack';
 import { isModePacksEnabled } from './flags';
 import { useModePackCatalog } from './useModePackCatalog';
+import { resolvePrepFace } from './resolvePrepFace';
 import { WHITEBOARD_MODE_PACK, WHITEBOARD_MODE_PACK_ID } from './whiteboardPack';
 import { XUEAN_MODE_PACK } from './xueanPack';
 import { registerWhiteboardModePack, unregisterWhiteboardModePack } from './registerWhiteboardModePack';
@@ -76,7 +76,7 @@ function PrepSegmentBar({
   );
 }
 
-export function ModePackPrepShell() {
+export function ModePackPrepShell({ requestedTab }: { requestedTab?: string | null }) {
   const appData = useOptionalAppData();
   const timelineSegments = (appData?.timelineSegments ?? []) as PrepSegment[];
   const activeSegmentId = (appData?.activeSegmentId as string | null) ?? null;
@@ -107,14 +107,27 @@ export function ModePackPrepShell() {
   }, [catalog]);
 
   const activeSegment = timelineSegments.find((s) => s.id === activeSegmentId);
-  const pack = useMemo(
-    () => resolveModePackForSegment(packs, normalizeSegmentType(activeSegment?.type)),
-    [packs, activeSegment?.type],
+  const currentLesson = (
+    appData?.lessons as Array<{ id: string; mode_pack_id?: string | null; delivery_mode?: string | null }> | undefined
+  )?.find((lesson) => lesson.id === lessonId);
+
+  // 优先级：当前环节 → 课时模式包/交付模式 → 请求的 teacherTab。
+  const face = useMemo(
+    () =>
+      resolvePrepFace({
+        activeSegmentType: activeSegment?.type,
+        lessonModePackId: currentLesson?.mode_pack_id,
+        lessonDeliveryMode: currentLesson?.delivery_mode,
+        requestedTab,
+        packs,
+      }),
+    [activeSegment?.type, currentLesson?.mode_pack_id, currentLesson?.delivery_mode, requestedTab, packs],
   );
 
-  const prepId = pack?.prepContributionId ?? WHITEBOARD_MODE_PACK.prepContributionId;
-  const isXuean = prepId === XUEAN_MODE_PACK.prepContributionId;
-  const isWhiteboard = prepId === WHITEBOARD_MODE_PACK.prepContributionId;
+  const pack = face.pack;
+  const prepId = face.prepId ?? WHITEBOARD_MODE_PACK.prepContributionId;
+  const isXuean = face.kind === 'xuean';
+  const isWhiteboard = face.kind === 'whiteboard';
   const hasPrepExtension =
     !isXuean &&
     !isWhiteboard &&

@@ -1,6 +1,6 @@
 # LearningSurface 教学内容 / 活动容器设计
 
-> 状态：已实现（阶段 1–7）
+> 状态：已实现（阶段 1–13）
 > 日期：2026-11-22
 > 范围：白板、学案、作业与第三方渲染插件的统一内容/活动容器
 
@@ -288,9 +288,9 @@ host → iframe: { channel: 'ol-plugin-view', type: 'state.patch', payload }
 | POST   | `/api/learning-surface-lessons/:lessonId/eval-submissions`             | 课时级随堂提交           |
 | POST   | `/api/learning-surface-lessons/:lessonId/eval-submissions/:id/reviews` | 课时级互评               |
 
-新 API 逐步替换旧作业接口；迁移完成前旧读接口保持不变。
+新 API 已替换旧作业读写接口；旧读接口自阶段 11.2 起返回 410（班级级旧读自阶段 12.3 起同样 410）。
 
-阶段 7.2 追加作业读通道（前端唯一入口；旧 `GET /api/assignments*` 保留为带 `Deprecation` / `Link` 头的委托，阶段 8 再下线）：
+阶段 7.2 追加作业读通道（前端唯一入口；旧 `GET /api/assignments*` 曾以 `Deprecation` / `Link` 头委托，现已下线）：
 
 | 方法 | 路径                                                            | 说明                                                         |
 | ---- | --------------------------------------------------------------- | ------------------------------------------------------------ |
@@ -326,7 +326,7 @@ host → iframe: { channel: 'ol-plugin-view', type: 'state.patch', payload }
 - 迁移 `073`：明细表补 `attempt_id`，存量提交、版本、文件、互评、评分与成绩历史在单事务内回填。
 - 迁移 `074`：课时级随堂提交（`assignment_id IS NULL`）回填为 `kind='lesson_eval'` 的 Surface 与 attempt。
 - 作业定义映射为 `kind='assignment'` 的 Surface；班级级作业 `lesson_id` 为空字符串。
-- 旧写 API 统一 410，新写通道 `/api/learning-surface-assignments/*` 与 `/api/learning-surface-lessons/*` 接管；旧读 API 保持不变。
+- 旧写 API 统一 410，新写通道 `/api/learning-surface-assignments/*` 与 `/api/learning-surface-lessons/*` 接管；旧读 API 当时保持不变（阶段 11.2 起也已 410）。
 - 新写完成后由桥接服务同步 attempt 并回填 `attempt_id`，读侧口径一致。
 
 ### 阶段 3：宿主与放置
@@ -367,7 +367,7 @@ host → iframe: { channel: 'ol-plugin-view', type: 'state.patch', payload }
 ### 阶段 7：运行时统一与读路径收口
 
 - **7.1 模式包运行时统一**：新增前端 `mode-pack/useModePackCatalog.ts` 缓存 `GET /api/mode-packs`；`LiveClassroomView` 的 compact 判定与 `CourseManagement` 的筛选 / 徽标改用 `resolveLessonModePackDeliveryMode(mode_pack_id, delivery_mode)`，不再直读 `delivery_mode`。课程卡片徽标优先显示模式包目录的 `label`，未知或已卸载的包回落到「白板 / 学案」并给出说明。
-- **7.2 作业读路径收口**：抽出 `assignment-read` 共享读取与鉴权逻辑，新增 `/api/learning-surface-assignments/*` 与 `/api/classes/:classId/learning-surface-assignments` 读端点，前端调用全部切换。旧 `GET /api/assignments*` 改为委托新逻辑并返回 `Deprecation` / `Link` 头，阶段 8 再下线；写端点已在阶段 2 返回 410。
+- **7.2 作业读路径收口**：抽出 `assignment-read` 共享读取与鉴权逻辑，新增 `/api/learning-surface-assignments/*` 与 `/api/classes/:classId/learning-surface-assignments` 读端点，前端调用全部切换。旧 `GET /api/assignments*` 改为委托新逻辑并返回 `Deprecation` / `Link` 头（阶段 11.2 已下线为 410）；写端点已在阶段 2 返回 410。
 - **7.3 课堂内 Surface 学习面板**：新增 `learning-surface-summary` 聚合（排除教师预览、每个学生取最新 attempt、已交 = `submitted` / `graded`、分数按满分归一），由 `GET /api/lessons/:lessonId/learning-surface-summary?classId=` 提供。教师课堂的「学生提交数据」面板顶部增加可折叠 Surface 概览：按当前环节筛选，展开时轮询，收起即停。白板 Surface 通过 `owner_id = 元素 id` 反查 `whiteboard_elements.data.segmentId`；学案活动与首页块归入本课。
 - **7.4 验收**：全量门禁、docs 构建与 audit；CHANGELOG 记录三条变更。
 
@@ -384,6 +384,39 @@ host → iframe: { channel: 'ol-plugin-view', type: 'state.patch', payload }
 - 渲染器空态/错误态补齐语义；课堂 `SurfaceLiveSummaryPanel` 增加 `aria-live` / `aria-busy` / `aria-controls`。
 - 新增 `useSurfaceFullscreen`：宿主级全屏、`fullscreenchange` 反向同步、原生被拒时 Esc 降级退出、退出后焦点回到触发按钮。
 - `LearningSurfaceHost` 提供统一全屏按钮，覆盖课件、演示文稿与沙箱；演示文稿内部全屏保留以兼容白板。
+
+### 阶段 11：第三方模式包验收与旧读端点下线
+
+- **11.1 第三方模式包 fixture 与验收**：新增共享 fixture（`packages/core/plugin-host/__tests__/fixtures/mode-pack-lab.ts`），
+  覆盖 `mode.pack` 全字段（`segmentTypes` 含前缀类型、`prepContributionId` / `outlineContributionId` /
+  `teacherWorkspaceId` / `studentWorkspaceId` / `adapterIds` / `channels`），以及对应的扩展点注册声明。
+  服务端用同一 fixture 验证 manifest 校验、目录收录、能力缺失 `warnings` 与课时绑定决议；
+  前端用同一 fixture 验证工作区决议、大纲贡献、环节类型自动注册 / 清理与课程徽标，
+  把 `docs/tutorials/mode-pack-third-party.md` §6 的验收清单转成用例。
+- **11.2 旧读端点下线**：前端已全部切到 `/api/learning-surface-assignments/*`，旧 `GET /api/assignments*`
+  从「委托 + Deprecation」改为 410，并保留 `Link` 指向新路径；同步更新服务端测试与注释。
+- **11.3 验收**：全量门禁、docs 构建与 audit；CHANGELOG 记录阶段 11。
+
+### 阶段 12：第三方模式包真实安装与读路径收尾
+
+- **12.1 示例包与打包**：新增 `packages/mode-pack-lab`（manifest 声明 `mode.pack`，`segmentTypes: ['inquiry-lab']`），
+  以及 `scripts/build-mode-pack-lab.mjs`，用 esbuild + JSZip 产出可安装 ZIP。
+- **12.2 真实安装验收**：新增 `server/__tests__/mode-pack-lab-plugin.test.ts`，走
+  `POST /api/plugins/upload-zip-raw` 安装 → 激活 → `GET /api/mode-packs` 出现且无 `warnings`
+  → 创建课时落库 `mode_pack_id` → 停用后目录移除、再次创建回落内置白板。
+- **12.3 读路径收尾**：`GET /api/classes/:classId/assignments` 改为 410 + `Link`；
+  修复 `scripts/stress/http-load.mjs` 仍调用旧写路径的问题。
+- **12.4 验收**：全量门禁、docs 构建与 audit；CHANGELOG 记录阶段 12。
+
+### 阶段 13：第三方模式包浏览器 E2E 与测试库回收
+
+- **13.1 测试库回收**：`vitest.setup.ts` 增加「死进程 pid」回收 —— 只删除文件内 pid 已不存在的测试库，
+  并把 24 小时清理改为逐文件容错（此前单个文件消失会中断整轮清理）。纯函数抽到
+  `packages/core/db/test-db-files.ts` 并补单测，避免 `/tmp/openlearn_test_dbs` 再次堆到数 GB。
+- **13.2 浏览器 E2E**：新增 `e2e/mode-pack-install.spec.ts`，用示例包走真实浏览器链路：
+  API 安装并激活 → 课程管理向导出现「探究学习」→ 绑定课时的课程卡显示包徽标 →
+  停用插件后徽标回落白板，并清理安装物与课时。
+- **13.3 验收**：全量门禁、docs 构建与 audit；CHANGELOG 记录阶段 13。
 
 ---
 
@@ -439,6 +472,7 @@ lesson.mode_pack_id → lesson.delivery_mode → whiteboard
 ## 12. 待定事项
 
 - 作业明细表清单与逐表迁移顺序（阶段 0 产出）。
-- 匿名互评、小组作业与 Surface attempt 的映射方式。
+- 匿名互评已接入 attempt；小组作业与 Surface attempt 的映射方式仍未定。
 - 无障碍与全屏：快捷键 / 焦点隔离（9.1）与宿主级全屏、加载/错误态 aria（阶段 10）已覆盖核心范围。
+- 第三方模式包：阶段 11.1 用共享 fixture 覆盖声明 / 目录 / 工作区 / 大纲 / 环节类型链路；阶段 12 用示例包覆盖 ZIP 安装 → 激活 → 目录 → 课时绑定；阶段 13.2 增加浏览器 E2E（向导 → 课时徽标 → 停用回落）。
 - 课程级（`courses`）内容复用的优先级与时机。

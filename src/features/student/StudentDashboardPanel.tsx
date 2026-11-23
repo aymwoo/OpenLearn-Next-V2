@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   LayoutGrid,
   RotateCcw,
@@ -9,8 +9,6 @@ import {
   Calendar as CalendarIcon,
   Award,
   Sparkles,
-  Sliders,
-  Check,
 } from 'lucide-react';
 import { StudentDashboardHeader } from './StudentDashboardHeader';
 import { StudentRollCallAlarms } from './StudentRollCallAlarms';
@@ -26,6 +24,8 @@ import { WeeklyProgressTrendChart } from '../../components/WeeklyProgressTrendCh
 import { DashboardWidgetCard } from './components/DashboardWidgetCard';
 import { StudentQuickActionsFloatingMenu } from './components/StudentQuickActionsFloatingMenu';
 import { ExtensionPointRenderer } from '../../plugin-host/extension-point-renderer';
+import { useOptionalPluginHost } from '../../plugin-host/plugin-host-context';
+import { usePluginHostStore } from '../../plugin-host/plugin-host-store';
 import { useStudentActiveSession } from './useStudentActiveSession';
 import { StudentActiveClassBanner } from './StudentActiveClassBanner';
 import { StudentAssessmentsWidget } from '../assessment/student/StudentAssessmentsWidget';
@@ -33,6 +33,12 @@ import { useThemeStore } from '../../store/themeStore';
 import type { StudentType } from '../../types/app';
 import type { DashboardWidgetId, WidgetSize, WidgetLayoutConfig } from './types/dashboardLayout';
 import { DEFAULT_WIDGET_LAYOUT, LAYOUT_PRESETS } from './types/dashboardLayout';
+import {
+  isPluginHiddenByPolicy,
+  widgetFeatureId,
+  type EffectiveStudentUiPolicy,
+  type StudentUiFeatureId,
+} from '../../../packages/core/student-ui-policy/index';
 
 export interface StudentDashboardPanelProps {
   students: StudentType[];
@@ -49,7 +55,11 @@ export interface StudentDashboardPanelProps {
   setSubAssignmentTab: (tab: string) => void;
   /** Issue #122：打开「我的测评」全屏视图（缺省时挂件只显示摘要） */
   onOpenAssessments?: () => void;
+  /** Gitee Issue IKW5KV：教师配置的生效策略；缺省表示不限制。 */
+  studentUiPolicy?: EffectiveStudentUiPolicy | null;
 }
+
+const EMPTY_STRING_ARRAY: string[] = [];
 
 export function StudentDashboardPanel(props: StudentDashboardPanelProps) {
   const {
@@ -66,10 +76,29 @@ export function StudentDashboardPanel(props: StudentDashboardPanelProps) {
     setQuizStudentAnswers,
     setSubAssignmentTab,
     onOpenAssessments,
+    studentUiPolicy = null,
   } = props;
+
+  const isFeatureVisible = (id: StudentUiFeatureId) =>
+    studentUiPolicy === null || studentUiPolicy.features[id] !== false;
+  const hideGuidance = studentUiPolicy?.hideGuidance === true;
+  const hiddenPluginIds = studentUiPolicy?.hiddenPlugins ?? EMPTY_STRING_ARRAY;
+  const hiddenExtensionIds = studentUiPolicy?.hiddenExtensions ?? EMPTY_STRING_ARRAY;
 
   // Issue #109: 真实进行中的课堂会话（轮询由 StudentView 顶层统一驱动）
   const activeSession = useStudentActiveSession((s) => s.activeSession);
+
+  // 插件扩展卡片在「所有贡献都被隐藏」时自动收起，避免留下空卡片。
+  const pluginHost = useOptionalPluginHost();
+  const extensionPoints = usePluginHostStore((s) => s.extensionPoints);
+  const visibleStudentViewCount = React.useMemo(() => {
+    if (!pluginHost) return 1;
+    // 直接读 store 的槽位表：extensionPoints 变化本身就会让本组件重渲染
+    return (extensionPoints.get('student.view') ?? []).filter(
+      (ext) => !isPluginHiddenByPolicy(studentUiPolicy, ext.pluginId, ext.id),
+    ).length;
+  }, [pluginHost, extensionPoints, studentUiPolicy]);
+
   const returnToActiveClass = () => {
     if (!activeSession) return;
     setSelectedLesson(activeSession.lessonId);
@@ -91,7 +120,7 @@ export function StudentDashboardPanel(props: StudentDashboardPanelProps) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
           // Ensure all default widget IDs exist in case of schema update
-          const existingIds = new Set(parsed.map((item: any) => item.id));
+          const existingIds = new Set(parsed.map((item: { id: string }) => item.id));
           const missing = DEFAULT_WIDGET_LAYOUT.filter((def) => !existingIds.has(def.id));
           return [...parsed, ...missing];
         }
@@ -104,6 +133,25 @@ export function StudentDashboardPanel(props: StudentDashboardPanelProps) {
 
   const [activePreset, setActivePreset] = useState<string>('default');
   const [draggedWidgetId, setDraggedWidgetId] = useState<DashboardWidgetId | null>(null);
+
+  /**
+   * 教师策略只在渲染层过滤，不修改学生本地保存的 layout。
+   * 这样教师重新打开组件后，学生原来的位置/尺寸/折叠状态仍然保留。
+   */
+  const isWidgetAllowed = (widgetId: DashboardWidgetId) =>
+    isFeatureVisible(widgetFeatureId(widgetId)) &&
+    (widgetId !== 'extension-views' || studentUiPolicy === null || visibleStudentViewCount > 0);
+
+  const visibleLayout = layout.filter((widget) => widget.visible && isWidgetAllowed(widget.id));
+
+  const filterLayoutForPolicy = (items: WidgetLayoutConfig[]) =>
+    items.filter((widget) => isWidgetAllowed(widget.id)).map((widget) => ({ ...widget, visible: true }));
+
+  const hiddenQuickActionKeys: Array<'join-live-session' | 'view-assignments' | 'check-notifications'> = [
+    ...(isFeatureVisible('quick-action.join-live-session') ? [] : (['join-live-session'] as const)),
+    ...(isFeatureVisible('quick-action.view-assignments') ? [] : (['view-assignments'] as const)),
+    ...(isFeatureVisible('quick-action.check-notifications') ? [] : (['check-notifications'] as const)),
+  ];
 
   // Sync to localStorage
   const saveLayout = useCallback(
@@ -194,7 +242,7 @@ export function StudentDashboardPanel(props: StudentDashboardPanelProps) {
     const preset = LAYOUT_PRESETS[presetKey];
     if (preset) {
       setActivePreset(presetKey);
-      saveLayout(preset.layout);
+      saveLayout(filterLayoutForPolicy(preset.layout));
       addToast?.(
         lang === 'zh' ? '预设布局已应用' : 'Preset Applied',
         lang === 'zh' ? `已切换至「${preset.label.zh}」` : `Switched to ${preset.label.en}`,
@@ -206,7 +254,7 @@ export function StudentDashboardPanel(props: StudentDashboardPanelProps) {
   // Reset layout to factory defaults
   const handleResetLayout = () => {
     setActivePreset('default');
-    saveLayout(DEFAULT_WIDGET_LAYOUT);
+    saveLayout(filterLayoutForPolicy(DEFAULT_WIDGET_LAYOUT));
     addToast?.(
       lang === 'zh' ? '已恢复默认布局' : 'Layout Reset',
       lang === 'zh' ? '学生仪表盘已重置为标准栅格排版' : 'Dashboard reset to default grid layout',
@@ -231,9 +279,10 @@ export function StudentDashboardPanel(props: StudentDashboardPanelProps) {
             onMoveLeft={() => handleMove('quick-stats', 'left')}
             onMoveRight={() => handleMove('quick-stats', 'right')}
             isFirst={index === 0}
-            isLast={index === layout.length - 1}
+            isLast={index === visibleLayout.length - 1}
             onToggleCollapse={() => handleToggleCollapse('quick-stats')}
             lang={lang}
+            hideSubtitle={hideGuidance}
             onDragStart={handleDragStart}
             onDrop={handleDrop}
             isDragging={draggedWidgetId === 'quick-stats'}
@@ -256,9 +305,10 @@ export function StudentDashboardPanel(props: StudentDashboardPanelProps) {
             onMoveLeft={() => handleMove('progress-trends', 'left')}
             onMoveRight={() => handleMove('progress-trends', 'right')}
             isFirst={index === 0}
-            isLast={index === layout.length - 1}
+            isLast={index === visibleLayout.length - 1}
             onToggleCollapse={() => handleToggleCollapse('progress-trends')}
             lang={lang}
+            hideSubtitle={hideGuidance}
             onDragStart={handleDragStart}
             onDrop={handleDrop}
             isDragging={draggedWidgetId === 'progress-trends'}
@@ -281,9 +331,10 @@ export function StudentDashboardPanel(props: StudentDashboardPanelProps) {
             onMoveLeft={() => handleMove('assessments', 'left')}
             onMoveRight={() => handleMove('assessments', 'right')}
             isFirst={index === 0}
-            isLast={index === layout.length - 1}
+            isLast={index === visibleLayout.length - 1}
             onToggleCollapse={() => handleToggleCollapse('assessments')}
             lang={lang}
+            hideSubtitle={hideGuidance}
             onDragStart={handleDragStart}
             onDrop={handleDrop}
             isDragging={draggedWidgetId === 'assessments'}
@@ -306,9 +357,10 @@ export function StudentDashboardPanel(props: StudentDashboardPanelProps) {
             onMoveLeft={() => handleMove('upcoming-assignments', 'left')}
             onMoveRight={() => handleMove('upcoming-assignments', 'right')}
             isFirst={index === 0}
-            isLast={index === layout.length - 1}
+            isLast={index === visibleLayout.length - 1}
             onToggleCollapse={() => handleToggleCollapse('upcoming-assignments')}
             lang={lang}
+            hideSubtitle={hideGuidance}
             onDragStart={handleDragStart}
             onDrop={handleDrop}
             isDragging={draggedWidgetId === 'upcoming-assignments'}
@@ -338,9 +390,10 @@ export function StudentDashboardPanel(props: StudentDashboardPanelProps) {
             onMoveLeft={() => handleMove('course-progress', 'left')}
             onMoveRight={() => handleMove('course-progress', 'right')}
             isFirst={index === 0}
-            isLast={index === layout.length - 1}
+            isLast={index === visibleLayout.length - 1}
             onToggleCollapse={() => handleToggleCollapse('course-progress')}
             lang={lang}
+            hideSubtitle={hideGuidance}
             onDragStart={handleDragStart}
             onDrop={handleDrop}
             isDragging={draggedWidgetId === 'course-progress'}
@@ -367,9 +420,10 @@ export function StudentDashboardPanel(props: StudentDashboardPanelProps) {
             onMoveLeft={() => handleMove('schedules', 'left')}
             onMoveRight={() => handleMove('schedules', 'right')}
             isFirst={index === 0}
-            isLast={index === layout.length - 1}
+            isLast={index === visibleLayout.length - 1}
             onToggleCollapse={() => handleToggleCollapse('schedules')}
             lang={lang}
+            hideSubtitle={hideGuidance}
             onDragStart={handleDragStart}
             onDrop={handleDrop}
             isDragging={draggedWidgetId === 'schedules'}
@@ -398,9 +452,10 @@ export function StudentDashboardPanel(props: StudentDashboardPanelProps) {
             onMoveLeft={() => handleMove('academic-trajectory', 'left')}
             onMoveRight={() => handleMove('academic-trajectory', 'right')}
             isFirst={index === 0}
-            isLast={index === layout.length - 1}
+            isLast={index === visibleLayout.length - 1}
             onToggleCollapse={() => handleToggleCollapse('academic-trajectory')}
             lang={lang}
+            hideSubtitle={hideGuidance}
             onDragStart={handleDragStart}
             onDrop={handleDrop}
             isDragging={draggedWidgetId === 'academic-trajectory'}
@@ -431,9 +486,10 @@ export function StudentDashboardPanel(props: StudentDashboardPanelProps) {
             onMoveLeft={() => handleMove('academic-comparison', 'left')}
             onMoveRight={() => handleMove('academic-comparison', 'right')}
             isFirst={index === 0}
-            isLast={index === layout.length - 1}
+            isLast={index === visibleLayout.length - 1}
             onToggleCollapse={() => handleToggleCollapse('academic-comparison')}
             lang={lang}
+            hideSubtitle={hideGuidance}
             onDragStart={handleDragStart}
             onDrop={handleDrop}
             isDragging={draggedWidgetId === 'academic-comparison'}
@@ -456,15 +512,18 @@ export function StudentDashboardPanel(props: StudentDashboardPanelProps) {
             onMoveLeft={() => handleMove('extension-views', 'left')}
             onMoveRight={() => handleMove('extension-views', 'right')}
             isFirst={index === 0}
-            isLast={index === layout.length - 1}
+            isLast={index === visibleLayout.length - 1}
             onToggleCollapse={() => handleToggleCollapse('extension-views')}
             lang={lang}
+            hideSubtitle={hideGuidance}
             onDragStart={handleDragStart}
             onDrop={handleDrop}
             isDragging={draggedWidgetId === 'extension-views'}
           >
             <ExtensionPointRenderer
               slot="student.view"
+              excludePluginIds={hiddenPluginIds}
+              excludeExtensionIds={hiddenExtensionIds}
               slotProps={{
                 studentId: activeStudentId,
                 studentName: students.find((s) => s.id === activeStudentId)?.name ?? null,
@@ -492,137 +551,166 @@ export function StudentDashboardPanel(props: StudentDashboardPanelProps) {
         activeSession={activeSession}
         onReturnToClass={returnToActiveClass}
         lang={lang}
+        hideGuidance={hideGuidance}
       />
 
       {/* 第三方学生仪表盘顶部激励挂件扩展（每日学习打卡连胜榜 / 积分虚拟商城展位） */}
-      <ExtensionPointRenderer
-        slot="student.dashboard.hero_widget"
-        slotProps={{
-          studentId: activeStudentId,
-          students,
-          studentDashboardData,
-          lang,
-        }}
-      />
+      {isFeatureVisible('section.hero-widget') && (
+        <ExtensionPointRenderer
+          slot="student.dashboard.hero_widget"
+          excludePluginIds={hiddenPluginIds}
+          excludeExtensionIds={hiddenExtensionIds}
+          slotProps={{
+            studentId: activeStudentId,
+            students,
+            studentDashboardData,
+            lang,
+          }}
+        />
+      )}
 
       {/* 2. Roll Call Alert / Alarm Notifications */}
-      <StudentRollCallAlarms
-        studentDashboardData={studentDashboardData}
-        readNotifications={readNotifications}
-        setReadNotifications={setReadNotifications}
-        activeStudentId={activeStudentId}
-        addToast={addToast}
-        lang={lang}
-      />
+      {isFeatureVisible('section.roll-call-alarms') && (
+        <StudentRollCallAlarms
+          studentDashboardData={studentDashboardData}
+          readNotifications={readNotifications}
+          setReadNotifications={setReadNotifications}
+          activeStudentId={activeStudentId}
+          addToast={addToast}
+          lang={lang}
+        />
+      )}
 
       {/* 3. Issue IKVKVF: 首屏学习路径焦点区（待办 → 最近课节 → 续学），不随栅格布局漂移 */}
-      <StudentLearningFocus
-        studentDashboardData={studentDashboardData}
-        lang={lang}
-        setSelectedLesson={setSelectedLesson}
-        setStudentViewStatus={setStudentViewStatus}
-        setSelectedAssignment={setSelectedAssignment}
-        setQuizStudentAnswers={setQuizStudentAnswers}
-        setSubAssignmentTab={setSubAssignmentTab}
-      />
+      {isFeatureVisible('section.learning-focus') && (
+        <StudentLearningFocus
+          studentDashboardData={studentDashboardData}
+          lang={lang}
+          hideGuidance={hideGuidance}
+          setSelectedLesson={setSelectedLesson}
+          setStudentViewStatus={setStudentViewStatus}
+          setSelectedAssignment={setSelectedAssignment}
+          setQuizStudentAnswers={setQuizStudentAnswers}
+          setSubAssignmentTab={setSubAssignmentTab}
+        />
+      )}
 
       {/* 4. Modular Layout Customization Toolbar */}
-      <div className="flex flex-col gap-2 rounded-2xl border border-slate-200/80 bg-slate-50 p-3 shadow-3xs sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-3 sm:p-3.5">
-        <div className="flex items-center justify-between gap-2.5">
-          <div className="flex min-w-0 items-center gap-2.5">
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-indigo-500/10 text-indigo-600">
-              <LayoutGrid size={16} />
-            </div>
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-xs font-black tracking-tight text-slate-800">
-                  {lang === 'zh' ? '模块化自适应栅格工作台' : 'Modular CSS Grid Dashboard'}
-                </span>
-                <span className="rounded-full border border-indigo-100 bg-indigo-50 px-2 py-0.5 text-2xs font-bold text-indigo-600">
-                  {layout.length} {lang === 'zh' ? '个自适应组件' : 'Widgets'}
-                </span>
+      {isFeatureVisible('section.layout-toolbar') && visibleLayout.length > 1 && (
+        <div className="flex flex-col gap-2 rounded-2xl border border-slate-200/80 bg-slate-50 p-3 shadow-3xs sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-3 sm:p-3.5">
+          <div className="flex items-center justify-between gap-2.5">
+            <div className="flex min-w-0 items-center gap-2.5">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-indigo-500/10 text-indigo-600">
+                <LayoutGrid size={16} />
               </div>
-              <p className="hidden text-2xs text-slate-455 sm:block">
-                {lang === 'zh'
-                  ? '支持自由拖拽排序、切换 1/3~整行 宽度以及一键折叠展开'
-                  : 'Drag to reorder, resize from 1/3 to full width, or collapse widgets'}
-              </p>
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs font-black tracking-tight text-slate-800">
+                    {lang === 'zh' ? '模块化自适应栅格工作台' : 'Modular CSS Grid Dashboard'}
+                  </span>
+                  <span className="rounded-full border border-indigo-100 bg-indigo-50 px-2 py-0.5 text-2xs font-bold text-indigo-600">
+                    {visibleLayout.length} {lang === 'zh' ? '个自适应组件' : 'Widgets'}
+                  </span>
+                </div>
+                {!hideGuidance && (
+                  <p className="hidden text-2xs text-slate-455 sm:block">
+                    {lang === 'zh'
+                      ? '支持自由拖拽排序、切换 1/3~整行 宽度以及一键折叠展开'
+                      : 'Drag to reorder, resize from 1/3 to full width, or collapse widgets'}
+                  </p>
+                )}
+              </div>
             </div>
+
+            {/* 窄屏默认收起，避免工具条挤占首屏 */}
+            <button
+              type="button"
+              onClick={() => setCustomizeOpen((v) => !v)}
+              aria-expanded={customizeOpen}
+              aria-controls="student-dashboard-layout-controls"
+              className="shrink-0 cursor-pointer rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-2xs font-bold text-slate-600 transition-colors hover:text-indigo-600 sm:hidden"
+            >
+              {customizeOpen ? (lang === 'zh' ? '收起' : 'Close') : lang === 'zh' ? '自定义布局' : 'Customize'}
+            </button>
           </div>
 
-          {/* 窄屏默认收起，避免工具条挤占首屏 */}
-          <button
-            type="button"
-            onClick={() => setCustomizeOpen((v) => !v)}
-            aria-expanded={customizeOpen}
-            aria-controls="student-dashboard-layout-controls"
-            className="shrink-0 cursor-pointer rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-2xs font-bold text-slate-600 transition-colors hover:text-indigo-600 sm:hidden"
+          {/* Preset Selector & Reset Action */}
+          <div
+            id="student-dashboard-layout-controls"
+            className={`${customizeOpen ? 'flex' : 'hidden'} w-full flex-wrap items-center justify-end gap-2 sm:flex sm:w-auto`}
           >
-            {customizeOpen ? (lang === 'zh' ? '收起' : 'Close') : lang === 'zh' ? '自定义布局' : 'Customize'}
-          </button>
-        </div>
+            <div className="flex items-center rounded-xl border border-slate-200 bg-white p-0.5 text-xs font-bold text-slate-600 shadow-3xs">
+              {Object.entries(LAYOUT_PRESETS).map(([key, config]) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => handleApplyPreset(key)}
+                  className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer text-2xs ${
+                    activePreset === key
+                      ? 'bg-indigo-600 text-white shadow-2xs font-extrabold'
+                      : 'hover:text-slate-900 text-slate-600'
+                  }`}
+                >
+                  {lang === 'zh' ? config.label.zh : config.label.en}
+                </button>
+              ))}
+            </div>
 
-        {/* Preset Selector & Reset Action */}
-        <div
-          id="student-dashboard-layout-controls"
-          className={`${customizeOpen ? 'flex' : 'hidden'} w-full flex-wrap items-center justify-end gap-2 sm:flex sm:w-auto`}
-        >
-          <div className="flex items-center rounded-xl border border-slate-200 bg-white p-0.5 text-xs font-bold text-slate-600 shadow-3xs">
-            {Object.entries(LAYOUT_PRESETS).map(([key, config]) => (
-              <button
-                key={key}
-                type="button"
-                onClick={() => handleApplyPreset(key)}
-                className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer text-2xs ${
-                  activePreset === key
-                    ? 'bg-indigo-600 text-white shadow-2xs font-extrabold'
-                    : 'hover:text-slate-900 text-slate-600'
-                }`}
-              >
-                {lang === 'zh' ? config.label.zh : config.label.en}
-              </button>
-            ))}
+            <button
+              type="button"
+              onClick={handleResetLayout}
+              title={lang === 'zh' ? '恢复默认布局' : 'Reset to default layout'}
+              className="p-2 text-slate-500 hover:text-indigo-600 hover:bg-white rounded-xl border border-transparent hover:border-slate-200 transition-all cursor-pointer shadow-3xs"
+            >
+              <RotateCcw size={14} />
+            </button>
           </div>
-
-          <button
-            type="button"
-            onClick={handleResetLayout}
-            title={lang === 'zh' ? '恢复默认布局' : 'Reset to default layout'}
-            className="p-2 text-slate-500 hover:text-indigo-600 hover:bg-white rounded-xl border border-transparent hover:border-slate-200 transition-all cursor-pointer shadow-3xs"
-          >
-            <RotateCcw size={14} />
-          </button>
         </div>
-      </div>
+      )}
 
       {/* 5. Modular CSS Grid Workspace */}
-      <div
-        id="student-dashboard-modular-grid"
-        data-card-columns={studentCardColumns}
-        className={`grid items-start gap-4 lg:gap-6 ${
-          studentCardColumns === 1
-            ? 'grid-cols-1'
-            : studentCardColumns === 3
-              ? 'grid-cols-1 md:grid-cols-2 xl:grid-cols-3'
-              : 'grid-cols-1 md:grid-cols-2 lg:grid-cols-12'
-        }`}
-      >
-        {layout.filter((w) => w.visible).map((widget, index) => renderWidgetContent(widget, index))}
-      </div>
+      {visibleLayout.length === 0 ? (
+        <div
+          data-testid="student-dashboard-empty"
+          className="rounded-2xl border border-dashed border-slate-300 bg-slate-50/70 px-6 py-10 text-center text-sm font-semibold text-slate-500"
+        >
+          {lang === 'zh' ? '老师已隐藏首屏组件，请等待新的课堂安排' : 'Your teacher has hidden the dashboard widgets.'}
+        </div>
+      ) : (
+        <div
+          id="student-dashboard-modular-grid"
+          data-card-columns={studentCardColumns}
+          className={`grid items-start gap-4 lg:gap-6 ${
+            studentCardColumns === 1
+              ? 'grid-cols-1'
+              : studentCardColumns === 3
+                ? 'grid-cols-1 md:grid-cols-2 xl:grid-cols-3'
+                : 'grid-cols-1 md:grid-cols-2 lg:grid-cols-12'
+          }`}
+        >
+          {visibleLayout.map((widget, index) => renderWidgetContent(widget, index))}
+        </div>
+      )}
 
       {/* 6. Student Dashboard Quick Actions Floating Menu */}
-      <StudentQuickActionsFloatingMenu
-        studentDashboardData={studentDashboardData}
-        activeStudentId={activeStudentId}
-        readNotifications={readNotifications}
-        setReadNotifications={setReadNotifications}
-        setSelectedLesson={setSelectedLesson}
-        setStudentViewStatus={setStudentViewStatus}
-        setSelectedAssignment={setSelectedAssignment}
-        addToast={(title: string, description: string, type?: string) => addToast(title, description, type ?? 'info')}
-        lang={lang}
-        onExpandWidget={handleExpandWidget}
-      />
+      {isFeatureVisible('section.floating-quick-actions') && (
+        <StudentQuickActionsFloatingMenu
+          studentDashboardData={studentDashboardData}
+          activeStudentId={activeStudentId}
+          readNotifications={readNotifications}
+          setReadNotifications={setReadNotifications}
+          setSelectedLesson={setSelectedLesson}
+          setStudentViewStatus={setStudentViewStatus}
+          setSelectedAssignment={setSelectedAssignment}
+          addToast={(title: string, description: string, type?: string) => addToast(title, description, type ?? 'info')}
+          lang={lang}
+          hideGuidance={hideGuidance}
+          hiddenQuickActionKeys={hiddenQuickActionKeys}
+          hiddenPluginIds={hiddenPluginIds}
+          hiddenExtensionIds={hiddenExtensionIds}
+          onExpandWidget={handleExpandWidget}
+        />
+      )}
     </div>
   );
 }

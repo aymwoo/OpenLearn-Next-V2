@@ -47,6 +47,33 @@ export async function reorderLessonActivities(lessonId: string, ids: string[]) {
   return { ok: true, data: await res.json() };
 }
 
+// ── 试题活动（引用现有试卷）──────────────────────────────────────────────
+export async function getLessonLinkedClasses(lessonId: string) {
+  const res = await fetch(`/api/lessons/${lessonId}/linked-classes`);
+  if (!res.ok) return { ok: false, error: await res.json().catch(() => ({})) };
+  return { ok: true, data: (await res.json()) as Array<{ id: string; name: string }> };
+}
+
+export async function bindAssessmentActivity(
+  lessonId: string,
+  payload: {
+    assessmentId: string;
+    classId: string;
+    activityId?: string;
+    title?: string;
+    required?: boolean;
+    visible?: boolean;
+  },
+) {
+  const res = await fetch(`/api/lessons/${lessonId}/activities/assessment`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) return { ok: false, error: await res.json().catch(() => ({})) };
+  return { ok: true, data: await res.json() };
+}
+
 // ── 学案首页块（lesson_activity_blocks）────────────────────────────────────
 export async function getLessonBlocks(lessonId: string) {
   const res = await fetch(`/api/lessons/${lessonId}/blocks`);
@@ -76,6 +103,16 @@ export async function updateLessonBlock(id: string, payload: Record<string, unkn
 
 export async function deleteLessonBlock(id: string) {
   const res = await fetch(`/api/blocks/${id}`, { method: 'DELETE' });
+  if (!res.ok) return { ok: false, error: await res.json().catch(() => ({})) };
+  return { ok: true, data: await res.json() };
+}
+
+export async function reorderLessonBlocks(lessonId: string, ids: string[]) {
+  const res = await fetch(`/api/lessons/${lessonId}/blocks/reorder`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ids }),
+  });
   if (!res.ok) return { ok: false, error: await res.json().catch(() => ({})) };
   return { ok: true, data: await res.json() };
 }

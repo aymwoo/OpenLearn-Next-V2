@@ -226,7 +226,7 @@ describe('assignment-hub 路由（上传 / 下载 / 提交）', () => {
 
   it('未登录下载 → 401；学生读本人 200；学生读他人 403；教师读任意 200', async () => {
     const uploaded: any = await (await upload(pdfBytes, 'own.pdf', studentToken)).json();
-    const fileUrl = `${baseUrl}/api/assignments/${assignmentId}/files/${uploaded.file.id}`;
+    const fileUrl = `${baseUrl}/api/learning-surface-assignments/${assignmentId}/files/${uploaded.file.id}`;
 
     // 记录落盘路径以便清理
     const stored = kernelContainer.db
@@ -257,7 +257,7 @@ describe('assignment-hub 路由（上传 / 下载 / 提交）', () => {
         .get(uploaded.file.id) as { stored_path: string } | undefined;
       if (stored) createdFiles.push(path.resolve(process.cwd(), stored.stored_path));
 
-      const fileUrl = `${baseUrl}/api/assignments/${assignmentId}/files/${uploaded.file.id}`;
+      const fileUrl = `${baseUrl}/api/learning-surface-assignments/${assignmentId}/files/${uploaded.file.id}`;
       const res = await fetch(`${fileUrl}?disposition=inline`, { headers: cookie(studentToken) });
       try {
         await assert(res);
@@ -298,7 +298,7 @@ describe('assignment-hub 路由（上传 / 下载 / 提交）', () => {
 
     // 预览模式不放水鉴权：未登录 401，他人文件 403
     const pdf = await (await upload(pdfBytes, 'auth-check.pdf', studentToken)).json();
-    const pdfUrl = `${baseUrl}/api/assignments/${assignmentId}/files/${pdf.file.id}?disposition=inline`;
+    const pdfUrl = `${baseUrl}/api/learning-surface-assignments/${assignmentId}/files/${pdf.file.id}?disposition=inline`;
     expect((await fetch(pdfUrl)).status).toBe(401);
     const asOther = await fetch(pdfUrl, { headers: cookie(otherToken) });
     expect(asOther.status).toBe(403);
@@ -411,7 +411,9 @@ describe('assignment-hub 路由（上传 / 下载 / 提交）', () => {
     const file = await uploadTracked('读路径附件.pdf');
 
     // ① 上传后尚未提交：附件处于「待提交」状态（无 version_id）
-    const pending = await fetch(`${baseUrl}/api/assignments/${assignmentId}/files`, { headers: cookie(studentToken) });
+    const pending = await fetch(`${baseUrl}/api/learning-surface-assignments/${assignmentId}/files`, {
+      headers: cookie(studentToken),
+    });
     const pendingBody: any = await pending.json();
     expect(pending.status, JSON.stringify(pendingBody)).toBe(200);
     const pendingRow = pendingBody.files.find((f: any) => f.id === file.id);
@@ -432,7 +434,7 @@ describe('assignment-hub 路由（上传 / 下载 / 提交）', () => {
 
     // ④ 归档后该附件不再出现在待提交列表
     const after: any = await (
-      await fetch(`${baseUrl}/api/assignments/${assignmentId}/files`, {
+      await fetch(`${baseUrl}/api/learning-surface-assignments/${assignmentId}/files`, {
         headers: cookie(studentToken),
       })
     ).json();
@@ -441,7 +443,7 @@ describe('assignment-hub 路由（上传 / 下载 / 提交）', () => {
 
     // ⑤ 弹窗详情：assignment + submission + versions + grade
     const detail: any = await (
-      await fetch(`${baseUrl}/api/assignments/${assignmentId}`, {
+      await fetch(`${baseUrl}/api/learning-surface-assignments/${assignmentId}`, {
         headers: cookie(studentToken),
       })
     ).json();
@@ -469,7 +471,7 @@ describe('assignment-hub 路由（上传 / 下载 / 提交）', () => {
 
     // 学生：列表行附带自己的 submission / grade
     const asStudent: any = await (
-      await fetch(`${baseUrl}/api/assignments?lessonId=lesson-hub-0001`, {
+      await fetch(`${baseUrl}/api/learning-surface-assignments?lessonId=lesson-hub-0001`, {
         headers: cookie(studentToken),
       })
     ).json();
@@ -480,7 +482,7 @@ describe('assignment-hub 路由（上传 / 下载 / 提交）', () => {
 
     // 教师：不指定学生时不附带个人提交；指定后可以看到该学生的提交
     const asTeacher: any = await (
-      await fetch(`${baseUrl}/api/assignments?lessonId=lesson-hub-0001`, {
+      await fetch(`${baseUrl}/api/learning-surface-assignments?lessonId=lesson-hub-0001`, {
         headers: cookie(teacherToken),
       })
     ).json();
@@ -489,7 +491,7 @@ describe('assignment-hub 路由（上传 / 下载 / 提交）', () => {
     expect(teacherRow.submission).toBeUndefined();
 
     const withStudent: any = await (
-      await fetch(`${baseUrl}/api/assignments?lessonId=lesson-hub-0001&studentId=${studentId}`, {
+      await fetch(`${baseUrl}/api/learning-surface-assignments?lessonId=lesson-hub-0001&studentId=${studentId}`, {
         headers: cookie(teacherToken),
       })
     ).json();
@@ -497,16 +499,23 @@ describe('assignment-hub 路由（上传 / 下载 / 提交）', () => {
     expect(scopedRow.submission.version).toBe(1);
   });
 
-  it('读路径收口：新旧端点返回同一份列表，旧端点带 Deprecation 头', async () => {
+  it('读路径收口：旧端点 410 并指向新路径，新端点正常返回', async () => {
     resetAssignmentState();
     await submitWork(studentToken, { textContent: '读路径收口' });
+
+    // 未登录仍然先被鉴权拦截，不会因为端点下线而泄露信息
+    expect((await fetch(`${baseUrl}/api/assignments?lessonId=lesson-hub-0001`)).status).toBe(401);
 
     const legacy = await fetch(`${baseUrl}/api/assignments?lessonId=lesson-hub-0001`, {
       headers: cookie(studentToken),
     });
-    expect(legacy.status).toBe(200);
-    expect(legacy.headers.get('deprecation')).toBe('true');
-    expect(legacy.headers.get('link') || '').toContain('/api/learning-surface-assignments?lessonId=lesson-hub-0001');
+    expect(legacy.status).toBe(410);
+    const legacyBody: any = await legacy.json();
+    expect(legacyBody.code).toBe('LEGACY_ASSIGNMENT_READ_DISABLED');
+    expect(legacyBody.replacement).toBe('/api/learning-surface-assignments');
+    expect(legacy.headers.get('link') || '').toContain(
+      '</api/learning-surface-assignments?lessonId=lesson-hub-0001>; rel="successor-version"',
+    );
 
     const canonical = await fetch(`${baseUrl}/api/learning-surface-assignments?lessonId=lesson-hub-0001`, {
       headers: cookie(studentToken),
@@ -514,11 +523,8 @@ describe('assignment-hub 路由（上传 / 下载 / 提交）', () => {
     expect(canonical.status).toBe(200);
     expect(canonical.headers.get('deprecation')).toBeNull();
 
-    const legacyBody: any = await legacy.json();
     const canonicalBody: any = await canonical.json();
-    expect((canonicalBody.assignments || []).map((a: any) => a.id)).toEqual(
-      (legacyBody.assignments || []).map((a: any) => a.id),
-    );
+    expect((canonicalBody.assignments || []).some((a: any) => a.id === assignmentId)).toBe(true);
   });
 
   it('教师新建作业：不挂班级也能创建（POST /api/assignments 返回 assignmentId 供白板绑定）', async () => {
@@ -552,7 +558,7 @@ describe('assignment-hub 路由（上传 / 下载 / 提交）', () => {
 
     // 学生能在同一课时的列表里看到这条刚发布的作业
     const asStudent: any = await (
-      await fetch(`${baseUrl}/api/assignments?lessonId=lesson-hub-0003`, {
+      await fetch(`${baseUrl}/api/learning-surface-assignments?lessonId=lesson-hub-0003`, {
         headers: cookie(studentToken),
       })
     ).json();
@@ -680,7 +686,7 @@ describe('assignment-hub 路由（上传 / 下载 / 提交）', () => {
     });
     expect(assignRes.status).toBe(200);
 
-    const fileUrl = `${baseUrl}/api/assignments/${assignmentId}/files/${file.id}`;
+    const fileUrl = `${baseUrl}/api/learning-surface-assignments/${assignmentId}/files/${file.id}`;
     const task = db
       .prepare(
         `SELECT t.reviewer_id FROM plugin_peer_review_tasks t
@@ -721,7 +727,7 @@ describe('assignment-hub 路由（上传 / 下载 / 提交）', () => {
     });
 
     const teacherView: any = await (
-      await fetch(`${baseUrl}/api/assignments/${assignmentId}`, {
+      await fetch(`${baseUrl}/api/learning-surface-assignments/${assignmentId}`, {
         headers: cookie(teacherToken),
       })
     ).json();
@@ -734,7 +740,7 @@ describe('assignment-hub 路由（上传 / 下载 / 提交）', () => {
     );
 
     const studentView: any = await (
-      await fetch(`${baseUrl}/api/assignments/${assignmentId}`, {
+      await fetch(`${baseUrl}/api/learning-surface-assignments/${assignmentId}`, {
         headers: cookie(studentToken),
       })
     ).json();
@@ -891,7 +897,7 @@ describe('修复回归：H1 班级归属 / H2 状态截止 / M4 文件 GC', () =
 
   // ── H1 班级归属 ─────────────────────────────────────────────────────────
   it('H1: 外班学生读班级作业详情 → 403；班内学生 → 200', async () => {
-    const url = `${baseUrl}/api/assignments/${classBoundAssignmentId}`;
+    const url = `${baseUrl}/api/learning-surface-assignments/${classBoundAssignmentId}`;
     const asOutsider = await fetch(url, { headers: cookie(outsiderToken) });
     expect(asOutsider.status).toBe(403);
     const asMember = await fetch(url, { headers: cookie(memberToken) });
@@ -914,12 +920,14 @@ describe('修复回归：H1 班级归属 / H2 状态截止 / M4 文件 GC', () =
   });
 
   it('H1: 教师不受班级归属限制；课时作业（class_id NULL）行为不变', async () => {
-    const asTeacher = await fetch(`${baseUrl}/api/assignments/${classBoundAssignmentId}`, {
+    const asTeacher = await fetch(`${baseUrl}/api/learning-surface-assignments/${classBoundAssignmentId}`, {
       headers: cookie(guardTeacherToken),
     });
     expect(asTeacher.status).toBe(200);
     // 课时作业（class_id = NULL）仍对所有登录学生可读（无归属约束，行为不变）
-    const legacyOk = await fetch(`${baseUrl}/api/assignments/${legacyAssignmentId}`, { headers: cookie(memberToken) });
+    const legacyOk = await fetch(`${baseUrl}/api/learning-surface-assignments/${legacyAssignmentId}`, {
+      headers: cookie(memberToken),
+    });
     expect(legacyOk.status).toBe(200);
   });
 
@@ -1056,7 +1064,7 @@ describe('修复回归：H1 班级归属 / H2 状态截止 / M4 文件 GC', () =
     const pluginId = '@openlearn/plugin-assignment-eval';
     await kernelContainer.pluginHost.deactivatePlugin(pluginId);
     try {
-      const res = await fetch(`${baseUrl}/api/assignments?lessonId=lesson-hub-0001`, {
+      const res = await fetch(`${baseUrl}/api/learning-surface-assignments?lessonId=lesson-hub-0001`, {
         headers: cookie(memberToken),
       });
       expect(res.status).toBe(503);
