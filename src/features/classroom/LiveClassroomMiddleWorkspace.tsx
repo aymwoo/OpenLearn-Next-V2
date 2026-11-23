@@ -1,4 +1,4 @@
-import React, { useState, type ComponentProps, type RefObject } from 'react';
+import React, { useEffect, useState, type ComponentProps, type RefObject } from 'react';
 import { Presentation, ChevronRight, Activity, AlertTriangle, Trophy, Sparkles } from 'lucide-react';
 import { LazyWhiteboard } from '../../components/LazyWhiteboard';
 import type { WhiteboardHandle } from '../whiteboard/InteractiveWhiteboard';
@@ -92,6 +92,13 @@ export function LiveClassroomMiddleWorkspace(props: LiveClassroomMiddleWorkspace
     ...submissionsProps
   } = props;
   const [panelsOpen, setPanelsOpen] = useState(false);
+
+  // 当前环节没有匹配的主工作区扩展时，不能停留在空的「环节工作区」页，
+  // 否则中栏只剩一块空白，白板与大纲页面都不再出现（白板未挂载 ⇒ 页面列表也为空）。
+  const effectiveMiddleTab = middleTab === 'segment_main' && !hasSegmentMainExtension ? 'whiteboard' : middleTab;
+  useEffect(() => {
+    if (middleTab === 'segment_main' && !hasSegmentMainExtension) setMiddleTab('whiteboard');
+  }, [middleTab, hasSegmentMainExtension, setMiddleTab]);
 
   return (
     <div className="flex-1 flex flex-col min-w-0 bg-surface-secondary/40 p-3 gap-3 relative">
@@ -320,7 +327,7 @@ export function LiveClassroomMiddleWorkspace(props: LiveClassroomMiddleWorkspace
             </div>
           </div>
 
-          {middleTab === 'whiteboard' ? (
+          {effectiveMiddleTab === 'whiteboard' ? (
             <>
               {!compact && hasSegmentMainExtension && currentActiveSegment && (
                 <div
@@ -390,7 +397,7 @@ export function LiveClassroomMiddleWorkspace(props: LiveClassroomMiddleWorkspace
                 )}
               </div>
             </>
-          ) : middleTab === 'submissions' ? (
+          ) : effectiveMiddleTab === 'submissions' ? (
             <LiveSubmissionsPanel
               {...submissionsProps}
               lang={lang as LiveSubmissionsPanelProps['lang']}
@@ -399,7 +406,7 @@ export function LiveClassroomMiddleWorkspace(props: LiveClassroomMiddleWorkspace
               activeSegmentId={activeSegmentId}
               setMiddleTab={setMiddleTab}
             />
-          ) : middleTab === 'top_performers' ? (
+          ) : effectiveMiddleTab === 'top_performers' ? (
             <div className="flex-grow flex-1 min-h-0 w-full relative rounded-xl overflow-y-auto border border-theme shadow-md bg-surface flex flex-col p-4">
               <TopPerformersWidget
                 lang={lang as any}
@@ -411,7 +418,7 @@ export function LiveClassroomMiddleWorkspace(props: LiveClassroomMiddleWorkspace
                 addToast={addToast}
               />
             </div>
-          ) : middleTab === 'segment_main' ? (
+          ) : effectiveMiddleTab === 'segment_main' ? (
             <div
               data-testid="classroom-active-segment-main-container"
               className="flex-grow flex-1 min-h-0 w-full relative rounded-xl overflow-hidden border border-theme shadow-md bg-surface flex flex-col p-4"

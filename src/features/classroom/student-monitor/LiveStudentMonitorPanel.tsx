@@ -13,6 +13,8 @@ import {
   MessageSquare,
   Trash2,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Mars,
   Venus,
   UserRound,
@@ -93,6 +95,9 @@ export type LiveStudentMonitorPanelProps = {
   setIsFeedCollapsed: React.Dispatch<React.SetStateAction<boolean>>;
   liveClassFeed: LiveClassFeedItem[];
   setLiveClassFeed: React.Dispatch<React.SetStateAction<LiveClassFeedItem[]>>;
+  /** 收起为右侧窄条，给白板 / 大纲让出空间。 */
+  isCollapsed?: boolean;
+  onToggleCollapse?: () => void;
 };
 
 export function LiveStudentMonitorPanel(props: LiveStudentMonitorPanelProps) {
@@ -124,7 +129,39 @@ export function LiveStudentMonitorPanel(props: LiveStudentMonitorPanelProps) {
     setIsFeedCollapsed,
     liveClassFeed,
     setLiveClassFeed,
+    isCollapsed = false,
+    onToggleCollapse,
   } = props;
+
+  // 收起态：只保留一条可展开的窄栏，避免长期占用 264px 挤占白板与大纲。
+  if (isCollapsed) {
+    return (
+      <div
+        data-testid="live-student-monitor-collapsed"
+        className="w-10 shrink-0 bg-surface border-l border-theme flex flex-col items-center gap-2 py-3 select-none"
+      >
+        <button
+          type="button"
+          onClick={onToggleCollapse}
+          className="p-1.5 rounded-lg border border-theme text-muted hover:text-primary-ink hover:bg-surface-secondary transition-colors cursor-pointer"
+          aria-label={lang === 'zh' ? '展开学生专注面板' : 'Expand student focus panel'}
+          title={lang === 'zh' ? '展开学生专注面板' : 'Expand student focus panel'}
+        >
+          <ChevronLeft size={14} />
+        </button>
+        <span
+          className="text-[11px] font-black tracking-[0.2em] text-muted"
+          style={{ writingMode: 'vertical-rl' }}
+          aria-hidden="true"
+        >
+          {lang === 'zh' ? '学生专注' : 'Student Focus'}
+        </span>
+        <span className="text-[10px] font-mono font-bold text-muted">
+          {onlineStudentIds.length}/{students.length}
+        </span>
+      </div>
+    );
+  }
 
   return (
     <div className="w-[264px] shrink-0 bg-surface p-3 border-l border-theme flex flex-col gap-2.5 overflow-hidden transition-all duration-300">
@@ -157,17 +194,28 @@ export function LiveStudentMonitorPanel(props: LiveStudentMonitorPanelProps) {
               }}
             />
           </div>
-          <span
-            className="text-xs font-mono font-bold px-2 py-0.5 rounded-full border border-theme bg-surface-secondary text-muted shrink-0 flex items-center gap-1"
-            title={lang === 'zh' ? '已锁定学生屏幕人数 (专注 / 答题)' : 'Locked count (Focus / Answer)'}
-          >
-            <span>
-              🔒 {students.filter((s) => s.locked_lesson_id === selectedLesson).length}/{students.length}
+          <div className="flex items-center gap-1.5 shrink-0">
+            <span
+              className="text-xs font-mono font-bold px-2 py-0.5 rounded-full border border-theme bg-surface-secondary text-muted shrink-0 flex items-center gap-1"
+              title={lang === 'zh' ? '已锁定学生屏幕人数 (专注 / 答题)' : 'Locked count (Focus / Answer)'}
+            >
+              <span>
+                🔒 {students.filter((s) => s.locked_lesson_id === selectedLesson).length}/{students.length}
+              </span>
+              {students.some((s) => s.locked_lesson_id === selectedLesson && s.lock_mode === 'navigation') && (
+                <span className="text-amber-600 text-[11px] font-semibold font-sans">✏️答题</span>
+              )}
             </span>
-            {students.some((s) => s.locked_lesson_id === selectedLesson && s.lock_mode === 'navigation') && (
-              <span className="text-amber-600 text-[11px] font-semibold font-sans">✏️答题</span>
-            )}
-          </span>
+            <button
+              type="button"
+              onClick={onToggleCollapse}
+              className="p-1 rounded-md text-muted hover:text-primary-ink hover:bg-surface-secondary border border-theme/60 transition-colors cursor-pointer shrink-0"
+              aria-label={lang === 'zh' ? '收起学生专注面板' : 'Collapse student focus panel'}
+              title={lang === 'zh' ? '收起学生专注面板' : 'Collapse student focus panel'}
+            >
+              <ChevronRight size={12} />
+            </button>
+          </div>
         </div>
 
         {liveClassSelectedClassId ? (

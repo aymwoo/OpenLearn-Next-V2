@@ -1,4 +1,4 @@
-import React, { type ComponentProps } from 'react';
+import React, { useState, type ComponentProps } from 'react';
 import { Presentation } from 'lucide-react';
 import { PreClassReadyView } from './PreClassReadyView';
 import { PostClassWrapupView } from './PostClassWrapupView';
@@ -47,8 +47,11 @@ export function LiveClassroomStageRouter({
   briefingProps: Omit<ComponentProps<typeof ClassroomBriefingView>, ClassroomBriefingViewInjected>;
   timelineProps: Omit<TimelineSidebarProps, 'selectedLesson' | 'lang'>;
   middleWorkspaceProps: Omit<MiddleWorkspaceProps, 'selectedLesson'>;
-  studentMonitorProps: Omit<StudentMonitorProps, 'lang' | 'selectedLesson'>;
+  studentMonitorProps: Omit<StudentMonitorProps, 'lang' | 'selectedLesson' | 'isCollapsed' | 'onToggleCollapse'>;
 }) {
+  // 右侧「学生专注」面板默认展开，可收起成窄条把空间让给白板与大纲。
+  const [isMonitorCollapsed, setIsMonitorCollapsed] = useState(false);
+
   if (!selectedLesson) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center text-subtle gap-2.5 select-none bg-surface">
@@ -108,7 +111,13 @@ export function LiveClassroomStageRouter({
         <ClassroomTimelineSidebar {...timelineProps} selectedLesson={selectedLesson} lang={lang} />
       )}
       <LiveClassroomMiddleWorkspace {...middleWorkspaceProps} selectedLesson={selectedLesson} />
-      <LiveStudentMonitorPanel {...studentMonitorProps} lang={lang} selectedLesson={selectedLesson} />
+      <LiveStudentMonitorPanel
+        {...studentMonitorProps}
+        lang={lang}
+        selectedLesson={selectedLesson}
+        isCollapsed={isMonitorCollapsed}
+        onToggleCollapse={() => setIsMonitorCollapsed((v) => !v)}
+      />
     </div>
   );
 }

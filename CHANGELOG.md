@@ -119,6 +119,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - `assignmentSubmission` 优先读取作业中心 `plugin_submissions` / `plugin_submission_versions`，再回落 legacy `assignment_submissions`；新增 `source` / `textContent` / `linkUrl` / `files` 字段，`canShareSubmission` 识别仅链接或仅附件的提交，避免成绩投影的空 content 遮住真实作答。
   - `xueanActivityProgress` 补 `visible = 1` 与 `release_at` 过滤，与学生端活动接口口径一致。
   - SDK 将 4 个新 services 键标注为 `T | null | undefined`，明确 worker / process 模式下为 `undefined`。
+- **白板课中栏不再卡在空的「环节工作区」**：当前环节没有匹配的 `classroom.active_segment.main` 扩展时，中栏自动回退到演示白板。此前若中栏停留在 `segment_main`（例如切换环节后扩展不再覆盖该类型），中栏会只剩空白，白板不挂载，大纲里的白板页面列表也随之为空 —— 表现为「看不到白板，也看不到大纲页面内容」。新增回归测试覆盖回退与保留扩展两条路径。
+- **右侧「学生专注力监控」可折叠**：面板头部新增收起按钮，收起后保留 40px 窄条（含展开按钮与在线人数），把宽度让给白板与大纲；展开 / 收起状态在课中阶段切换时保持。
 
 - **移除学生看板欢迎头部的重复「返回课堂」**：课堂进行中时，顶部绿色横幅（`StudentActiveClassBanner`）已提供返回入口，欢迎头部（`StudentDashboardHeader`）不再重复渲染同一按钮；同步移除该组件不再使用的 `activeSession` / `onReturnToClass` 入参与图标依赖。
 
