@@ -66,6 +66,10 @@ import {
   IRewardCatalogServiceToken,
   ICreditRedemptionServiceToken,
   IClassroomMessageServiceToken,
+  IAssignmentSubmissionServiceToken,
+  IXueanActivityProgressServiceToken,
+  ILessonReportServiceToken,
+  IClassroomSelfMessageServiceToken,
 } from '../di/interfaces.js';
 import { StorageService } from '../di/storage-service.js';
 import { AIService } from '../di/ai-service.js';
@@ -79,6 +83,10 @@ import { RewardCatalogService } from '../di/reward-catalog-service.js';
 import { CreditRedemptionService } from '../di/credit-redemption-service.js';
 import { CreditAwardService } from '../di/credit-award-service.js';
 import { ClassroomMessageService } from '../di/classroom-message-service.js';
+import { AssignmentSubmissionService } from '../di/assignment-submission-service.js';
+import { XueanActivityProgressService } from '../di/xuean-activity-progress-service.js';
+import { LessonReportService } from '../di/lesson-report-service.js';
+import { ClassroomSelfMessageService } from '../di/classroom-self-message-service.js';
 import { DbSideEffectEnqueuer } from '../di/pending-side-effect-enqueuer.js';
 import { AuthSessionBridgeService } from '../di/auth-session-bridge-service.js';
 import { CoursewareRuntimeScriptRegistry } from '../di/courseware-runtime-script-registry.js';
@@ -303,9 +311,18 @@ export class Kernel {
       }),
     );
     // 通讯协议可靠投递：与发放共用事件总线与补偿入队器。
+    const classroomMessageService = new ClassroomMessageService(flowDb, this.eventBus, sideEffectEnqueuer);
+    this.serviceRegistry.register(IClassroomMessageServiceToken, classroomMessageService);
+
+    // P0 第三方插件安全扩展：作业提交 / 学案进度 / 课后报告 / 学生自发消息。
+    // 前三个是只读替代通道（对应表在 sql-guard 禁读清单里）；最后一个把 sender
+    // 从 plugin 换成宿主派生的学生 actor，避免学生为了发消息被迫拿到 lesson:write。
+    this.serviceRegistry.register(IAssignmentSubmissionServiceToken, new AssignmentSubmissionService(flowDb));
+    this.serviceRegistry.register(IXueanActivityProgressServiceToken, new XueanActivityProgressService(flowDb));
+    this.serviceRegistry.register(ILessonReportServiceToken, new LessonReportService(flowDb));
     this.serviceRegistry.register(
-      IClassroomMessageServiceToken,
-      new ClassroomMessageService(flowDb, this.eventBus, sideEffectEnqueuer),
+      IClassroomSelfMessageServiceToken,
+      new ClassroomSelfMessageService(flowDb, classroomMessageService),
     );
 
     // Issue #366：受管名册读取（插件禁止直查 classes / students / class_students 的替代通道）

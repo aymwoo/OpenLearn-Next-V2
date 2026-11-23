@@ -174,9 +174,9 @@ describe('buildContext', () => {
     expect(ctx.pluginId).toBe('plugin-id-123');
     expect(ctx.manifest).toBe(testManifest);
 
-    // 验证 services 键（7 个核心 + 2 个积分 + 受管名册 + 课节标题）
+    // 验证 services 键（7 个核心 + 2 个积分 + 受管名册 + 课节标题 + 4 个 P0 服务）
     const keys = Object.keys(ctx.services);
-    expect(keys).toHaveLength(11);
+    expect(keys).toHaveLength(15);
     expect(keys).toContain('commandBus');
     expect(keys).toContain('eventBus');
     expect(keys).toContain('actionRegistry');
@@ -188,6 +188,10 @@ describe('buildContext', () => {
     expect(keys).toContain('pointsLedger');
     expect(keys).toContain('roster');
     expect(keys).toContain('lessonOutline');
+    expect(keys).toContain('assignmentSubmission');
+    expect(keys).toContain('xueanActivityProgress');
+    expect(keys).toContain('lessonReport');
+    expect(keys).toContain('classroomSelfMessage');
   });
 
   // ── 受管名册（Issue #366）─────────────────────────────────────────────

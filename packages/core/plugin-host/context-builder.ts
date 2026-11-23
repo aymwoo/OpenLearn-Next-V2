@@ -51,6 +51,10 @@ import {
   IClassroomActivityCatalogToken,
   IInteractionRuntimeServiceToken,
   IClassroomMessageServiceToken,
+  IAssignmentSubmissionServiceToken,
+  IXueanActivityProgressServiceToken,
+  ILessonReportServiceToken,
+  IClassroomSelfMessageServiceToken,
   ISubmissionRegistryToken,
   PLUGIN_RESOLVABLE_TOKEN_NAMES,
 } from '../di/interfaces.js';
@@ -71,6 +75,10 @@ import type {
   IClassroomLifecycleService,
   IClassroomActivityCatalog,
   IClassroomMessageService,
+  IAssignmentSubmissionService,
+  IXueanActivityProgressService,
+  ILessonReportService,
+  IClassroomSelfMessageService,
   ClassroomStageGuard,
   ClassroomLifecycleStage,
   QuickActivityDescriptor,
@@ -805,6 +813,18 @@ function wrapPluginRuntimeService<T>(
   if (tokenName === ILessonOutlineServiceToken.name) {
     return wrapLessonOutlineService(raw as ILessonOutlineService, pluginId, capabilities) as T;
   }
+  if (tokenName === IAssignmentSubmissionServiceToken.name) {
+    return wrapAssignmentSubmissionService(raw as IAssignmentSubmissionService, pluginId, capabilities) as T;
+  }
+  if (tokenName === IXueanActivityProgressServiceToken.name) {
+    return wrapXueanActivityProgressService(raw as IXueanActivityProgressService, pluginId, capabilities) as T;
+  }
+  if (tokenName === ILessonReportServiceToken.name) {
+    return wrapLessonReportService(raw as ILessonReportService, pluginId, capabilities) as T;
+  }
+  if (tokenName === IClassroomSelfMessageServiceToken.name) {
+    return wrapClassroomSelfMessageService(raw as IClassroomSelfMessageService, pluginId, capabilities) as T;
+  }
   return raw;
 }
 
@@ -888,6 +908,123 @@ function wrapLessonOutlineService(
     getOutline: safe(async (lessonId: string) => {
       assertReadable();
       return service.getOutline(lessonId);
+    }),
+  };
+}
+
+/**
+ * 统一的 manifest 能力门禁（P0 只读/受限服务共用）。
+ *
+ * 与 roster / lessonOutline 同口径：先落审计，缺能力时 ERROR 日志 + 抛错。
+ */
+function assertManifestCapability(
+  pluginId: string,
+  capabilities: readonly string[] | undefined,
+  required: string,
+  auditEvent: string,
+  method: string,
+): void {
+  const hasCap = hasCapability(capabilities ?? [], required);
+  recordSecurityAudit(auditEvent, {
+    pluginId,
+    method,
+    hasCapability: hasCap,
+    ...(hasCap ? {} : { denied: true }),
+  });
+  if (hasCap) return;
+  console.error(
+    `[Security] 插件 "${pluginId}" 调用 ${method} 被拒：缺少能力 "${required}"。` +
+      `请在 manifest.capabilitiesProposed 声明它。`,
+  );
+  throw new PluginCapabilityDeniedError(pluginId, required, 'read', method);
+}
+
+/** 包装作业提交只读服务（`assignment:read`）。 */
+function wrapAssignmentSubmissionService(
+  service: IAssignmentSubmissionService,
+  pluginId: string,
+  capabilities?: readonly string[],
+): IAssignmentSubmissionService {
+  const CAP = 'assignment:read';
+  const safe = <T extends (...args: never[]) => unknown>(fn: T): T => createSafeFunction(fn) as unknown as T;
+  const assert = (method: string) =>
+    assertManifestCapability(pluginId, capabilities, CAP, 'plugin.assignment_submission_read', method);
+
+  return {
+    getMySubmission: safe(async (assignmentId: string) => {
+      assert('getMySubmission');
+      return service.getMySubmission(assignmentId);
+    }),
+    getSubmissionForViewer: safe(async (assignmentId: string, studentId: string) => {
+      assert('getSubmissionForViewer');
+      return service.getSubmissionForViewer(assignmentId, studentId);
+    }),
+    canShareSubmission: safe(async (assignmentId: string, studentId: string) => {
+      assert('canShareSubmission');
+      return service.canShareSubmission(assignmentId, studentId);
+    }),
+  };
+}
+
+/** 包装学案活动进度只读服务（`lesson:read`）。 */
+function wrapXueanActivityProgressService(
+  service: IXueanActivityProgressService,
+  pluginId: string,
+  capabilities?: readonly string[],
+): IXueanActivityProgressService {
+  const CAP = 'lesson:read';
+  const safe = <T extends (...args: never[]) => unknown>(fn: T): T => createSafeFunction(fn) as unknown as T;
+  const assert = (method: string) =>
+    assertManifestCapability(pluginId, capabilities, CAP, 'plugin.xuean_progress_read', method);
+
+  return {
+    getMyActivityProgress: safe(async (activityId: string) => {
+      assert('getMyActivityProgress');
+      return service.getMyActivityProgress(activityId);
+    }),
+    listMyActivityProgress: safe(async (lessonId: string) => {
+      assert('listMyActivityProgress');
+      return service.listMyActivityProgress(lessonId);
+    }),
+  };
+}
+
+/** 包装课后报告只读服务（`lesson:read`；服务内部再校验教师/管理员）。 */
+function wrapLessonReportService(
+  service: ILessonReportService,
+  pluginId: string,
+  capabilities?: readonly string[],
+): ILessonReportService {
+  const CAP = 'lesson:read';
+  const safe = <T extends (...args: never[]) => unknown>(fn: T): T => createSafeFunction(fn) as unknown as T;
+  const assert = (method: string) =>
+    assertManifestCapability(pluginId, capabilities, CAP, 'plugin.lesson_report_read', method);
+
+  return {
+    getLessonReport: safe(async (lessonId: string) => {
+      assert('getLessonReport');
+      return service.getLessonReport(lessonId);
+    }),
+    getSessionReport: safe(async (sessionId: string) => {
+      assert('getSessionReport');
+      return service.getSessionReport(sessionId);
+    }),
+  };
+}
+
+/** 包装学生 self 消息服务：注入插件归属，并要求声明 `classroom:message:self`。 */
+function wrapClassroomSelfMessageService(
+  service: IClassroomSelfMessageService,
+  pluginId: string,
+  capabilities?: readonly string[],
+): IClassroomSelfMessageService {
+  const CAP = 'classroom:message:self';
+  const safe = <T extends (...args: never[]) => unknown>(fn: T): T => createSafeFunction(fn) as unknown as T;
+
+  return {
+    sendAsSelf: safe((input: Parameters<IClassroomSelfMessageService['sendAsSelf']>[0]) => {
+      assertManifestCapability(pluginId, capabilities, CAP, 'plugin.classroom_self_message', 'sendAsSelf');
+      return service.sendAsSelf(input, pluginId);
     }),
   };
 }
@@ -1149,6 +1286,10 @@ export async function buildContext(
   const pointsLedgerService = await serviceRegistry.tryResolve(IPointsLedgerServiceToken);
   const rosterService = await serviceRegistry.tryResolve(IClassRosterServiceToken);
   const lessonOutlineService = await serviceRegistry.tryResolve(ILessonOutlineServiceToken);
+  const assignmentSubmissionService = await serviceRegistry.tryResolve(IAssignmentSubmissionServiceToken);
+  const xueanActivityProgressService = await serviceRegistry.tryResolve(IXueanActivityProgressServiceToken);
+  const lessonReportService = await serviceRegistry.tryResolve(ILessonReportServiceToken);
+  const classroomSelfMessageService = await serviceRegistry.tryResolve(IClassroomSelfMessageServiceToken);
 
   // 2. 逐个包装 IService — 应用 createSafeFunction + ResourceTracker 集成
   const wrappedCommandBus = wrapCommandBus(commandBusService, tracker, pluginId, manifest.id, actionRegistryService);
@@ -1179,6 +1320,18 @@ export async function buildContext(
     : null;
   const wrappedLessonOutline = lessonOutlineService
     ? wrapLessonOutlineService(lessonOutlineService, pluginId, manifest.capabilitiesProposed)
+    : null;
+  const wrappedAssignmentSubmission = assignmentSubmissionService
+    ? wrapAssignmentSubmissionService(assignmentSubmissionService, pluginId, manifest.capabilitiesProposed)
+    : null;
+  const wrappedXueanActivityProgress = xueanActivityProgressService
+    ? wrapXueanActivityProgressService(xueanActivityProgressService, pluginId, manifest.capabilitiesProposed)
+    : null;
+  const wrappedLessonReport = lessonReportService
+    ? wrapLessonReportService(lessonReportService, pluginId, manifest.capabilitiesProposed)
+    : null;
+  const wrappedClassroomSelfMessage = classroomSelfMessageService
+    ? wrapClassroomSelfMessageService(classroomSelfMessageService, pluginId, manifest.capabilitiesProposed)
     : null;
 
   // 3. 冻结包装对象的原型链（迁移自 PluginRuntime lines 512-518）
@@ -1215,6 +1368,10 @@ export async function buildContext(
     pointsLedger: wrappedPointsLedger,
     roster: wrappedRoster,
     lessonOutline: wrappedLessonOutline,
+    assignmentSubmission: wrappedAssignmentSubmission,
+    xueanActivityProgress: wrappedXueanActivityProgress,
+    lessonReport: wrappedLessonReport,
+    classroomSelfMessage: wrappedClassroomSelfMessage,
   };
 
   // === Phase 6: Null out incompatible optional service keys (D-12) =============
@@ -1235,6 +1392,10 @@ export async function buildContext(
       '@openlearn/core:IPointsLedgerService': 'pointsLedger',
       '@openlearn/core:IClassRosterService': 'roster',
       '@openlearn/core:ILessonOutlineService': 'lessonOutline',
+      '@openlearn/core:IAssignmentSubmissionService': 'assignmentSubmission',
+      '@openlearn/core:IXueanActivityProgressService': 'xueanActivityProgress',
+      '@openlearn/core:ILessonReportService': 'lessonReport',
+      '@openlearn/core:IClassroomSelfMessageService': 'classroomSelfMessage',
     };
     for (const tokenName of skipTokens) {
       const serviceKey = TOKEN_TO_SERVICE_KEY[tokenName];

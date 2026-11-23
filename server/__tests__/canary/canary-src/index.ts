@@ -98,15 +98,19 @@ export default {
         const want = [
           'actionRegistry',
           'ai',
+          'assignmentSubmission',
           'capability',
+          'classroomSelfMessage',
           'commandBus',
           'eventBus',
           'lessonOutline',
+          'lessonReport',
           'pointsDimension',
           'pointsLedger',
           'processManager',
           'roster',
           'storage',
+          'xueanActivityProgress',
         ];
         if (JSON.stringify(keys) !== JSON.stringify(want)) throw new Error(keys.join(','));
         // 键数由实际集合推导：硬编码 9 在新增服务（Issue #366 的 roster）时会静默失配

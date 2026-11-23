@@ -65,6 +65,8 @@ export const CAP = {
   ASSIGNMENT_REVIEW: 'assignment:review',
   ASSIGNMENT_SUBMIT: 'assignment:submit',
   ASSIGNMENT_WRITE: 'assignment:write',
+  // 学生 self 身份课堂消息（sender 由宿主派生，不要求 lesson:write）。
+  CLASSROOM_MESSAGE_SELF: 'classroom:message:self',
   LESSON_DELETE: 'lesson:delete',
   LESSON_READ: 'lesson:read',
   LESSON_WRITE: 'lesson:write',

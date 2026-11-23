@@ -115,6 +115,7 @@ export type ExtensionSlot =
   | 'student.classroom.overlay'
   // ── 作业评估与多模态预览扩展槽位 ──
   | 'assignment.submission.preview'
+  | 'assignment.submission.actions'
   | 'assignment.file.preview'
   // ── 全局壳层扩展槽位（底座解耦）──
   | 'header.action'
@@ -259,7 +260,7 @@ export type AnyExtensionSlot = ExtensionSlot | AnchorSlot | (string & {});
 
 实测口径：遍历 `src/**/*.tsx`（排除 `__tests__`），解析 `<ExtensionPointRenderer ... slot="…">`。
 
-- 生产调用点上的**固定名槽位值随版本增长**（本节 98 为历史实测；当前联合类型 120 个成员，其中 **116 个**在 `src/**/*.tsx` 有 `<ExtensionPointRenderer>` 生产调用点。剩余 4 个 —— `command_palette.item` / `quick_insert.item` / `ai.prompt.template` / `ai.skill.provider` —— 是**数据型或服务端消费**槽位，不经过渲染器，契约见 §12.7。消费率口径见文末统计节，复核命令见下）；
+- 生产调用点上的**固定名槽位值随版本增长**（本节 98 为历史实测；当前联合类型 141 个成员，其中 **117 个**在 `src/**/*.tsx` 有 `<ExtensionPointRenderer>` 生产调用点。剩余 4 个 —— `command_palette.item` / `quick_insert.item` / `ai.prompt.template` / `ai.skill.provider` —— 是**数据型或服务端消费**槽位，不经过渲染器，契约见 §12.7。消费率口径见文末统计节，复核命令见下）；
 - 另有 **8 个** `anchor:*` 锚点槽位（见 §1.1 附注）。
 
 | 槽位                                    | 渲染调用点（`src/` 下）                                                                                                                 | 调用点传入的 `slotProps`                                                                                                       |
@@ -343,6 +344,7 @@ export type AnyExtensionSlot = ExtensionSlot | AnchorSlot | (string & {});
 | `admin.tab`（button 形态）              | `src/components/AdminPanel.tsx`                                                                                                         | `{ renderType: 'button', adminActiveTab, setAdminActiveTab }`                                                                  |
 | `admin.tab`（panel 形态）               | `src/components/AdminPanel.tsx`                                                                                                         | `{ renderType: 'panel', adminActiveTab, currentUserId, currentUserRole, lang, siteInfo }`                                      |
 | `assignment.submission.preview`         | `src/components/StudentAssignmentEvalPanel.tsx`                                                                                         | `{ submission, studentId, lessonId, isSelf, lang }`                                                                            |
+| `assignment.submission.actions`         | `src/components/StudentAssignmentEvalPanel.tsx`                                                                                         | `{ assignment, submission, studentId, lessonId, isSelf, lang, refresh }`                                                       |
 | `assignment.file.preview`               | `src/components/AssignmentFilePreview.tsx`                                                                                              | `{ file, fileExtension, assignmentId, downloadUrl, inlineUrl, lang }`                                                          |
 | `header.action`                         | `src/components/AppHeader.tsx`                                                                                                          | `{ session, currentRole, lang }`                                                                                               |
 | `statusbar.item`                        | `src/components/AppStatusBar.tsx`（由 `src/App.tsx` 挂载；无插件贡献时不渲染）                                                          | `{ session, currentRole, lang, isOnline }`                                                                                     |
@@ -1574,3 +1576,4 @@ ctx.ui.registerExtensionPoint('xuean.activity.student', {
 > 2026-11-14 更新：白板域新增 `whiteboard.selection.toolbar`、`whiteboard.context_menu`、`whiteboard.pagebar.action`、`whiteboard.page_drawer.action`、`whiteboard.properties.addon` 5 个扩展槽位，`ExtensionSlot` 成员数由 120 增至 **125**（总槽位数含 8 个锚点共 **133** 个），详见 §10。
 > 2026-11-15 更新：互动课堂顶栏与高级弹窗新增 `classroom.toolbar.quick_action`、`classroom.monitor.header_action`、`classroom.submissions.toolbar`、`classroom.top_performers.action`、`classroom.showcase_diff.action`、`classroom.macro_runner.action`、`classroom.hardware_bridge.addon`、`classroom.sessions.action` 8 个增量扩展槽位，`ExtensionSlot` 成员数由 125 增至 **133**（总槽位数含 8 个锚点共 **141** 个），详见 §12.8。
 > 2026-11-22 更新：学案编辑器新增 `xuean.activity.type`（服务端数据型）、`xuean.activity.editor`、`xuean.activity.student` 3 个扩展槽位，`ExtensionSlot` 成员数由 137 增至 **140**（总槽位数含 8 个锚点共 **148** 个），详见 §12.9。
+> 2026-11-23 更新：作业提交卡片新增 `assignment.submission.actions`（操作型：重新提交 / 分享 / 导出 / 第三方评分），`ExtensionSlot` 成员数由 140 增至 **141**（总槽位数含 8 个锚点共 **149** 个）。

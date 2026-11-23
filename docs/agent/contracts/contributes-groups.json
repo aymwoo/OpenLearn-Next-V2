@@ -84,6 +84,7 @@
     "stage.display.overlay",
     "stage.display.action",
     "assignment.submission.preview",
+    "assignment.submission.actions",
     "assignment.file.preview",
     "student.classroom.overlay",
     "student.profile.tab",
@@ -127,7 +128,7 @@
     "xuean.activity.student"
   ],
   "a_total": 75,
-  "b_total": 46,
+  "b_total": 47,
   "a_not_in_extension_slot": [
     "ai.persona.provider",
     "learning.surface",

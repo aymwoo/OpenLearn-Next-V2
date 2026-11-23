@@ -15,6 +15,7 @@
     "assignment.grade.item.addon",
     "assignment.grade.rubric.addon",
     "assignment.grade.toolbar.action",
+    "assignment.submission.actions",
     "assignment.submission.preview",
     "class.batch.action",
     "class.tab",
@@ -153,5 +154,5 @@
     "anchor:whiteboard-toolbar:presentation",
     "anchor:whiteboard-toolbar:rollcall"
   ],
-  "total": 140
+  "total": 141
 }

@@ -63,6 +63,10 @@ import {
   IRewardCatalogServiceToken,
   ICreditRedemptionServiceToken,
   IClassroomMessageServiceToken,
+  IAssignmentSubmissionServiceToken,
+  IXueanActivityProgressServiceToken,
+  ILessonReportServiceToken,
+  IClassroomSelfMessageServiceToken,
 } from '../../../packages/core/di/interfaces.js';
 import { FileStorageExtensionRegistry } from '../../../packages/core/di/file-storage-extension-registry.js';
 import { IActivityRegistryToken } from '../../../packages/activity-ecosystem/index.js';
@@ -77,6 +81,10 @@ import { RewardCatalogService } from '../../../packages/core/di/reward-catalog-s
 import { CreditRedemptionService } from '../../../packages/core/di/credit-redemption-service.js';
 import { CreditAwardService } from '../../../packages/core/di/credit-award-service.js';
 import { ClassroomMessageService } from '../../../packages/core/di/classroom-message-service.js';
+import { AssignmentSubmissionService } from '../../../packages/core/di/assignment-submission-service.js';
+import { XueanActivityProgressService } from '../../../packages/core/di/xuean-activity-progress-service.js';
+import { LessonReportService } from '../../../packages/core/di/lesson-report-service.js';
+import { ClassroomSelfMessageService } from '../../../packages/core/di/classroom-self-message-service.js';
 import { StageGuardPipeline } from '../../../packages/core/lesson-engine/stage-guard-pipeline.js';
 import { buildCanaryZip } from './canary.builder';
 import { approvePluginCapabilities } from '../../../packages/core/plugin-host/plugin-grants.js';
@@ -367,6 +375,14 @@ describe('金丝雀插件双模式全链路测试（步骤 3）', () => {
       ],
       [ICreditAwardServiceToken, new CreditAwardService(db as never, new PointsLedgerService(db as never))],
       [IClassroomMessageServiceToken, new ClassroomMessageService(db as never)],
+      // P0 只读 / 受限扩展服务（金丝雀 token 探针逐项 resolve）
+      [IAssignmentSubmissionServiceToken, new AssignmentSubmissionService(db as never)],
+      [IXueanActivityProgressServiceToken, new XueanActivityProgressService(db as never)],
+      [ILessonReportServiceToken, new LessonReportService(db as never)],
+      [
+        IClassroomSelfMessageServiceToken,
+        new ClassroomSelfMessageService(db as never, new ClassroomMessageService(db as never)),
+      ],
     ];
 
     pluginsDir = fs.mkdtempSync(path.resolve(__dirname, '.tmp-plugins-'));

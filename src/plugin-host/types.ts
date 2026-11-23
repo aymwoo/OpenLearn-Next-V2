@@ -186,6 +186,7 @@ export type ExtensionSlot =
   | 'student.classroom.overlay' // 学生端课堂全屏交互浮层扩展（弹幕、防作弊水印、抢答悬浮球等）
   // ── 作业评估与多模态预览扩展槽位 ──
   | 'assignment.submission.preview' // 作业提交多模态预览扩展（沙盒运行/富媒体播放/3D模型等）
+  | 'assignment.submission.actions' // 作业提交卡片操作扩展（重新提交 / 分享 / 导出 / 第三方评分等）
   | 'assignment.file.preview' // 作业**附件**预览扩展（按扩展名/MIME 声明能处理的文件类型，如 docx/pptx/3D 模型）
   // ── 全局壳层扩展槽位（底座解耦）──
   | 'header.action' // 全局顶栏右侧快捷操作（全局 AI 助手入口 / 屏幕录制 / 校园门户直通等）
@@ -643,6 +644,20 @@ export interface AssignmentSubmissionPreviewSlotProps {
   lessonId?: string;
   isSelf?: boolean;
   lang?: 'zh' | 'en';
+  dispatcher?: IHostActionDispatcher;
+}
+
+/** Props passed to assignment.submission.actions extensions（作业提交卡片操作） */
+export interface AssignmentSubmissionActionsSlotProps {
+  /** 提交所属作业（仅 id / lessonId，避免把完整作业正文透传给插件）。 */
+  assignment: { id?: string | null; lessonId?: string | null } | null;
+  submission: any;
+  studentId?: string;
+  lessonId?: string;
+  isSelf?: boolean;
+  lang?: 'zh' | 'en';
+  /** 宿主提供的数据刷新入口（重新提交 / 评分后调用）。 */
+  refresh?: () => void | Promise<void>;
   dispatcher?: IHostActionDispatcher;
 }
 

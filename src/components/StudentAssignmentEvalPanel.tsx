@@ -339,6 +339,20 @@ export function StudentAssignmentEvalPanel({ lessonId, studentId, lang, addToast
                   lang,
                 }}
               />
+
+              {/* 第三方作业提交操作扩展槽（重新提交 / 分享 / 导出等） */}
+              <ExtensionPointRenderer
+                slot="assignment.submission.actions"
+                slotProps={{
+                  assignment: { id: mySubmission.assignment_id ?? null, lessonId },
+                  submission: mySubmission,
+                  studentId,
+                  lessonId,
+                  isSelf: true,
+                  lang,
+                  refresh: () => fetchData(true),
+                }}
+              />
             </div>
           ) : (
             <div className="bg-amber-50/50 border border-amber-100 p-4 rounded-xl flex items-start gap-3 mb-4 text-left">

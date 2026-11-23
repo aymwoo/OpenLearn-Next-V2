@@ -12,6 +12,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Features
 
+- **第三方插件 P0 安全扩展服务**：新增 4 个宿主侧入口，避免插件为读核心数据而直查 sql-guard 禁读表或申请过宽权限：
+  - `ctx.services.assignmentSubmission`（`assignment:read`）：`getMySubmission` / `getSubmissionForViewer` / `canShareSubmission`；学生仅本人、教师仅自己班级、管理员不限，返回体不含名册字段。
+  - `ctx.services.xueanActivityProgress`（`lesson:read`）：学生读取本人活动进度与 `submission_json`，可见性走 `canSeeLesson`。
+  - `ctx.services.lessonReport`（`lesson:read`）：课节 / 会话课后聚合摘要（会话、作业完成度、活动参与度），仅教师与管理员。
+  - `ctx.services.classroomSelfMessage`（`classroom:message:self`）：以当前学生身份发送课堂消息，sender 由宿主派生为 `user:<studentId>:student`，校验 channel `rolesAllowed`、班级成员与定向目标同班，**不要求 `lesson:write`**；`messageId` 幂等。
+  - 新增扩展槽 `assignment.submission.actions`：学生已提交作业卡片底部的操作区，透传 `{ assignment, submission, studentId, lessonId, isSelf, lang, refresh }`。
+  - SDK（`openlearn.d.ts` / `index.ts`）、`docs/agent/contracts`、DI Token 字典、槽位目录与能力矩阵已同步。
+
 - **学案活动编辑面板加宽**：编辑 / 新增活动弹窗由窄单列改为 `max-w-3xl` 宽面板，活动类型与标题、提交物类型与发布 / 截止时间、评价量规与学习面内容分组并排；面板高度限制为一屏并支持内部滚动（`overscroll-contain`），底部「取消 / 保存」吸底，不再竖向撑满屏幕。
 - **学生学案课堂页聚焦活动内容**：移除学生学案课堂左侧的「环节 / 资料 / 笔记」工具导航与抽屉，学案正文直接占满主区域。`StudentXueanView` 顶部新增横向活动导航（`tablist`），按序列出「学案首页」与全部活动名称，完成显示 ✓、进行中显示蓝点，点击即可切换；导航改用序号徽标 + 选中下划线的样式，头部加一条完成进度条，单行横向滚动（隐藏滚动条、吸附对齐），切换时自动把选中项滚入可视区；中间一次只渲染当前活动，底部提供「上一活动 / 下一活动」与序号进度。学案课堂去掉居中的 `max-w-4xl` 窄栏，头部与正文卡片铺满整个可用屏幕宽度并撑满高度。首帧直接派生当前项，避免加载后短暂出现空态。`XueanModeWorkspace` 学生端不再显示「Mode Pack · 学案工作区」标题行。
 - **课程编辑收口到课程管理**：系统导航栏移除「备课 / 学案编辑器」入口；在「课程管理」点击任一课程（白板或学案）仍在当前页内展开对应编辑器，并提供「返回课程管理」，不再切换系统导航 tab。`onViewCourse` 只更新当前课时选择，页内按课时交付模式懒加载 `ModePackPrepShell` / `LessonEditorView` / `XueanEditor`。课程向导创建完成后、互动课堂「编辑本课」也统一回到课程管理页内展开；旧书签 hash（`#/lesson_editor`、`#/xuean_editor`）自动回落到课程管理，编辑中的课程 id 存入 `appStore.courseEditingLessonId`，从任意入口都能复用同一编辑面。修复页内编辑器宿主缺少 flex 容器导致学案编辑器主体高度塌陷、活动编排区域空白的问题。统一备课壳的顶部环节切换条改为**仅混排课时显示**：纯学案 / 纯白板课时的所有环节都落到同一备课面，切换条不再展示，避免与下方可拖拽的学案活动列表重复。学案编辑器子面板顺序调整为「学案首页 → 活动编排 → 进度面板」；学案首页简化为单条 `xuean_home` 块，只设置简介文字与背景图（新增 `POST /api/uploads/image` 上传，≤5MB），移除多块新增 / 排序 / JSON 编辑；学生端将学案首页置顶渲染为带背景图的简介头图。学生端学案活动卡片移除手动「开始 / 提交 / 重新提交」按钮与提交弹窗，活动完成与提交统一由活动内部功能（引用试卷、学习面、插件活动）驱动。
@@ -105,6 +113,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - 5 个迁移（057–061）、SDK Token 与类型导出、6 个内核服务、命令与事件文档、新开发指南 `docs/reference/classroom-flow-server.md`；全量测试 688 文件 / 5645 用例通过。
 
 ### Fixes
+
+- **P0 插件扩展服务评审修复**：
+  - `classroomSelfMessage` 的 `targetUserIds` 仅在未指定时表示广播；非数组或含空/非字符串元素时直接抛 `ClassroomSelfMessageInputError`，不再静默降级为广播。同时校验 `classId` 与 `lessonId` 的归属关系，避免消息带错误班级标签进入课节补投流。
+  - `assignmentSubmission` 优先读取作业中心 `plugin_submissions` / `plugin_submission_versions`，再回落 legacy `assignment_submissions`；新增 `source` / `textContent` / `linkUrl` / `files` 字段，`canShareSubmission` 识别仅链接或仅附件的提交，避免成绩投影的空 content 遮住真实作答。
+  - `xueanActivityProgress` 补 `visible = 1` 与 `release_at` 过滤，与学生端活动接口口径一致。
+  - SDK 将 4 个新 services 键标注为 `T | null | undefined`，明确 worker / process 模式下为 `undefined`。
 
 - **移除学生看板欢迎头部的重复「返回课堂」**：课堂进行中时，顶部绿色横幅（`StudentActiveClassBanner`）已提供返回入口，欢迎头部（`StudentDashboardHeader`）不再重复渲染同一按钮；同步移除该组件不再使用的 `activeSession` / `onReturnToClass` 入参与图标依赖。
 

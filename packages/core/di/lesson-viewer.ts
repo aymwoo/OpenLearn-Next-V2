@@ -40,6 +40,24 @@ export function currentLessonViewer(): LessonViewer | null {
   return viewerStore.getStore() ?? null;
 }
 
+/** 把会话角色归一为 administrator / teacher / student / anonymous。 */
+export function normalizeViewerRole(viewer: LessonViewer | null | undefined): string {
+  if (!viewer) return 'anonymous';
+  for (const candidate of [viewer.subRole, viewer.role]) {
+    if (typeof candidate !== 'string' || candidate.length === 0) continue;
+    const normalized = candidate === 'admin' ? 'administrator' : candidate;
+    if (normalized === 'administrator' || normalized === 'teacher' || normalized === 'student') return normalized;
+  }
+  return 'anonymous';
+}
+
+/** 从会话取学生 id：学生 actor 的 userId 与 studentId 同值。非学生返回 null。 */
+export function studentIdFromViewer(viewer: LessonViewer | null | undefined): string | null {
+  if (!viewer || normalizeViewerRole(viewer) !== 'student') return null;
+  const id = viewer.studentId || viewer.userId;
+  return typeof id === 'string' && id.length > 0 ? id : null;
+}
+
 export function runWithLessonViewer<T>(viewer: LessonViewer, fn: () => T): T {
   return viewerStore.run(viewer, fn);
 }

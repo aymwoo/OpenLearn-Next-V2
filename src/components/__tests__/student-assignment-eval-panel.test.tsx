@@ -219,4 +219,52 @@ describe('StudentAssignmentEvalPanel 空 file_path', () => {
     expect(await screen.findByTestId('preview-peer')).toBeDefined();
     expect(screen.getByText('Preview: 同伴提交的物理实验数据')).toBeDefined();
   });
+
+  it('挂载并渲染 assignment.submission.actions 扩展槽位（自提交操作）', async () => {
+    const ActionsComp = (props: any) => (
+      <div data-testid="submission-actions">
+        {String(props.assignment?.id)}|{String(props.isSelf)}|{typeof props.refresh}
+      </div>
+    );
+    const factory = () => Promise.resolve({ default: ActionsComp });
+    (factory as any).__isLazyFactory = true;
+
+    usePluginHostStore.getState().registerExtensionPoint('assignment.submission.actions', {
+      id: 'mock-submission-actions',
+      label: '作业操作',
+      pluginId: 'p-submission-actions',
+      component: factory,
+    });
+
+    mockFetchWith(
+      {
+        submission: {
+          id: 'sub-self-2',
+          assignment_id: 'asg-actions-1',
+          lesson_id: lessonId,
+          student_id: studentId,
+          file_path: null,
+          version: 1,
+          created_at: Date.now(),
+          updated_at: Date.now(),
+          files: [],
+          textContent: '待扩展操作的提交',
+          linkUrl: null,
+        },
+        reviewsWritten: [],
+        grade: null,
+      },
+      [],
+    );
+
+    const host = new FrontendPluginHost();
+    render(
+      <PluginHostProvider host={host}>
+        <StudentAssignmentEvalPanel lessonId={lessonId} studentId={studentId} lang="zh" addToast={noopToast} />
+      </PluginHostProvider>,
+    );
+
+    expect(await screen.findByTestId('submission-actions')).toBeDefined();
+    expect(screen.getByText('asg-actions-1|true|function')).toBeDefined();
+  });
 });

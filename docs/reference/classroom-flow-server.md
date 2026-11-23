@@ -179,6 +179,8 @@ await ctx.invokeCommand('classroom.sendMessage', {
 
 `commandType` 固定为 `classroom.sendMessage`，要求 `lesson:write`，`exposeToAgent: false`。经命令进入时 actor 为 `plugin:<id>`，宿主强制 `senderPluginId`，插件只能往自己拥有的 channel（或 `shared` 通道）发。用户经 HTTP 进入时不带 `senderPluginId`，改由 `rolesAllowed` 约束。`targetUserIds` 非空时 socket 只进入这些用户的房间和教师房间。
 
+**学生 self 身份（P0，`ctx.services.classroomSelfMessage`）**：第三方插件若只是要替当前学生发一条课堂消息，不必（也不应）申请 `lesson:write`。声明 `classroom:message:self` 后调用 `sendAsSelf(input)`，宿主会把 sender 派生为 `user:<studentId>:student`，并校验：channel 已注册且 `rolesAllowed` 包含 `student`、学生属于 `classId`、定向 `targetUserIds` 与发送者同班；`messageId` 幂等语义与 `IClassroomMessageService.send` 一致。教师会话、无会话调用与非本班目标都会被拒绝。
+
 ### 2.4 接收与断线补投
 
 - **在线**：监听 socket `classroom:message`，payload 带 `_meta.correlationId = messageId`，前端按 messageId 短窗去重（通知类）。

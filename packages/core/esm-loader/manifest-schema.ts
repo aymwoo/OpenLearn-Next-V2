@@ -628,6 +628,9 @@ const frontendSlotsShape = {
   'stage.display.overlay': z.array(frontendSlotEntrySchema).optional(),
   'stage.display.action': z.array(frontendSlotEntrySchema).optional(),
   'assignment.submission.preview': z.array(frontendSlotEntrySchema).optional(),
+  // 作业提交卡片操作（重新提交 / 分享 / 导出 / 第三方评分）。与 preview 同一数据域，
+  // 但语义是「动作按钮」而非「内容预览」。
+  'assignment.submission.actions': z.array(frontendSlotEntrySchema).optional(),
   // 作业**附件**预览：插件声明自己能处理的文件类型（extensions / mimeTypes），
   // 宿主在预览对话框里按类型匹配后给出入口。数据型贡献（远程插件可用）。
   'assignment.file.preview': z.array(frontendSlotEntrySchema).optional(),

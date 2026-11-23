@@ -578,6 +578,27 @@ export { IClassRosterServiceToken } from '../core/di/interfaces.js';
 export type { ILessonOutlineService, LessonOutline, LessonSegmentTitle } from '../core/di/interfaces.js';
 export { ILessonOutlineServiceToken } from '../core/di/interfaces.js';
 
+// ── P0 第三方插件安全扩展：作业提交 / 学案进度 / 课后报告 / 学生自发消息 ──
+// 前三个是只读替代通道（目标表在 sql-guard 禁读清单里）；最后一个把课堂消息的
+// sender 从 plugin 换成宿主派生的学生 actor，不要求 lesson:write。
+export type {
+  AssignmentSubmissionView,
+  IAssignmentSubmissionService,
+  XueanActivityProgressView,
+  IXueanActivityProgressService,
+  ClassroomReportSessionSummary,
+  LessonReportSummary,
+  ILessonReportService,
+  ClassroomSelfMessageInput,
+  IClassroomSelfMessageService,
+} from '../core/di/interfaces.js';
+export {
+  IAssignmentSubmissionServiceToken,
+  IXueanActivityProgressServiceToken,
+  ILessonReportServiceToken,
+  IClassroomSelfMessageServiceToken,
+} from '../core/di/interfaces.js';
+
 // ── 文件存储三插槽扩展（LayoutPolicy / StorageBackend / FileProcessor） ──
 export type {
   FilePurpose,

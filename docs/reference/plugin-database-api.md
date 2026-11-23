@@ -136,6 +136,13 @@ SQL 语句中一旦匹配以下危险特征（`FORBIDDEN_OPERATIONS`），直接
 
 - **插件私有数据**：必须使用**路径 A（`ctx.db`）**，所有表自动归入 `plugin_<scopeId>_*` 前缀；
 - **平台核心实体**：如需在白板上画图、新建课程或打分，**必须调用命令总线（`CommandBus`）由平台内核命令统一执行**（例如派遣 `whiteboard.draw` 命令），严禁尝试直接对 `whiteboard_elements` 等平台表执行原生 SQL。
+- **核心数据的只读通道**（不要为读数据去绕 SQL-Guard）：
+  - 班级 / 学生 → `ctx.services.roster`（`management:read`）；
+  - 课节标题 / 环节标题 → `ctx.services.lessonOutline`（`lesson:read`）；
+  - 本人作业提交 → `ctx.services.assignmentSubmission`（`assignment:read`，学生仅本人、教师仅自己班级）；
+  - 本人学案活动进度 → `ctx.services.xueanActivityProgress`（`lesson:read`）；
+  - 课节课后聚合摘要 → `ctx.services.lessonReport`（`lesson:read`，仅教师 / 管理员）；
+  - 学生以自己身份发课堂消息 → `ctx.services.classroomSelfMessage`（`classroom:message:self`，不要求 `lesson:write`）。
 
 ---
 

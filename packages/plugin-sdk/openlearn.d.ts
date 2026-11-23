@@ -513,6 +513,26 @@ interface PluginContext {
      * 直查 `lessons` 会被 sql-guard 拒绝。
      */
     lessonOutline: ILessonOutlineService | null;
+    /**
+     * 作业提交只读（`assignment:read`）。学生仅本人；教师仅自己班级。
+     * 仅 inline 模式注入；worker / process 隔离模式下该键为 `undefined`。
+     */
+    assignmentSubmission: IAssignmentSubmissionService | null | undefined;
+    /**
+     * 学案活动进度只读（`lesson:read`）。学生仅自己的进度与提交。
+     * 仅 inline 模式注入；worker / process 隔离模式下该键为 `undefined`。
+     */
+    xueanActivityProgress: IXueanActivityProgressService | null | undefined;
+    /**
+     * 课节课后报告聚合摘要（`lesson:read`；仅教师 / 管理员）。
+     * 仅 inline 模式注入；worker / process 隔离模式下该键为 `undefined`。
+     */
+    lessonReport: ILessonReportService | null | undefined;
+    /**
+     * 学生 self 身份课堂消息（`classroom:message:self`）。sender 由宿主派生。
+     * 仅 inline 模式注入；worker / process 隔离模式下该键为 `undefined`。
+     */
+    classroomSelfMessage: IClassroomSelfMessageService | null | undefined;
   };
   pluginId: string;
   manifest: Manifest;
@@ -684,6 +704,116 @@ interface LessonOutline {
  */
 interface ILessonOutlineService {
   getOutline(lessonId: string): Promise<LessonOutline | null>;
+}
+
+/** 单条作业提交的只读视图（不含名册信息）。 */
+interface AssignmentSubmissionView {
+  assignmentId: string;
+  classId: string | null;
+  lessonId: string | null;
+  studentId: string;
+  content: string;
+  score: number | null;
+  feedback: string | null;
+  submittedAt: number;
+  gradedAt: number | null;
+  status: string;
+  /** 数据来源：legacy = assignments/assignment_submissions；assignment_hub = plugin_assignments/plugin_submissions。 */
+  source?: 'legacy' | 'assignment_hub';
+  /** 作业中心最新版本的文字作答。 */
+  textContent?: string | null;
+  /** 作业中心最新版本的链接作答。 */
+  linkUrl?: string | null;
+  /** 作业中心最新版本的附件元数据（已解析的 files_json）。 */
+  files?: unknown[];
+}
+
+/**
+ * 作业提交只读服务。传统作业与作业中心提交均在 sql-guard 禁读范围内。
+ * 身份由当前会话派生：学生仅本人；教师仅自己班级；管理员不限。需 `assignment:read`。
+ */
+interface IAssignmentSubmissionService {
+  getMySubmission(assignmentId: string): Promise<AssignmentSubmissionView | null>;
+  getSubmissionForViewer(assignmentId: string, studentId: string): Promise<AssignmentSubmissionView | null>;
+  canShareSubmission(assignmentId: string, studentId: string): Promise<boolean>;
+}
+
+/** 学案活动进度只读视图。`submission` 为解析后的学生提交内容。 */
+interface XueanActivityProgressView {
+  activityId: string;
+  lessonId: string;
+  activityTitle: string;
+  studentId: string;
+  status: string;
+  progressPercent: number;
+  verified: boolean;
+  score: number | null;
+  gradedAt: number | null;
+  lastActivityAt: number | null;
+  submission: unknown;
+}
+
+/** 学案活动进度只读服务：当前学生只能读自己的进度。需 `lesson:read`。 */
+interface IXueanActivityProgressService {
+  getMyActivityProgress(activityId: string): Promise<XueanActivityProgressView | null>;
+  listMyActivityProgress(lessonId: string): Promise<XueanActivityProgressView[]>;
+}
+
+/** 课堂会话报告摘要（聚合值，不含原始消息 / 个人明细）。 */
+interface ClassroomReportSessionSummary {
+  sessionId: string;
+  classId: string | null;
+  stage: string;
+  startedAt: number | null;
+  endedAt: number | null;
+  studentCount: number;
+}
+
+/** 课节课后报告摘要。 */
+interface LessonReportSummary {
+  lessonId: string;
+  lessonTitle: string;
+  sessions: ClassroomReportSessionSummary[];
+  assignments: { total: number; graded: number; averageScore: number | null };
+  activities: { total: number; submitted: number; completed: number };
+}
+
+/** 课后报告只读服务：仅教师 / 管理员，且受 canSeeLesson 约束。需 `lesson:read`。 */
+interface ILessonReportService {
+  getLessonReport(lessonId: string): Promise<LessonReportSummary | null>;
+  getSessionReport(sessionId: string): Promise<ClassroomReportSessionSummary | null>;
+}
+
+/** 学生 self 身份课堂消息入参；sender 字段全部由宿主派生。 */
+interface ClassroomSelfMessageInput {
+  channel: string;
+  msgType: 'request' | 'response';
+  lessonId?: string | null;
+  classId?: string | null;
+  targetUserIds?: string[] | null;
+  correlationId?: string | null;
+  payload: unknown;
+  ttlMs?: number | null;
+  messageId?: string;
+}
+
+/**
+ * 学生 self 身份课堂消息服务：sender 是当前会话的学生，不是插件。
+ * 校验 channel rolesAllowed、班级成员与 target 同班；messageId 幂等。
+ * 需 `classroom:message:self`，**不要求** `lesson:write`。
+ */
+interface IClassroomSelfMessageService {
+  sendAsSelf(
+    input: ClassroomSelfMessageInput,
+    senderPluginId?: string,
+  ): {
+    ok: boolean;
+    code?: string;
+    error?: string;
+    messageId?: string;
+    seq?: number;
+    duplicated?: boolean;
+  };
 }
 
 interface ILessonEngineService {
@@ -1329,6 +1459,10 @@ declare const IPointsDimensionRegistryToken: Token<IPointsDimensionRegistry>;
 declare const IPointsLedgerServiceToken: Token<IPointsLedgerService>;
 declare const IClassRosterServiceToken: Token<IClassRosterService>;
 declare const ILessonOutlineServiceToken: Token<ILessonOutlineService>;
+declare const IAssignmentSubmissionServiceToken: Token<IAssignmentSubmissionService>;
+declare const IXueanActivityProgressServiceToken: Token<IXueanActivityProgressService>;
+declare const ILessonReportServiceToken: Token<ILessonReportService>;
+declare const IClassroomSelfMessageServiceToken: Token<IClassroomSelfMessageService>;
 declare const ILessonEngineServiceToken: Token<ILessonEngineService>;
 declare const IClassroomRuntimeServiceToken: Token<IClassroomRuntimeService>;
 declare const IPresenceEngineServiceToken: Token<IPresenceEngineService>;
@@ -1708,6 +1842,15 @@ export type {
   ILessonOutlineService,
   LessonOutline,
   LessonSegmentTitle,
+  AssignmentSubmissionView,
+  IAssignmentSubmissionService,
+  XueanActivityProgressView,
+  IXueanActivityProgressService,
+  ClassroomReportSessionSummary,
+  LessonReportSummary,
+  ILessonReportService,
+  ClassroomSelfMessageInput,
+  IClassroomSelfMessageService,
   ILessonEngineService,
   IClassroomRuntimeService,
   IPresenceEngineService,
@@ -1829,6 +1972,10 @@ export {
   IPointsLedgerServiceToken,
   IClassRosterServiceToken,
   ILessonOutlineServiceToken,
+  IAssignmentSubmissionServiceToken,
+  IXueanActivityProgressServiceToken,
+  ILessonReportServiceToken,
+  IClassroomSelfMessageServiceToken,
   ILessonEngineServiceToken,
   IClassroomRuntimeServiceToken,
   IPresenceEngineServiceToken,
