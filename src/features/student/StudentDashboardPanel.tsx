@@ -545,14 +545,7 @@ export function StudentDashboardPanel(props: StudentDashboardPanelProps) {
       )}
 
       {/* 1. Fixed Top Student Profile Header */}
-      <StudentDashboardHeader
-        students={students}
-        activeStudentId={activeStudentId}
-        activeSession={activeSession}
-        onReturnToClass={returnToActiveClass}
-        lang={lang}
-        hideGuidance={hideGuidance}
-      />
+      <StudentDashboardHeader students={students} activeStudentId={activeStudentId} hideGuidance={hideGuidance} />
 
       {/* 第三方学生仪表盘顶部激励挂件扩展（每日学习打卡连胜榜 / 积分虚拟商城展位） */}
       {isFeatureVisible('section.hero-widget') && (
