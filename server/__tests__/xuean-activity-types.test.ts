@@ -27,7 +27,17 @@ describe('collectXueanActivityTypes', () => {
   it('无插件时返回全部内置类型', () => {
     const types = collectXueanActivityTypes([]);
     const ids = types.map((item) => item.id);
-    expect(ids).toEqual(['reading', 'submission', 'quiz', 'discussion', 'courseware', 'scratch', 'form', 'other']);
+    expect(ids).toEqual([
+      'reading',
+      'submission',
+      'quiz',
+      'survey',
+      'discussion',
+      'courseware',
+      'scratch',
+      'form',
+      'other',
+    ]);
     expect(types.every((item) => item.source === 'builtin')).toBe(true);
   });
 

@@ -40,13 +40,14 @@ export interface XueanActivityTypePluginRecord {
 }
 
 const BUILTIN_LABELS: Record<string, string> = {
-  reading: '阅读任务',
-  submission: '作品提交',
-  quiz: '试题（引用试卷）',
+  reading: '阅读',
+  submission: '作品提交（练习）',
+  quiz: '测验',
+  survey: '调查',
   discussion: '讨论',
   courseware: '网页课件',
   scratch: '图形化编程',
-  form: '表单',
+  form: '填表',
   other: '其他',
 };
 

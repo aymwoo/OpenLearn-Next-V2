@@ -1447,8 +1447,16 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
   const listDiscussionsHandler = (req: Request, res: Response) => {
     try {
       const activityId = req.params.id;
+      // 作者名优先取学生档案，教师/管理员发帖时回退 users.name。
       const rows = readDb
-        .prepare('SELECT * FROM lesson_discussions WHERE activity_id = ? ORDER BY created_at ASC')
+        .prepare(
+          `SELECT d.*, COALESCE(s.name, u.name) AS author_name
+             FROM lesson_discussions d
+             LEFT JOIN students s ON s.id = d.author_id
+             LEFT JOIN users u ON u.id = d.author_id
+            WHERE d.activity_id = ?
+            ORDER BY d.created_at ASC`,
+        )
         .all(activityId);
       res.json(rows);
     } catch (err: unknown) {
@@ -1475,12 +1483,20 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
       if (!content || !content.trim()) {
         return res.status(400).json({ success: false, error: 'content required' });
       }
+      const text = String(content).trim().slice(0, 2000);
+      if (parentId) {
+        const parent = readDb.prepare('SELECT activity_id FROM lesson_discussions WHERE id = ?').get(parentId) as
+          { activity_id: string } | undefined;
+        if (!parent || parent.activity_id !== activityId) {
+          return res.status(400).json({ success: false, error: 'Invalid parentId' });
+        }
+      }
       const id = `disc_${randomId()}`;
       const ts = now();
       db.prepare(
         `INSERT INTO lesson_discussions (id, activity_id, author_id, content, parent_id, created_at)
          VALUES (?, ?, ?, ?, ?, ?)`,
-      ).run(id, activityId, session.userId, content.trim(), parentId ?? null, ts);
+      ).run(id, activityId, session.userId, text, parentId ?? null, ts);
       const row = readDb.prepare('SELECT * FROM lesson_discussions WHERE id = ?').get(id);
       res.json(row);
     } catch (err: unknown) {

@@ -8,6 +8,11 @@ import { getXuean, type ActivitySubmission } from '../../../services/lessonActiv
 import { sanitizeRichTextHtml } from '../../../../packages/core/security/html-sanitize';
 import { LearningSurfaceHost } from '../../learning-surface/LearningSurfaceHost';
 import { AssessmentActivityCard } from './AssessmentActivityCard';
+import { ReadingActivityCard } from './activities/ReadingActivityCard';
+import { SubmissionActivityCard } from './activities/SubmissionActivityCard';
+import { SurveyActivityCard } from './activities/SurveyActivityCard';
+import { FormActivityCard } from './activities/FormActivityCard';
+import { DiscussionActivityCard } from './activities/DiscussionActivityCard';
 import { ExtensionPointRenderer } from '../../../plugin-host/extension-point-renderer';
 
 type Block = {
@@ -65,11 +70,12 @@ const BLOCK_TYPE_LABELS: Record<string, string> = {
 const ACTIVITY_TYPE_LABELS: Record<string, string> = {
   reading: '阅读',
   submission: '作品提交',
-  quiz: '试题',
+  quiz: '测验',
+  survey: '调查',
   discussion: '讨论',
   courseware: '课件',
   scratch: '编程',
-  form: '表单',
+  form: '填表',
   other: '其他',
 };
 
@@ -244,6 +250,7 @@ export function StudentXueanView({ lessonId, lessonTitle, lang = 'zh', onActivit
                   index={index}
                   activity={activity}
                   progress={data.progressByActivity[activity.id]}
+                  lang={lang}
                   onProgressUpdated={refresh}
                   onActivityProgressReported={onActivityProgressReported}
                 />
@@ -460,12 +467,14 @@ function ActivityItem({
   index,
   activity,
   progress,
+  lang = 'zh',
   onProgressUpdated,
   onActivityProgressReported,
 }: {
   index: number;
   activity: Activity;
   progress?: Progress;
+  lang?: 'zh' | 'en';
   onProgressUpdated: () => void;
   onActivityProgressReported?: (info: { activityId: string; status: string }) => void;
 }) {
@@ -523,6 +532,26 @@ function ActivityItem({
     }
   }
 
+  const moduleProps = {
+    activity,
+    progress,
+    lang,
+    onProgressUpdated,
+    onActivityProgressReported,
+  };
+  const activityModule =
+    activity.type === 'reading' ? (
+      <ReadingActivityCard {...moduleProps} />
+    ) : activity.type === 'submission' ? (
+      <SubmissionActivityCard {...moduleProps} />
+    ) : activity.type === 'survey' ? (
+      <SurveyActivityCard {...moduleProps} />
+    ) : activity.type === 'form' ? (
+      <FormActivityCard {...moduleProps} />
+    ) : activity.type === 'discussion' ? (
+      <DiscussionActivityCard {...moduleProps} />
+    ) : null;
+
   return (
     <>
       <div className="rounded-xl border border-theme bg-surface p-4 hover:border-primary-theme/30 transition">
@@ -559,6 +588,8 @@ function ActivityItem({
             </div>
             <p className="mt-1 text-sm font-semibold text-main">{activity.title}</p>
 
+            {activityModule}
+
             {/* 学习面：活动绑定了 Surface 时，由统一宿主渲染内容 */}
             {activity.surface_id ? (
               <div className="mt-2 h-80 rounded-lg overflow-hidden border border-theme/60 bg-surface-secondary/30">
@@ -572,8 +603,8 @@ function ActivityItem({
               </div>
             ) : null}
 
-            {/* 已提交内容预览 */}
-            {existingSubmission && (
+            {/* 已提交内容预览（内置活动模块会自行展示，避免重复） */}
+            {!activityModule && existingSubmission && (
               <div className="mt-2 p-2 rounded-lg bg-surface-secondary/50 border border-theme/60 max-h-24 overflow-y-auto">
                 <p className="text-[10px] text-muted font-bold mb-0.5">我的提交</p>
                 <p className="text-xs text-main/80 whitespace-pre-wrap break-all">

@@ -18,6 +18,8 @@ import {
 import { assessmentApi, type AssessmentSummary } from '../../assessment/api';
 import { useOptionalAppData } from '../../../context/AppDataContext.js';
 import { CoursewarePicker } from './CoursewarePicker';
+import { ActivityConfigEditor } from './ActivityConfigEditor';
+import { parseActivityConfig, readFormConfig, readSurveyConfig } from '../../xuean/activity-config';
 import { ExtensionPointRenderer } from '../../../plugin-host/extension-point-renderer';
 
 type Activity = {
@@ -43,13 +45,14 @@ type Activity = {
 type SurfaceRenderer = { id: string; label: string; sourceKinds: string[] };
 
 const BUILTIN_ACTIVITY_TYPES = [
-  { value: 'reading', label: '阅读任务' },
-  { value: 'submission', label: '作品提交' },
-  { value: 'quiz', label: '试题（引用试卷）' },
+  { value: 'reading', label: '阅读' },
+  { value: 'submission', label: '作品提交（练习）' },
+  { value: 'quiz', label: '测验' },
+  { value: 'survey', label: '调查' },
   { value: 'discussion', label: '讨论' },
   { value: 'courseware', label: '网页课件' },
   { value: 'scratch', label: '图形化编程' },
-  { value: 'form', label: '表单' },
+  { value: 'form', label: '填表' },
   { value: 'other', label: '其他' },
 ];
 
@@ -227,13 +230,26 @@ export function XueanActivitiesPanel() {
 /** 活动卡片上的紧凑预览：只展示对教师编排最有用的配置摘要。 */
 function summarizeActivity(activity: Activity): string[] {
   const summary: string[] = [];
+  const config = parseActivityConfig(activity.config_json);
   if (activity.type === 'quiz') {
-    try {
-      const config = JSON.parse(activity.config_json ?? '{}') as Record<string, unknown>;
-      summary.push(config.assignmentId ? '已布置试卷' : '未绑定试卷');
-    } catch {
-      summary.push('试卷配置异常');
-    }
+    summary.push(config.assignmentId ? '已布置试卷' : '未绑定试卷');
+  }
+  if (activity.type === 'reading') {
+    summary.push(typeof config.content === 'string' && config.content.trim() ? '已填写阅读材料' : '未填写阅读材料');
+  }
+  if (activity.type === 'submission') {
+    summary.push(
+      typeof config.instructions === 'string' && config.instructions.trim() ? '已填写练习要求' : '未填写练习要求',
+    );
+  }
+  if (activity.type === 'survey') {
+    summary.push(`${readSurveyConfig(config).questions.length} 道调查题`);
+  }
+  if (activity.type === 'form') {
+    summary.push(`${readFormConfig(config).fields.length} 个表单字段`);
+  }
+  if (activity.type === 'discussion') {
+    summary.push(typeof config.prompt === 'string' && config.prompt.trim() ? '已设置讨论话题' : '未设置讨论话题');
   }
   if (activity.surface_id) summary.push('已绑定学习面');
   if (activity.rubric_json) summary.push('含评价量规');
@@ -368,6 +384,10 @@ function ActivityEditor({
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // 非试题活动的类型专属配置（阅读正文、调查题目、表单字段等）。
+  const [configDraft, setConfigDraft] = useState<Record<string, unknown>>(() =>
+    parseActivityConfig(existing?.config_json),
+  );
 
   // 试题活动：引用现有试卷 + 课时关联班级
   const existingAssessmentConfig = (() => {
@@ -496,8 +516,15 @@ function ActivityEditor({
       releaseAt: form.releaseAt ? new Date(form.releaseAt).getTime() : null,
       dueAt: form.dueAt ? new Date(form.dueAt).getTime() : null,
       rubricJson: form.rubricJson.trim() || null,
+      config: configDraft,
     };
-    if (form.submissionType) payload.submissionType = form.submissionType;
+    if (form.type === 'submission') {
+      const acceptText = configDraft.acceptText !== false;
+      const acceptLink = configDraft.acceptLink !== false;
+      payload.submissionType = [acceptText ? 'text' : '', acceptLink ? 'link' : ''].filter(Boolean).join(',') || null;
+    } else if (form.submissionType) {
+      payload.submissionType = form.submissionType;
+    }
 
     // 有资源才绑定；已有 Surface 但清空了输入则解绑。
     const isInlineSource = surfaceSourceKind === 'inline';
@@ -628,6 +655,12 @@ function ActivityEditor({
               <p className="text-[10px] text-amber-600">还没有可用试卷，请先在测评中心创建。</p>
             )}
           </div>
+        ) : null}
+
+        {!isPluginActivityType(form.type) &&
+        form.type !== 'quiz' &&
+        ['reading', 'submission', 'survey', 'form', 'discussion'].includes(form.type) ? (
+          <ActivityConfigEditor type={form.type} value={configDraft} onChange={setConfigDraft} />
         ) : null}
 
         <div className="grid gap-3 sm:grid-cols-3">

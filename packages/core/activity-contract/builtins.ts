@@ -13,6 +13,7 @@ export const XUEAN_ACTIVITY_TYPES = [
   'reading',
   'submission',
   'quiz',
+  'survey',
   'discussion',
   'courseware',
   'scratch',
@@ -23,13 +24,14 @@ export const XUEAN_ACTIVITY_TYPES = [
 export type XueanActivityType = (typeof XUEAN_ACTIVITY_TYPES)[number];
 
 const XUEAN_LABELS: Record<XueanActivityType, string> = {
-  reading: '阅读材料',
-  submission: '提交作业',
-  quiz: '随堂测验',
+  reading: '阅读',
+  submission: '作品提交（练习）',
+  quiz: '测验',
+  survey: '调查',
   discussion: '讨论',
   courseware: '课件学习',
   scratch: '编程实践',
-  form: '表单填写',
+  form: '填表',
   other: '其他活动',
 };
 

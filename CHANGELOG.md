@@ -19,6 +19,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - `ctx.services.classroomSelfMessage`（`classroom:message:self`）：以当前学生身份发送课堂消息，sender 由宿主派生为 `user:<studentId>:student`，校验 channel `rolesAllowed`、班级成员与定向目标同班，**不要求 `lesson:write`**；`messageId` 幂等。
   - 新增扩展槽 `assignment.submission.actions`：学生已提交作业卡片底部的操作区，透传 `{ assignment, submission, studentId, lessonId, isSelf, lang, refresh }`。
   - SDK（`openlearn.d.ts` / `index.ts`）、`docs/agent/contracts`、DI Token 字典、槽位目录与能力矩阵已同步。
+- **学案内置活动模块（阅读 / 作品提交 / 测验 / 调查 / 填表 / 讨论）**：`lesson_activities` 新增「调查」类型，教师端「新增活动」按统一命名提供六类活动；阅读、作品提交、调查、填表、讨论支持类型专属配置（阅读正文与链接、练习要求与作答方式、单选/多选/填空题、文本/数字/下拉/勾选字段、讨论话题与回复开关），配置写入 `config_json`。学生端按类型渲染对应模块：阅读可标记已读、作品提交支持文字或作品链接、调查与填表提交结构化答案、讨论复用 `lesson_discussions` 发帖与回复；答案统一写入 `activity_progress.submission_json`，教师可在进度面板继续批阅。讨论列表补充作者姓名并限制回复必须属于同一活动。
 - **白板课堂工具统一入口与「控制」页**：顶栏原本分开的「课堂工具」与「更多」合并为一个「课堂工具」入口，展开后同时显示阶段导航、极速投票 / 抢答 / 通票 / 大屏展台 / 随机抽问 / 积分榜、快捷动作与课堂管理按钮；「课堂面板」菜单新增「控制」页，用开关逐项启用 / 关闭这些功能，设置写入 `localStorage` 即时生效，被关闭的按钮在顶栏与工具面板中不再渲染，也可一键「全部恢复显示」。
 - **白板课堂去掉中栏标题行并把倒计时移入白板工具栏**：移除中栏「课堂面板 / LIVE BROADCASTER CONNECTED」整行（白板课）；「课堂面板」下拉与「展开大纲」入口并入顶部标题栏，广播连接状态不再单独占一行。课堂倒计时从标题栏移入白板工具栏右侧（`WhiteboardToolbar` 新增 `toolbarExtras`），由工具栏承载显示，顶栏与画布之间的空白进一步减少；学案课不显示该倒计时。
 - **白板课堂顶栏精简**：把「课堂工具」按钮移到顶部标题栏，删除原本单独占一行的「课中授课」阶段条（阶段切换仍保留在展开后的课堂工具面板里）；面板默认收起，关闭时整条不再渲染，减少顶部空白，把垂直空间留给白板与大纲。

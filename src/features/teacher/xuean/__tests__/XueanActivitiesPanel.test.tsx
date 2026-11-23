@@ -63,18 +63,24 @@ describe('XueanActivitiesPanel', () => {
   const state = {
     activities: [] as Row[],
     assessmentBodies: [] as Array<Record<string, unknown>>,
+    createBodies: [] as Array<Record<string, unknown>>,
     reordered: [] as string[][],
   };
 
   beforeEach(() => {
     state.activities = [];
     state.assessmentBodies = [];
+    state.createBodies = [];
     state.reordered = [];
     assessmentList.mockReset().mockResolvedValue({ items: [] });
     globalThis.fetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       const method = init?.method ?? 'GET';
       if (url === '/api/lessons/lesson-1/activities' && method === 'GET') return response(state.activities);
+      if (url === '/api/lessons/lesson-1/activities' && method === 'POST') {
+        state.createBodies.push(JSON.parse(String(init?.body ?? '{}')));
+        return response(row('act-new', 0, '新活动', 'reading'));
+      }
       if (url === '/api/xuean/activity-types') {
         return response([
           { id: 'reading', label: '阅读任务', source: 'builtin' },
@@ -136,6 +142,23 @@ describe('XueanActivitiesPanel', () => {
       title: '随堂测',
       required: true,
       visible: true,
+    });
+  });
+
+  it('阅读活动保存类型专属配置', async () => {
+    render(<XueanActivitiesPanel />);
+    await screen.findByText('还没有活动');
+
+    fireEvent.click(screen.getByRole('button', { name: '+ 新增活动' }));
+    fireEvent.change(screen.getByPlaceholderText('例如：阅读第 3 章'), { target: { value: '阅读第一章' } });
+    fireEvent.change(screen.getByLabelText('阅读内容'), { target: { value: '第一章正文' } });
+    fireEvent.click(screen.getByRole('button', { name: '保存' }));
+
+    await waitFor(() => expect(state.createBodies).toHaveLength(1));
+    expect(state.createBodies[0]).toMatchObject({
+      type: 'reading',
+      title: '阅读第一章',
+      config: { content: '第一章正文' },
     });
   });
 
