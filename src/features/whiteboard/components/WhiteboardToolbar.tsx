@@ -59,6 +59,8 @@ export interface WhiteboardToolbarProps {
   classroomTools?: any[];
   /** 执行一个插件工具（下发 commandType） */
   onExecuteTool?: (tool: any) => void | Promise<void>;
+  /** 宿主注入的工具栏附加内容（如课堂倒计时），渲染在右侧控制区最前。 */
+  toolbarExtras?: React.ReactNode;
 }
 
 export const WhiteboardToolbar: React.FC<WhiteboardToolbarProps> = ({
@@ -89,6 +91,7 @@ export const WhiteboardToolbar: React.FC<WhiteboardToolbarProps> = ({
   onRefresh,
   classroomTools = [],
   onExecuteTool,
+  toolbarExtras,
 }) => {
   // ── 课堂插件工具区（Popover + CSS Anchor Positioning，无支持时降级为 portal）──
   const uid = useId().replace(/:/g, '');
@@ -558,6 +561,7 @@ export const WhiteboardToolbar: React.FC<WhiteboardToolbarProps> = ({
 
       {/* 右侧画布控制与状态 */}
       <div className="flex items-center gap-1 shrink-0 ml-auto">
+        {toolbarExtras}
         <ExtensionPointRenderer slot="anchor:whiteboard-toolbar:grid" placement="before" />
         <button
           onClick={() => setShowGrid((g) => !g)}

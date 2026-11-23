@@ -5,6 +5,7 @@ import { LiveClassroomView } from '../LiveClassroomView';
 import { AppDataProvider } from '../../context/AppDataContext';
 import { appStore } from '../../store/appStore';
 import { uiStore } from '../../store/uiStore';
+import { resetClassroomToolbarVisibility } from '../../features/classroom/classroomToolbarVisibility';
 
 // Mock child components & dependencies
 vi.mock('../LazyWhiteboard', () => ({
@@ -116,6 +117,7 @@ describe('LiveClassroomView - Student Pop-up & Sync', () => {
     vi.clearAllMocks();
     // Issue #91：会话恢复记忆写在 sessionStorage，用例之间必须隔离
     window.sessionStorage.clear();
+    resetClassroomToolbarVisibility();
   });
 
   it('renders "学生视角预览 (独立Tab)" button instead of the old inline role toggle', () => {
@@ -129,8 +131,8 @@ describe('LiveClassroomView - Student Pop-up & Sync', () => {
     expect(screen.queryByText('👨‍🏫 教师模式')).toBeNull();
     expect(screen.queryByText('🎓 学生模式')).toBeNull();
 
-    // New independent tab button should exist inside 更多
-    fireEvent.click(screen.getByTestId('teacher-whiteboard-more'));
+    // New independent tab button should exist inside 课堂工具
+    fireEvent.click(screen.getByTestId('teacher-whiteboard-tools'));
     const tabButton = screen.getByRole('button', { name: /学生视角预览 \(独立Tab\)/ });
     expect(tabButton).toBeTruthy();
   });
@@ -148,7 +150,7 @@ describe('LiveClassroomView - Student Pop-up & Sync', () => {
       </AppDataProvider>,
     );
 
-    fireEvent.click(screen.getByTestId('teacher-whiteboard-more'));
+    fireEvent.click(screen.getByTestId('teacher-whiteboard-tools'));
     const tabButton = screen.getByRole('button', { name: /学生视角预览 \(独立Tab\)/ });
     fireEvent.click(tabButton);
 
@@ -219,7 +221,7 @@ describe('LiveClassroomView - Student Pop-up & Sync', () => {
       </AppDataProvider>,
     );
 
-    fireEvent.click(screen.getByTestId('teacher-whiteboard-more'));
+    fireEvent.click(screen.getByTestId('teacher-whiteboard-tools'));
     const tabButton = screen.getByRole('button', { name: /学生视角预览 \(独立Tab\)/ });
     fireEvent.click(tabButton);
 
@@ -655,10 +657,55 @@ describe('LiveClassroomView - Student Pop-up & Sync', () => {
     expect(screen.queryByText('极速投票')).toBeNull();
     expect(screen.queryByText('学生提交数据')).toBeNull();
 
-    fireEvent.click(screen.getByTestId('teacher-whiteboard-more'));
+    fireEvent.click(screen.getByTestId('teacher-whiteboard-tools'));
     expect(screen.getByRole('button', { name: '返回门户' })).toBeTruthy();
     expect(screen.getByRole('button', { name: '课堂异常告警中心' })).toBeTruthy();
     expect(screen.getByTestId('teacher-learning-topic').isConnected).toBe(true);
+  });
+
+  it('控制 tab 可从课堂面板进入，关闭的功能不再渲染按钮', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation((url: string) => {
+        if (String(url).includes('/api/classroom/sessions/')) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({
+              hasActiveSession: true,
+              stage: 'IN_CLASS_TEACHING',
+              session: { class_id: 'class-g1' },
+            }),
+          });
+        }
+        if (String(url).includes('/api/schedules/today')) {
+          return Promise.resolve({ ok: true, json: async () => ({ success: true, schedules: [] }) });
+        }
+        if (String(url).includes('/api/classroom/teaching-modes')) {
+          return Promise.resolve({ ok: true, json: async () => ({ success: true, modes: [] }) });
+        }
+        return Promise.resolve({ ok: true, json: async () => ({}) });
+      }),
+    );
+
+    render(
+      <AppDataProvider value={defaultProps as any}>
+        <LiveClassroomView initialPortalOpen={false} />
+      </AppDataProvider>,
+    );
+
+    fireEvent.click(screen.getByTestId('teacher-whiteboard-panels'));
+    fireEvent.click(screen.getByRole('button', { name: '控制' }));
+    expect(await screen.findByTestId('classroom-toolbar-control-page')).toBeTruthy();
+
+    const diagnosticSwitch = screen.getByRole('switch', { name: '课堂异常告警中心' });
+    expect(diagnosticSwitch.getAttribute('aria-checked')).toBe('true');
+    fireEvent.click(diagnosticSwitch);
+    expect(diagnosticSwitch.getAttribute('aria-checked')).toBe('false');
+
+    // 打开统一的「课堂工具」面板后，被关闭的按钮不再渲染
+    fireEvent.click(screen.getByTestId('teacher-whiteboard-tools'));
+    expect(screen.queryByRole('button', { name: '课堂异常告警中心' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'AI 实时学情预测' })).toBeTruthy();
   });
 
   it('returns to the entry portal where an in-progress class cannot be changed', async () => {
@@ -698,7 +745,7 @@ describe('LiveClassroomView - Student Pop-up & Sync', () => {
       </AppDataProvider>,
     );
 
-    fireEvent.click(screen.getByTestId('teacher-whiteboard-more'));
+    fireEvent.click(screen.getByTestId('teacher-whiteboard-tools'));
     fireEvent.click(screen.getByRole('button', { name: '返回门户' }));
     expect(await screen.findByTestId('portal-class-lock-hint')).toBeTruthy();
     const other = screen.getByRole('button', { name: /高二2班/ });
@@ -729,7 +776,7 @@ describe('LiveClassroomView - Student Pop-up & Sync', () => {
       </AppDataProvider>,
     );
 
-    fireEvent.click(screen.getByTestId('teacher-whiteboard-more'));
+    fireEvent.click(screen.getByTestId('teacher-whiteboard-tools'));
     const selectEl = screen.getByRole('combobox');
     const switchBtn = screen.getByRole('button', { name: /切换/ });
 

@@ -212,6 +212,8 @@ export interface InteractiveWhiteboardProps {
   onFullscreenSync?: (elementId: string | null) => void;
   /** 是否隐藏画布内的白板分页大纲栏（例如已在外层备课边栏中独立渲染大纲） */
   hidePageBar?: boolean;
+  /** 宿主注入到工具栏右侧的附加内容（如课堂倒计时）。 */
+  toolbarExtras?: React.ReactNode;
   /** 页面列表与当前页状态回调，供外层边栏渲染大纲 */
   onPagesStateChange?: (state: { pages: WhiteboardPageItem[]; currentPage: number }) => void;
   /** 组件拖拽状态变化通知（支持外部大纲与环节等区域感知与高亮） */
@@ -299,6 +301,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
       followRemoteFullscreen = false,
       onFullscreenSync,
       hidePageBar = false,
+      toolbarExtras,
       onPagesStateChange,
       onElementDragChange,
       onElementDropCheck,
@@ -3681,6 +3684,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
               onRefresh={onRefresh}
               classroomTools={classroomTools}
               onExecuteTool={onExecuteTool}
+              toolbarExtras={toolbarExtras}
             />
           )}
 

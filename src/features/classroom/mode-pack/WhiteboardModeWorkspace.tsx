@@ -4,11 +4,12 @@
  * 通过 WhiteboardHostBridge 挂载与 LiveClassroom / 学生端同一契约的 LazyWhiteboard，
  * 保留全屏同步、大纲页状态回调与 activeSegmentId 过滤。flag 关闭时本组件不会被注册。
  */
+import type { ReactNode } from 'react';
 import { LazyWhiteboard } from '../../../components/LazyWhiteboard';
 import type { ClassroomActiveSegmentMainSlotProps } from '../../../plugin-host/types';
 import { useWhiteboardHostBridge } from './whiteboardHostBridge';
 
-export function WhiteboardModeWorkspace(props: ClassroomActiveSegmentMainSlotProps) {
+export function WhiteboardModeWorkspace(props: ClassroomActiveSegmentMainSlotProps & { toolbarExtras?: ReactNode }) {
   const { segment, lessonId } = props;
   const title = segment.title || segment.id;
   const bridge = useWhiteboardHostBridge();
@@ -39,7 +40,7 @@ export function WhiteboardModeWorkspace(props: ClassroomActiveSegmentMainSlotPro
       data-bridge="ready"
       className="flex h-full min-h-0 w-full flex-col"
     >
-      <LazyWhiteboard ref={bridge.whiteboardRef} {...bridge.canvasProps} />
+      <LazyWhiteboard ref={bridge.whiteboardRef} {...bridge.canvasProps} toolbarExtras={props.toolbarExtras} />
     </div>
   );
 }

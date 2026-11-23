@@ -86,7 +86,7 @@ describe('ClassroomInteractiveCockpit & StageDisplayModal', () => {
     expect(screen.getByText('打开大屏展台')).toBeDefined();
   });
 
-  it('白板精简模式把互动按钮收进课堂工具，当前阶段留在外面', () => {
+  it('白板精简模式不再单独占一行：面板默认收起，按钮交给顶栏', () => {
     render(
       <ClassroomInteractiveCockpit
         compact
@@ -99,17 +99,33 @@ describe('ClassroomInteractiveCockpit & StageDisplayModal', () => {
       />,
     );
 
-    expect(screen.getByTestId('teacher-current-stage').textContent).toContain('课中授课');
+    expect(screen.queryByTestId('teacher-current-stage')).toBeNull();
+    expect(screen.queryByTestId('teacher-whiteboard-tools')).toBeNull();
     const toolPanel = screen.getByTestId('teacher-whiteboard-tools-panel');
     expect(toolPanel.hidden).toBe(true);
     expect(toolPanel.getAttribute('data-open')).toBe('false');
+  });
 
-    fireEvent.click(screen.getByTestId('teacher-whiteboard-tools'));
+  it('顶栏把课堂工具切到展开时，互动按钮可见', () => {
+    render(
+      <ClassroomInteractiveCockpit
+        compact
+        toolsOpen
+        onToolsOpenChange={vi.fn()}
+        lessonId="les_1"
+        lessonTitle="物理课"
+        classId="cls_1"
+        lang="zh"
+        addToast={addToast}
+        currentStage="IN_CLASS_TEACHING"
+      />,
+    );
+
+    const toolPanel = screen.getByTestId('teacher-whiteboard-tools-panel');
     expect(toolPanel.hidden).toBe(false);
     expect(screen.getByText('极速投票')).toBeTruthy();
     expect(screen.getByText('发起抢答')).toBeTruthy();
     expect(screen.getByText('打开大屏展台')).toBeTruthy();
-    expect(screen.getByTestId('teacher-current-stage').isConnected).toBe(true);
   });
 
   it('opens quick poll setup modal when 极速投票 button is clicked', () => {

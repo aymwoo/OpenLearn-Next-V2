@@ -43,6 +43,8 @@ import { useClassroomPluginTools } from '../features/classroom/hooks/useClassroo
 import { LiveClassroomAccessErrorBanner } from '../features/classroom/LiveClassroomAccessErrorBanner';
 import { LiveClassroomSwitchLessonModal } from '../features/classroom/LiveClassroomSwitchLessonModal';
 import { LiveClassroomStageRouter } from '../features/classroom/LiveClassroomStageRouter';
+import { ClassroomCountdownWidget } from '../features/classroom/ClassroomCountdownWidget';
+import { createLiveTimeRemainingHandler } from '../features/classroom/liveTimeRemaining';
 import { useLiveClassroomMacroEngine } from '../features/classroom/hooks/useLiveClassroomMacroEngine';
 export { FINISHED_STATUSES, IN_PROGRESS_STATUSES };
 
@@ -357,6 +359,8 @@ export function LiveClassroomView({
   });
 
   const [middleTab, setMiddleTab] = useState<TeacherMiddleTab>('whiteboard');
+  // 白板课「课堂工具」面板：按钮在顶栏，面板挂在 Cockpit 内，共用这一份展开状态。
+  const [classroomToolsOpen, setClassroomToolsOpen] = useState(false);
 
   const {
     attempts,
@@ -1176,6 +1180,25 @@ export function LiveClassroomView({
   const isXueanLesson =
     resolveLessonModePackDeliveryMode(currentLesson?.mode_pack_id, currentLesson?.delivery_mode) === 'xuean';
 
+  const handleLiveTimeRemainingChange = createLiveTimeRemainingHandler({
+    lang,
+    addToast,
+    prevTimerRunningRef,
+    setLiveClassIsActive,
+    syncChannelRef,
+  });
+  // 白板课把倒计时放进白板工具栏（腾出顶栏空间）；学案课不显示。
+  const classroomCountdownNode = (
+    <ClassroomCountdownWidget
+      variant="header"
+      lessonId={selectedLesson}
+      lang={lang === 'zh' ? 'zh' : 'en'}
+      syncChannel={syncChannelRef.current}
+      onlineStudentCount={onlineStudentIds?.length || liveClassAcknowledgedMap.size || 0}
+      onTimeRemainingChange={handleLiveTimeRemainingChange}
+    />
+  );
+
   return (
     <div className="flex-grow flex-1 flex flex-col min-h-0 bg-surface border border-theme rounded-2xl shadow-xl text-main overflow-hidden font-sans">
       <LiveClassroomHeaderBar
@@ -1214,9 +1237,20 @@ export function LiveClassroomView({
         syncChannelRef={syncChannelRef}
         onlineStudentIds={onlineStudentIds}
         liveClassAcknowledgedMap={liveClassAcknowledgedMap}
-        setLiveClassIsActive={setLiveClassIsActive}
-        addToast={addToast}
-        prevTimerRunningRef={prevTimerRunningRef}
+        onTimeRemainingChange={handleLiveTimeRemainingChange}
+        classroomToolsOpen={classroomToolsOpen}
+        onToggleClassroomTools={() => setClassroomToolsOpen((v) => !v)}
+        panelsMenu={{
+          middleTab,
+          hasSegmentMainExtension,
+          currentActiveSegment: currentActiveSegment
+            ? { id: currentActiveSegment.id, title: currentActiveSegment.title }
+            : null,
+          onSelect: (tab) => setMiddleTab(tab),
+          onFinishTeaching: () => handleStageChange('WRAP_UP_EXIT_TICKET'),
+        }}
+        leftSidebarCollapsed={isLeftSidebarCollapsed}
+        onExpandLeftSidebar={() => setIsLeftSidebarCollapsed(false)}
       />
 
       {accessErrorBanner}
@@ -1232,6 +1266,8 @@ export function LiveClassroomView({
         currentStage={classroomStage}
         onStageChange={(newStage) => setClassroomStage(newStage)}
         students={classProfiles}
+        toolsOpen={classroomToolsOpen}
+        onToolsOpenChange={setClassroomToolsOpen}
       />
 
       <LiveClassroomStageRouter
@@ -1319,6 +1355,7 @@ export function LiveClassroomView({
         }}
         middleWorkspaceProps={{
           compact: !isXueanLesson,
+          toolbarExtras: isXueanLesson ? null : classroomCountdownNode,
           isLeftSidebarCollapsed,
           setIsLeftSidebarCollapsed,
           middleTab,
