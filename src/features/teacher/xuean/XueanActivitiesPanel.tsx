@@ -538,7 +538,7 @@ function ActivityEditor({
     >
       <form
         onSubmit={handleSubmit}
-        className="w-full max-w-md bg-surface rounded-2xl border border-theme shadow-xl p-5 space-y-4"
+        className="w-full max-w-3xl max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain bg-surface rounded-2xl border border-theme shadow-xl p-5 space-y-4"
       >
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-bold">{existing ? '编辑活动' : '新增活动'}</h3>
@@ -552,19 +552,33 @@ function ActivityEditor({
           </button>
         </div>
 
-        <div className="space-y-2">
-          <label className="block text-xs font-semibold text-muted">活动类型</label>
-          <select
-            value={form.type}
-            onChange={(e) => setForm({ ...form, type: e.target.value })}
-            className="w-full px-3 py-2 text-sm rounded-lg border border-theme bg-surface text-main focus:outline-none focus:ring-2 focus:ring-primary-theme/40"
-          >
-            {types.map((t) => (
-              <option key={t.value} value={t.value}>
-                {t.label}
-              </option>
-            ))}
-          </select>
+        {/* 基本信息并排，避免表单竖向过长 */}
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="space-y-2">
+            <label className="block text-xs font-semibold text-muted">活动类型</label>
+            <select
+              value={form.type}
+              onChange={(e) => setForm({ ...form, type: e.target.value })}
+              className="w-full px-3 py-2 text-sm rounded-lg border border-theme bg-surface text-main focus:outline-none focus:ring-2 focus:ring-primary-theme/40"
+            >
+              {types.map((t) => (
+                <option key={t.value} value={t.value}>
+                  {t.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="space-y-2">
+            <label className="block text-xs font-semibold text-muted">标题</label>
+            <input
+              type="text"
+              value={form.title}
+              onChange={(e) => setForm({ ...form, title: e.target.value })}
+              placeholder="例如：阅读第 3 章"
+              className="w-full px-3 py-2 text-sm rounded-lg border border-theme bg-surface text-main focus:outline-none focus:ring-2 focus:ring-primary-theme/40"
+              autoFocus
+            />
+          </div>
         </div>
 
         {/* 插件活动：编辑能力由插件提供；未加载时仍可保存通用字段。 */}
@@ -616,27 +630,37 @@ function ActivityEditor({
           </div>
         ) : null}
 
-        <div className="space-y-2">
-          <label className="block text-xs font-semibold text-muted">标题</label>
-          <input
-            type="text"
-            value={form.title}
-            onChange={(e) => setForm({ ...form, title: e.target.value })}
-            placeholder="例如：阅读第 3 章"
-            className="w-full px-3 py-2 text-sm rounded-lg border border-theme bg-surface text-main focus:outline-none focus:ring-2 focus:ring-primary-theme/40"
-            autoFocus
-          />
-        </div>
-
-        <div className="space-y-2">
-          <label className="block text-xs font-semibold text-muted">提交物类型（可选）</label>
-          <input
-            type="text"
-            value={form.submissionType}
-            onChange={(e) => setForm({ ...form, submissionType: e.target.value })}
-            placeholder="file / text / link 等"
-            className="w-full px-3 py-2 text-sm rounded-lg border border-theme bg-surface text-main focus:outline-none focus:ring-2 focus:ring-primary-theme/40"
-          />
+        <div className="grid gap-3 sm:grid-cols-3">
+          <div className="space-y-2">
+            <label className="block text-xs font-semibold text-muted">提交物类型（可选）</label>
+            <input
+              type="text"
+              value={form.submissionType}
+              onChange={(e) => setForm({ ...form, submissionType: e.target.value })}
+              placeholder="file / text / link 等"
+              className="w-full px-3 py-2 text-sm rounded-lg border border-theme bg-surface text-main focus:outline-none focus:ring-2 focus:ring-primary-theme/40"
+            />
+          </div>
+          <div className="space-y-1">
+            <label className="block text-xs font-semibold text-muted">发布时间（可选）</label>
+            <input
+              type="datetime-local"
+              value={form.releaseAt}
+              onChange={(e) => setForm({ ...form, releaseAt: e.target.value })}
+              className="w-full px-3 py-2 text-sm rounded-lg border border-theme bg-surface text-main focus:outline-none focus:ring-2 focus:ring-primary-theme/40"
+            />
+            <p className="text-[10px] text-muted">留空 = 立即对学生可见</p>
+          </div>
+          <div className="space-y-1">
+            <label className="block text-xs font-semibold text-muted">截止时间（可选）</label>
+            <input
+              type="datetime-local"
+              value={form.dueAt}
+              onChange={(e) => setForm({ ...form, dueAt: e.target.value })}
+              className="w-full px-3 py-2 text-sm rounded-lg border border-theme bg-surface text-main focus:outline-none focus:ring-2 focus:ring-primary-theme/40"
+            />
+            <p className="text-[10px] text-muted">留空 = 无截止</p>
+          </div>
         </div>
 
         <div className="flex flex-wrap gap-4">
@@ -666,120 +690,99 @@ function ActivityEditor({
           </label>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid gap-4 md:grid-cols-2">
           <div className="space-y-1">
-            <label className="block text-xs font-semibold text-muted">发布时间（可选）</label>
-            <input
-              type="datetime-local"
-              value={form.releaseAt}
-              onChange={(e) => setForm({ ...form, releaseAt: e.target.value })}
-              className="w-full px-3 py-2 text-sm rounded-lg border border-theme bg-surface text-main focus:outline-none focus:ring-2 focus:ring-primary-theme/40"
+            <label className="block text-xs font-semibold text-muted">评价量规（可选，JSON）</label>
+            <textarea
+              value={form.rubricJson}
+              onChange={(e) => setForm({ ...form, rubricJson: e.target.value })}
+              rows={4}
+              placeholder='例如：[{"criterion":"内容完整","weight":0.5,"maxScore":10},{"criterion":"表达清晰","weight":0.5,"maxScore":10}]'
+              className="w-full px-3 py-2 text-xs rounded-lg border border-theme bg-surface text-main focus:outline-none focus:ring-2 focus:ring-primary-theme/40 font-mono"
             />
-            <p className="text-[10px] text-muted">留空 = 立即对学生可见</p>
+            <p className="text-[10px] text-muted">批阅时参考此量规打分。留空则使用自由分。</p>
           </div>
-          <div className="space-y-1">
-            <label className="block text-xs font-semibold text-muted">截止时间（可选）</label>
-            <input
-              type="datetime-local"
-              value={form.dueAt}
-              onChange={(e) => setForm({ ...form, dueAt: e.target.value })}
+
+          <div className="space-y-2 rounded-lg border border-theme p-3">
+            <p className="text-xs font-bold text-main">学习面内容（可选）</p>
+            <p className="text-[10px] text-muted">绑定后学生端由统一宿主渲染；留空表示不绑定。</p>
+            <select
+              value={surfaceRendererId}
+              onChange={(e) => setSurfaceRendererId(e.target.value)}
               className="w-full px-3 py-2 text-sm rounded-lg border border-theme bg-surface text-main focus:outline-none focus:ring-2 focus:ring-primary-theme/40"
-            />
-            <p className="text-[10px] text-muted">留空 = 无截止</p>
-          </div>
-        </div>
-
-        <div className="space-y-1">
-          <label className="block text-xs font-semibold text-muted">评价量规（可选，JSON）</label>
-          <textarea
-            value={form.rubricJson}
-            onChange={(e) => setForm({ ...form, rubricJson: e.target.value })}
-            rows={4}
-            placeholder='例如：[{"criterion":"内容完整","weight":0.5,"maxScore":10},{"criterion":"表达清晰","weight":0.5,"maxScore":10}]'
-            className="w-full px-3 py-2 text-xs rounded-lg border border-theme bg-surface text-main focus:outline-none focus:ring-2 focus:ring-primary-theme/40 font-mono"
-          />
-          <p className="text-[10px] text-muted">批阅时参考此量规打分。留空则使用自由分。</p>
-        </div>
-
-        <div className="space-y-2 rounded-lg border border-theme p-3">
-          <p className="text-xs font-bold text-main">学习面内容（可选）</p>
-          <p className="text-[10px] text-muted">绑定后学生端由统一宿主渲染；留空表示不绑定。</p>
-          <select
-            value={surfaceRendererId}
-            onChange={(e) => setSurfaceRendererId(e.target.value)}
-            className="w-full px-3 py-2 text-sm rounded-lg border border-theme bg-surface text-main focus:outline-none focus:ring-2 focus:ring-primary-theme/40"
-          >
-            <option value="">不绑定</option>
-            {renderers.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.label}
-              </option>
-            ))}
-          </select>
-          {surfaceRendererId ? (
-            <div className="space-y-2">
-              <div className="grid grid-cols-2 gap-2">
-                <select
-                  value={surfaceSourceKind}
-                  onChange={(e) => setSurfaceSourceKind(e.target.value)}
-                  className="w-full px-3 py-2 text-sm rounded-lg border border-theme bg-surface text-main focus:outline-none focus:ring-2 focus:ring-primary-theme/40"
-                >
-                  {(renderers.find((item) => item.id === surfaceRendererId)?.sourceKinds ?? ['courseware']).map(
-                    (kind) => (
-                      <option key={kind} value={kind}>
-                        {kind === 'courseware' ? '互动课件' : kind === 'resource' ? '资源库' : '内联 Markdown'}
-                      </option>
-                    ),
-                  )}
-                </select>
-                {surfaceSourceKind === 'inline' ? (
-                  <div className="flex items-center text-[10px] text-muted">在下方填写 Markdown</div>
-                ) : surfaceSourceKind === 'courseware' ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      // 展开课件选择器（与首页块共用同一组件）
-                      setCoursewarePickerOpen((v) => !v);
-                    }}
-                    className="w-full px-3 py-2 text-sm rounded-lg border border-theme bg-surface text-main text-left hover:bg-surface-secondary"
+            >
+              <option value="">不绑定</option>
+              {renderers.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.label}
+                </option>
+              ))}
+            </select>
+            {surfaceRendererId ? (
+              <div className="space-y-2">
+                <div className="grid grid-cols-2 gap-2">
+                  <select
+                    value={surfaceSourceKind}
+                    onChange={(e) => setSurfaceSourceKind(e.target.value)}
+                    className="w-full px-3 py-2 text-sm rounded-lg border border-theme bg-surface text-main focus:outline-none focus:ring-2 focus:ring-primary-theme/40"
                   >
-                    {surfaceSourceId ? '已选择课件，点击更换' : '选择互动课件'}
-                  </button>
-                ) : (
-                  <input
-                    type="text"
+                    {(renderers.find((item) => item.id === surfaceRendererId)?.sourceKinds ?? ['courseware']).map(
+                      (kind) => (
+                        <option key={kind} value={kind}>
+                          {kind === 'courseware' ? '互动课件' : kind === 'resource' ? '资源库' : '内联 Markdown'}
+                        </option>
+                      ),
+                    )}
+                  </select>
+                  {surfaceSourceKind === 'inline' ? (
+                    <div className="flex items-center text-[10px] text-muted">在下方填写 Markdown</div>
+                  ) : surfaceSourceKind === 'courseware' ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        // 展开课件选择器（与首页块共用同一组件）
+                        setCoursewarePickerOpen((v) => !v);
+                      }}
+                      className="w-full px-3 py-2 text-sm rounded-lg border border-theme bg-surface text-main text-left hover:bg-surface-secondary"
+                    >
+                      {surfaceSourceId ? '已选择课件，点击更换' : '选择互动课件'}
+                    </button>
+                  ) : (
+                    <input
+                      type="text"
+                      value={surfaceSourceId}
+                      onChange={(e) => setSurfaceSourceId(e.target.value)}
+                      placeholder="资源 ID"
+                      className="w-full px-3 py-2 text-sm rounded-lg border border-theme bg-surface text-main font-mono focus:outline-none focus:ring-2 focus:ring-primary-theme/40"
+                    />
+                  )}
+                </div>
+                {surfaceSourceKind === 'courseware' && coursewarePickerOpen ? (
+                  <CoursewarePicker
                     value={surfaceSourceId}
-                    onChange={(e) => setSurfaceSourceId(e.target.value)}
-                    placeholder="资源 ID"
-                    className="w-full px-3 py-2 text-sm rounded-lg border border-theme bg-surface text-main font-mono focus:outline-none focus:ring-2 focus:ring-primary-theme/40"
+                    onChange={(uuid) => {
+                      setSurfaceSourceId(uuid);
+                      setCoursewarePickerOpen(false);
+                    }}
                   />
-                )}
+                ) : null}
+                {surfaceSourceKind === 'inline' ? (
+                  <textarea
+                    value={surfaceMarkdown}
+                    onChange={(e) => setSurfaceMarkdown(e.target.value)}
+                    rows={4}
+                    placeholder={'# 第一页\n---\n## 第二页'}
+                    className="w-full px-3 py-2 text-xs rounded-lg border border-theme bg-surface text-main font-mono focus:outline-none focus:ring-2 focus:ring-primary-theme/40"
+                  />
+                ) : null}
               </div>
-              {surfaceSourceKind === 'courseware' && coursewarePickerOpen ? (
-                <CoursewarePicker
-                  value={surfaceSourceId}
-                  onChange={(uuid) => {
-                    setSurfaceSourceId(uuid);
-                    setCoursewarePickerOpen(false);
-                  }}
-                />
-              ) : null}
-              {surfaceSourceKind === 'inline' ? (
-                <textarea
-                  value={surfaceMarkdown}
-                  onChange={(e) => setSurfaceMarkdown(e.target.value)}
-                  rows={4}
-                  placeholder={'# 第一页\n---\n## 第二页'}
-                  className="w-full px-3 py-2 text-xs rounded-lg border border-theme bg-surface text-main font-mono focus:outline-none focus:ring-2 focus:ring-primary-theme/40"
-                />
-              ) : null}
-            </div>
-          ) : null}
+            ) : null}
+          </div>
         </div>
 
         {error && <p className="text-xs text-rose-600">{error}</p>}
 
-        <div className="flex justify-end gap-2 pt-2">
+        <div className="sticky bottom-0 -mx-5 -mb-5 flex justify-end gap-2 border-t border-theme bg-surface px-5 py-3">
           <button
             type="button"
             onClick={onClose}
