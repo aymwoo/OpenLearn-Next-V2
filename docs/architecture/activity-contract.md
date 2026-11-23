@@ -40,12 +40,38 @@ providers 已实现统一生命周期 `ActivityLifecycle`；其余体系按需�
 
 `packages/core/activity-contract/builtins.ts` 收敛了两份原先散落在路由里的清单：
 
-- `XUEAN_ACTIVITY_TYPES`：学案活动类型白名单（reading / submission / quiz / discussion /
-  courseware / scratch / form / other）；
+- `XUEAN_ACTIVITY_TYPES`：学案活动类型白名单（reading / submission / quiz / survey /
+  discussion / courseware / scratch / form / other）；
 - `CLASSROOM_LEGACY_ACTIVITIES`：极速投票、抢答器、听懂了反馈、结课通票。
 
 它们供 `/api/lesson-activities/*` 的入参校验与 `IExtensionCatalog.listActivities()` 的目录发现
 共用，新增类型必须同时更新这里与对应表结构。
+
+### 4.1 学案内置活动模块
+
+教师端「新增活动」按以下内置类型渲染专属配置，配置写入 `lesson_activities.config_json`：
+
+| 类型         | 教师配置                                   | 学生端交互                                   |
+| ------------ | ------------------------------------------ | -------------------------------------------- |
+| `reading`    | 阅读正文、外部链接                         | 阅读材料，点击「标记为已读」回写 `submitted` |
+| `submission` | 练习要求、允许文字 / 链接                  | 文字作答或提交作品链接，可更新提交           |
+| `quiz`       | 引用现有试卷（`assessmentId` / `classId`） | 复用 `AssessmentRunner` 作答                 |
+| `survey`     | 单选 / 多选 / 填空题与选项、必答开关       | 提交结构化答案                               |
+| `form`       | 文本 / 数字 / 下拉 / 勾选字段、必填开关    | 按字段填写并提交                             |
+| `discussion` | 讨论话题、是否允许回复                     | 发帖 / 回复，帖子存入 `lesson_discussions`   |
+
+除 `quiz`（复用试卷布置）外，学生端答案统一写入 `activity_progress.submission_json`：
+
+```json
+{ "type": "text", "content": "{\"answers\":{\"q1\":\"A\"}}" }
+```
+
+`survey` / `form` 的 `content` 是 JSON 字符串，`answers` 的键为题目或字段 `id`；教师端进度
+面板与批阅接口无需感知类型差异。
+
+第三方插件仍通过 `xuean.activity.type` / `.editor` / `.student` 扩展新类型；类型 id 必须使用
+`<manifest.id>:` 命名空间，不能覆盖内置类型。完整的活动数据模型、教师 / 学生端行为与接口见
+[Xuean Activities](xuean-activities.md)。
 
 ## 5. 消费方
 
