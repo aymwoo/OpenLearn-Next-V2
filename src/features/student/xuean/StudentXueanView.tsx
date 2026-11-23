@@ -83,11 +83,12 @@ const STATUS_LABELS: Record<Progress['status'], { text: string; cls: string }> =
 interface Props {
   lessonId: string;
   lessonTitle?: string;
+  lang?: 'zh' | 'en';
   /** Mode Pack 工作区可选：进度写库成功后通知（如 ClassroomMessage xuean:task） */
   onActivityProgressReported?: (info: { activityId: string; status: string }) => void;
 }
 
-export function StudentXueanView({ lessonId, lessonTitle, onActivityProgressReported }: Props) {
+export function StudentXueanView({ lessonId, lessonTitle, lang = 'zh', onActivityProgressReported }: Props) {
   const [data, setData] = useState<XueanData | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -101,6 +102,17 @@ export function StudentXueanView({ lessonId, lessonTitle, onActivityProgressRepo
   useEffect(() => {
     refresh();
   }, [refresh]);
+
+  // 当前展示项：'home' 或某个活动 id。默认展示第一个活动，没有活动时展示学案首页。
+  const [activeItem, setActiveItem] = useState<string | null>(null);
+  useEffect(() => {
+    if (!data) return;
+    setActiveItem((current) => {
+      if (current === 'home' && data.blocks.length > 0) return current;
+      if (current && data.activities.some((activity) => activity.id === current)) return current;
+      return data.activities[0]?.id ?? (data.blocks.length > 0 ? 'home' : null);
+    });
+  }, [data]);
 
   if (loading) return <div className="text-center text-muted py-16">加载学案中…</div>;
   if (!data)
@@ -116,6 +128,17 @@ export function StudentXueanView({ lessonId, lessonTitle, onActivityProgressRepo
         </button>
       </div>
     );
+
+  // 首帧派生当前项，避免 effect 尚未执行时短暂显示空态。
+  const defaultItem = data.activities[0]?.id ?? (data.blocks.length > 0 ? 'home' : null);
+  const currentItem =
+    activeItem === 'home'
+      ? data.blocks.length > 0
+        ? 'home'
+        : defaultItem
+      : activeItem && data.activities.some((activity) => activity.id === activeItem)
+        ? activeItem
+        : defaultItem;
 
   const completedCount = data.activities.filter((a) => {
     const p = data.progressByActivity[a.id];
@@ -135,50 +158,128 @@ export function StudentXueanView({ lessonId, lessonTitle, onActivityProgressRepo
         </div>
       </div>
 
-      <div className="p-5 space-y-6 max-w-3xl mx-auto w-full">
-        {/* 学案首页块 */}
-        {data.blocks.length > 0 && (
-          <section aria-label="学案首页">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-muted mb-3">学案首页</h3>
-            <div className="space-y-3">
-              {[...data.blocks]
-                .sort((a, b) => {
-                  // 学案首页始终置顶，其余块沿用 order_index。
-                  if (a.block_type === 'xuean_home') return -1;
-                  if (b.block_type === 'xuean_home') return 1;
-                  return a.order_index - b.order_index;
-                })
-                .map((b) => (
-                  <BlockCard key={b.id} block={b} />
-                ))}
-            </div>
-          </section>
-        )}
+      {/* 活动导航：横向列出全部学案活动，点击直接切换中间内容 */}
+      <div className="border-b border-theme bg-surface/90 backdrop-blur-sm sticky top-[73px] z-10">
+        <div role="tablist" aria-label="学案活动导航" className="flex items-center gap-2 px-4 py-2 overflow-x-auto">
+          {data.blocks.length > 0 && (
+            <ActivityNavTab
+              selected={currentItem === 'home'}
+              label={lang === 'zh' ? '学案首页' : 'Overview'}
+              onClick={() => setActiveItem('home')}
+            />
+          )}
+          {data.activities.map((activity, index) => {
+            const progress = data.progressByActivity[activity.id];
+            const done =
+              progress && (progress.status === 'graded' || (progress.verified && progress.status === 'submitted'));
+            return (
+              <ActivityNavTab
+                key={activity.id}
+                selected={currentItem === activity.id}
+                label={`${index + 1}. ${activity.title}`}
+                done={Boolean(done)}
+                active={progress?.status === 'in_progress'}
+                onClick={() => setActiveItem(activity.id)}
+              />
+            );
+          })}
+        </div>
+      </div>
 
-        {/* 活动序列 */}
-        <section aria-label="活动序列">
-          <h3 className="text-xs font-bold uppercase tracking-wider text-muted mb-3">活动序列</h3>
-          {data.activities.length === 0 ? (
-            <div className="text-center text-muted py-8 border-2 border-dashed border-theme rounded-xl text-sm">
-              教师尚未编排活动
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {data.activities.map((a, i) => (
+      <div className="flex-1 p-5 max-w-4xl mx-auto w-full">
+        {currentItem === 'home' && data.blocks.length > 0 ? (
+          <section aria-label="学案首页" className="space-y-3">
+            {[...data.blocks]
+              .sort((a, b) => {
+                // 学案首页始终置顶，其余块沿用 order_index。
+                if (a.block_type === 'xuean_home') return -1;
+                if (b.block_type === 'xuean_home') return 1;
+                return a.order_index - b.order_index;
+              })
+              .map((b) => (
+                <BlockCard key={b.id} block={b} />
+              ))}
+          </section>
+        ) : currentItem ? (
+          (() => {
+            const index = data.activities.findIndex((activity) => activity.id === currentItem);
+            if (index < 0) return null;
+            const activity = data.activities[index];
+            return (
+              <section aria-label={`活动 ${index + 1}：${activity.title}`} className="space-y-4">
                 <ActivityItem
-                  key={a.id}
-                  index={i}
-                  activity={a}
-                  progress={data.progressByActivity[a.id]}
+                  index={index}
+                  activity={activity}
+                  progress={data.progressByActivity[activity.id]}
                   onProgressUpdated={refresh}
                   onActivityProgressReported={onActivityProgressReported}
                 />
-              ))}
-            </div>
-          )}
-        </section>
+                {data.activities.length > 1 && (
+                  <div className="flex items-center justify-between gap-3 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setActiveItem(data.activities[index - 1]?.id ?? currentItem)}
+                      disabled={index === 0}
+                      className="px-3 py-1.5 text-xs rounded-lg border border-theme text-main hover:bg-surface-secondary disabled:opacity-30 disabled:cursor-not-allowed"
+                    >
+                      ← {lang === 'zh' ? '上一活动' : 'Previous'}
+                    </button>
+                    <span className="text-[11px] text-muted">
+                      {index + 1} / {data.activities.length}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setActiveItem(data.activities[index + 1]?.id ?? currentItem)}
+                      disabled={index === data.activities.length - 1}
+                      className="px-3 py-1.5 text-xs rounded-lg border border-theme text-main hover:bg-surface-secondary disabled:opacity-30 disabled:cursor-not-allowed"
+                    >
+                      {lang === 'zh' ? '下一活动' : 'Next'} →
+                    </button>
+                  </div>
+                )}
+              </section>
+            );
+          })()
+        ) : (
+          <div className="text-center text-muted py-16 border-2 border-dashed border-theme rounded-xl text-sm">
+            {lang === 'zh' ? '教师尚未编排活动' : 'No activities yet'}
+          </div>
+        )}
       </div>
     </div>
+  );
+}
+
+function ActivityNavTab({
+  selected,
+  label,
+  done = false,
+  active = false,
+  onClick,
+}: {
+  selected: boolean;
+  label: string;
+  done?: boolean;
+  active?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={selected}
+      onClick={onClick}
+      title={label}
+      className={`shrink-0 inline-flex items-center gap-1.5 max-w-[16rem] px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors ${
+        selected
+          ? 'bg-primary-theme/15 border-primary-theme/40 text-primary-theme'
+          : 'bg-surface border-theme text-muted hover:text-main hover:bg-surface-secondary'
+      }`}
+    >
+      <span className="truncate">{label}</span>
+      {done && <span className="text-emerald-600 shrink-0">✓</span>}
+      {!done && active && <span className="w-1.5 h-1.5 rounded-full bg-sky-500 shrink-0" aria-hidden="true" />}
+    </button>
   );
 }
 

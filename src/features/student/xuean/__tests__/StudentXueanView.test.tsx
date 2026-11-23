@@ -2,7 +2,7 @@
  * StudentXueanView：插件活动分发、试题活动内嵌作答。
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, cleanup } from '@testing-library/react';
+import { render, screen, cleanup, fireEvent } from '@testing-library/react';
 import { StudentXueanView } from '../StudentXueanView';
 
 const getXuean = vi.hoisted(() => vi.fn());
@@ -76,6 +76,32 @@ describe('StudentXueanView', () => {
     expect(await screen.findByText('欢迎来到本课')).toBeTruthy();
     const hero = screen.getByText('欢迎来到本课').parentElement as HTMLElement;
     expect(hero.style.backgroundImage).toContain('/api/files/cover-1');
+  });
+
+  it('顶部活动导航列出全部活动并可切换中间内容', async () => {
+    getXuean.mockResolvedValue({
+      ok: true,
+      data: {
+        lessonId: 'lesson-1',
+        blocks: [],
+        activities: [
+          { ...baseActivity, id: 'a1', type: 'reading', title: '活动一', order_index: 0 },
+          { ...baseActivity, id: 'a2', type: 'reading', title: '活动二', order_index: 1 },
+        ],
+        progressByActivity: {},
+      },
+    });
+
+    render(<StudentXueanView lessonId="lesson-1" />);
+
+    expect(await screen.findByRole('tab', { name: /1\. 活动一/ })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: /2\. 活动二/ })).toBeTruthy();
+    expect(screen.getByLabelText('活动 1：活动一')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('tab', { name: /2\. 活动二/ }));
+
+    expect(await screen.findByLabelText('活动 2：活动二')).toBeTruthy();
+    expect(screen.queryByLabelText('活动 1：活动一')).toBeNull();
   });
 
   it('插件活动交给 xuean.activity.student 槽位渲染', async () => {

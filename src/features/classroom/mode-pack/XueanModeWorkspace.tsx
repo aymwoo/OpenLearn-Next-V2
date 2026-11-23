@@ -12,7 +12,7 @@ import { StudentXueanView } from '../../student/xuean/StudentXueanView';
 export type XueanModeWorkspaceRole = 'teacher' | 'student';
 
 export function XueanModeWorkspace(props: ClassroomActiveSegmentMainSlotProps & { role?: XueanModeWorkspaceRole }) {
-  const { segment, lessonId, classId, flow, role = 'teacher' } = props;
+  const { segment, lessonId, classId, flow, role = 'teacher', lang = 'zh' } = props;
   const title = segment.title || segment.id;
   const segmentType = typeof segment.type === 'string' ? segment.type : 'xuean';
   const effectiveLessonId = lessonId || '';
@@ -26,16 +26,19 @@ export function XueanModeWorkspace(props: ClassroomActiveSegmentMainSlotProps & 
       data-lesson-id={effectiveLessonId}
       className="flex h-full min-h-0 w-full flex-col gap-2 overflow-auto"
     >
-      <div className="shrink-0 text-xs font-semibold text-muted px-1">
-        Mode Pack · 学案工作区
-        <span className="ml-2 font-normal">环节：{title}</span>
-      </div>
+      {role !== 'student' && (
+        <div className="shrink-0 text-xs font-semibold text-muted px-1">
+          Mode Pack · 学案工作区
+          <span className="ml-2 font-normal">环节：{title}</span>
+        </div>
+      )}
       <div className="min-h-0 flex-1">
         {role === 'student' ? (
           effectiveLessonId ? (
             <StudentXueanView
               lessonId={effectiveLessonId}
               lessonTitle={title}
+              lang={lang === 'en' ? 'en' : 'zh'}
               onActivityProgressReported={(info) => {
                 void flow
                   .sendMessage({
