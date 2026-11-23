@@ -3,7 +3,7 @@
  * - 顶部学案首页块（半结构化：learning_goals / key_points / resources / free_html 等）
  * - 活动序列卡片（状态指示 + 自报进度）
  */
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { getXuean, type ActivitySubmission } from '../../../services/lessonActivitiesService.js';
 import { sanitizeRichTextHtml } from '../../../../packages/core/security/html-sanitize';
 import { LearningSurfaceHost } from '../../learning-surface/LearningSurfaceHost';
@@ -114,6 +114,13 @@ export function StudentXueanView({ lessonId, lessonTitle, lang = 'zh', onActivit
     });
   }, [data]);
 
+  // 活动导航横向滚动：切换时把选中项滚入可视区（只滚动导航自身）。
+  const tablistRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const tab = tablistRef.current?.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]');
+    tab?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+  }, [activeItem, data]);
+
   if (loading) return <div className="text-center text-muted py-16">加载学案中…</div>;
   if (!data)
     return (
@@ -145,48 +152,74 @@ export function StudentXueanView({ lessonId, lessonTitle, lang = 'zh', onActivit
     return p && (p.status === 'graded' || (p.verified && p.status === 'submitted'));
   }).length;
 
+  const completedPercent = data.activities.length > 0 ? (completedCount / data.activities.length) * 100 : 0;
+
   return (
-    <div className="flex flex-col h-full overflow-y-auto">
-      {/* 学案头部 */}
-      <div className="px-5 py-4 border-b border-theme bg-surface/80 backdrop-blur-sm sticky top-0 z-10">
-        <h2 className="text-base sm:text-lg font-black text-main tracking-tight">{lessonTitle ?? data.lessonId}</h2>
-        <div className="mt-1 flex items-center gap-3 text-xs text-muted">
-          <span>📚 学案式学习</span>
-          <span>
-            ✅ {completedCount} / {data.activities.length} 活动完成
-          </span>
-        </div>
-      </div>
+    <div className="flex h-full flex-col overflow-y-auto">
+      {/* 学案头部 + 活动导航：共用一层 sticky 容器，避免硬编码吸顶高度 */}
+      <div className="sticky top-0 z-20 border-b border-theme bg-surface/95 backdrop-blur-md">
+        <div className="w-full px-5 pt-4 sm:px-6">
+          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+            <h2 className="text-base font-black tracking-tight text-main sm:text-lg">{lessonTitle ?? data.lessonId}</h2>
+            <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-muted">
+              <span className="inline-block h-1.5 w-1.5 rounded-full bg-primary-theme" aria-hidden="true" />
+              {lang === 'zh' ? '学案式学习' : 'Guided study'}
+            </span>
+          </div>
 
-      {/* 活动导航：横向列出全部学案活动，点击直接切换中间内容 */}
-      <div className="border-b border-theme bg-surface/90 backdrop-blur-sm sticky top-[73px] z-10">
-        <div role="tablist" aria-label="学案活动导航" className="flex items-center gap-2 px-4 py-2 overflow-x-auto">
-          {data.blocks.length > 0 && (
-            <ActivityNavTab
-              selected={currentItem === 'home'}
-              label={lang === 'zh' ? '学案首页' : 'Overview'}
-              onClick={() => setActiveItem('home')}
-            />
-          )}
-          {data.activities.map((activity, index) => {
-            const progress = data.progressByActivity[activity.id];
-            const done =
-              progress && (progress.status === 'graded' || (progress.verified && progress.status === 'submitted'));
-            return (
-              <ActivityNavTab
-                key={activity.id}
-                selected={currentItem === activity.id}
-                label={`${index + 1}. ${activity.title}`}
-                done={Boolean(done)}
-                active={progress?.status === 'in_progress'}
-                onClick={() => setActiveItem(activity.id)}
+          {/* 完成进度：一条细进度条 + 计数，替代散落的文字 */}
+          <div className="mt-2 flex items-center gap-2.5">
+            <div className="h-1 flex-1 overflow-hidden rounded-full bg-surface-secondary">
+              <div
+                className="h-full rounded-full bg-emerald-500 transition-[width] duration-300"
+                style={{ width: `${completedPercent}%` }}
+                role="progressbar"
+                aria-label={lang === 'zh' ? '学案活动完成进度' : 'Activity completion'}
+                aria-valuemin={0}
+                aria-valuemax={data.activities.length}
+                aria-valuenow={completedCount}
               />
-            );
-          })}
+            </div>
+            <span className="shrink-0 text-[11px] tabular-nums text-muted">
+              {completedCount} / {data.activities.length}
+            </span>
+          </div>
+
+          {/* 活动导航：单行横向滚动，点击直接切换中间内容 */}
+          <div
+            ref={tablistRef}
+            role="tablist"
+            aria-label="学案活动导航"
+            className="scrollbar-none -mx-1 mt-3 flex snap-x snap-proximity items-center gap-1 overflow-x-auto scroll-px-1 px-1 pb-1"
+          >
+            {data.blocks.length > 0 && (
+              <ActivityNavTab
+                selected={currentItem === 'home'}
+                label={lang === 'zh' ? '学案首页' : 'Overview'}
+                onClick={() => setActiveItem('home')}
+              />
+            )}
+            {data.activities.map((activity, index) => {
+              const progress = data.progressByActivity[activity.id];
+              const done =
+                progress && (progress.status === 'graded' || (progress.verified && progress.status === 'submitted'));
+              return (
+                <ActivityNavTab
+                  key={activity.id}
+                  selected={currentItem === activity.id}
+                  index={index + 1}
+                  label={activity.title}
+                  done={Boolean(done)}
+                  active={progress?.status === 'in_progress'}
+                  onClick={() => setActiveItem(activity.id)}
+                />
+              );
+            })}
+          </div>
         </div>
       </div>
 
-      <div className="flex-1 p-5 max-w-4xl mx-auto w-full">
+      <div className="w-full flex-1 px-5 py-6 sm:px-6">
         {currentItem === 'home' && data.blocks.length > 0 ? (
           <section aria-label="学案首页" className="space-y-3">
             {[...data.blocks]
@@ -253,32 +286,69 @@ export function StudentXueanView({ lessonId, lessonTitle, lang = 'zh', onActivit
 function ActivityNavTab({
   selected,
   label,
+  index,
   done = false,
   active = false,
   onClick,
 }: {
   selected: boolean;
   label: string;
+  /** 活动序号；学案首页不传。 */
+  index?: number;
   done?: boolean;
   active?: boolean;
   onClick: () => void;
 }) {
+  const displayLabel = index ? `${index}. ${label}` : label;
+
   return (
     <button
       type="button"
       role="tab"
       aria-selected={selected}
       onClick={onClick}
-      title={label}
-      className={`shrink-0 inline-flex items-center gap-1.5 max-w-[16rem] px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors ${
+      title={displayLabel}
+      aria-label={displayLabel}
+      className={`relative inline-flex shrink-0 snap-start items-center gap-2 rounded-lg px-2.5 py-2 text-xs font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary-theme/40 ${
         selected
-          ? 'bg-primary-theme/15 border-primary-theme/40 text-primary-theme'
-          : 'bg-surface border-theme text-muted hover:text-main hover:bg-surface-secondary'
+          ? "bg-primary-theme/10 text-primary-theme after:absolute after:inset-x-2 after:bottom-0.5 after:border-b-[3px] after:border-primary-theme after:content-['']"
+          : 'text-muted hover:bg-surface-secondary hover:text-main'
       }`}
     >
-      <span className="truncate">{label}</span>
-      {done && <span className="text-emerald-600 shrink-0">✓</span>}
-      {!done && active && <span className="w-1.5 h-1.5 rounded-full bg-sky-500 shrink-0" aria-hidden="true" />}
+      {index ? (
+        // 序号徽标仅作视觉提示，可访问名称由按钮的 aria-label 提供（如「1. 活动一」）。
+        <span
+          aria-hidden="true"
+          className={`grid h-5 min-w-5 shrink-0 place-items-center rounded-full border px-1 text-[10px] font-bold leading-none tabular-nums ${
+            selected ? 'border-primary-theme bg-primary-theme text-white' : 'border-theme bg-surface text-muted'
+          }`}
+        >
+          {index}
+        </span>
+      ) : (
+        <svg aria-hidden="true" viewBox="0 0 16 16" fill="none" className="h-3.5 w-3.5 shrink-0">
+          <path
+            d="M2.5 7 8 2.5 13.5 7v6a.5.5 0 0 1-.5.5H3a.5.5 0 0 1-.5-.5V7Z"
+            stroke="currentColor"
+            strokeWidth="1.3"
+            strokeLinejoin="round"
+          />
+        </svg>
+      )}
+      <span className="max-w-[12rem] truncate">{label}</span>
+      {done ? (
+        <svg aria-hidden="true" viewBox="0 0 16 16" fill="none" className="h-3.5 w-3.5 shrink-0 text-emerald-600">
+          <path
+            d="m3 8.5 3 3 7-7"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      ) : active ? (
+        <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-sky-500" aria-hidden="true" />
+      ) : null}
     </button>
   );
 }

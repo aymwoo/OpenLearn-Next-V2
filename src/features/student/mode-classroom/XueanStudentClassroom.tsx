@@ -27,7 +27,7 @@ export function XueanStudentClassroom({
 }) {
   return (
     <div data-testid="student-xuean-classroom" className="flex min-h-0 flex-1 flex-col gap-3">
-      <header className="mx-auto w-full max-w-4xl px-1">
+      <header className="w-full px-4 sm:px-6">
         <p className="text-xs font-medium tracking-wide text-stone-500">学案课堂</p>
         <h1 data-testid="student-learning-topic" className="text-2xl font-semibold tracking-tight text-stone-900">
           {topic}
@@ -35,7 +35,7 @@ export function XueanStudentClassroom({
         {topic !== lessonTitle ? <p className="text-sm text-stone-500">{lessonTitle}</p> : null}
       </header>
 
-      <main className="mx-auto flex min-h-[16rem] w-full max-w-4xl min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-stone-200 bg-white">
+      <main className="flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-stone-200 bg-white">
         {blockSegmentContent ? (
           <div
             role="status"

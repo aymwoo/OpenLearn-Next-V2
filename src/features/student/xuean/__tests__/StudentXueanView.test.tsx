@@ -117,7 +117,7 @@ describe('StudentXueanView', () => {
 
     render(<StudentXueanView lessonId="lesson-1" lessonTitle="探究课" />);
 
-    expect(await screen.findByText('虚拟实验')).toBeTruthy();
+    expect(await screen.findByLabelText('活动 1：虚拟实验')).toBeTruthy();
     const slot = screen.getByTestId('plugin-activity-slot');
     expect(slot.getAttribute('data-slot')).toBe('xuean.activity.student');
     expect(slot.getAttribute('data-activity-type')).toBe('@acme/lab:experiment');
@@ -146,7 +146,7 @@ describe('StudentXueanView', () => {
     render(<StudentXueanView lessonId="lesson-1" />);
 
     expect(await screen.findByTestId('quiz-card')).toBeTruthy();
-    expect(screen.getByText('单元测验')).toBeTruthy();
+    expect(screen.getByLabelText('活动 1：单元测验')).toBeTruthy();
   });
 
   it('未绑定 assignment 的试题活动回退为普通活动卡片', async () => {
@@ -162,7 +162,7 @@ describe('StudentXueanView', () => {
 
     render(<StudentXueanView lessonId="lesson-1" />);
 
-    expect(await screen.findByText('待绑定测验')).toBeTruthy();
+    expect(await screen.findByLabelText('活动 1：待绑定测验')).toBeTruthy();
     expect(screen.queryByTestId('quiz-card')).toBeNull();
     // 学案活动不再提供手动「开始 / 提交」，提交由活动内部功能完成。
     expect(screen.queryByRole('button', { name: '开始' })).toBeNull();
