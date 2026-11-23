@@ -19,9 +19,9 @@ import { getOptionalSocket, onSocketInstance } from '../services/socket-service'
 import { buildShowcaseDiffCandidateWorks } from '../features/classroom/showcase-diff/build-diff-works';
 import { useErrorStore } from '../store/errorStore';
 import { ClassroomInteractiveCockpit } from '../features/classroom/ClassroomInteractiveCockpit';
+import { ClassroomToolbarSetupDialog } from '../features/classroom/ClassroomToolbarSetupDialog';
 import { ClassroomEntryPortal } from '../features/classroom/ClassroomEntryPortal';
 import { ClassroomSessionManager, type ClassroomSessionItem } from '../features/classroom/ClassroomSessionManager';
-import { InProgressSessionList } from '../features/classroom/InProgressSessionList';
 import { readRememberedActiveLesson, rememberActiveLesson } from '../features/classroom/live-class-resume-memory';
 import { useClassroomLiveData } from '../features/classroom/hooks/useClassroomLiveData';
 import { resolveSegmentDuration } from '../utils/timeline-duration';
@@ -236,13 +236,6 @@ export function LiveClassroomView({
   );
   /** 是否展示「课堂会话与档案管理」看板 */
   const [showSessionManager, setShowSessionManager] = useState(false);
-  /**
-   * Issue #91：进入互动课堂的第一屏是「进行中的课堂会话」列表。
-   * 常规路径（initialPortalOpen）先看列表，列表为空时由 `onEmpty` 回退到起始门户。
-   */
-  const [showSessionPicker, setShowSessionPicker] = useState(
-    initialPortalOpen && !resumeRememberedSession && !initialLaunchSignal,
-  );
   // 刷新时先确认进行中会话的班级，避免起始门户（含「下一节课」）在判定前可点。
   const [entryDecisionReady, setEntryDecisionReady] = useState(
     !initialPortalOpen || resumeRememberedSession || !!initialLaunchSignal,
@@ -298,8 +291,7 @@ export function LiveClassroomView({
   /** 课程/会话鉴权或资源缺失（401/403/404）后立即停止轮询并向教师展示清晰提示 */
   const [lessonAccessError, setLessonAccessError] = useState<{ status: number; endpoint: string } | null>(null);
   const notifiedAccessErrorKeyRef = useRef<string | null>(null);
-  const isActiveClassroomView =
-    Boolean(selectedLesson) && !showSessionManager && !showSessionPicker && !showEntryPortal;
+  const isActiveClassroomView = Boolean(selectedLesson) && !showSessionManager && !showEntryPortal;
 
   const reportLessonAccessError = useCallback(
     (status: number, endpoint: string) => {
@@ -349,7 +341,6 @@ export function LiveClassroomView({
     setEntryDecisionReady,
     setHasActiveSession,
     setLessonAccessError,
-    setShowSessionPicker,
     setShowEntryPortal,
     setSelectedLesson,
     setLiveClassSelectedClassId,
@@ -361,6 +352,13 @@ export function LiveClassroomView({
   const [middleTab, setMiddleTab] = useState<TeacherMiddleTab>('whiteboard');
   // 白板课「课堂工具」面板：按钮在顶栏，面板挂在 Cockpit 内，共用这一份展开状态。
   const [classroomToolsOpen, setClassroomToolsOpen] = useState(false);
+  // 进入白板授课视图时先弹出功能开关设置；同一课节确认一次。
+  const [toolbarSetupLessonId, setToolbarSetupLessonId] = useState<string | null>(null);
+
+  useEffect(() => {
+    // 回到入口门户后重新进入课堂时再次弹出，沿用上次保存的选择。
+    if (showEntryPortal) setToolbarSetupLessonId(null);
+  }, [showEntryPortal]);
 
   const {
     attempts,
@@ -614,8 +612,22 @@ export function LiveClassroomView({
     userReturnedToPortalRef.current = false;
     enteredClassroomRef.current = true;
     rememberActiveLesson(lessonId);
-    setShowSessionPicker(false);
     setShowEntryPortal(false);
+  };
+
+  /** 归档并结束课堂：清掉当前会话状态并回到起始门户，避免停留在学情简报页。 */
+  const handleClassArchived = () => {
+    viewingSpecificReportRef.current = null;
+    setReportSessionId(null);
+    userReturnedToPortalRef.current = true;
+    enteredClassroomRef.current = false;
+    rememberActiveLesson(null);
+    setEntryDecisionReady(true);
+    setClassroomStage('PRE_CLASS_READY');
+    setHasActiveSession(false);
+    setLiveClassIsActive(false);
+    setShowSessionManager(false);
+    setShowEntryPortal(true);
   };
 
   const host = useOptionalPluginHost();
@@ -1036,7 +1048,6 @@ export function LiveClassroomView({
           rememberActiveLesson(null);
           setEntryDecisionReady(true);
           setShowSessionManager(false);
-          setShowSessionPicker(false);
           setShowEntryPortal(true);
         }}
         onResumeSession={(session: ClassroomSessionItem) => {
@@ -1049,7 +1060,6 @@ export function LiveClassroomView({
           if (session.classId) setLiveClassSelectedClassId(session.classId);
           setClassroomStage(session.stage || 'IN_CLASS_TEACHING');
           setShowSessionManager(false);
-          setShowSessionPicker(false);
           setShowEntryPortal(false);
         }}
         onViewReport={(session: ClassroomSessionItem) => {
@@ -1080,50 +1090,8 @@ export function LiveClassroomView({
             enteredClassroomRef.current = false;
             rememberActiveLesson(null);
             setEntryDecisionReady(true);
-            setShowSessionPicker(false);
             setShowEntryPortal(true);
           }
-        }}
-      />
-    );
-  }
-
-  // Issue #91：第一屏 —— 进行中的课堂会话列表（空列表时自动回退到起始门户）
-  if (showSessionPicker) {
-    return (
-      <InProgressSessionList
-        lang={lang}
-        currentLessonId={selectedLesson}
-        addToast={addToast}
-        onResume={(session: ClassroomSessionItem) => {
-          viewingSpecificReportRef.current = null;
-          setReportSessionId(null);
-          userReturnedToPortalRef.current = false;
-          enteredClassroomRef.current = true;
-          rememberActiveLesson(session.lessonId);
-          setSelectedLesson(session.lessonId);
-          if (session.classId) setLiveClassSelectedClassId(session.classId);
-          setClassroomStage(session.stage || 'IN_CLASS_TEACHING');
-          setShowSessionPicker(false);
-          setShowEntryPortal(false);
-        }}
-        onStartNew={() => {
-          // 开始一节新课走既有起始门户；进行中的会话不受影响。
-          userReturnedToPortalRef.current = true;
-          enteredClassroomRef.current = false;
-          rememberActiveLesson(null);
-          setEntryDecisionReady(true);
-          setShowSessionPicker(false);
-          setShowEntryPortal(true);
-        }}
-        onOpenArchive={() => {
-          setShowSessionPicker(false);
-          setShowSessionManager(true);
-        }}
-        onEmpty={() => {
-          // 一场进行中的会话都没有 → 直接显示起始门户（与旧行为一致）
-          setShowSessionPicker(false);
-          if (!enteredClassroomRef.current) setShowEntryPortal(true);
         }}
       />
     );
@@ -1179,6 +1147,8 @@ export function LiveClassroomView({
   const currentLesson = lessons.find((item) => item.id === selectedLesson);
   const isXueanLesson =
     resolveLessonModePackDeliveryMode(currentLesson?.mode_pack_id, currentLesson?.delivery_mode) === 'xuean';
+  const showToolbarSetup =
+    Boolean(currentLesson) && Boolean(selectedLesson) && !isXueanLesson && toolbarSetupLessonId !== selectedLesson;
 
   const handleLiveTimeRemainingChange = createLiveTimeRemainingHandler({
     lang,
@@ -1210,7 +1180,6 @@ export function LiveClassroomView({
         userReturnedToPortalRef={userReturnedToPortalRef}
         enteredClassroomRef={enteredClassroomRef}
         setEntryDecisionReady={setEntryDecisionReady}
-        setShowSessionPicker={setShowSessionPicker}
         setShowEntryPortal={setShowEntryPortal}
         setShowSessionManager={setShowSessionManager}
         pendingLessonId={pendingLessonId}
@@ -1280,6 +1249,7 @@ export function LiveClassroomView({
         isLeftSidebarCollapsed={isLeftSidebarCollapsed}
         onToggleClassLock={() => handleToggleClassLock(!isClassLocked)}
         onStageChange={handleStageChange}
+        onClassArchived={handleClassArchived}
         preClassProps={{
           selectedClassId: liveClassSelectedClassId,
           className: classes.find((c) => c.id === liveClassSelectedClassId)?.name || '',
@@ -1512,6 +1482,13 @@ export function LiveClassroomView({
 
       {/* 课中快捷设置工作台侧滑抽屉 */}
       <ClassroomInContextDrawer />
+
+      {/* 白板课开课前功能开关设置 */}
+      <ClassroomToolbarSetupDialog
+        open={showToolbarSetup}
+        lang={lang === 'zh' ? 'zh' : 'en'}
+        onDismiss={() => setToolbarSetupLessonId(selectedLesson)}
+      />
     </div>
   );
 }

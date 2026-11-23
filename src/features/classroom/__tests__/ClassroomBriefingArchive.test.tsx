@@ -26,7 +26,7 @@ describe('ClassroomBriefingView: 归档并结束课堂常驻提示', () => {
   let archiveCalls: string[] = [];
   let confirmSpy: ReturnType<typeof vi.spyOn>;
 
-  function renderBriefing(addToast = vi.fn()) {
+  function renderBriefing(addToast = vi.fn(), onArchived?: () => void) {
     render(
       <ClassroomBriefingView
         selectedLesson="lesson-101"
@@ -37,6 +37,7 @@ describe('ClassroomBriefingView: 归档并结束课堂常驻提示', () => {
         lang="zh"
         onReturnToTeaching={vi.fn()}
         onReturnToPreClass={vi.fn()}
+        onArchived={onArchived}
         addToast={addToast}
       />,
     );
@@ -151,5 +152,19 @@ describe('ClassroomBriefingView: 归档并结束课堂常驻提示', () => {
     await waitFor(() => {
       expect(addToast).toHaveBeenCalledWith('本课节已归档', expect.any(String), 'info');
     });
+  });
+
+  it('归档成功后通知父组件结束课堂', async () => {
+    stubFetch({ id: 'sess-1', stage: 'IN_CLASS_TEACHING' });
+    const onArchived = vi.fn();
+    renderBriefing(vi.fn(), onArchived);
+
+    await waitFor(() => {
+      expect(screen.getByText('归档并结束课堂')).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getByText('归档并结束课堂'));
+
+    await waitFor(() => expect(onArchived).toHaveBeenCalledTimes(1));
   });
 });

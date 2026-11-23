@@ -14,7 +14,8 @@ type TimelineSidebarProps = ComponentProps<typeof ClassroomTimelineSidebar>;
 type PreClassReadyViewInjected =
   'selectedLesson' | 'lessonTitle' | 'isClassLocked' | 'onToggleClassLock' | 'onStartClass';
 type PostClassWrapupViewInjected = 'selectedLesson' | 'lessonTitle' | 'onAdvanceToReport' | 'onReturnToTeaching';
-type ClassroomBriefingViewInjected = 'selectedLesson' | 'lessonTitle' | 'onReturnToTeaching' | 'onReturnToPreClass';
+type ClassroomBriefingViewInjected =
+  'selectedLesson' | 'lessonTitle' | 'onReturnToTeaching' | 'onReturnToPreClass' | 'onArchived';
 
 export function LiveClassroomStageRouter({
   selectedLesson,
@@ -26,6 +27,7 @@ export function LiveClassroomStageRouter({
   isLeftSidebarCollapsed,
   onToggleClassLock,
   onStageChange,
+  onClassArchived,
   preClassProps,
   wrapUpProps,
   briefingProps,
@@ -42,6 +44,8 @@ export function LiveClassroomStageRouter({
   isLeftSidebarCollapsed: boolean;
   onToggleClassLock: () => void;
   onStageChange: (stage: string) => void;
+  /** 归档并结束课堂后回到起始门户。 */
+  onClassArchived: () => void;
   preClassProps: Omit<ComponentProps<typeof PreClassReadyView>, PreClassReadyViewInjected>;
   wrapUpProps: Omit<ComponentProps<typeof PostClassWrapupView>, PostClassWrapupViewInjected>;
   briefingProps: Omit<ComponentProps<typeof ClassroomBriefingView>, ClassroomBriefingViewInjected>;
@@ -101,6 +105,7 @@ export function LiveClassroomStageRouter({
         lessonTitle={lessons.find((l) => l.id === selectedLesson)?.title || ''}
         onReturnToTeaching={() => onStageChange('IN_CLASS_TEACHING')}
         onReturnToPreClass={() => onStageChange('PRE_CLASS_READY')}
+        onArchived={onClassArchived}
       />
     );
   }

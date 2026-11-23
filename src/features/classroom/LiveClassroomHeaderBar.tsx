@@ -18,7 +18,6 @@ export function LiveClassroomHeaderBar({
   userReturnedToPortalRef,
   enteredClassroomRef,
   setEntryDecisionReady,
-  setShowSessionPicker,
   setShowEntryPortal,
   setShowSessionManager,
   pendingLessonId,
@@ -60,7 +59,6 @@ export function LiveClassroomHeaderBar({
   userReturnedToPortalRef: MutableRefObject<boolean>;
   enteredClassroomRef: MutableRefObject<boolean>;
   setEntryDecisionReady: (v: boolean) => void;
-  setShowSessionPicker: (v: boolean) => void;
   setShowEntryPortal: (v: boolean) => void;
   setShowSessionManager: (v: boolean) => void;
   pendingLessonId: string | null;
@@ -284,7 +282,6 @@ export function LiveClassroomHeaderBar({
                     enteredClassroomRef.current = false;
                     rememberActiveLesson(null);
                     setEntryDecisionReady(true);
-                    setShowSessionPicker(false);
                     setShowEntryPortal(true);
                   }}
                   className="inline-flex items-center text-xs font-medium px-2 py-1 rounded-lg border border-theme text-muted hover:text-main hover:bg-surface shrink-0 cursor-pointer"

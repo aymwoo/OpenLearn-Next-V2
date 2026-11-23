@@ -19,6 +19,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - `ctx.services.classroomSelfMessage`（`classroom:message:self`）：以当前学生身份发送课堂消息，sender 由宿主派生为 `user:<studentId>:student`，校验 channel `rolesAllowed`、班级成员与定向目标同班，**不要求 `lesson:write`**；`messageId` 幂等。
   - 新增扩展槽 `assignment.submission.actions`：学生已提交作业卡片底部的操作区，透传 `{ assignment, submission, studentId, lessonId, isSelf, lang, refresh }`。
   - SDK（`openlearn.d.ts` / `index.ts`）、`docs/agent/contracts`、DI Token 字典、槽位目录与能力矩阵已同步。
+- **白板课开课前功能设置**：教师进入白板授课视图时先弹出「开课前功能设置」，默认沿用上一次保存的开关选择；可在开始上课前调整课堂工具与快捷动作的显隐，确认后关闭，设置即时生效并持久化。学案课不弹出该面板。
 - **学案内置活动模块（阅读 / 作品提交 / 测验 / 调查 / 填表 / 讨论）**：`lesson_activities` 新增「调查」类型，教师端「新增活动」按统一命名提供六类活动；阅读、作品提交、调查、填表、讨论支持类型专属配置（阅读正文与链接、练习要求与作答方式、单选/多选/填空题、文本/数字/下拉/勾选字段、讨论话题与回复开关），配置写入 `config_json`。学生端按类型渲染对应模块：阅读可标记已读、作品提交支持文字或作品链接、调查与填表提交结构化答案、讨论复用 `lesson_discussions` 发帖与回复；答案统一写入 `activity_progress.submission_json`，教师可在进度面板继续批阅。讨论列表补充作者姓名并限制回复必须属于同一活动。
 - **白板课堂工具统一入口与「控制」页**：顶栏原本分开的「课堂工具」与「更多」合并为一个「课堂工具」入口，展开后同时显示阶段导航、极速投票 / 抢答 / 通票 / 大屏展台 / 随机抽问 / 积分榜、快捷动作与课堂管理按钮；「课堂面板」菜单新增「控制」页，用开关逐项启用 / 关闭这些功能，设置写入 `localStorage` 即时生效，被关闭的按钮在顶栏与工具面板中不再渲染，也可一键「全部恢复显示」。
 - **白板课堂去掉中栏标题行并把倒计时移入白板工具栏**：移除中栏「课堂面板 / LIVE BROADCASTER CONNECTED」整行（白板课）；「课堂面板」下拉与「展开大纲」入口并入顶部标题栏，广播连接状态不再单独占一行。课堂倒计时从标题栏移入白板工具栏右侧（`WhiteboardToolbar` 新增 `toolbarExtras`），由工具栏承载显示，顶栏与画布之间的空白进一步减少；学案课不显示该倒计时。
@@ -84,6 +85,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - 新增统一 `activity.completed` 事件（`ecosystem` / `lesson-activity` / `classroom-interaction` 三类来源），内核事件总线照常入库；新增内存聚合器与管理员只读接口 `GET /api/system/activity-completions`。课堂全景学情简报追加按课节聚合的 `activityCompletions` 字段，既有字段保持不变。
   - 服务重启后未完成的 `running/paused` 运行恢复为 `interrupted` 终态，不再伪装成可继续；管理弹层显示「已中断」并隐藏恢复/结束操作，避免稳定触发 409。
   - 新增 `GET /api/system/extension-points`（未知扩展槽与当前 strict/warn/lenient 模式）与 `GET /api/system/legacy-activity-routes`（旧别名按 `METHOD + 路由模式` 的调用计数），为后续摘除别名提供数据。
+
+### Fixes
+
+- **互动课堂入口不再先显示进行中会话列表**：进入互动课堂时始终先落到起始门户（课程选择 + 当前会话提示条），有进行中的课堂就在门户顶部通过「课堂进行中 → 回到课堂」进入，不再先跳到独立的进行中会话列表页；刷新恢复、班级锁定与一键开课信号的行为保持不变。
+- **归档并结束课堂后回到起始门户**：在学情简报页点击「归档并结束课堂」成功后，清理当前会话状态并返回起始门户，不再停留在原简报页；服务端归档仍保持幂等。
 
 ### Docs
 
