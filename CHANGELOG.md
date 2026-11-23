@@ -119,6 +119,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - `assignmentSubmission` 优先读取作业中心 `plugin_submissions` / `plugin_submission_versions`，再回落 legacy `assignment_submissions`；新增 `source` / `textContent` / `linkUrl` / `files` 字段，`canShareSubmission` 识别仅链接或仅附件的提交，避免成绩投影的空 content 遮住真实作答。
   - `xueanActivityProgress` 补 `visible = 1` 与 `release_at` 过滤，与学生端活动接口口径一致。
   - SDK 将 4 个新 services 键标注为 `T | null | undefined`，明确 worker / process 模式下为 `undefined`。
+- **白板课中大纲按环节正确展示多页**：课中大纲此前在页面没有 `segmentId` 绑定时按索引把页面 1:1 分给各环节（页数与环节数相等时每个环节只剩一页），与课程编辑器里看到的多页不一致。现在优先按环节的 `targetPages`（课程大纲 / AI 教案写入）取页；没有该字段时沿用编辑器的共享页规则 —— 共享页在每个环节都可见，`segmentId` 绑定页只在本环节可见，`excludedSegmentIds` 命中则隐藏。广播环节时同时跳到该环节大纲的第一页，避免停留在其它环节的页面。
 - **白板课中栏不再卡在空的「环节工作区」**：当前环节没有匹配的 `classroom.active_segment.main` 扩展时，中栏自动回退到演示白板。此前若中栏停留在 `segment_main`（例如切换环节后扩展不再覆盖该类型），中栏会只剩空白，白板不挂载，大纲里的白板页面列表也随之为空 —— 表现为「看不到白板，也看不到大纲页面内容」。新增回归测试覆盖回退与保留扩展两条路径。
 - **右侧「学生专注力监控」可折叠**：面板头部新增收起按钮，收起后保留 40px 窄条（含展开按钮与在线人数），把宽度让给白板与大纲；展开 / 收起状态在课中阶段切换时保持。
 

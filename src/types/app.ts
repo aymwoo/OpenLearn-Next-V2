@@ -31,6 +31,8 @@ export type TimelineSegment = {
   color?: string;
   elementIds?: string[];
   assignmentIds?: string[];
+  /** 本环节对应的白板页下标（课程大纲/AI 生成教案写入）；有则课中大纲按此分组。 */
+  targetPages?: number[] | null;
   [key: string]: unknown;
 };
 

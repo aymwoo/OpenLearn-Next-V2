@@ -887,6 +887,13 @@ export function LiveClassroomView({
   const handleStartSegment = (seg: any) => {
     setActiveSegmentId(seg.id);
     setExpandedSegmentMap((prev) => ({ ...prev, [seg.id]: true }));
+    // 切到该环节时跳到它大纲里的第一页，避免停留在其它环节的页面上。
+    const segIdx = timelineSegments.findIndex((s) => s.id === seg.id);
+    if (segIdx >= 0) {
+      const segPages = getPagesForSegmentPure(seg, segIdx, whiteboardPages, timelineSegments);
+      const firstPage = segPages[0];
+      if (firstPage) whiteboardRef.current?.switchPage?.(firstPage.globalIdx);
+    }
     const secs = resolveSegmentDuration(seg, { fallbackSeconds: 300 }).seconds ?? 300;
     // R-8：计时写入 liveClassStore（不经过 AppDataContext）
     liveClassStore.getState().setLiveClassTimeRemaining(secs);
