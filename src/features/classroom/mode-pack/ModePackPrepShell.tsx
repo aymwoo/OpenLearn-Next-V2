@@ -4,7 +4,8 @@
  * flag 开启时替代 lesson_editor / xuean_editor 双硬编码主路径：
  * 按当前 activeSegment.type 决议 Mode Pack，再渲染对应 prep 面
  * （白板 → LessonEditorView；学案 → XueanEditor）。
- * 顶部环节条始终可见，保证混排课时可在单一壳内切换白板/学案环节。
+ * 顶部环节条只在**混排课时**显示：当所有环节都落到同一个备课面时，
+ * 切换它不会改变编辑器，纯学案 / 纯白板课程直接隐藏，避免与下方活动编排重复。
  */
 import { lazy, Suspense, useEffect, useMemo, useRef } from 'react';
 import { Loader2 } from 'lucide-react';
@@ -128,6 +129,24 @@ export function ModePackPrepShell({ requestedTab }: { requestedTab?: string | nu
   const prepId = face.prepId ?? WHITEBOARD_MODE_PACK.prepContributionId;
   const isXuean = face.kind === 'xuean';
   const isWhiteboard = face.kind === 'whiteboard';
+
+  // 所有环节是否落到同一个备课面：纯学案 / 纯白板课时无需顶部切换条。
+  const showSegmentBar = useMemo(() => {
+    if (timelineSegments.length <= 1) return false;
+    const faces = new Set(
+      timelineSegments.map((segment) => {
+        const resolved = resolvePrepFace({
+          activeSegmentType: segment.type,
+          lessonModePackId: currentLesson?.mode_pack_id,
+          lessonDeliveryMode: currentLesson?.delivery_mode,
+          requestedTab,
+          packs,
+        });
+        return `${resolved.kind}:${resolved.prepId ?? ''}`;
+      }),
+    );
+    return faces.size > 1;
+  }, [timelineSegments, currentLesson?.mode_pack_id, currentLesson?.delivery_mode, requestedTab, packs]);
   const hasPrepExtension =
     !isXuean &&
     !isWhiteboard &&
@@ -156,11 +175,13 @@ export function ModePackPrepShell({ requestedTab }: { requestedTab?: string | nu
       data-segment-type={normalizeSegmentType(activeSegment?.type) || DEFAULT_MODE_PACK_SEGMENT_TYPE}
       className="flex-1 min-h-0 flex flex-col"
     >
-      <PrepSegmentBar
-        segments={timelineSegments}
-        activeSegmentId={activeSegmentId}
-        onSelect={(id) => setActiveSegmentId?.(id)}
-      />
+      {showSegmentBar && (
+        <PrepSegmentBar
+          segments={timelineSegments}
+          activeSegmentId={activeSegmentId}
+          onSelect={(id) => setActiveSegmentId?.(id)}
+        />
+      )}
       <Suspense
         fallback={
           <div className="flex-1 flex flex-col items-center justify-center min-h-[400px] text-slate-400 gap-3">

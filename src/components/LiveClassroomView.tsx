@@ -46,6 +46,19 @@ import { LiveClassroomStageRouter } from '../features/classroom/LiveClassroomSta
 import { useLiveClassroomMacroEngine } from '../features/classroom/hooks/useLiveClassroomMacroEngine';
 export { FINISHED_STATUSES, IN_PROGRESS_STATUSES };
 
+/**
+ * 课程编辑统一回到「课程管理」页内展开，不再跳到已下线的备课页。
+ * 抽成独立函数，便于回归测试固定课堂内各「编辑」入口的导航目标。
+ */
+export function navigateToCourseEditor(lessonId: string, setTeacherTab?: (tab: string) => void): void {
+  appStore.getState().setCourseEditingLessonId(lessonId);
+  if (setTeacherTab) {
+    setTeacherTab('courses');
+  } else {
+    appStore.getState().setTeacherTab('courses');
+  }
+}
+
 export function LiveClassroomView({
   initialPortalOpen = true,
 }: {
@@ -984,11 +997,7 @@ export function LiveClassroomView({
     if (fetchElements) {
       void fetchElements(lessonId);
     }
-    if (setTeacherTab) {
-      setTeacherTab('lesson_editor');
-    } else {
-      appSetTeacherTab('lesson_editor');
-    }
+    navigateToCourseEditor(lessonId, setTeacherTab ?? appSetTeacherTab);
   };
 
   // 起始门户中的「前往课表设置」按钮回调。

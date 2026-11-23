@@ -51,6 +51,33 @@ describe('StudentXueanView', () => {
     vi.restoreAllMocks();
   });
 
+  it('学案首页块渲染简介与背景图', async () => {
+    getXuean.mockResolvedValue({
+      ok: true,
+      data: {
+        lessonId: 'lesson-1',
+        blocks: [
+          {
+            id: 'b1',
+            lesson_id: 'lesson-1',
+            block_type: 'xuean_home',
+            order_index: 0,
+            content_json: JSON.stringify({ intro: '欢迎来到本课', backgroundImage: '/api/files/cover-1' }),
+            surface_id: null,
+          },
+        ],
+        activities: [],
+        progressByActivity: {},
+      },
+    });
+
+    render(<StudentXueanView lessonId="lesson-1" />);
+
+    expect(await screen.findByText('欢迎来到本课')).toBeTruthy();
+    const hero = screen.getByText('欢迎来到本课').parentElement as HTMLElement;
+    expect(hero.style.backgroundImage).toContain('/api/files/cover-1');
+  });
+
   it('插件活动交给 xuean.activity.student 槽位渲染', async () => {
     getXuean.mockResolvedValue({
       ok: true,
@@ -111,5 +138,9 @@ describe('StudentXueanView', () => {
 
     expect(await screen.findByText('待绑定测验')).toBeTruthy();
     expect(screen.queryByTestId('quiz-card')).toBeNull();
+    // 学案活动不再提供手动「开始 / 提交」，提交由活动内部功能完成。
+    expect(screen.queryByRole('button', { name: '开始' })).toBeNull();
+    expect(screen.queryByRole('button', { name: '提交' })).toBeNull();
+    expect(screen.queryByRole('button', { name: '重新提交' })).toBeNull();
   });
 });

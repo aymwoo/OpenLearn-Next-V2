@@ -21,6 +21,7 @@ import { routePrepDrop } from '../classroom/mode-pack/prepDropRouter';
 export function LessonEditorView() {
   // C1-R3: 全部数据经 AppDataContext 取用（不再经 TeacherView props 透传）
   const host = useOptionalPluginHost();
+  const setCourseEditingLessonId = useAppStore((s) => s.setCourseEditingLessonId);
   const {
     lang,
     session,
@@ -406,7 +407,10 @@ export function LessonEditorView() {
 
           <button
             type="button"
-            onClick={() => setTeacherTab('courses')}
+            onClick={() => {
+              setCourseEditingLessonId(null);
+              setTeacherTab('courses');
+            }}
             className="px-3 py-1.5 bg-surface hover:bg-surface-secondary border border-theme text-muted hover:text-main text-xs font-bold rounded-xl transition-all cursor-pointer shadow-2xs hover:scale-102"
           >
             {lang === 'zh' ? '返回课程库' : 'Back to Courses'}

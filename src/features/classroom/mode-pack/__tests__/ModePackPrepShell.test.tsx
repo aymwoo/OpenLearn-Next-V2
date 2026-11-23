@@ -3,14 +3,16 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import { ModePackPrepShell } from '../ModePackPrepShell';
 import { setModePacksEnabledForTests } from '../flags';
 
+const DEFAULT_SEGMENTS = [
+  { id: 'seg-wb', title: '白板导入', type: 'whiteboard' },
+  { id: 'seg-xa', title: '学案自学', type: 'xuean:study' },
+  { id: 'seg-lab', title: '探究实验', type: 'inquiry' },
+];
+
 const state = vi.hoisted(() => ({
   packs: [] as Array<Record<string, unknown>>,
   prepExtensions: [] as Array<Record<string, unknown>>,
-  segments: [
-    { id: 'seg-wb', title: '白板导入', type: 'whiteboard' },
-    { id: 'seg-xa', title: '学案自学', type: 'xuean:study' },
-    { id: 'seg-lab', title: '探究实验', type: 'inquiry' },
-  ] as Array<Record<string, unknown>>,
+  segments: [] as Array<Record<string, unknown>>,
   activeSegmentId: 'seg-xa' as string | null,
   lessonModePackId: null as string | null,
   lessonDeliveryMode: null as string | null,
@@ -79,6 +81,7 @@ describe('ModePackPrepShell', () => {
     setModePacksEnabledForTests(true);
     state.packs = [];
     state.prepExtensions = [];
+    state.segments = DEFAULT_SEGMENTS.map((segment) => ({ ...segment }));
     state.activeSegmentId = 'seg-xa';
     state.lessonModePackId = null;
     state.lessonDeliveryMode = null;
@@ -114,6 +117,33 @@ describe('ModePackPrepShell', () => {
 
     render(<ModePackPrepShell />);
     expect(await screen.findByTestId('xuean-editor-mock')).toBeTruthy();
+  });
+
+  it('纯学案课时隐藏顶部环节切换条', async () => {
+    state.segments = [
+      { id: 'seg-x1', title: '预习导读', type: 'xuean:preview' },
+      { id: 'seg-x2', title: '学案研读', type: 'xuean' },
+      { id: 'seg-x3', title: '巩固练习', type: 'xuean:drill' },
+    ];
+    state.activeSegmentId = 'seg-x1';
+
+    render(<ModePackPrepShell />);
+
+    expect(await screen.findByTestId('xuean-editor-mock')).toBeTruthy();
+    expect(screen.queryByTestId('mode-pack-prep-segment-bar')).toBeNull();
+  });
+
+  it('纯白板课时隐藏顶部环节切换条', async () => {
+    state.segments = [
+      { id: 'seg-w1', title: '导入', type: 'whiteboard' },
+      { id: 'seg-w2', title: '讲解', type: 'whiteboard' },
+    ];
+    state.activeSegmentId = 'seg-w1';
+
+    render(<ModePackPrepShell />);
+
+    expect(await screen.findByTestId('lesson-editor-mock')).toBeTruthy();
+    expect(screen.queryByTestId('mode-pack-prep-segment-bar')).toBeNull();
   });
 
   it('第三方包命中 classroom.prep 时渲染扩展备课面', async () => {

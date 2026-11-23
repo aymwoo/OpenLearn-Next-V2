@@ -9,6 +9,7 @@ import {
   BUILTIN_WHITEBOARD_MODE_PACK_ID,
   BUILTIN_XUEAN_MODE_PACK_ID,
 } from '../../packages/core/plugin-host/mode-pack';
+import { appStore } from '../store/appStore';
 
 /** 课程向导里可选的一种交付模式（内置包 + 已激活插件包）。 */
 export interface WizardModePackChoice {
@@ -312,7 +313,9 @@ export function useCourseWizard(options: UseCourseWizardOptions) {
         await fetchLessons();
         if (newLessonId) {
           setSelectedLesson(newLessonId);
-          setTeacherTab(wizardDeliveryMode === 'xuean' ? 'xuean_editor' : 'lesson_editor');
+          // 课程编辑统一留在「课程管理」页内，创建后不再跳转到独立备课页。
+          appStore.getState().setCourseEditingLessonId(newLessonId);
+          setTeacherTab('courses');
         }
         addToast(
           lang === 'zh' ? '⭐ 课程发布成功' : '⭐ Course Deployed Successfully',

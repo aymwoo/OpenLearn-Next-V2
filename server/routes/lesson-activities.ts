@@ -72,6 +72,7 @@ const VALID_BLOCK_TYPES = new Set([
   'reflection',
   'free_html',
   'interactive_courseware',
+  'xuean_home',
 ]);
 
 const VALID_PROGRESS_STATUS = new Set(['not_started', 'in_progress', 'submitted', 'graded']);
@@ -300,6 +301,30 @@ function parseBlock(body: unknown): ParseResult<BlockValue> {
       resourceId,
       title: typeof record.title === 'string' ? record.title.trim().slice(0, 120) : null,
     });
+    return { ok: true, value: { blockType, contentJson } };
+  }
+  if (blockType === 'xuean_home') {
+    // 学案首页只保留「简介 + 背景图」两个字段，不再支持多块编排。
+    const raw =
+      typeof content === 'string'
+        ? (() => {
+            try {
+              return JSON.parse(content) as unknown;
+            } catch {
+              return null;
+            }
+          })()
+        : content;
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+      return { ok: false, error: 'xuean_home content must be a JSON object', status: 400 };
+    }
+    const record = raw as Record<string, unknown>;
+    const intro = typeof record.intro === 'string' ? record.intro.trim().slice(0, 2000) : '';
+    const rawBackground = typeof record.backgroundImage === 'string' ? record.backgroundImage.trim() : '';
+    if (rawBackground && !/^(\/api\/files\/|\/uploads\/)/.test(rawBackground)) {
+      return { ok: false, error: 'backgroundImage must be an uploaded file URL', status: 400 };
+    }
+    contentJson = JSON.stringify({ intro, backgroundImage: rawBackground.slice(0, 500) });
     return { ok: true, value: { blockType, contentJson } };
   }
   try {

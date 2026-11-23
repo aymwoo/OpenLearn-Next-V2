@@ -4,6 +4,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, fireEvent, cleanup } from '@testing-library/react';
 import { CourseManagement } from '../CourseManagement';
+import { appStore } from '../../../store/appStore';
 
 const onViewCourse = vi.hoisted(() => vi.fn());
 
@@ -76,6 +77,7 @@ describe('CourseManagement 课程编辑页内展开', () => {
   afterEach(() => {
     cleanup();
     onViewCourse.mockReset();
+    appStore.getState().setCourseEditingLessonId(null);
   });
 
   it('白板课程在课程管理内打开白板编辑器并可返回', async () => {
@@ -85,9 +87,15 @@ describe('CourseManagement 课程编辑页内展开', () => {
 
     expect(await screen.findByTestId('lesson-editor-view')).toBeTruthy();
     expect(onViewCourse).toHaveBeenCalledWith('l-wb');
-    expect(screen.getByText(/返回课程管理/)).toBeTruthy();
+    // 顶部返回栏已移除，由编辑器组件自己提供返回入口。
+    expect(screen.queryByRole('button', { name: /返回课程管理/ })).toBeNull();
 
-    fireEvent.click(screen.getByRole('button', { name: /返回课程管理/ }));
+    // 编辑器宿主必须是 flex 容器，否则 XueanEditor 内部 flex-1 + 绝对定位面板会塌成 0 高。
+    const host = screen.getByTestId('course-editor-host');
+    expect(host.className).toContain('flex');
+    expect(host.className).toContain('flex-col');
+
+    appStore.getState().setCourseEditingLessonId(null);
     expect(await screen.findByText('学案课')).toBeTruthy();
   });
 

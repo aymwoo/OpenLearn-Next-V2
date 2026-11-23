@@ -5,7 +5,8 @@
  */
 import { Suspense, lazy, useRef, useState } from 'react';
 import { useOptionalAppData } from '../../../context/AppDataContext.js';
-import { Loader2, Eye, Download, Upload } from 'lucide-react';
+import { useAppStore } from '../../../store/appStore';
+import { Loader2, Eye, Download, Upload, ArrowLeft } from 'lucide-react';
 import { exportXueanPackage, importXueanPackage } from '../../../services/lessonActivitiesService.js';
 
 const XueanActivitiesPanel = lazy(() =>
@@ -24,8 +25,13 @@ export function XueanEditor() {
   const selectedLesson = appData?.selectedLesson ?? '';
   const lessons = appData?.lessons ?? [];
   const lessonTitle = lessons.find((l) => l.id === selectedLesson)?.title ?? '未选择课时';
+  const lang = appData?.lang === 'en' ? 'en' : 'zh';
 
-  const [subTab, setSubTab] = useState<SubTab>('activities');
+  const courseEditingLessonId = useAppStore((s) => s.courseEditingLessonId);
+  const setCourseEditingLessonId = useAppStore((s) => s.setCourseEditingLessonId);
+  const isEmbeddedInCourseManagement = Boolean(selectedLesson) && courseEditingLessonId === selectedLesson;
+
+  const [subTab, setSubTab] = useState<SubTab>('blocks');
   const [previewOpen, setPreviewOpen] = useState(false);
   const [ioBusy, setIoBusy] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -85,6 +91,17 @@ export function XueanEditor() {
         <div className="px-4 py-2.5 border-b border-theme bg-surface/85 backdrop-blur-md">
           <div className="flex items-center justify-between gap-3 flex-wrap">
             <div className="flex items-center gap-2 min-w-0">
+              {isEmbeddedInCourseManagement && (
+                <button
+                  type="button"
+                  onClick={() => setCourseEditingLessonId(null)}
+                  className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold rounded-lg border border-theme text-muted hover:text-main hover:bg-surface-secondary transition-colors shrink-0"
+                  title={lang === 'zh' ? '返回课程管理' : 'Back to Courses'}
+                >
+                  <ArrowLeft size={12} />
+                  {lang === 'zh' ? '返回课程管理' : 'Back'}
+                </button>
+              )}
               <span className="text-[10px] font-black uppercase tracking-wider text-primary-theme">学案编辑器</span>
               <span className="text-xs text-muted truncate">· {lessonTitle}</span>
             </div>
@@ -96,11 +113,11 @@ export function XueanEditor() {
                 aria-label="学案编辑器子面板"
                 className="flex items-center gap-1 bg-surface-secondary rounded-lg p-0.5"
               >
-                <TabButton role="tab" selected={subTab === 'activities'} onClick={() => setSubTab('activities')}>
-                  活动编排
-                </TabButton>
                 <TabButton role="tab" selected={subTab === 'blocks'} onClick={() => setSubTab('blocks')}>
                   学案首页
+                </TabButton>
+                <TabButton role="tab" selected={subTab === 'activities'} onClick={() => setSubTab('activities')}>
+                  活动编排
                 </TabButton>
                 <TabButton role="tab" selected={subTab === 'progress'} onClick={() => setSubTab('progress')}>
                   进度面板

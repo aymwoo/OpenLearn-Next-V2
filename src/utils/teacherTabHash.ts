@@ -25,13 +25,20 @@ export function tabToHash(tab: string): string {
 }
 
 /**
+ * 旧的「备课」路由已下线：课程编辑改为在「课程管理」页内展开。
+ * 旧书签 / 历史 hash 仍可能带着这两个值，统一回落课程管理，避免重新打开已移除的备课页。
+ */
+const LEGACY_PREP_TABS = new Set(['lesson_editor', 'xuean_editor']);
+
+/**
  * Decode a URL hash back to a teacher tab id.
  * Returns `null` if the hash is empty or just the root `/`.
  */
 export function hashToTab(hash: string): string | null {
   const raw = hash.replace(/^#/, '');
   if (!raw || raw === '/') return null;
-  return raw.replace(/^\//, '');
+  const tab = raw.replace(/^\//, '');
+  return LEGACY_PREP_TABS.has(tab) ? 'courses' : tab;
 }
 
 /**

@@ -330,6 +330,30 @@ describe('学案式课时包路由 (IKVO15 · P0)', () => {
       expect(res.status).toBe(400);
     });
 
+    it('学案首页块只保留简介与上传背景图', async () => {
+      const res = await fetchJson<TestRow>(`${baseUrl}/api/lessons/${lessonId}/blocks`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...teacherCookie },
+        body: JSON.stringify({
+          blockType: 'xuean_home',
+          content: { intro: ' 本节课简介 ', backgroundImage: '/api/files/cover-1', extra: 'ignored' },
+        }),
+      });
+      expect(res.status).toBe(201);
+      expect(JSON.parse(String(res.body.content_json))).toEqual({
+        intro: '本节课简介',
+        backgroundImage: '/api/files/cover-1',
+      });
+      await fetch(`${baseUrl}/api/blocks/${res.body.id}`, { method: 'DELETE', headers: teacherCookie });
+
+      const rejected = await fetchJson(`${baseUrl}/api/lessons/${lessonId}/blocks`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...teacherCookie },
+        body: JSON.stringify({ blockType: 'xuean_home', content: { backgroundImage: 'javascript:alert(1)' } }),
+      });
+      expect(rejected.status).toBe(400);
+    });
+
     it('教师可批量重排首页块，未知 id 被拒绝', async () => {
       const list = await fetchJson<TestRow[]>(`${baseUrl}/api/lessons/${lessonId}/blocks`, { headers: teacherCookie });
       const ids = list.body.map((row) => String(row.id)).reverse();

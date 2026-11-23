@@ -62,8 +62,15 @@ describe('AssessmentActivityCard', () => {
       answers: { q1: 'A' },
     });
     const onProgressUpdated = vi.fn();
+    const onActivityProgressReported = vi.fn();
 
-    render(<AssessmentActivityCard activity={activity} onProgressUpdated={onProgressUpdated} />);
+    render(
+      <AssessmentActivityCard
+        activity={activity}
+        onProgressUpdated={onProgressUpdated}
+        onActivityProgressReported={onActivityProgressReported}
+      />,
+    );
     fireEvent.click(screen.getByRole('button', { name: '开始作答' }));
 
     const submit = await screen.findByTestId('runner-submit');
@@ -73,6 +80,7 @@ describe('AssessmentActivityCard', () => {
       expect(postActivityProgress).toHaveBeenCalledWith('a1', { status: 'submitted', progressPercent: 100 }),
     );
     expect(onProgressUpdated).toHaveBeenCalledTimes(1);
+    expect(onActivityProgressReported).toHaveBeenCalledWith({ activityId: 'a1', status: 'submitted' });
     expect(await screen.findByText('得分 8/10')).toBeTruthy();
     expect(startAttempt).toHaveBeenCalledWith('asg-1');
   });

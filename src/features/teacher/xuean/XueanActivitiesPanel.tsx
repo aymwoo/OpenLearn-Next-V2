@@ -125,14 +125,6 @@ export function XueanActivitiesPanel() {
     }
   };
 
-  const handleMove = async (index: number, direction: -1 | 1) => {
-    const newIndex = index + direction;
-    if (newIndex < 0 || newIndex >= activities.length) return;
-    const next = activities.slice();
-    [next[index], next[newIndex]] = [next[newIndex], next[index]];
-    await commitOrder(next);
-  };
-
   const handleDrop = async (targetIndex: number) => {
     const from = dragIndex;
     setDragIndex(null);
@@ -189,7 +181,6 @@ export function XueanActivitiesPanel() {
             key={act.id}
             activity={act}
             index={i}
-            total={activities.length}
             dragging={dragIndex === i}
             dragOver={overIndex === i && dragIndex !== i}
             onDragStart={() => setDragIndex(i)}
@@ -199,7 +190,6 @@ export function XueanActivitiesPanel() {
               setOverIndex(null);
             }}
             onDrop={() => handleDrop(i)}
-            onMove={(dir) => handleMove(i, dir)}
             types={typeOptions}
             onEdit={() => setEditing(act)}
             onDelete={() => handleDelete(act.id)}
@@ -254,28 +244,24 @@ function summarizeActivity(activity: Activity): string[] {
 function ActivityCard({
   activity,
   index,
-  total,
   dragging,
   dragOver,
   onDragStart,
   onDragOver,
   onDragEnd,
   onDrop,
-  onMove,
   types,
   onEdit,
   onDelete,
 }: {
   activity: Activity;
   index: number;
-  total: number;
   dragging: boolean;
   dragOver: boolean;
   onDragStart: () => void;
   onDragOver: () => void;
   onDragEnd: () => void;
   onDrop: () => void;
-  onMove: (dir: -1 | 1) => void;
   types: ActivityTypeOption[];
   onEdit: () => void;
   onDelete: () => void;
@@ -305,29 +291,11 @@ function ActivityCard({
         (dragOver ? 'ring-2 ring-primary-theme/40 border-primary-theme/60' : '')
       }
     >
-      {/* 拖拽手柄 + 可访问的上下移动按钮 */}
-      <div className="flex flex-col items-center gap-0.5 pt-0.5 shrink-0">
+      {/* 拖拽手柄（活动排序统一走拖拽） */}
+      <div className="flex flex-col items-center pt-0.5 shrink-0">
         <span className="text-muted cursor-grab select-none" aria-hidden="true" title="拖拽排序">
           ⋮⋮
         </span>
-        <button
-          type="button"
-          onClick={() => onMove(-1)}
-          disabled={index === 0}
-          aria-label="上移"
-          className="w-6 h-6 rounded border border-theme hover:bg-surface-secondary disabled:opacity-30 disabled:cursor-not-allowed text-muted"
-        >
-          ↑
-        </button>
-        <button
-          type="button"
-          onClick={() => onMove(1)}
-          disabled={index === total - 1}
-          aria-label="下移"
-          className="w-6 h-6 rounded border border-theme hover:bg-surface-secondary disabled:opacity-30 disabled:cursor-not-allowed text-muted"
-        >
-          ↓
-        </button>
       </div>
 
       <div className="flex-1 min-w-0">

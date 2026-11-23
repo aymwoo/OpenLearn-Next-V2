@@ -89,11 +89,12 @@ export function CourseManagement() {
 
   const [filterMyLessons, setFilterMyLessons] = useState(false);
   const [filterDeliveryMode, setFilterDeliveryMode] = useState<'all' | 'whiteboard' | 'xuean'>('all');
-  const [editingLessonId, setEditingLessonId] = useState<string | null>(null);
-  const editingLesson = editingLessonId ? lessons.find((item) => item.id === editingLessonId) : undefined;
+  const courseEditingLessonId = useAppStore((s) => s.courseEditingLessonId);
+  const setCourseEditingLessonId = useAppStore((s) => s.setCourseEditingLessonId);
+  const editingLesson = courseEditingLessonId ? lessons.find((item) => item.id === courseEditingLessonId) : undefined;
   const openCourseEditor = (lessonId: string) => {
     onViewCourse(lessonId);
-    setEditingLessonId(lessonId);
+    setCourseEditingLessonId(lessonId);
   };
   const modePacks = useModePackCatalog();
   const [deleteTarget, setDeleteTarget] = useState<Lesson | null>(null);
@@ -153,37 +154,25 @@ export function CourseManagement() {
   if (editingLesson) {
     const deliveryMode = resolveLessonModePackDeliveryMode(editingLesson.mode_pack_id, editingLesson.delivery_mode);
     return (
-      <div className="flex-1 flex flex-col gap-3 h-full min-h-0">
-        <div className="flex items-center gap-3 shrink-0">
-          <button
-            type="button"
-            onClick={() => setEditingLessonId(null)}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 transition-colors"
-          >
-            ← {lang === 'zh' ? '返回课程管理' : 'Back to Courses'}
-          </button>
-          <span className="text-sm font-medium text-gray-600 truncate" title={editingLesson.title}>
-            {editingLesson.title}
-          </span>
-        </div>
-        <div className="flex-1 min-h-0 overflow-hidden">
-          <Suspense
-            fallback={
-              <div className="flex items-center justify-center h-full text-sm text-gray-400 gap-2">
-                <Loader2 className="w-4 h-4 animate-spin" />
-                {lang === 'zh' ? '加载课程编辑器…' : 'Loading course editor…'}
-              </div>
-            }
-          >
-            {isModePacksEnabled() ? (
-              <ModePackPrepShell />
-            ) : deliveryMode === 'xuean' ? (
-              <XueanEditor />
-            ) : (
-              <LessonEditorView />
-            )}
-          </Suspense>
-        </div>
+      // 必须是 flex 容器：编辑器（XueanEditor / LessonEditorView / ModePackPrepShell）
+      // 内部用 flex-1 + 绝对定位面板铺满高度，块级父容器会让内容高度塌成 0。
+      <div data-testid="course-editor-host" className="flex-1 min-h-0 overflow-hidden flex flex-col">
+        <Suspense
+          fallback={
+            <div className="flex items-center justify-center h-full text-sm text-gray-400 gap-2">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              {lang === 'zh' ? '加载课程编辑器…' : 'Loading course editor…'}
+            </div>
+          }
+        >
+          {isModePacksEnabled() ? (
+            <ModePackPrepShell />
+          ) : deliveryMode === 'xuean' ? (
+            <XueanEditor />
+          ) : (
+            <LessonEditorView />
+          )}
+        </Suspense>
       </div>
     );
   }

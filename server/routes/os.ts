@@ -162,6 +162,48 @@ export function registerOsRoutes(ctx: ServerContext, runService?: ActivityRunSer
     }
   });
 
+  // 学案首页背景图上传（教师/管理员）。图片走统一文件资产，返回 /api/files/:assetId。
+  app.post('/api/uploads/image', requireAuth('teacher', 'administrator'), async (req, res) => {
+    try {
+      const { filename, base64Data } = req.body || {};
+      if (!filename || !base64Data) {
+        return res.status(400).json({ error: 'Filename and base64Data are required' });
+      }
+      const ext = path.extname(String(filename)).toLowerCase();
+      const imageMime: Record<string, string> = {
+        '.jpg': 'image/jpeg',
+        '.jpeg': 'image/jpeg',
+        '.png': 'image/png',
+        '.gif': 'image/gif',
+        '.webp': 'image/webp',
+      };
+      if (BLOCKED_EXTENSIONS.includes(ext) || !imageMime[ext]) {
+        return res.status(400).json({ error: 'Only image files (jpg / png / gif / webp) are allowed' });
+      }
+      const fileBuffer = Buffer.from(String(base64Data).replace(/^data:[^;]+;base64,/, ''), 'base64');
+      if (fileBuffer.length > 5 * 1024 * 1024) {
+        return res.status(413).json({ error: 'Image must be smaller than 5MB' });
+      }
+      if (!validateMagicBytes(fileBuffer, String(filename))) {
+        return res.status(400).json({ error: 'File content does not match the declared image type' });
+      }
+      const session = (req as Request & { session?: { userId?: string } }).session;
+      const stored = await getFileStorageService().store({
+        buffer: fileBuffer,
+        originalName: String(filename),
+        mime: imageMime[ext],
+        context: {
+          purpose: 'lesson-cover',
+          accessScope: 'authenticated',
+          authorId: session?.userId ?? null,
+        },
+      });
+      res.json({ success: true, assetId: stored.assetId, fileUrl: stored.fileUrl });
+    } catch (e: unknown) {
+      sendSafeError(res, e);
+    }
+  });
+
   // OS Capability: Submit Command Manually via Web App Shell API (SEC: 仅限教师与管理员调用)
   app.post('/api/commands', requireAuth('teacher', 'administrator'), async (req, res) => {
     try {

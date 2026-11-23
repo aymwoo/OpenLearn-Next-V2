@@ -13,9 +13,16 @@ interface AssessmentActivityCardProps {
   activity: { id: string; title: string; config_json?: string | null };
   lang?: 'zh' | 'en';
   onProgressUpdated?: () => void;
+  /** Mode Pack 工作区可选：交卷并回写活动进度后通知（如 ClassroomMessage xuean:task）。 */
+  onActivityProgressReported?: (info: { activityId: string; status: string }) => void;
 }
 
-export function AssessmentActivityCard({ activity, lang = 'zh', onProgressUpdated }: AssessmentActivityCardProps) {
+export function AssessmentActivityCard({
+  activity,
+  lang = 'zh',
+  onProgressUpdated,
+  onActivityProgressReported,
+}: AssessmentActivityCardProps) {
   const zh = lang === 'zh';
   const config = (() => {
     try {
@@ -60,6 +67,7 @@ export function AssessmentActivityCard({ activity, lang = 'zh', onProgressUpdate
     try {
       await postActivityProgress(activity.id, { status: 'submitted', progressPercent: 100 });
       onProgressUpdated?.();
+      onActivityProgressReported?.({ activityId: activity.id, status: 'submitted' });
     } catch {
       // 进度回写失败不影响学生看到成绩
     }

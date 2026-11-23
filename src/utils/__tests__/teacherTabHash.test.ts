@@ -45,6 +45,11 @@ describe('teacherTabHash', () => {
       expect(hashToTab('/')).toBeNull();
     });
 
+    it('maps removed prep routes back to courses', () => {
+      expect(hashToTab('#/lesson_editor')).toBe('courses');
+      expect(hashToTab('#/xuean_editor')).toBe('courses');
+    });
+
     it('round-trips with tabToHash for every built-in tab', () => {
       const tabs = [
         'dashboard',

@@ -139,13 +139,29 @@ describe('XueanActivitiesPanel', () => {
     });
   });
 
-  it('下移活动时提交新的 id 顺序', async () => {
+  it('拖拽活动时提交新的 id 顺序，且不再渲染上下箭头', async () => {
     state.activities = [row('a1', 0, '阅读材料'), row('a2', 1, '作品提交', 'submission')];
 
     render(<XueanActivitiesPanel />);
     await screen.findByText('阅读材料');
 
-    fireEvent.click(screen.getAllByRole('button', { name: '下移' })[0]);
+    expect(screen.queryByRole('button', { name: '上移' })).toBeNull();
+    expect(screen.queryByRole('button', { name: '下移' })).toBeNull();
+
+    const firstCard = screen.getByText('阅读材料').closest('[draggable="true"]') as HTMLElement;
+    // 「作品提交」同时是活动标题和类型标签，取标题（<p>）所在的卡片。
+    const secondTitle = screen.getAllByText('作品提交').find((el) => el.tagName === 'P') as HTMLElement;
+    const secondCard = secondTitle.closest('[draggable="true"]') as HTMLElement;
+    const dataTransfer = {
+      effectAllowed: 'move',
+      dropEffect: 'move',
+      setData: vi.fn(),
+      getData: vi.fn(),
+    };
+
+    fireEvent.dragStart(firstCard, { dataTransfer });
+    fireEvent.dragOver(secondCard, { dataTransfer });
+    fireEvent.drop(secondCard, { dataTransfer });
 
     await waitFor(() => expect(state.reordered).toHaveLength(1));
     expect(state.reordered[0]).toEqual(['a2', 'a1']);
