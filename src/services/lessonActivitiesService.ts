@@ -179,6 +179,35 @@ export async function getActivityProgressPanel(lessonId: string) {
   return { ok: true, data: await res.json() };
 }
 
+// ── 学案成绩同步到成绩册（教师端）───────────────────────────────────────
+export interface ActivityGradeSyncOptions {
+  classId?: string | null;
+  studentIds?: string[];
+}
+
+export async function syncActivityGrades(lessonId: string, activityId: string, opts: ActivityGradeSyncOptions = {}) {
+  const res = await fetch(
+    `/api/lessons/${encodeURIComponent(lessonId)}/activities/${encodeURIComponent(activityId)}/sync-grade`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ classId: opts.classId ?? undefined, studentIds: opts.studentIds }),
+    },
+  );
+  if (!res.ok) return { ok: false as const, error: await res.json().catch(() => ({})) };
+  return { ok: true as const, data: await res.json() };
+}
+
+export async function syncLessonActivityGrades(lessonId: string, opts: ActivityGradeSyncOptions = {}) {
+  const res = await fetch(`/api/lessons/${encodeURIComponent(lessonId)}/activity-grades/sync`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ classId: opts.classId ?? undefined, studentIds: opts.studentIds }),
+  });
+  if (!res.ok) return { ok: false as const, error: await res.json().catch(() => ({})) };
+  return { ok: true as const, data: await res.json() };
+}
+
 // ── 学案包导入导出 ──────────────────────────────────────────────
 export async function exportXueanPackage(lessonId: string) {
   const res = await fetch(`/api/lessons/${lessonId}/xuean/export`);

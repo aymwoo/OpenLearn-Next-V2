@@ -81,6 +81,9 @@ export interface GradeWriteInputView {
   source: 'manual' | 'auto' | 'ai' | 'plugin' | 'system';
   reason?: string | null;
   overrideProtected?: boolean;
+  /** 宿主注入的操作者 actor，用于 graded_by 与审计历史。 */
+  actorId?: string | null;
+  actorRole?: string | null;
 }
 
 export interface RegisterAdapterResult {

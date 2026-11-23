@@ -97,6 +97,12 @@
 `studentId`。教师批阅走 `POST /api/lesson-activities/:id/progress/verify`，写入 `verified`、
 `score` 与 `status=graded`。
 
+> **批阅 ≠ 进成绩册**：`verify` 只写 `activity_progress`。要让学案成绩进入学期总评，教师还需
+> 显式同步到平台成绩册：`POST /api/lessons/:lessonId/activities/:activityId/sync-grade`（单活动）
+> 或 `POST /api/lessons/:lessonId/activity-grades/sync`（整课批量）。同步只取 `verified=1` 且有
+> 分数的记录，按 `xuean-activity:<activityId>` 写入 `assignments` / `assignment_submissions`，
+> 复用 grade-writer 的审计与手动分保护，重复同步幂等。
+
 ## 3. 教师端编排
 
 学案编辑器由 `XueanActivitiesPanel` 与 `ActivityConfigEditor` 组成：
@@ -140,7 +146,9 @@ canonical 路由位于 `server/routes/lesson-activities.ts`；旧 `/api/activiti
 | `POST /api/lessons/:lessonId/activities/assessment` | class-staff   | 试题活动：复用或发布试卷         |
 | `GET /api/lessons/:lessonId/xuean`                  | authenticated | 学生端聚合：块 + 活动 + 我的进度 |
 | `POST /api/lesson-activities/:id/progress`          | authenticated | 上报进度与提交                   |
-| `POST /api/lesson-activities/:id/progress/verify`   | class-staff   | 批阅 / 验证                      |
+| `POST /api/lesson-activities/:id/progress/verify`   | class-staff   | 批阅 / 验证（只写活动进度）      |
+| `POST /api/lesson-activities/:id/sync-grade`        | class-staff   | 单活动成绩同步到成绩册           |
+| `POST /api/lessons/:lessonId/activity-grades/sync`  | class-staff   | 整课批量同步已批阅成绩到成绩册   |
 | `POST /api/lesson-activities/:id/nudge`             | class-staff   | 催办                             |
 | `GET/POST /api/lesson-activities/:id/discussions`   | class-member  | 讨论列表与发帖 / 回复            |
 

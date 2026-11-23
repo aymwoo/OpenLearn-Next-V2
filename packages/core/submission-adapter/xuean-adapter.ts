@@ -130,15 +130,58 @@ function resolveClassId(
   return { ok: true, classId: linked.length === 1 ? linked[0] : '' };
 }
 
+/**
+ * 解析课节所属学年：排课优先，其次课堂会话。
+ *
+ * 学案作业壳没有自己的学年来源；如果不落学年，学期成绩按学年过滤时会整条漏掉。
+ */
+function resolveAcademicYear(db: XueanAdapterDb, classId: string, lessonId: string | null): string | null {
+  if (!lessonId) return null;
+  try {
+    const schedule = db
+      .prepare(
+        `SELECT academic_year FROM schedules
+          WHERE lesson_id = ? AND class_id = ? AND academic_year IS NOT NULL
+          LIMIT 1`,
+      )
+      .get?.(lessonId, classId) as { academic_year?: string | null } | undefined;
+    if (schedule?.academic_year) return schedule.academic_year;
+
+    const session = db
+      .prepare(
+        `SELECT academic_year FROM classroom_sessions
+          WHERE lesson_id = ? AND class_id = ? AND academic_year IS NOT NULL
+          ORDER BY COALESCE(started_at, created_at) DESC
+          LIMIT 1`,
+      )
+      .get?.(lessonId, classId) as { academic_year?: string | null } | undefined;
+    return session?.academic_year ?? null;
+  } catch {
+    // 表缺失 / 简化库：学年留空，由调用方按无学年处理
+    return null;
+  }
+}
+
 /** 确保成绩册里有对应的作业壳行：没有 assignment，grade-writer 会直接拒绝写分。 */
 function ensureAssignmentShell(
   db: XueanAdapterDb,
   args: { assignmentId: string; activityId: string; classId: string; lessonId: string | null },
 ): boolean {
   try {
-    const lookup = db.prepare('SELECT id FROM assignments WHERE id = ?');
+    const lookup = db.prepare('SELECT id, academic_year FROM assignments WHERE id = ?');
     if (!lookup.get) return false;
-    if (lookup.get(args.assignmentId)) return true;
+    const existing = lookup.get(args.assignmentId) as { id: string; academic_year?: string | null } | undefined;
+    if (existing) {
+      // 旧壳可能没落学年；补一次，避免按学年过滤时漏掉。
+      const academicYear = resolveAcademicYear(db, args.classId, args.lessonId);
+      if (!existing.academic_year && academicYear) {
+        db.prepare('UPDATE assignments SET academic_year = ? WHERE id = ? AND academic_year IS NULL').run?.(
+          academicYear,
+          args.assignmentId,
+        );
+      }
+      return true;
+    }
 
     let title = `学案活动 ${args.activityId}`;
     try {
@@ -149,9 +192,10 @@ function ensureAssignmentShell(
       // 标题只是展示信息，查不到就用兜底
     }
 
+    const academicYear = resolveAcademicYear(db, args.classId, args.lessonId);
     const insert = db.prepare(
-      `INSERT OR IGNORE INTO assignments (id, class_id, lesson_id, title, description, content, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT OR IGNORE INTO assignments (id, class_id, lesson_id, title, description, content, created_at, academic_year)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     );
     if (!insert.run) return false;
     insert.run(
@@ -162,6 +206,7 @@ function ensureAssignmentShell(
       null,
       JSON.stringify({ adapter: XUEAN_SUBMISSION_ADAPTER_ID, activityId: args.activityId }),
       Date.now(),
+      academicYear,
     );
     return true;
   } catch {

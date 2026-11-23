@@ -109,7 +109,15 @@ export class SubmissionAggregator {
     adapterId: string,
     submissionId: string,
     filter: SubmissionFilter,
-    grade: { score: number; feedback?: string | null; overrideProtected?: boolean; reason?: string | null },
+    grade: {
+      score: number;
+      feedback?: string | null;
+      overrideProtected?: boolean;
+      reason?: string | null;
+      /** 操作者 actor（宿主注入），用于 graded_by 与审计历史；缺省保持旧行为。 */
+      actorId?: string | null;
+      actorRole?: string | null;
+    },
   ): Promise<{ ok: boolean; reason?: string; historyId?: string }> {
     const adapter = this.registry.list().find((a) => a.descriptor.id === adapterId);
     if (!adapter || !adapter.toGradeInput) {
@@ -140,6 +148,8 @@ export class SubmissionAggregator {
       source: 'manual',
       reason: grade.reason ?? mapped.reason ?? 'classroom-flow grade',
       overrideProtected: grade.overrideProtected === true,
+      actorId: grade.actorId ?? null,
+      actorRole: grade.actorRole ?? null,
     });
     if (result.ok && adapter.afterGrade) {
       try {

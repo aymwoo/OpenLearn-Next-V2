@@ -12,6 +12,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Features
 
+- **学案成绩显式同步到成绩册**：新增 `POST /api/lesson-activities/:id/sync-grade`、`POST /api/lessons/:lessonId/activities/:activityId/sync-grade` 与 `POST /api/lessons/:lessonId/activity-grades/sync`。教师批阅（`progress/verify`）仍只写 `activity_progress`；同步动作把 `verified=1` 且有分的记录按 `xuean-activity:<activityId>` 写入 `assignments` / `assignment_submissions`，复用 SubmissionAggregator 与 grade-writer 的审计、手动分保护与幂等；`graded_by` / `assignment_grade_history` 记录教师 actor。学案教师进度面板新增「同步已批阅成绩」批量按钮与逐学生「同步」按钮，并在面板内提示「批阅后需同步到成绩册，学期总评才会计入」。
 - **第三方插件 P0 安全扩展服务**：新增 4 个宿主侧入口，避免插件为读核心数据而直查 sql-guard 禁读表或申请过宽权限：
   - `ctx.services.assignmentSubmission`（`assignment:read`）：`getMySubmission` / `getSubmissionForViewer` / `canShareSubmission`；学生仅本人、教师仅自己班级、管理员不限，返回体不含名册字段。
   - `ctx.services.xueanActivityProgress`（`lesson:read`）：学生读取本人活动进度与 `submission_json`，可见性走 `canSeeLesson`。
@@ -88,11 +89,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixes
 
+- **学期作业分分母与学年口径统一**：学期总评的作业分改为「本学年已发布作业数」为分母，未交 / 未出分按 0 计入；本学年没有任何已发布作业时按 100 分处理，不再被其他学年的作业拖成 0 分。作业成绩查询对 `assignment_submissions.academic_year` 兼容 `NULL`（以父作业学年为权威口径），避免旧数据因冗余列缺失被整段丢掉。学案同步补建的 `xuean-activity:*` 作业壳会按排课 / 课堂会话解析并写入 `academic_year`（旧壳为空时补写），保证同步后的学案成绩能在对应学年的学期总评里被统计。
 - **互动课堂入口不再先显示进行中会话列表**：进入互动课堂时始终先落到起始门户（课程选择 + 当前会话提示条），有进行中的课堂就在门户顶部通过「课堂进行中 → 回到课堂」进入，不再先跳到独立的进行中会话列表页；刷新恢复、班级锁定与一键开课信号的行为保持不变。
 - **归档并结束课堂后回到起始门户**：在学情简报页点击「归档并结束课堂」成功后，清理当前会话状态并返回起始门户，不再停留在原简报页；服务端归档仍保持幂等。
 
 ### Docs
 
+- **学案成绩同步文档**：`docs/architecture/xuean-activities.md` 明确「批阅 ≠ 进成绩册」，补充单活动同步与整课批量同步端点；`docs/ai-reference/api/http-endpoints.md` 同步新增路由与鉴权。
 - **活动协议参考同步**：`docs/ai-reference/api/http-endpoints.md` 新增「活动协议路由族」小节，记录 `/api/activity-providers`、`/api/activity-runs`、`/api/lesson-activities` 的 canonical 路径、鉴权与 307 别名映射，以及 `/api/system/extension-points`、`/api/system/activity-completions`、`/api/system/legacy-activity-routes` 三个管理员观测端点；`docs/ai-reference/subsystems/ai-and-assessment.md` 同步活动生态入口口径，不再把 `/api/activities` 当作规范路径。
 
 - **仓库平台模型切换为 Gitee 单平台**：Gitee 成为本仓库 **Issue / PR / 分支 / 合并 的唯一入口**，GitHub 仓库降级为归档副本（其 Actions 仍跑自动化 CI，但不参与协作流程）。

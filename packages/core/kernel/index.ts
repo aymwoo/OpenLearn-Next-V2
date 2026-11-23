@@ -382,6 +382,8 @@ export class Kernel {
           source: input.source,
           reason: input.reason,
           overrideProtected: input.overrideProtected,
+          actorId: input.actorId,
+          actorRole: input.actorRole,
         }),
     });
     this.serviceRegistry.register(ISubmissionRegistryToken, submissionRegistry);

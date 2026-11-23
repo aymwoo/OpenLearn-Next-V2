@@ -7,9 +7,11 @@ import {
   getActivityProgressPanel,
   verifyActivityProgress,
   nudgeActivity,
+  syncActivityGrades,
+  syncLessonActivityGrades,
 } from '../../../services/lessonActivitiesService.js';
 import { useOptionalAppData } from '../../../context/AppDataContext.js';
-import { Loader2, ChevronDown, ChevronRight } from 'lucide-react';
+import { Loader2, ChevronDown, ChevronRight, RefreshCw } from 'lucide-react';
 
 type PanelActivity = {
   id: string;
@@ -84,6 +86,13 @@ export function ProgressPanel() {
   const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [verifying, setVerifying] = useState<{ activityId: string; studentId: string } | null>(null);
+  const [syncing, setSyncing] = useState(false);
+  const [syncNotice, setSyncNotice] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // 学期成绩按班级结算；优先用当前课堂班级，其次用唯一选中的班级。
+  const syncClassId =
+    appData?.liveClassSelectedClassId ??
+    (appData?.selectedClassIds?.size === 1 ? Array.from(appData.selectedClassIds)[0] : null);
 
   const refresh = useCallback(async () => {
     if (!lessonId) {
@@ -118,6 +127,53 @@ export function ProgressPanel() {
             100,
         )
       : 0;
+
+  const syncResultText = (result: { synced?: number; skipped?: number; failed?: number }) => {
+    const synced = result.synced ?? 0;
+    const skipped = result.skipped ?? 0;
+    const failed = result.failed ?? 0;
+    if (synced === 0 && failed === 0) return '没有可同步的已批阅成绩';
+    if (failed > 0) return `已同步 ${synced} 条，跳过 ${skipped} 条，失败 ${failed} 条`;
+    return `已同步 ${synced} 条到成绩册${skipped > 0 ? `，跳过 ${skipped} 条` : ''}`;
+  };
+
+  const handleSyncAll = async () => {
+    if (!lessonId || syncing) return;
+    setSyncing(true);
+    setSyncNotice(null);
+    const res = await syncLessonActivityGrades(lessonId, { classId: syncClassId });
+    setSyncing(false);
+    if (!res.ok) {
+      const err = res.error as { error?: string };
+      setSyncNotice({ type: 'error', text: err?.error ?? '同步失败' });
+      return;
+    }
+    const result = res.data as { synced?: number; skipped?: number; failed?: number };
+    setSyncNotice({
+      type: (result.failed ?? 0) > 0 ? 'error' : 'success',
+      text: syncResultText(result),
+    });
+    await refresh();
+  };
+
+  const handleSyncOne = async (activityId: string, studentId: string) => {
+    if (!lessonId || syncing) return;
+    setSyncing(true);
+    setSyncNotice(null);
+    const res = await syncActivityGrades(lessonId, activityId, { classId: syncClassId, studentIds: [studentId] });
+    setSyncing(false);
+    if (!res.ok) {
+      const err = res.error as { error?: string };
+      setSyncNotice({ type: 'error', text: err?.error ?? '同步失败' });
+      return;
+    }
+    const result = res.data as { synced?: number; skipped?: number; failed?: number };
+    setSyncNotice({
+      type: (result.failed ?? 0) > 0 ? 'error' : 'success',
+      text: syncResultText(result),
+    });
+    await refresh();
+  };
 
   if (loading)
     return (
@@ -170,6 +226,26 @@ export function ProgressPanel() {
             aria-valuemax={100}
           />
         </div>
+        <div className="mt-3 flex items-center justify-between gap-2">
+          <p className="text-[11px] text-muted text-left">批阅后需同步到成绩册，学期总评才会计入。</p>
+          <button
+            type="button"
+            onClick={handleSyncAll}
+            disabled={syncing || data.activities.length === 0}
+            className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-primary-theme/30 text-primary-theme font-bold hover:bg-primary-theme/10 disabled:opacity-50"
+          >
+            <RefreshCw size={12} className={syncing ? 'animate-spin' : ''} />
+            {syncing ? '同步中…' : '同步已批阅成绩'}
+          </button>
+        </div>
+        {syncNotice && (
+          <p
+            className={`mt-2 text-[11px] text-left ${syncNotice.type === 'success' ? 'text-emerald-600' : 'text-rose-600'}`}
+            role="status"
+          >
+            {syncNotice.text}
+          </p>
+        )}
       </div>
 
       {/* 活动列表 */}
@@ -220,7 +296,9 @@ export function ProgressPanel() {
                 <StudentTable
                   activity={a}
                   studentMap={studentMap}
+                  syncing={syncing}
                   onVerify={(studentId) => setVerifying({ activityId: a.id, studentId })}
+                  onSync={(studentId) => handleSyncOne(a.id, studentId)}
                   onNudge={async (studentId) => {
                     await nudgeActivity(a.id, studentId);
                     await refresh();
@@ -266,12 +344,16 @@ function OverviewCell({ label, value, accent }: { label: string; value: string |
 function StudentTable({
   activity,
   studentMap,
+  syncing,
   onVerify,
+  onSync,
   onNudge,
 }: {
   activity: PanelActivity;
   studentMap: Record<string, { name?: string | null; username?: string | null }>;
+  syncing: boolean;
   onVerify: (studentId: string) => void;
+  onSync: (studentId: string) => void;
   onNudge: (studentId: string) => void;
 }) {
   // 无学生数据时提示
@@ -348,6 +430,17 @@ function StudentTable({
                       title={s.nudge_count ? `已催办 ${s.nudge_count} 次` : '催办'}
                     >
                       催办{s.nudge_count ? ` ${s.nudge_count}` : ''}
+                    </button>
+                  )}
+                  {s.verified === 1 && s.score != null && (
+                    <button
+                      type="button"
+                      onClick={() => onSync(s.student_id)}
+                      disabled={syncing}
+                      className="px-2.5 py-1 text-xs rounded border border-emerald-500/30 hover:bg-emerald-500/10 text-emerald-600 font-bold disabled:opacity-50"
+                      title="同步该学生成绩到学期成绩册"
+                    >
+                      同步
                     </button>
                   )}
                   <button

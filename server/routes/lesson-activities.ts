@@ -35,6 +35,12 @@
 import type { Request, Response, NextFunction } from 'express';
 import type Database from 'better-sqlite3';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
+import {
+  ISubmissionAggregatorToken,
+  ISubmissionRegistryToken,
+  XUEAN_SUBMISSION_ADAPTER_ID,
+  type SubmissionAggregator,
+} from '../../packages/core/submission-adapter/index.js';
 import { publishActivityCompleted } from '../../packages/core/events/activity-events.js';
 import { requireScopedAuth } from '../middleware/data-scope.js';
 import { sendSafeError } from '../utils/error-handler.js';
@@ -1316,6 +1322,222 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
     requireScopedAuth('class-staff'),
     requireActivityInLesson,
     verifyProgressHandler,
+  );
+
+  // ══════════════════════════════════════════════════════════════════════
+  // 学案成绩同步到平台成绩册（P0-3）
+  //
+  // verify 只写 activity_progress；本接口把已批阅（verified=1 且有分）的活动
+  // 显式投影为 `xuean-activity:<id>` 成绩项，经 SubmissionAggregator 统一写入
+  // assignment_submissions（复用 grade-writer 的审计与手动分保护）。
+  // 幂等：重复同步只刷新同一成绩项，不产生重复行。
+  // ══════════════════════════════════════════════════════════════════════
+
+  interface ActivitySyncRow {
+    student_id: string;
+    score: number | null;
+    verified: number;
+  }
+
+  interface ActivitySyncSummary {
+    activityId: string;
+    synced: number;
+    skipped: number;
+    failed: number;
+    results: Array<{ studentId: string; ok: boolean; reason?: string }>;
+  }
+
+  /** 课节 → 唯一班级；多班或零班时必须由调用方显式传 classId。 */
+  const resolveSyncClassId = (lessonId: string, requested: unknown): string | null => {
+    const linked = lessonLinkedClassIds(readDb, lessonId);
+    const wanted = typeof requested === 'string' && requested.trim() ? requested.trim() : null;
+    if (wanted) return linked.includes(wanted) ? wanted : null;
+    return linked.length === 1 ? linked[0] : null;
+  };
+
+  /** 校验 studentIds 均属于该班级；返回 null 表示未指定（同步全班）。 */
+  const resolveSyncStudentIds = (classId: string, raw: unknown): string[] | null | { error: string } => {
+    if (raw == null) return null;
+    if (!Array.isArray(raw) || raw.some((v) => typeof v !== 'string' || !v.trim())) {
+      return { error: 'studentIds must be an array of non-empty strings' };
+    }
+    const ids = Array.from(new Set(raw.map((v) => (v as string).trim())));
+    if (ids.length === 0) return null;
+    const placeholders = ids.map(() => '?').join(',');
+    const rows = readDb
+      .prepare(`SELECT student_id FROM class_students WHERE class_id = ? AND student_id IN (${placeholders})`)
+      .all(classId, ...ids) as Array<{ student_id: string }>;
+    const allowed = new Set(rows.map((r) => r.student_id));
+    const invalid = ids.filter((id) => !allowed.has(id));
+    return invalid.length > 0 ? { error: `studentIds not in class: ${invalid.join(', ')}` } : ids;
+  };
+
+  /** 解析当前会话的审计 actor（`user:<id>:<role>`），供 grade-writer 记录 graded_by/history。 */
+  const gradeActorFor = (session: AccessSession): { actorId: string | null; actorRole: string } => {
+    const id = actorUserId(session);
+    const role = isAdministrator(session) ? 'administrator' : 'teacher';
+    return { actorId: id ? `user:${id}:${role}` : null, actorRole: role };
+  };
+
+  /** 取得聚合器；xuean 适配器未注册时返回 null，由调用方给出明确错误。 */
+  const resolveGradeAggregator = async (): Promise<SubmissionAggregator | null> => {
+    const registry = await kernelContainer.serviceRegistry.resolve(ISubmissionRegistryToken);
+    if (!registry.list().some((a) => a.descriptor.id === XUEAN_SUBMISSION_ADAPTER_ID)) return null;
+    return kernelContainer.serviceRegistry.resolve(ISubmissionAggregatorToken);
+  };
+
+  const syncOneActivity = async (
+    activity: ActivityRow,
+    classId: string,
+    studentIds: string[] | null,
+    session: AccessSession,
+    aggregator: SubmissionAggregator,
+  ): Promise<ActivitySyncSummary> => {
+    const clauses = ['ap.activity_id = ?'];
+    const params: unknown[] = [activity.id];
+    if (studentIds && studentIds.length > 0) {
+      clauses.push(`ap.student_id IN (${studentIds.map(() => '?').join(',')})`);
+      params.push(...studentIds);
+    }
+    const rows = readDb
+      .prepare(
+        `SELECT ap.student_id, ap.score, ap.verified
+           FROM activity_progress ap
+           JOIN class_students cs ON cs.class_id = ? AND cs.student_id = ap.student_id
+          WHERE ${clauses.join(' AND ')}`,
+      )
+      .all(classId, ...params) as ActivitySyncRow[];
+
+    const { actorId, actorRole } = gradeActorFor(session);
+    const summary: ActivitySyncSummary = { activityId: activity.id, synced: 0, skipped: 0, failed: 0, results: [] };
+
+    for (const row of rows) {
+      // 只同步已批阅且有分的行；自报进度（verified=0）不进入成绩册。
+      if (row.verified !== 1 || row.score == null) {
+        summary.skipped++;
+        continue;
+      }
+      const score = Number(row.score);
+      if (!Number.isFinite(score) || score < 0 || score > 100) {
+        summary.failed++;
+        summary.results.push({ studentId: row.student_id, ok: false, reason: 'invalid-score' });
+        continue;
+      }
+      const result = await aggregator.writeGrade(
+        XUEAN_SUBMISSION_ADAPTER_ID,
+        `${XUEAN_SUBMISSION_ADAPTER_ID}:${activity.id}:${row.student_id}`,
+        {
+          classId,
+          lessonId: activity.lesson_id,
+          studentId: row.student_id,
+          adapterIds: [XUEAN_SUBMISSION_ADAPTER_ID],
+        },
+        { score, reason: 'xuean-sync-grade', actorId, actorRole },
+      );
+      if (result.ok) {
+        summary.synced++;
+      } else {
+        summary.failed++;
+        summary.results.push({ studentId: row.student_id, ok: false, reason: result.reason });
+      }
+    }
+    return summary;
+  };
+
+  const syncActivityGradesHandler = async (req: Request, res: Response) => {
+    try {
+      const activityId = req.params.id;
+      const session = requestSession(req);
+      const activity = readDb.prepare('SELECT * FROM lesson_activities WHERE id = ?').get(activityId) as
+        ActivityRow | undefined;
+      if (!activity) return res.status(404).json({ success: false, error: 'Activity not found' });
+      if (rejectUnless(res, authorizeLessonStaff(readDb, session, activity.lesson_id))) return;
+
+      const body = (req.body || {}) as Record<string, unknown>;
+      const classId = resolveSyncClassId(activity.lesson_id, body.classId);
+      if (!classId) {
+        return res.status(400).json({
+          success: false,
+          error: 'classId required: lesson is linked to zero or multiple classes',
+        });
+      }
+      if (rejectUnless(res, authorizeClass(readDb, session, classId, 'staff'))) return;
+
+      const studentIds = resolveSyncStudentIds(classId, body.studentIds);
+      if (studentIds && !Array.isArray(studentIds)) {
+        return res.status(400).json({ success: false, error: studentIds.error });
+      }
+      const aggregator = await resolveGradeAggregator();
+      if (!aggregator) {
+        return res.status(409).json({ success: false, error: 'xuean submission adapter is not registered' });
+      }
+
+      const summary = await syncOneActivity(activity, classId, studentIds, session, aggregator);
+      res.json({ success: true, classId, ...summary });
+    } catch (err: unknown) {
+      sendSafeError(res, err);
+    }
+  };
+
+  const syncLessonActivityGradesHandler = async (req: Request, res: Response) => {
+    try {
+      const lessonId = req.params.lessonId;
+      const session = requestSession(req);
+      if (rejectUnless(res, authorizeLessonStaff(readDb, session, lessonId))) return;
+
+      const body = (req.body || {}) as Record<string, unknown>;
+      const classId = resolveSyncClassId(lessonId, body.classId);
+      if (!classId) {
+        return res.status(400).json({
+          success: false,
+          error: 'classId required: lesson is linked to zero or multiple classes',
+        });
+      }
+      if (rejectUnless(res, authorizeClass(readDb, session, classId, 'staff'))) return;
+
+      const studentIds = resolveSyncStudentIds(classId, body.studentIds);
+      if (studentIds && !Array.isArray(studentIds)) {
+        return res.status(400).json({ success: false, error: studentIds.error });
+      }
+      const aggregator = await resolveGradeAggregator();
+      if (!aggregator) {
+        return res.status(409).json({ success: false, error: 'xuean submission adapter is not registered' });
+      }
+
+      const activityId = typeof body.activityId === 'string' && body.activityId.trim() ? body.activityId.trim() : null;
+      const activities = (
+        activityId
+          ? readDb.prepare('SELECT * FROM lesson_activities WHERE lesson_id = ? AND id = ?').all(lessonId, activityId)
+          : readDb.prepare('SELECT * FROM lesson_activities WHERE lesson_id = ?').all(lessonId)
+      ) as ActivityRow[];
+
+      const totals = { synced: 0, skipped: 0, failed: 0 };
+      const activitySummaries: ActivitySyncSummary[] = [];
+      for (const activity of activities) {
+        const summary = await syncOneActivity(activity, classId, studentIds, session, aggregator);
+        totals.synced += summary.synced;
+        totals.skipped += summary.skipped;
+        totals.failed += summary.failed;
+        activitySummaries.push(summary);
+      }
+
+      res.json({ success: true, lessonId, classId, ...totals, activities: activitySummaries });
+    } catch (err: unknown) {
+      sendSafeError(res, err);
+    }
+  };
+
+  app.post('/api/lesson-activities/:id/sync-grade', requireScopedAuth('class-staff'), syncActivityGradesHandler);
+  app.post(
+    '/api/lessons/:lessonId/activities/:activityId/sync-grade',
+    requireScopedAuth('class-staff'),
+    requireActivityInLesson,
+    syncActivityGradesHandler,
+  );
+  app.post(
+    '/api/lessons/:lessonId/activity-grades/sync',
+    requireScopedAuth('class-staff'),
+    syncLessonActivityGradesHandler,
   );
 
   // 一键催办：教师给未完成学生发催办，更新 nudged_at + nudge_count

@@ -30,11 +30,13 @@ function seedDb() {
     CREATE TABLE classroom_sessions (
       lesson_id TEXT NOT NULL,
       class_id TEXT,
-      stage TEXT
+      stage TEXT,
+      academic_year TEXT
     );
     CREATE TABLE schedules (
       lesson_id TEXT NOT NULL,
-      class_id TEXT
+      class_id TEXT,
+      academic_year TEXT
     );
     CREATE TABLE assignments (
       id TEXT PRIMARY KEY,
@@ -43,7 +45,8 @@ function seedDb() {
       title TEXT NOT NULL,
       description TEXT,
       content TEXT,
-      created_at INTEGER NOT NULL
+      created_at INTEGER NOT NULL,
+      academic_year TEXT
     );
   `);
   db.prepare(`INSERT INTO lesson_activities (id, lesson_id, order_index, type, title) VALUES (?, ?, 0, ?, ?)`).run(
@@ -56,6 +59,11 @@ function seedDb() {
     'les-1',
     'cls-1',
     'IN_CLASS_TEACHING',
+  );
+  db.prepare(`INSERT INTO schedules (lesson_id, class_id, academic_year) VALUES (?, ?, ?)`).run(
+    'les-1',
+    'cls-1',
+    '2025-2026',
   );
   db.prepare(
     `INSERT INTO activity_progress (activity_id, student_id, status, progress_percent, score, last_activity_at)
@@ -109,7 +117,13 @@ describe('createXueanSubmissionAdapter', () => {
     expect(sub.score).toBeNull();
     const mapped = adapter.toGradeInput!(sub);
     expect(mapped).toMatchObject({ assignmentId: 'xuean-activity:act-1', studentId: 'stu-2' });
-    expect(db.prepare('SELECT id FROM assignments WHERE id = ?').get('xuean-activity:act-1')).toBeTruthy();
+    const shell = db.prepare('SELECT id, academic_year FROM assignments WHERE id = ?').get('xuean-activity:act-1') as {
+      id: string;
+      academic_year: string | null;
+    };
+    expect(shell.id).toBe('xuean-activity:act-1');
+    // 作业壳必须落学年，否则学期成绩按学年过滤时会漏掉学案成绩。
+    expect(shell.academic_year).toBe('2025-2026');
 
     adapter.afterGrade!(sub, { score: 92, status: 'graded' });
     const row = db
