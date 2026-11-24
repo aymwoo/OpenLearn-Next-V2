@@ -32,6 +32,7 @@ function createTestDb() {
       class_id TEXT,
       lesson_id TEXT,
       title TEXT,
+      content TEXT,
       academic_year TEXT
     );
     CREATE TABLE assignment_submissions (
@@ -181,5 +182,42 @@ describe('AcademicYearComparisonService 跨学年指标计算与对比', () => {
     unregister();
     const mAfter = await service.getMetricsForYear('s1', '2024-2025');
     expect(mAfter.customMetrics).toBeUndefined();
+  });
+
+  it('同一成绩项被多条 assignment 重复记录时按去重后的项统计', async () => {
+    const db = createTestDb();
+    const service = new AcademicYearComparisonService(db);
+
+    db.prepare('INSERT INTO class_students (class_id, student_id) VALUES (?, ?)').run('c1', 's1');
+    db.prepare('INSERT INTO lessons (id, title) VALUES (?, ?)').run('les_math', '高等数学');
+    const cwContent = JSON.stringify({ type: 'interactive_courseware', coursewareUuid: 'cw-1' });
+    db.prepare(
+      'INSERT INTO assignments (id, class_id, lesson_id, title, content, academic_year) VALUES (?, ?, ?, ?, ?, ?)',
+    ).run('cw-old', 'c1', 'les_math', '互动课件: 旧壳', cwContent, '2025-2026');
+    db.prepare(
+      'INSERT INTO assignments (id, class_id, lesson_id, title, content, academic_year) VALUES (?, ?, ?, ?, ?, ?)',
+    ).run('cw-new', 'c1', 'les_math', '互动课件: 新壳', cwContent, '2025-2026');
+    db.prepare(
+      'INSERT INTO assignments (id, class_id, lesson_id, title, content, academic_year) VALUES (?, ?, ?, ?, ?, ?)',
+    ).run('plain', 'c1', 'les_math', '普通作业', '', '2025-2026');
+
+    db.prepare(
+      'INSERT INTO assignment_submissions (assignment_id, student_id, status, score, submitted_at, academic_year) VALUES (?, ?, ?, ?, ?, ?)',
+    ).run('cw-old', 's1', 'graded', 80, '2025-10-01', '2025-2026');
+    db.prepare(
+      'INSERT INTO assignment_submissions (assignment_id, student_id, status, score, submitted_at, academic_year) VALUES (?, ?, ?, ?, ?, ?)',
+    ).run('cw-new', 's1', 'graded', 90, '2025-10-02', '2025-2026');
+    db.prepare(
+      'INSERT INTO assignment_submissions (assignment_id, student_id, status, score, submitted_at, academic_year) VALUES (?, ?, ?, ?, ?, ?)',
+    ).run('plain', 's1', 'graded', 70, '2025-10-03', '2025-2026');
+
+    const m = await service.getMetricsForYear('s1', '2025-2026');
+    // 同一课件的两条壳合并为一项，取最新 90；加上普通作业 70。
+    expect(m.totalAssignments).toBe(2);
+    expect(m.submittedAssignments).toBe(2);
+    expect(m.averageScore).toBe(80);
+    expect(m.courseScores).toHaveLength(1);
+    expect(m.courseScores[0].totalAssignmentCount).toBe(2);
+    expect(m.courseScores[0].averageScore).toBe(80);
   });
 });

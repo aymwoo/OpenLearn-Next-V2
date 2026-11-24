@@ -12,6 +12,7 @@ import {
   getDefaultComparisonAcademicYears,
   getCurrentAcademicYear,
 } from '../utils/academic-year.js';
+import { resolveGradeItemKey } from './grade-item-key.js';
 
 export interface CourseScoreItem {
   courseId: string;
@@ -74,6 +75,54 @@ function calculateDelta(curr: number, prev: number): MetricDelta {
   if (diff > 0) return { diff, direction: 'up' };
   if (diff < 0) return { diff, direction: 'down' };
   return { diff: 0, direction: 'flat' };
+}
+
+interface AssignmentWithSubmission {
+  id: string;
+  class_id: string;
+  lesson_id?: string | null;
+  title: string;
+  content?: string | null;
+  submission_status?: string | null;
+  score?: number | null;
+  submitted_at?: string | number | null;
+}
+
+function submissionTime(raw: string | number | null | undefined): number {
+  if (raw == null) return 0;
+  if (typeof raw === 'number') return raw;
+  const numeric = Number(raw);
+  if (Number.isFinite(numeric) && numeric > 0) return numeric;
+  const parsed = Date.parse(raw);
+  return Number.isNaN(parsed) ? 0 : parsed;
+}
+
+/** 按成绩项键合并重复 assignment：优先保留有分数的行，其次保留最新提交的行。 */
+function dedupeAssignmentRows(rows: AssignmentWithSubmission[]): AssignmentWithSubmission[] {
+  const byKey = new Map<string, AssignmentWithSubmission>();
+  for (const row of rows) {
+    const key = resolveGradeItemKey({
+      id: row.id,
+      classId: row.class_id,
+      lessonId: row.lesson_id,
+      content: row.content,
+    });
+    const prev = byKey.get(key);
+    if (!prev) {
+      byKey.set(key, row);
+      continue;
+    }
+    const prevScored = prev.score != null && !Number.isNaN(Number(prev.score));
+    const nextScored = row.score != null && !Number.isNaN(Number(row.score));
+    if (nextScored !== prevScored) {
+      if (nextScored) byKey.set(key, row);
+      continue;
+    }
+    if (submissionTime(row.submitted_at) > submissionTime(prev.submitted_at)) {
+      byKey.set(key, row);
+    }
+  }
+  return [...byKey.values()];
 }
 
 export class AcademicYearComparisonService {
@@ -156,23 +205,20 @@ export class AcademicYearComparisonService {
     }
 
     // 1. 获取该学生所属班级在该学年布置的作业与该学生的提交
-    const assignments = this.db
+    //    同一成绩项可能被历史逻辑写成多行 assignment，先按稳定键去重，避免提交率、
+    //    均分与课程分布被同一份成绩重复统计。
+    const assignmentRows = this.db
       .prepare(
-        `SELECT a.id, a.lesson_id, a.title,
+        `SELECT a.id, a.class_id, a.lesson_id, a.title, a.content,
                 sub.status as submission_status, sub.score, sub.submitted_at
          FROM assignments a
          JOIN class_students cs ON a.class_id = cs.class_id
          LEFT JOIN assignment_submissions sub ON a.id = sub.assignment_id AND sub.student_id = ?
          WHERE cs.student_id = ? AND a.academic_year = ?`,
       )
-      .all(studentId, studentId, academicYear) as Array<{
-      id: string;
-      lesson_id?: string | null;
-      title: string;
-      submission_status?: string | null;
-      score?: number | null;
-      submitted_at?: string | null;
-    }>;
+      .all(studentId, studentId, academicYear) as AssignmentWithSubmission[];
+
+    const assignments = dedupeAssignmentRows(assignmentRows);
 
     const totalAssignments = assignments.length;
     const submittedRows = assignments.filter((a) => a.submission_status || a.submitted_at);

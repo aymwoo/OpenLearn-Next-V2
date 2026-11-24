@@ -8,6 +8,7 @@ import type Database from 'better-sqlite3';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
 import { randomId } from '../utils/id.js';
 import { deriveAcademicYear, deriveAcademicYearFromSemesterName } from '../utils/academic-year.js';
+import { resolveGradeItemKey } from './grade-item-key.js';
 import { resolveAccessibleAiProvider } from './ai-provider-resolver.js';
 import { fetchWithRetry } from '../../packages/core/ai/utils/fetch-with-retry.js';
 import { buildOpenAIChatUrl, validateAiProviderUrl } from '../../packages/core/ai/utils/redirect-guard.js';
@@ -379,17 +380,50 @@ export class GradingService {
     // 5. 批量拉取平时作业得分
     //    学年过滤：只认父作业 `assignments.academic_year`。`assignment_submissions.academic_year`
     //    是冗余列，存量行可能为 NULL 或与父作业不一致，不能再用它做二次过滤，否则历史成绩会被丢掉。
+    //
+    //    去重：同一成绩项（同一学案活动 / 同一课节的同一课件）可能被历史逻辑写成多行
+    //    assignment，逐行累加会让同一份成绩同时进入分子与分母。按稳定键去重，每个
+    //    学生每个成绩项只保留最新的一条（时间相同则取较高分），普通作业仍各自独立。
+    const assignmentItems = this.db
+      .prepare(
+        `SELECT id, lesson_id, content FROM assignments
+         WHERE class_id = ?${academicYear ? ' AND academic_year = ?' : ''}`,
+      )
+      .all(...(academicYear ? [classId, academicYear] : [classId])) as Array<{
+      id: string;
+      lesson_id: string | null;
+      content: string | null;
+    }>;
+
+    const gradeItemKeyByAssignmentId = new Map<string, string>();
+    const gradeItemKeys = new Set<string>();
+    for (const item of assignmentItems) {
+      const key = resolveGradeItemKey({
+        id: item.id,
+        classId,
+        lessonId: item.lesson_id,
+        content: item.content,
+      });
+      gradeItemKeyByAssignmentId.set(item.id, key);
+      gradeItemKeys.add(key);
+    }
+
     const assignmentSubmissions = this.db
       .prepare(
         `
-      SELECT s.student_id, s.score FROM assignment_submissions s
-      WHERE s.assignment_id IN (SELECT id FROM assignments WHERE class_id = ?${academicYear ? ' AND academic_year = ?' : ''})
+      SELECT s.student_id, s.assignment_id, s.score, s.graded_at, s.submitted_at
+      FROM assignment_submissions s
+      JOIN assignments a ON a.id = s.assignment_id
+      WHERE a.class_id = ?${academicYear ? ' AND a.academic_year = ?' : ''}
         AND s.status = 'graded' AND s.score IS NOT NULL
     `,
       )
       .all(...(academicYear ? [classId, academicYear] : [classId])) as Array<{
       student_id: string;
+      assignment_id: string;
       score: number | null;
+      graded_at: number | null;
+      submitted_at: number | null;
     }>;
 
     // 6. 批量拉取考试得分
@@ -437,10 +471,23 @@ export class GradingService {
       verifiedProgressMap.get(p.student_id)!.push(p.verified_progress_percent ?? p.progress_percent);
     }
 
-    const assignmentMap = new Map<string, number[]>();
-    for (const a of assignmentSubmissions) {
-      if (!assignmentMap.has(a.student_id)) assignmentMap.set(a.student_id, []);
-      assignmentMap.get(a.student_id)!.push(typeof a.score === 'number' ? a.score : 0);
+    type DedupedGrade = { score: number; at: number; assignmentId: string };
+    const assignmentMap = new Map<string, Map<string, DedupedGrade>>();
+    for (const row of assignmentSubmissions) {
+      const score = typeof row.score === 'number' ? row.score : 0;
+      const key = gradeItemKeyByAssignmentId.get(row.assignment_id) ?? `assignment:${row.assignment_id}`;
+      let byItem = assignmentMap.get(row.student_id);
+      if (!byItem) {
+        byItem = new Map();
+        assignmentMap.set(row.student_id, byItem);
+      }
+      const at = Number(row.graded_at ?? row.submitted_at ?? 0);
+      const prev = byItem.get(key);
+      const shouldReplace =
+        !prev ||
+        at > prev.at ||
+        (at === prev.at && (score > prev.score || (score === prev.score && row.assignment_id > prev.assignmentId)));
+      if (shouldReplace) byItem.set(key, { score, at, assignmentId: row.assignment_id });
     }
 
     const examMap = new Map<string, Array<{ score: number; max: number }>>();
@@ -453,15 +500,9 @@ export class GradingService {
     // 否则「本学年没有作业/考试」的班级会因为别的学年存在作业/考试而被判成「缺交记 0 分」。
     //
     // 作业分母与分子使用同一学年口径：本学年没有任何已发布作业时按「无作业」处理（100 分），
-    // 而不是被其它学年的作业拖成 0 分。
-    const totalPublishedAssignments =
-      (
-        this.db
-          .prepare(
-            `SELECT COUNT(*) as count FROM assignments WHERE class_id = ?${academicYear ? ' AND academic_year = ?' : ''}`,
-          )
-          .get(...(academicYear ? [classId, academicYear] : [classId])) as any
-      )?.count || 0;
+    // 而不是被其它学年的作业拖成 0 分。分母按去重后的成绩项计数，避免同一成绩项的多行
+    // assignment 把分母抬高。
+    const totalPublishedAssignments = gradeItemKeys.size;
 
     const totalPublishedExams =
       (
@@ -514,7 +555,9 @@ export class GradingService {
 
       // 计算作业分：本学年已发布作业为分母，未交/未出分按 0 分计入；
       // 本学年没有任何已发布作业时按 100 分处理，避免无课程产出被误扣分。
-      const scores = assignmentMap.get(student.id) || [];
+      const scores = assignmentMap.has(student.id)
+        ? [...assignmentMap.get(student.id)!.values()].map((item) => item.score)
+        : [];
       let assignmentScore = 100;
       if (totalPublishedAssignments > 0) {
         const sum = scores.reduce((acc, val) => acc + val, 0);

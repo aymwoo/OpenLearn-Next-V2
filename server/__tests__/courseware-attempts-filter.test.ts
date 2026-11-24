@@ -261,4 +261,50 @@ describe('GET /api/courseware/attempts coursewareUuid filter', () => {
     expect(teacherRow.comment).toBe('教师评语：不错');
     expect(teacherRow.extra_json).toContain('answers');
   });
+
+  it('isPromoted 传 lessonId 时只统计本课节的作业壳', async () => {
+    const now = Date.now();
+    const insertAssignment = kernelContainer.db.prepare(
+      `INSERT OR REPLACE INTO assignments (id, class_id, lesson_id, title, description, content, created_at, academic_year)
+       VALUES (?, ?, ?, ?, '', ?, ?, '2025-2026')`,
+    );
+    insertAssignment.run(
+      'ast-lesson-A',
+      classId,
+      'les-filter-A',
+      '互动课件: 课件 A',
+      JSON.stringify({ type: 'interactive_courseware', coursewareUuid: uuidA }),
+      now,
+    );
+    insertAssignment.run(
+      'ast-lesson-other',
+      classId,
+      'les-filter-other',
+      '互动课件: 课件 A',
+      JSON.stringify({ type: 'interactive_courseware', coursewareUuid: uuidA }),
+      now + 1,
+    );
+    const insertSubmission = kernelContainer.db.prepare(
+      `INSERT OR REPLACE INTO assignment_submissions (assignment_id, student_id, content, score, submitted_at, status, academic_year)
+       VALUES (?, ?, '{}', ?, ?, 'graded', '2025-2026')`,
+    );
+    insertSubmission.run('ast-lesson-A', studentId, 88, now);
+    insertSubmission.run('ast-lesson-other', studentId, 77, now);
+
+    const byLesson = (
+      (await (
+        await fetch(`${baseUrl}/api/courseware/attempts?coursewareUuid=${uuidA}&lessonId=les-filter-A`, {
+          headers: cookie(teacherToken),
+        })
+      ).json()) as { data: Array<{ attemptId: string; isPromoted: number }> }
+    ).data;
+    expect(byLesson.find((r) => r.attemptId === 'att-A-1')?.isPromoted).toBe(1);
+
+    const allLessons = (
+      (await (
+        await fetch(`${baseUrl}/api/courseware/attempts?coursewareUuid=${uuidA}`, { headers: cookie(teacherToken) })
+      ).json()) as { data: Array<{ attemptId: string; isPromoted: number }> }
+    ).data;
+    expect(allLessons.find((r) => r.attemptId === 'att-A-1')?.isPromoted).toBe(2);
+  });
 });

@@ -414,6 +414,72 @@ interface CoursewareAssignmentRef {
   academicYear: string | null;
 }
 
+/**
+ * 收集课节真实关联的课件 UUID：白板 learning_surface 元素、旧 html-applet 元素、
+ * 学案首页互动课件块。补录按该集合收敛，避免把同一班级「别的课节」的课件
+ * 作答也记到本课节名下（历史缺陷：补录只按班级圈全班，跨课节串分）。
+ */
+function collectLessonCoursewareUuids(db: SqliteLike, lessonId: string): string[] {
+  const uuids = new Set<string>();
+  const add = (value: unknown) => {
+    if (typeof value === 'string' && value.trim()) uuids.add(value.trim());
+  };
+
+  try {
+    const rows = db
+      .prepare(
+        `SELECT ls.content_ref_json AS ref
+           FROM whiteboard_elements w
+           JOIN learning_surfaces ls ON ls.id = json_extract(w.data, '$.surfaceId')
+          WHERE w.lesson_id = ? AND w.type = 'learning_surface'`,
+      )
+      .all(lessonId) as Array<{ ref: string | null }>;
+    for (const row of rows) {
+      try {
+        const ref = JSON.parse(row.ref || '{}') as {
+          rendererId?: string;
+          source?: { kind?: string; id?: string };
+        };
+        if (ref.rendererId === 'html_courseware' && ref.source?.kind === 'courseware') add(ref.source.id);
+      } catch {
+        // 单个 Surface 引用损坏不影响其余元素
+      }
+    }
+  } catch {
+    // 迁移尚未执行或表缺失时降级到旧路径
+  }
+
+  try {
+    const els = db
+      .prepare("SELECT data FROM whiteboard_elements WHERE lesson_id = ? AND type = 'html-applet'")
+      .all(lessonId) as Array<{ data: string }>;
+    for (const el of els) {
+      try {
+        const parsed = JSON.parse(el.data || '{}') as Record<string, unknown>;
+        add(parsed?.coursewareUuid ?? parsed?.uuid);
+      } catch {
+        // 忽略损坏的旧元素
+      }
+    }
+  } catch {}
+
+  try {
+    const blocks = db
+      .prepare('SELECT content_json FROM lesson_activity_blocks WHERE lesson_id = ?')
+      .all(lessonId) as Array<{ content_json: string | null }>;
+    for (const block of blocks) {
+      try {
+        const parsed = JSON.parse(block.content_json || '{}') as Record<string, unknown>;
+        add(parsed?.coursewareUuid);
+      } catch {
+        // 忽略损坏的学案块
+      }
+    }
+  } catch {}
+
+  return Array.from(uuids);
+}
+
 /** 学生是否属于该班级：成绩只能落在学生实际所在的班级。 */
 function isEnrolledInClass(db: SqliteLike, classId: string, studentId: string): boolean {
   try {
@@ -462,6 +528,8 @@ function resolveLessonAcademicYear(db: SqliteLike, classId: string, lessonId: st
 /**
  * 课件对应的作业壳行：以 assignments.content 里的 coursewareUuid 作为稳定关联键。
  * 只有历史上没有 UUID 标记的行才回退标题匹配，避免不同课件同名时互相覆盖成绩。
+ * 用 json_extract 做语义匹配，兼容 `{"coursewareUuid": "x"}` 这类带空格的写法；
+ * 命中无标记的旧壳时回填 UUID，后续调用即可走稳定键，不再依赖标题。
  */
 function findCoursewareAssignment(
   db: SqliteLike,
@@ -475,11 +543,12 @@ function findCoursewareAssignment(
       const byUuid = db
         .prepare(
           `SELECT id, academic_year FROM assignments
-           WHERE class_id = ? AND lesson_id = ? AND instr(COALESCE(content, ''), ?) > 0
+           WHERE class_id = ? AND lesson_id = ?
+             AND json_valid(COALESCE(content, ''))
+             AND json_extract(content, '$.coursewareUuid') = ?
            ORDER BY created_at ASC LIMIT 1`,
         )
-        .get(classId, lessonId, `"coursewareUuid":"${coursewareUuid}"`) as
-        { id: string; academic_year: string | null } | undefined;
+        .get(classId, lessonId, coursewareUuid) as { id: string; academic_year: string | null } | undefined;
       if (byUuid) return { id: byUuid.id, academicYear: byUuid.academic_year ?? null };
     }
 
@@ -487,14 +556,37 @@ function findCoursewareAssignment(
       .prepare(
         `SELECT id, academic_year FROM assignments
          WHERE class_id = ? AND lesson_id = ? AND title = ?
-           AND instr(COALESCE(content, ''), '"coursewareUuid"') = 0
+           AND (
+             json_valid(COALESCE(content, '')) = 0
+             OR json_extract(CASE WHEN json_valid(COALESCE(content, '')) THEN content ELSE '{}' END, '$.coursewareUuid') IS NULL
+           )
          ORDER BY created_at ASC LIMIT 1`,
       )
       .get(classId, lessonId, `互动课件: ${coursewareName}`) as
       { id: string; academic_year: string | null } | undefined;
-    return legacy ? { id: legacy.id, academicYear: legacy.academic_year ?? null } : null;
+    if (!legacy) return null;
+
+    if (coursewareUuid) backfillCoursewareUuid(db, legacy.id, coursewareUuid);
+    return { id: legacy.id, academicYear: legacy.academic_year ?? null };
   } catch {
     return null;
+  }
+}
+
+/** 给无标记的旧作业壳补写 coursewareUuid（非 JSON / 空 content 统一按 '{}' 处理） */
+function backfillCoursewareUuid(db: SqliteLike, assignmentId: string, coursewareUuid: string): void {
+  try {
+    db.prepare(
+      `UPDATE assignments
+          SET content = json_set(CASE WHEN json_valid(COALESCE(content, '')) THEN content ELSE '{}' END, '$.coursewareUuid', ?)
+        WHERE id = ?
+          AND (
+            json_valid(COALESCE(content, '')) = 0
+            OR json_extract(CASE WHEN json_valid(COALESCE(content, '')) THEN content ELSE '{}' END, '$.coursewareUuid') IS NULL
+          )`,
+    ).run(coursewareUuid, assignmentId);
+  } catch {
+    // 老库缺 json1 扩展或列缺失时保持原样，标题回退仍可工作
   }
 }
 
@@ -642,6 +734,12 @@ export interface AutoRecordReport {
   }>;
   /** 考勤联动：为本课节缺考且无成绩行的学生自动生成的缺考成绩行数 */
   absentGenerated?: number;
+  /**
+   * 补录口径：
+   * - 'lesson'：仅处理本课节真实关联课件的 attempt（白板 / 学案引用）；
+   * - 'class'：课节尚未关联任何课件时回退为全班口径（历史行为）。
+   */
+  scope?: 'lesson' | 'class';
 }
 
 /**
@@ -658,7 +756,19 @@ export function autoRecordForLesson(
   const { lessonId, classId } = context;
   const limit = Math.max(1, Math.min(context.limit ?? 1000, 5000));
 
-  let rows: any[] = [];
+  // 补录只处理本课节真实关联的课件；课节尚未关联任何课件（老数据 / 纯作业课节）
+  // 才回退全班口径，并在 report 中标明，避免「别的课节课件被记进本课节」。
+  let lessonCoursewareUuids: string[] = [];
+  try {
+    lessonCoursewareUuids = collectLessonCoursewareUuids(db, lessonId);
+  } catch {
+    // 关联表缺失时保持空集合，回退全班口径
+  }
+  const scope: 'lesson' | 'class' = lessonCoursewareUuids.length > 0 ? 'lesson' : 'class';
+  const scopeSql = scope === 'lesson' ? `AND cw.uuid IN (${lessonCoursewareUuids.map(() => '?').join(',')})` : '';
+  const scopeArgs = scope === 'lesson' ? lessonCoursewareUuids : [];
+
+  let rows: any[];
   try {
     rows = db
       .prepare(
@@ -670,15 +780,16 @@ export function autoRecordForLesson(
          LEFT JOIN submission_result r ON r.attempt_id = a.id
          WHERE a.status IN ('completed', 'submitted', 'finished')
            AND a.student_id NOT IN ('guest', 'teacher', 'teacher_preview', '')
+           ${scopeSql}
          ORDER BY a.finished_at DESC, a.started_at DESC
          LIMIT ?`,
       )
-      .all(classId, limit) as any[];
+      .all(classId, ...scopeArgs, limit) as any[];
   } catch (e) {
-    return { recorded: 0, skipped: 0, details: [] };
+    return { recorded: 0, skipped: 0, details: [], scope };
   }
 
-  const report: AutoRecordReport = { recorded: 0, skipped: 0, details: [] };
+  const report: AutoRecordReport = { recorded: 0, skipped: 0, details: [], scope };
 
   // 同一 (学生, 课件) 只补录最新一条 attempt：latest 策略刷新为最新分，
   // highest 策略也只应与最新 attempt 比较（旧行已按 finished_at DESC 排序，首个即最新）。

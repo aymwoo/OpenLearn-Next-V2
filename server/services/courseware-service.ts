@@ -419,11 +419,14 @@ export class CoursewareService {
   // ── 4. 榜单查询与脱敏投影 ──────────────────────────────────────────────────
 
   public listAttempts(
-    queryParams: { coursewareUuid?: string; page?: any; pageSize?: any },
+    queryParams: { coursewareUuid?: string; lessonId?: string; page?: any; pageSize?: any },
     sessionOrIsStaff?: AccessSession | boolean | null,
     requesterStudentId?: string,
   ): ListAttemptsResult {
     const coursewareUuid = typeof queryParams.coursewareUuid === 'string' ? queryParams.coursewareUuid.trim() : '';
+    // 「已录入」徽标按课节口径判定：调用方传 lessonId 时只看该课节的作业壳，
+    // 避免同一课件在别的课节/班级录入过就误标为「本课节已录入」。
+    const lessonId = typeof queryParams.lessonId === 'string' ? queryParams.lessonId.trim() : '';
 
     let isStaff = false;
     let isAdmin = false;
@@ -459,10 +462,15 @@ export class CoursewareService {
                SELECT COUNT(*) FROM assignment_submissions sub
                JOIN assignments ast ON sub.assignment_id = ast.id
                WHERE sub.student_id = a.student_id
+                 AND ast.class_id IN (
+                   SELECT cs.class_id FROM class_students cs WHERE cs.student_id = a.student_id
+                 )
+                 ${lessonId ? 'AND ast.lesson_id = ?' : ''}
                  AND (
-                   instr(COALESCE(ast.content, ''), '"coursewareUuid":"' || cw.uuid || '"') > 0
+                   (json_valid(COALESCE(ast.content, ''))
+                     AND json_extract(ast.content, '$.coursewareUuid') = cw.uuid)
                    OR (
-                     instr(COALESCE(ast.content, ''), '"coursewareUuid"') = 0
+                     json_extract(CASE WHEN json_valid(COALESCE(ast.content, '')) THEN ast.content ELSE '{}' END, '$.coursewareUuid') IS NULL
                      AND ast.title = '互动课件: ' || cw.name
                    )
                  )
@@ -510,9 +518,11 @@ export class CoursewareService {
     const pg: Pagination = parsePagination(queryParams as any);
     const countSql = `SELECT COUNT(*) AS n FROM courseware_attempt a JOIN courseware cw ON a.courseware_id = cw.id${whereSql}`;
 
+    // 投影里的 isPromoted 子查询参数先于 WHERE 参数绑定
+    const selectArgs = lessonId ? [lessonId] : [];
     const total = (this.db.prepare(countSql).get(...args) as any).n;
     const stmt = this.db.prepare(sql);
-    const rows = stmt.all(...args, pg.isAll ? -1 : pg.pageSize, pg.offset) as AttemptListItem[];
+    const rows = stmt.all(...selectArgs, ...args, pg.isAll ? -1 : pg.pageSize, pg.offset) as AttemptListItem[];
 
     const sanitizedData = isStaff
       ? rows

@@ -79,7 +79,10 @@ export function useLiveClassroomSubmissions(options: {
   const fetchAttempts = useCallback(async () => {
     setLoadingAttempts(true);
     try {
-      const res = await fetch('/api/courseware/attempts?pageSize=all');
+      // 带上课节：isPromoted（「已录入」徽标）只按本课节的作业壳判定
+      const params = new URLSearchParams({ pageSize: 'all' });
+      if (selectedLesson) params.set('lessonId', selectedLesson);
+      const res = await fetch(`/api/courseware/attempts?${params.toString()}`);
       if (res.ok) {
         const data = listFromEnvelope<any>(await res.json());
         setAttempts(data);
@@ -89,7 +92,7 @@ export function useLiveClassroomSubmissions(options: {
     } finally {
       setLoadingAttempts(false);
     }
-  }, []);
+  }, [selectedLesson]);
 
   const fetchPluginSubmissions = useCallback(async () => {
     if (!selectedLesson) return;

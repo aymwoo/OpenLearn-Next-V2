@@ -349,7 +349,16 @@ provider 活动的运行态。`id` / `activity_id` / `provider_id` / `lesson_id`
 
 ### `assignments`
 
-`id` / `class_id` / `lesson_id` / `title` / `description` / `content` / `created_at`。
+`id` / `class_id` / `lesson_id` / `title` / `description` / `content` / `created_at` / `academic_year`。
+
+> **成绩项去重**：`content` 里带稳定来源标识的作业会被识别为同一成绩项——互动课件的
+> `coursewareUuid`（同一课节内合并，跨课节视为两次课堂作业）与学案活动的 `activityId`。
+> 学期总评与学年对比按该标识去重后统计，避免历史重复壳行让同一份成绩重复计入分子与分母；
+> 无标识的普通作业仍按 `id` 各自独立。
+>
+> 写入侧同样按 `coursewareUuid` 做 JSON 语义匹配（兼容字段间空格），命中无标识的旧课件壳时
+> 自动补写 `coursewareUuid`；批量补录只处理课节真实关联的课件（白板 / 学案引用），
+> 课节未关联课件时才回退全班口径并在补录报告里标记 `scope`。
 
 ### `assignment_submissions`
 

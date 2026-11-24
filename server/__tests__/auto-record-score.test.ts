@@ -22,7 +22,10 @@ import {
   normalizePercentScore,
   promoteAttemptToGrade,
 } from '../utils/auto-record-score.js';
-import { saveScoreConfig, resolveScoreConfig } from '../../packages/plugins/courseware-score.js';
+import { saveScoreConfig, resolveScoreConfig, type SqliteLike } from '../../packages/plugins/courseware-score.js';
+
+/** better-sqlite3 的 Database 与宿主 SqliteLike 结构一致；显式转换避免 any 告警 */
+const asSqlite = (database: Database.Database): SqliteLike => database as unknown as SqliteLike;
 
 let db: Database.Database;
 let dbPath: string;
@@ -406,6 +409,42 @@ describe('promoteAttemptToGrade', () => {
     const count = db.prepare('SELECT COUNT(*) AS n FROM assignment_submissions').get() as { n: number };
     expect(count.n).toBe(0);
   });
+
+  it('作业壳 UUID 匹配按 JSON 语义，兼容带空格的写法', () => {
+    db.prepare(
+      `INSERT INTO assignments (id, class_id, lesson_id, title, description, content, created_at, academic_year)
+       VALUES ('ast_space', ?, ?, '互动课件: 旧标题', '', ?, ?, '2025-2026')`,
+    ).run(CLASS_ID, LESSON, '{ "type": "interactive_courseware", "coursewareUuid": "uuid-cw_1" }', Date.now());
+    seedAttempt({ attemptId: 'att_space', studentId: 's1', score: 77 });
+
+    const result = promoteAttemptToGrade(asSqlite(db), 'att_space', { lessonId: LESSON, classId: CLASS_ID });
+    expect(result.ok).toBe(true);
+    expect(result.assignmentId).toBe('ast_space');
+    const count = db.prepare('SELECT COUNT(*) AS n FROM assignments').get() as { n: number };
+    expect(count.n).toBe(1);
+  });
+
+  it('命中无标记旧作业壳时回填 coursewareUuid，后续不依赖标题', () => {
+    db.prepare(
+      `INSERT INTO assignments (id, class_id, lesson_id, title, description, content, created_at, academic_year)
+       VALUES ('ast_legacy', ?, ?, '互动课件: 分数乐园', '', '{"type":"interactive_courseware"}', ?, '2025-2026')`,
+    ).run(CLASS_ID, LESSON, Date.now());
+    seedAttempt({ attemptId: 'att_legacy', studentId: 's1', score: 66 });
+
+    const first = promoteAttemptToGrade(asSqlite(db), 'att_legacy', { lessonId: LESSON, classId: CLASS_ID });
+    expect(first.ok).toBe(true);
+    expect(first.assignmentId).toBe('ast_legacy');
+
+    const row = db.prepare("SELECT content FROM assignments WHERE id = 'ast_legacy'").get() as { content: string };
+    expect(JSON.parse(row.content).coursewareUuid).toBe('uuid-cw_1');
+
+    // 回填后课件改名仍命中同一壳（稳定键生效），不会按新标题重建
+    db.prepare("UPDATE courseware SET name = '改名后的课件' WHERE id = 'cw_1'").run();
+    const second = promoteAttemptToGrade(asSqlite(db), 'att_legacy', { lessonId: LESSON, classId: CLASS_ID });
+    expect(second.assignmentId).toBe('ast_legacy');
+    const count = db.prepare('SELECT COUNT(*) AS n FROM assignments').get() as { n: number };
+    expect(count.n).toBe(1);
+  });
 });
 
 describe('规则开关与门槛', () => {
@@ -479,6 +518,46 @@ describe('autoRecordForLesson 批量补录', () => {
 
     const reasons = report.details.map((d) => `${d.attemptId}:${d.reason ?? 'ok'}`).sort();
     expect(reasons).toEqual(expect.arrayContaining(['att_a:ok', 'att_b:missing-score', 'att_c:below-min-completion']));
+  });
+
+  it('课节已关联课件时只补录该课件，别的课节课件不生成作业壳', () => {
+    db.exec(`
+      CREATE TABLE lesson_activity_blocks (
+        id TEXT PRIMARY KEY, lesson_id TEXT NOT NULL, block_type TEXT NOT NULL,
+        content_json TEXT NOT NULL, order_index INTEGER NOT NULL DEFAULT 0
+      );
+    `);
+    db.prepare(
+      `INSERT INTO lesson_activity_blocks (id, lesson_id, block_type, content_json)
+       VALUES ('blk_cw', ?, 'interactive_courseware', ?)`,
+    ).run(LESSON, JSON.stringify({ coursewareUuid: 'uuid-cw_1' }));
+
+    seedCourseware('cw_2', '别的课节课件');
+    seedAttempt({ attemptId: 'att_in', studentId: 's1', score: 90, coursewareId: 'cw_1' });
+    seedAttempt({ attemptId: 'att_out', studentId: 's2', score: 70, coursewareId: 'cw_2' });
+    enableRule();
+
+    const report = autoRecordForLesson(asSqlite(db), { lessonId: LESSON, classId: CLASS_ID });
+
+    expect(report.scope).toBe('lesson');
+    expect(report.recorded).toBe(1);
+    expect(submissionRow('分数乐园', 's1').score).toBe(90);
+    const titles = (
+      db.prepare('SELECT title FROM assignments WHERE lesson_id = ?').all(LESSON) as Array<{ title: string }>
+    ).map((r) => r.title);
+    expect(titles).toEqual(['互动课件: 分数乐园']);
+  });
+
+  it('课节未关联任何课件时回退全班口径，并在 report 标记 scope=class', () => {
+    seedCourseware('cw_2', '另一个课件');
+    seedAttempt({ attemptId: 'att_a', studentId: 's1', score: 90, coursewareId: 'cw_1' });
+    seedAttempt({ attemptId: 'att_b', studentId: 's2', score: 70, coursewareId: 'cw_2' });
+    enableRule();
+
+    const report = autoRecordForLesson(asSqlite(db), { lessonId: LESSON, classId: CLASS_ID });
+
+    expect(report.scope).toBe('class');
+    expect(report.recorded).toBe(2);
   });
 
   it('重复补录幂等：auto 行按 latest 刷新为最新分但不产生重复行', () => {
