@@ -154,15 +154,16 @@ interface PluginContext {
 
 ### H. 课件运行时 / 课堂扩展 Token
 
-| 导出 Token                              | 解析类型                           | 标识字符串                                         |
-| --------------------------------------- | ---------------------------------- | -------------------------------------------------- |
-| `ICoursewareRuntimeScriptRegistryToken` | `ICoursewareRuntimeScriptRegistry` | `@openlearn/core:ICoursewareRuntimeScriptRegistry` |
-| `IClassroomLifecycleServiceToken`       | `IClassroomLifecycleService`       | `@openlearn/core:IClassroomLifecycleService`       |
-| `IInteractionRuntimeServiceToken`       | `IInteractionRuntimeService`       | `@openlearn/core:IInteractionRuntimeService`       |
-| `IClassroomCountdownServiceToken`       | `IClassroomCountdownService`       | `@openlearn/core:IClassroomCountdownService`       |
-| `IStageGuardServiceToken`               | `IStageGuardService`               | `@openlearn/core:IStageGuardService`               |
-| `IAssessmentGraderRegistryToken`        | `IAssessmentGraderRegistry`        | 测评批改器注册表（自定义 AI/规则批改器）           |
-| `INetworkProxyServiceToken`             | `INetworkProxyService`             | 插件出站网络宿主代发（R-02 授权闭环）              |
+| 导出 Token                              | 解析类型                           | 标识字符串                                           |
+| --------------------------------------- | ---------------------------------- | ---------------------------------------------------- |
+| `ICoursewareRuntimeScriptRegistryToken` | `ICoursewareRuntimeScriptRegistry` | `@openlearn/core:ICoursewareRuntimeScriptRegistry`   |
+| `IClassroomLifecycleServiceToken`       | `IClassroomLifecycleService`       | `@openlearn/core:IClassroomLifecycleService`         |
+| `IInteractionRuntimeServiceToken`       | `IInteractionRuntimeService`       | `@openlearn/core:IInteractionRuntimeService`         |
+| `IClassroomCountdownServiceToken`       | `IClassroomCountdownService`       | `@openlearn/core:IClassroomCountdownService`         |
+| `IStageGuardServiceToken`               | `IStageGuardService`               | `@openlearn/core:IStageGuardService`                 |
+| `IAssessmentGraderRegistryToken`        | `IAssessmentGraderRegistry`        | 测评批改器注册表（自定义 AI/规则批改器）             |
+| `IAssessmentReadServiceToken`           | `IAssessmentReadService`           | 测评/题库只读服务（`assessment:read`；不含标准答案） |
+| `INetworkProxyServiceToken`             | `INetworkProxyService`             | 插件出站网络宿主代发（R-02 授权闭环）                |
 
 ### I. 班级名册 / 文件存储扩展 Token
 

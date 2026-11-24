@@ -759,6 +759,100 @@ interface IXueanActivityProgressService {
   listMyActivityProgress(lessonId: string): Promise<XueanActivityProgressView[]>;
 }
 
+/** 测评只读摘要。 */
+interface AssessmentBrief {
+  id: string;
+  kind: string;
+  title: string;
+  description: string | null;
+  status: string;
+  itemCount: number;
+  totalScore: number;
+  academicYear: string | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
+/** 试卷发布记录摘要。 */
+interface AssessmentAssignmentBrief {
+  id: string;
+  assessmentId: string;
+  classId: string;
+  lessonId: string | null;
+  opensAt: number | null;
+  closesAt: number | null;
+  durationSec: number | null;
+  status: string;
+  scoreReleased: boolean;
+  createdAt: number;
+}
+
+/** 逐题聚合统计（不含标准答案与逐生作答）。 */
+interface AssessmentStatsItemView {
+  itemId: string;
+  type: string;
+  stem: string;
+  maxScore: number;
+  answered: number;
+  graded: number;
+  correct: number;
+  correctRate: number | null;
+  avgScore: number | null;
+  distribution: Record<string, number>;
+}
+
+/** 单次发布的统计投影。 */
+interface AssessmentStatsView {
+  assignmentId: string;
+  assessmentId: string;
+  attemptCount: number;
+  submittedCount: number;
+  gradedCount: number;
+  needsManualReviewCount: number;
+  averageScore: number | null;
+  averagePercent: number | null;
+  maxScore: number;
+  items: AssessmentStatsItemView[];
+}
+
+/** 题库条目只读摘要（不含 config / answerKey / ownerId）。 */
+interface AssessmentBankItemBrief {
+  id: string;
+  type: string;
+  stem: string;
+  tags: string[];
+  difficulty: number | null;
+  visibility: 'private' | 'school';
+  ownerIsSelf: boolean;
+  createdAt: number;
+  updatedAt: number;
+}
+
+/** 作答摘要（不含作答内容、学生身份与匿名键）。 */
+interface AssessmentAttemptBrief {
+  attemptId: string;
+  assignmentId: string;
+  attemptNo: number;
+  status: string;
+  submittedAt: number | null;
+  score: number | null;
+  maxScore: number | null;
+  needsManualReview: boolean;
+}
+
+/**
+ * 测评只读服务。身份由宿主会话派生；返回值不含标准答案。
+ * 需 `assessment:read`；未授予时调用被拒。
+ */
+interface IAssessmentReadService {
+  listAssessments(filter?: { kind?: string; status?: string }): Promise<AssessmentBrief[]>;
+  getAssessmentBrief(assessmentId: string): Promise<AssessmentBrief | null>;
+  listAssignments(assessmentId: string): Promise<AssessmentAssignmentBrief[]>;
+  getAssignmentStats(assignmentId: string): Promise<AssessmentStatsView | null>;
+  listBankItems(filter?: { type?: string }): Promise<AssessmentBankItemBrief[]>;
+  getAttemptSummary(attemptId: string): Promise<AssessmentAttemptBrief | null>;
+}
+
 /** 课堂会话报告摘要（聚合值，不含原始消息 / 个人明细）。 */
 interface ClassroomReportSessionSummary {
   sessionId: string;
@@ -1493,6 +1587,7 @@ declare const IClassroomActivityCatalogToken: Token<IClassroomActivityCatalog>;
 declare const IInteractionRuntimeServiceToken: Token<IInteractionRuntimeService>;
 declare const IClassroomCountdownServiceToken: Token<IClassroomCountdownService>;
 declare const IAssessmentGraderRegistryToken: Token<IAssessmentGraderRegistry>;
+declare const IAssessmentReadServiceToken: Token<IAssessmentReadService>;
 declare const IClassroomMessageServiceToken: Token<IClassroomMessageService>;
 declare const ICreditAwardServiceToken: Token<ICreditAwardService>;
 declare const IRewardCatalogServiceToken: Token<IRewardCatalogReader>;
@@ -1994,6 +2089,7 @@ export {
   IInteractionRuntimeServiceToken,
   IClassroomCountdownServiceToken,
   IAssessmentGraderRegistryToken,
+  IAssessmentReadServiceToken,
   IClassroomMessageServiceToken,
   ICreditAwardServiceToken,
   IRewardCatalogServiceToken,

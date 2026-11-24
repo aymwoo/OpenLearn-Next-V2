@@ -8,6 +8,7 @@
     "ai:persona",
     "api:admin",
     "api:write",
+    "assessment:read",
     "assignment:manage",
     "assignment:read",
     "assignment:review",
@@ -68,6 +69,7 @@
     "CAP_AI_PERSONA": "ai:persona",
     "CAP_TASK_REGISTER": "task:register",
     "CAP_STUDENT_DATA_READ": "student-data:read",
+    "CAP_ASSESSMENT_READ": "assessment:read",
     "CAP_STUDENT_DATA_WRITE": "student-data:write"
   },
   "runtime_permission": [

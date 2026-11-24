@@ -164,10 +164,23 @@ export type ExtensionSlot =
   | 'ai.skill.provider'
   // ── 课程向导 ──
   | 'course.wizard.quick_apply'
-  // ── 测评子系统（Issue #183）──
+  // ── 测评子系统（Issue #183 / 扩展提案）──
   | 'assessment.list.card'
   | 'assessment.attempt.toolbar'
   | 'assessment.stats.card'
+  | 'assessment.attempt.question.addon'
+  | 'assessment.bank.filter'
+  | 'assessment.bank.import.source'
+  | 'assessment.bank.item.action'
+  | 'assessment.bank.item.preview'
+  | 'assessment.bank.toolbar.action'
+  | 'assessment.editor.item.addon'
+  | 'assessment.editor.settings.addon'
+  | 'assessment.grading.answer.addon'
+  | 'assessment.grading.toolbar.action'
+  | 'assessment.publish.preflight'
+  | 'assessment.result.item.addon'
+  | 'assessment.stats.item.addon'
   // ── 教师作业批改面板 ──
   | 'assignment.grade.toolbar.action'
   | 'assignment.grade.item.addon'
@@ -260,7 +273,7 @@ export type AnyExtensionSlot = ExtensionSlot | AnchorSlot | (string & {});
 
 实测口径：遍历 `src/**/*.tsx`（排除 `__tests__`），解析 `<ExtensionPointRenderer ... slot="…">`。
 
-- 生产调用点上的**固定名槽位值随版本增长**（本节 98 为历史实测；当前联合类型 141 个成员，其中 **117 个**在 `src/**/*.tsx` 有 `<ExtensionPointRenderer>` 生产调用点。剩余 4 个 —— `command_palette.item` / `quick_insert.item` / `ai.prompt.template` / `ai.skill.provider` —— 是**数据型或服务端消费**槽位，不经过渲染器，契约见 §12.7。消费率口径见文末统计节，复核命令见下）；
+- 生产调用点上的**固定名槽位值随版本增长**（当前联合类型 154 个成员，以 `docs/agent/contracts/slots.json` 为准；`command_palette.item` / `quick_insert.item` / `ai.prompt.template` / `ai.skill.provider` 等是**数据型或服务端消费**槽位，不经过渲染器，契约见 §12.7。消费率口径见文末统计节，复核命令见下）；
 - 另有 **8 个** `anchor:*` 锚点槽位（见 §1.1 附注）。
 
 | 槽位                                    | 渲染调用点（`src/` 下）                                                                                                                 | 调用点传入的 `slotProps`                                                                                                       |
@@ -381,9 +394,22 @@ export type AnyExtensionSlot = ExtensionSlot | AnchorSlot | (string & {});
 | `ai.prompt.template`                    | `src/features/shared/AiPromptTemplatePicker.tsx`（Agent 输入区模板选择器）                                                              | `{ title, description, category, prompt, parameters[{name,label,default}] }`（slotProps 即完整模板配置）                       |
 | `ai.skill.provider`                     | `server/ai-agent.ts`（Agent 工具注入，非渲染槽位）                                                                                      | `{ id, name, description, commandType, parametersSchema? }`（经 commandBus 以插件 actor 派发）                                 |
 | `course.wizard.quick_apply`             | `src/features/modals/CourseWizardModal.tsx`                                                                                             | `{ lang, wizardCourseTitle, wizardCourseCategory, wizardCourseTimeline, setWizardCourseTimeline, addToast }`                   |
-| `assessment.list.card`                  | `src/features/assessment/AssessmentCenter.tsx`（**仅教师端**；`viewer` 恒为 `'teacher'`）                                               | `{ assessment, viewer, lang }`                                                                                                 |
-| `assessment.attempt.toolbar`            | `src/features/assessment/student/StudentAssessmentsView.tsx`                                                                            | `{ assignmentId, attemptId, lang }`                                                                                            |
+| `assessment.list.card`                  | 教师 `AssessmentCenter.tsx` / 学生 `StudentAssessmentsView.tsx`（按 `viewer` 判别）                                                     | `viewer='teacher'`：`{ assessment, lang }`；`viewer='student'`：`{ assessment, attempt, lang }`                                |
+| `assessment.attempt.toolbar`            | `src/features/assessment/student/StudentAssessmentsView.tsx`（顶部头部条）                                                              | `{ assignmentId, attemptId, lang }`                                                                                            |
 | `assessment.stats.card`                 | `src/features/assessment/StatsPanel.tsx`                                                                                                | `{ assignmentId, stats, lang }`                                                                                                |
+| `assessment.bank.toolbar.action`        | `src/features/assessment/QuestionBankPanel.tsx`                                                                                         | `{ filters, lang }`                                                                                                            |
+| `assessment.bank.item.action`           | `QuestionBankPanel.tsx`（每条目行）                                                                                                     | `{ item: BankItemSummary, lang }`                                                                                              |
+| `assessment.bank.import.source`         | `QuestionBankPanel.tsx`（新增题目卡片底部）                                                                                             | `{ lang }`                                                                                                                     |
+| `assessment.bank.filter`                | `QuestionBankPanel.tsx`（筛选栏）                                                                                                       | `{ activeFilters, onChange, lang }`                                                                                            |
+| `assessment.bank.item.preview`          | `QuestionBankPanel.tsx`（条目预览展开区）                                                                                               | `{ item: BankItemSummary, lang }`                                                                                              |
+| `assessment.editor.item.addon`          | `src/features/assessment/AssessmentEditor.tsx`（逐题卡片底部）                                                                          | `{ sensitiveAccess, assessmentId, item, sensitive?, lang }`（L2）                                                              |
+| `assessment.editor.settings.addon`      | `AssessmentEditor.tsx`（测评设置底部）                                                                                                  | `{ assessmentId, kind, settings, readOnly, onPatch, lang }`                                                                    |
+| `assessment.publish.preflight`          | `AssessmentEditor.tsx`（发布区）                                                                                                        | `{ assessmentId, classId, itemCount, totalScore, onResult, lang }`                                                             |
+| `assessment.grading.toolbar.action`     | `src/features/assessment/GradingPanel.tsx`（顶部）                                                                                      | `{ assignmentId, attempts, refresh, lang }`                                                                                    |
+| `assessment.grading.answer.addon`       | `GradingPanel.tsx`（逐题批改卡片底部）                                                                                                  | `{ sensitiveAccess, attemptId, item, sensitive?, onScoreChange, lang }`（L2）                                                  |
+| `assessment.stats.item.addon`           | `StatsPanel.tsx`（逐题统计行展开区）                                                                                                    | `{ assignmentId, item, lang }`                                                                                                 |
+| `assessment.attempt.question.addon`     | `StudentAssessmentsView.tsx`（每题作答区下方）                                                                                          | `{ assignmentId, attemptId, itemId, itemType, index, lang }`                                                                   |
+| `assessment.result.item.addon`          | `StudentAssessmentsView.tsx`（结果页逐题）                                                                                              | `{ sensitiveAccess, assignmentId, attemptId, item, sensitive?, lang }`                                                         |
 | `assignment.grade.toolbar.action`       | `src/components/TeacherAssignmentGradePanel.tsx`                                                                                        | `{ lessonId, submissions, refresh, lang }`                                                                                     |
 | `assignment.grade.item.addon`           | `src/components/TeacherAssignmentGradePanel.tsx`（每个学生作答卡片内）                                                                  | `{ submission, studentId, lessonId, score, comment, isConfirmed, onScoreChange, onCommentChange, lang }`                       |
 | `assignment.grade.rubric.addon`         | `src/components/TeacherAssignmentGradePanel.tsx`（评分权重区）                                                                          | `{ lessonId, defaultTeacherWeight, defaultPeerWeight, onTeacherWeightChange, lang }`                                           |
@@ -449,7 +475,7 @@ export type AnyExtensionSlot = ExtensionSlot | AnchorSlot | (string & {});
 
 ### 1.1.1 槽位容器语义分类（layoutVariant）
 
-平台将 140 个扩展槽位按照挂载上下文的容器模型划分为 4 种语义类型：
+平台将扩展槽位（当前 154 个，以 `docs/agent/contracts/slots.json` 为准）按照挂载上下文的容器模型划分为 4 种语义类型：
 
 | 容器语义分类 (`layoutVariant`)                           | 核心特征与宿主环境                                                                                                    | 典型槽位                                                                                          | 插件视图样式规范与禁止项                                                                                                                                                                                                                                                                                                                                                                           |
 | :------------------------------------------------------- | :-------------------------------------------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------------ | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -1257,26 +1283,32 @@ export interface AssignmentFilePreviewSlotProps {
 > 本节补齐 §1 清单中在 §11 之后新增、但此前没有展开说明的槽位。每个槽位标注**真实调用点**与**实际注入的 props**；props 以 §2 表格和 `src/plugin-host/types.ts` 的 `*SlotProps` 接口为准，本节只解释语义与易踩的坑。
 > 前提：除 §12.7 的数据型槽位外，所有经 `ExtensionPointRenderer` 渲染的槽位都额外收到宿主统一注入的 `lessonId` / `classId`（见 §3）。
 
-### 12.1 测评子系统（`assessment.*`，Issue #183）
+### 12.1 测评子系统（`assessment.*`，Issue #183 / 扩展提案）
 
-三个槽位全部走**白名单投影**：`answerKey` / 学生身份 / 逐个学生作答**永不进入 props**（实现见 `src/features/assessment/extension-slot-props.ts`，回归测试 `assessment-extension-slots.test.tsx` 用哨兵字段断言）。新增字段默认不可见，不要指望宿主后续自动透传。
+测评槽位全部走**白名单投影**：`answerKey` / 学生身份 / 逐个学生作答默认**永不进入 props**（实现见 `src/features/assessment/extension-slot-props.ts`、`sensitive-props.ts`，回归测试用哨兵字段断言）。新增字段默认不可见。
 
-| 槽位                         | 渲染位置                                 | 适合做什么                             |
-| ---------------------------- | ---------------------------------------- | -------------------------------------- |
-| `assessment.list.card`       | 测评列表每张卡片内（`AssessmentCenter`） | 卡片角标、资源入口、状态补充           |
-| `assessment.attempt.toolbar` | 学生作答页底栏「交卷」按钮旁             | 计算器、草稿纸、草稿暂存、题型专用工具 |
-| `assessment.stats.card`      | 统计页逐题表格上方                       | 自定义图表、分析结论、导出入口         |
+`assessment.list.card` 现在是**判别联合**：`viewer: 'teacher'` 收到卷面摘要；`viewer: 'student'` 收到 `assignmentId`（字段名仍为 `id`）、`windowState`、`attempt` 摘要等，**不含 `settings`**。
 
-**`assessment.list.card` 的 `viewer` 目前恒为 `'teacher'`。** 类型声明是 `'teacher' | 'student'`，但学生端从未渲染该槽位——按 `viewer === 'student'` 写分支是死代码。学生端要注入内容，请用 `student.assignment.toolbar.action`。
+| 分区                | 槽位                                                                                                                                                                           | 适合做什么                                         |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------- |
+| 列表 / 作答 / 统计  | `assessment.list.card` / `assessment.attempt.toolbar` / `assessment.stats.card`                                                                                                | 角标、计算器、草稿、自定义图表                     |
+| 题库（P1）          | `assessment.bank.toolbar.action` / `assessment.bank.item.action` / `assessment.bank.import.source` / `assessment.bank.filter` / `assessment.bank.item.preview`                 | 批量导入、AI 生成、打标、知识点筛选、预览          |
+| 组卷 / 发布（P1）   | `assessment.editor.item.addon` / `assessment.editor.settings.addon` / `assessment.publish.preflight`                                                                           | 难度/知识点标注、抽题规则、发布前检查              |
+| 批改 / 学生端（P2） | `assessment.grading.toolbar.action` / `assessment.grading.answer.addon` / `assessment.stats.item.addon` / `assessment.attempt.question.addon` / `assessment.result.item.addon` | AI 初评、代码运行结果、难度/区分度、草稿纸、错题本 |
+
+**敏感字段（L2）**：只有 `assessment.grading.answer.addon`、`assessment.editor.item.addon`、`assessment.result.item.addon` 允许声明 `requiresSensitive`。声明后仍需通过槽位 allowlist、角色与（启用时）安装授予；**未声明时扩展照常渲染，但 `sensitiveAccess: false` 且没有 `sensitive` 对象**。学生侧只允许 `assessment.result.item.addon` 拿「本人」字段，`answerKey` 还受 `showAnalysis` 约束。
 
 ```tsx
-ctx.ui.registerExtensionPoint('assessment.list.card', {
-  id: 'ext-question-bank/bank-badge',
-  label: '题库来源',
-  component: () => import('./BankBadge'),
-  // 组件收到: { assessment, viewer, lang, lessonId, classId }
+ctx.ui.registerExtensionPoint('assessment.grading.answer.addon', {
+  id: 'ext-code/review',
+  label: '代码评审',
+  requiresSensitive: ['answerKey', 'config', 'studentAnswer'],
+  component: () => import('./Review'),
+  // sensitiveAccess=true 时: props.sensitive = { answerKey, config, studentAnswer }
 });
 ```
+
+远程 `view` 插件拿不到 React props，但宿主会把槽位上下文（含标识与摘要）通过 `init.context` 下发；只含 JSON 安全子集且 ≤ 16KB。
 
 `assessment.stats.card` 的 `stats` 结构：
 

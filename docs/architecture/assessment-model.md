@@ -294,3 +294,35 @@ CSV / XLSX 是**同一个数据模型的扁平视图**（列：`order,section,ty
 | `PAPER_IMPORT_MISSING_TITLE`  | 缺试卷标题                                       |
 
 协议向后兼容策略：`schema` 不匹配只**告警不报错**（导入结果里带 `warnings`），字段顺序与语义保持不变。
+
+## 10. 插件只读服务与领域事件（扩展提案 P0）
+
+### 10.1 `IAssessmentReadService`
+
+`assessments` / `assessment_items` / `question_bank_items` 不在插件前缀内，sql-guard 拒绝直查，此前插件只有「注册题型」一条通道。本服务提供只读替代路径：
+
+| 方法                               | 说明                                                              |
+| ---------------------------------- | ----------------------------------------------------------------- |
+| `listAssessments(filter?)`         | 教师：自己名下（管理员：全部）；学生：所在班级的已发布/已关闭测评 |
+| `getAssessmentBrief(id)`           | 单卷摘要；无权限时 `null`（不区分不存在，避免探测）               |
+| `listAssignments(assessmentId)`    | 发布记录摘要（学生按班级过滤）                                    |
+| `getAssignmentStats(assignmentId)` | 逐题聚合统计；学生与非 owner 返回 `null`                          |
+| `listBankItems(filter?)`           | 题库摘要（无 `config` / `answerKey` / `ownerId`）；学生恒空       |
+| `getAttemptSummary(attemptId)`     | 作答摘要（学生只能读自己；不含作答内容与匿名键）                  |
+
+- 身份由 `currentLessonViewer()` 派生，插件不能自报 `userId/role`。
+- 门禁：manifest 声明 `assessment:read`（方法级能力，未授予时调用被拒）。
+- 只读、无副作用：不清算过期作答、不写审计。
+- 服务实现：`packages/core/di/assessment-read-service.ts`。
+
+### 10.2 领域事件
+
+| 事件                              | 触发点                               | 载荷（不含答案/作答正文/学生身份）                                             |
+| --------------------------------- | ------------------------------------ | ------------------------------------------------------------------------------ |
+| `assessment.assignment.published` | `publish()`                          | `assessmentId / assignmentId / classId / lessonId / kind / opensAt / closesAt` |
+| `assessment.assignment.closed`    | `closeAssignment()`                  | `assignmentId / classId / closedAt`                                            |
+| `assessment.assignment.released`  | `releaseScores()`                    | `assignmentId / classId / releasedAt`                                          |
+| `assessment.attempt.submitted`    | `submitAttempt()`（仅在首次交卷时）  | `assignmentId / attemptId / submittedAt / needsManualReview`                   |
+| `assessment.attempt.graded`       | `regradeAttempt()` / `manualGrade()` | `assignmentId / attemptId / score / maxScore / needsManualReview`              |
+
+需要学生维度的订阅方通过 `assessment:read` + `student-data:read` 二次取数，而不是从事件里拿 `studentId`。

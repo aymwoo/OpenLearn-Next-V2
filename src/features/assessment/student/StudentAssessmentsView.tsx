@@ -32,6 +32,11 @@ import { assessmentQuestionTypeUiRegistry } from '../question-type-ui-registry';
 import '../register-builtin-question-uis';
 import { FallbackAnswer } from './answer-uis';
 import { ExtensionPointRenderer } from '../../../plugin-host/extension-point-renderer';
+import { toStudentAssessmentListCardProps } from '../extension-slot-props';
+import { projectAssessmentSensitive } from '../sensitive-props';
+import type { EffectiveStudentUiPolicy } from '../../../../packages/core/student-ui-policy/index';
+
+const EMPTY_STRING_LIST: readonly string[] = Object.freeze([]);
 
 type View =
   | { mode: 'list' }
@@ -59,8 +64,19 @@ function answerToText(answer: unknown): string {
   return String(answer);
 }
 
-export function StudentAssessmentsView({ lang, onExit }: { lang: 'zh' | 'en'; onExit?: () => void }) {
+export function StudentAssessmentsView({
+  lang,
+  onExit,
+  studentUiPolicy = null,
+}: {
+  lang: 'zh' | 'en';
+  onExit?: () => void;
+  /** 教师按班级/课节收敛的学生端可见性策略；缺省表示不限制。 */
+  studentUiPolicy?: EffectiveStudentUiPolicy | null;
+}) {
   const zh = lang === 'zh';
+  const hiddenPluginIds = (studentUiPolicy?.hiddenPlugins ?? EMPTY_STRING_LIST) as string[];
+  const hiddenExtensionIds = (studentUiPolicy?.hiddenExtensions ?? EMPTY_STRING_LIST) as string[];
   const [view, setView] = useState<View>({ mode: 'list' });
   const [entries, setEntries] = useState<StudentAssignmentEntry[] | null>(null);
   const [loading, setLoading] = useState(false);
@@ -199,7 +215,14 @@ export function StudentAssessmentsView({ lang, onExit }: { lang: 'zh' | 'en'; on
                 <ul data-testid="student-pending-list" className="space-y-2">
                   {pending.map((entry) => (
                     <li key={entry.assignmentId}>
-                      <EntryCard entry={entry} lang={lang} disabled={loading} onOpen={() => void openEntry(entry)} />
+                      <EntryCard
+                        entry={entry}
+                        lang={lang}
+                        disabled={loading}
+                        onOpen={() => void openEntry(entry)}
+                        hiddenPluginIds={hiddenPluginIds}
+                        hiddenExtensionIds={hiddenExtensionIds}
+                      />
                     </li>
                   ))}
                 </ul>
@@ -214,7 +237,14 @@ export function StudentAssessmentsView({ lang, onExit }: { lang: 'zh' | 'en'; on
                 <ul data-testid="student-completed-list" className="space-y-2">
                   {done.map((entry) => (
                     <li key={entry.assignmentId}>
-                      <EntryCard entry={entry} lang={lang} disabled={loading} onOpen={() => void openEntry(entry)} />
+                      <EntryCard
+                        entry={entry}
+                        lang={lang}
+                        disabled={loading}
+                        onOpen={() => void openEntry(entry)}
+                        hiddenPluginIds={hiddenPluginIds}
+                        hiddenExtensionIds={hiddenExtensionIds}
+                      />
                     </li>
                   ))}
                 </ul>
@@ -234,11 +264,15 @@ function EntryCard({
   lang,
   disabled,
   onOpen,
+  hiddenPluginIds,
+  hiddenExtensionIds,
 }: {
   entry: StudentAssignmentEntry;
   lang: 'zh' | 'en';
   disabled: boolean;
   onOpen: () => void;
+  hiddenPluginIds: string[];
+  hiddenExtensionIds: string[];
 }) {
   const zh = lang === 'zh';
   const closed = entry.windowState === 'after_close';
@@ -260,82 +294,97 @@ function EntryCard({
   return (
     <div
       data-testid={`student-assessment-${entry.assignmentId}`}
-      className="bg-surface border border-theme rounded-xl px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-3"
+      className="bg-surface border border-theme rounded-xl px-4 py-3 flex flex-col gap-2"
     >
-      <div className="min-w-0 flex-1 space-y-1">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="font-bold text-sm text-main truncate">{entry.title}</span>
-          <span className="px-2 py-0.5 rounded-full bg-surface-secondary border border-theme text-2xs font-semibold text-main">
-            {kindLabel}
-          </span>
-          {entry.completed && entry.attempt?.needsManualReview && (
-            <span className="px-2 py-0.5 rounded-full text-2xs font-semibold bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800">
-              {zh ? '待批改' : 'Pending review'}
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+        <div className="min-w-0 flex-1 space-y-1">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="font-bold text-sm text-main truncate">{entry.title}</span>
+            <span className="px-2 py-0.5 rounded-full bg-surface-secondary border border-theme text-2xs font-semibold text-main">
+              {kindLabel}
             </span>
-          )}
+            {entry.completed && entry.attempt?.needsManualReview && (
+              <span className="px-2 py-0.5 rounded-full text-2xs font-semibold bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800">
+                {zh ? '待批改' : 'Pending review'}
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-3 text-2xs text-muted flex-wrap">
+            <span className="inline-flex items-center gap-1">
+              <Clock size={11} />
+              {closed
+                ? zh
+                  ? '已截止'
+                  : 'Closed'
+                : notOpen
+                  ? zh
+                    ? '未开始'
+                    : 'Not open yet'
+                  : entry.closesAt
+                    ? `${zh ? '截止' : 'Due'} ${new Date(entry.closesAt).toLocaleString()}`
+                    : zh
+                      ? '不限时'
+                      : 'No deadline'}
+            </span>
+            {entry.durationSec && (
+              <span>
+                {zh ? `限时 ${Math.round(entry.durationSec / 60)} 分钟` : `${Math.round(entry.durationSec / 60)} min`}
+              </span>
+            )}
+            {entry.completed && entry.attempt && (
+              <span>
+                {entry.attempt.score === null
+                  ? zh
+                    ? '成绩待发布'
+                    : 'Score pending'
+                  : `${zh ? '得分' : 'Score'} ${entry.attempt.score}/${entry.attempt.maxScore ?? '—'}`}
+              </span>
+            )}
+          </div>
         </div>
-        <div className="flex items-center gap-3 text-2xs text-muted flex-wrap">
-          <span className="inline-flex items-center gap-1">
-            <Clock size={11} />
-            {closed
+        <button
+          type="button"
+          onClick={onOpen}
+          disabled={disabled || blocked}
+          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold shrink-0 ${
+            blocked
+              ? 'bg-surface-secondary text-muted border border-theme cursor-not-allowed'
+              : entry.completed
+                ? 'border border-theme text-main hover:bg-surface-secondary cursor-pointer'
+                : 'bg-indigo-600 text-white hover:bg-indigo-700 cursor-pointer'
+          }`}
+        >
+          {!blocked && !entry.completed && <Play size={12} />}
+          {blocked
+            ? closed
               ? zh
                 ? '已截止'
                 : 'Closed'
-              : notOpen
-                ? zh
-                  ? '未开始'
-                  : 'Not open yet'
-                : entry.closesAt
-                  ? `${zh ? '截止' : 'Due'} ${new Date(entry.closesAt).toLocaleString()}`
-                  : zh
-                    ? '不限时'
-                    : 'No deadline'}
-          </span>
-          {entry.durationSec && (
-            <span>
-              {zh ? `限时 ${Math.round(entry.durationSec / 60)} 分钟` : `${Math.round(entry.durationSec / 60)} min`}
-            </span>
-          )}
-          {entry.completed && entry.attempt && (
-            <span>
-              {entry.attempt.score === null
-                ? zh
-                  ? '成绩待发布'
-                  : 'Score pending'
-                : `${zh ? '得分' : 'Score'} ${entry.attempt.score}/${entry.attempt.maxScore ?? '—'}`}
-            </span>
-          )}
-        </div>
-      </div>
-      <button
-        type="button"
-        onClick={onOpen}
-        disabled={disabled || blocked}
-        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold shrink-0 ${
-          blocked
-            ? 'bg-surface-secondary text-muted border border-theme cursor-not-allowed'
+              : zh
+                ? '未开始'
+                : 'Not open'
             : entry.completed
-              ? 'border border-theme text-main hover:bg-surface-secondary cursor-pointer'
-              : 'bg-indigo-600 text-white hover:bg-indigo-700 cursor-pointer'
-        }`}
-      >
-        {!blocked && !entry.completed && <Play size={12} />}
-        {blocked
-          ? closed
-            ? zh
-              ? '已截止'
-              : 'Closed'
-            : zh
-              ? '未开始'
-              : 'Not open'
-          : entry.completed
-            ? zh
-              ? '查看结果'
-              : 'View result'
-            : zh
-              ? '开始作答'
-              : 'Start'}
-      </button>
+              ? zh
+                ? '查看结果'
+                : 'View result'
+              : zh
+                ? '开始作答'
+                : 'Start'}
+        </button>
+      </div>
+      {/* Q1：学生端列表扩展；viewer='student'，props 不含 settings / 答案 */}
+      <ExtensionPointRenderer
+        slot="assessment.list.card"
+        slotProps={{
+          ...toStudentAssessmentListCardProps(entry),
+          lang,
+          classId: entry.classId,
+          lessonId: entry.lessonId,
+        }}
+        excludePluginIds={hiddenPluginIds}
+        excludeExtensionIds={hiddenExtensionIds}
+        lang={lang}
+      />
     </div>
   );
 }
@@ -678,6 +727,21 @@ export function AssessmentRunner({
                   onChange={(next) => changeAnswer(item.id, next)}
                   lang={lang}
                 />
+                {/* P2：每题附加工具（草稿纸 / 计算器）；L0，不含配置与答案 */}
+                <div className="pt-1 border-t border-theme">
+                  <ExtensionPointRenderer
+                    slot="assessment.attempt.question.addon"
+                    slotProps={{
+                      assignmentId: payload.assignment.id,
+                      attemptId,
+                      itemId: item.id,
+                      itemType: item.type,
+                      index,
+                      lang,
+                    }}
+                    lang={lang}
+                  />
+                </div>
               </li>
             );
           })}
@@ -794,6 +858,44 @@ export function ResultView({
                 <p className="text-2xs text-muted">
                   {zh ? '本题得分' : 'Item score'}：{item.score}/{item.maxScore}
                 </p>
+              )}
+              {attempt && (
+                <div className="pt-2 border-t border-theme">
+                  {/* P2：结果页逐题扩展。answerKey 仅在 showAnalysis 时进入 source */}
+                  <ExtensionPointRenderer
+                    slot="assessment.result.item.addon"
+                    slotProps={{
+                      assignmentId: assignment.id,
+                      attemptId: attempt.id,
+                      item: {
+                        itemId: item.itemId,
+                        type: item.type,
+                        stem: item.stem,
+                        maxScore: item.maxScore,
+                        answer: item.answer,
+                        score: item.score,
+                        isCorrect: item.isCorrect,
+                        feedback: item.feedback,
+                      },
+                      lang,
+                    }}
+                    resolveExtensionProps={(ext) => {
+                      const projected = projectAssessmentSensitive(ext, {
+                        slot: 'assessment.result.item.addon',
+                        viewer: 'student',
+                        role: 'student',
+                        source: {
+                          answerKey: result.showAnalysis ? item.answerKey : undefined,
+                          studentAnswer: item.answer,
+                        },
+                      });
+                      return projected.sensitive
+                        ? { sensitiveAccess: true, sensitive: projected.sensitive }
+                        : { sensitiveAccess: false };
+                    }}
+                    lang={lang}
+                  />
+                </div>
               )}
             </li>
           ))}

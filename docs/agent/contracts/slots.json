@@ -8,9 +8,22 @@
     "ai.prompt.template",
     "ai.skill.provider",
     "ai_sidebar.tab",
+    "assessment.attempt.question.addon",
     "assessment.attempt.toolbar",
+    "assessment.bank.filter",
+    "assessment.bank.import.source",
+    "assessment.bank.item.action",
+    "assessment.bank.item.preview",
+    "assessment.bank.toolbar.action",
+    "assessment.editor.item.addon",
+    "assessment.editor.settings.addon",
+    "assessment.grading.answer.addon",
+    "assessment.grading.toolbar.action",
     "assessment.list.card",
+    "assessment.publish.preflight",
+    "assessment.result.item.addon",
     "assessment.stats.card",
+    "assessment.stats.item.addon",
     "assignment.file.preview",
     "assignment.grade.item.addon",
     "assignment.grade.rubric.addon",
@@ -154,5 +167,5 @@
     "anchor:whiteboard-toolbar:presentation",
     "anchor:whiteboard-toolbar:rollcall"
   ],
-  "total": 141
+  "total": 154
 }

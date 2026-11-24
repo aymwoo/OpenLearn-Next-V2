@@ -7,23 +7,16 @@
  *
  * 回归测试：`__tests__/assessment-extension-slots.test.tsx` 用哨兵字段断言。
  */
-import type { AssessmentStats, AssessmentSummary } from './api';
+import type {
+  AssessmentEditorItemSummary,
+  BankItemSummary,
+  StudentAssessmentAttemptSummary,
+  TeacherAssessmentCardSummary,
+} from '../../plugin-host/types';
+import type { AssessmentItemView, AssessmentStats, AssessmentSummary, BankItem, StudentAssignmentEntry } from './api';
 
-export interface AssessmentListCardProps {
-  id: string;
-  kind: string;
-  title: string;
-  description: string | null;
-  status: string;
-  itemCount: number;
-  totalScore: number;
-  settings: Record<string, unknown>;
-  createdAt: number;
-  updatedAt: number;
-}
-
-/** 列表卡片槽 props：只含卷面摘要，不含题目/答案。 */
-export function toAssessmentListCardProps(item: AssessmentSummary): AssessmentListCardProps {
+/** 教师列表卡片摘要：只含卷面摘要，不含题目/答案。 */
+export function toAssessmentListCardProps(item: AssessmentSummary): TeacherAssessmentCardSummary {
   return {
     id: item.id,
     kind: item.kind,
@@ -35,6 +28,90 @@ export function toAssessmentListCardProps(item: AssessmentSummary): AssessmentLi
     settings: item.settings as unknown as Record<string, unknown>,
     createdAt: item.createdAt,
     updatedAt: item.updatedAt,
+  };
+}
+
+/**
+ * 学生列表卡片 props（Q1）。
+ *
+ * 注意 `assessment.id` 是 **assignmentId**；`settings` 刻意不下发，
+ * `score` 由服务端按可见性置 null，扩展不得自行推断。
+ */
+export function toStudentAssessmentListCardProps(entry: StudentAssignmentEntry): {
+  viewer: 'student';
+  assessment: {
+    id: string;
+    assessmentId: string;
+    kind: string;
+    title: string;
+    classId: string;
+    lessonId: string | null;
+    windowState: StudentAssignmentEntry['windowState'];
+    completed: boolean;
+    opensAt: number | null;
+    closesAt: number | null;
+    durationSec: number | null;
+  };
+  attempt: StudentAssessmentAttemptSummary | null;
+} {
+  return {
+    viewer: 'student',
+    assessment: {
+      id: entry.assignmentId,
+      assessmentId: entry.assessmentId,
+      kind: entry.kind,
+      title: entry.title,
+      classId: entry.classId,
+      lessonId: entry.lessonId,
+      windowState: entry.windowState,
+      completed: entry.completed,
+      opensAt: entry.opensAt,
+      closesAt: entry.closesAt,
+      durationSec: entry.durationSec,
+    },
+    attempt: entry.attempt
+      ? {
+          attemptNo: entry.attempt.attemptNo,
+          status: entry.attempt.status,
+          submittedAt: entry.attempt.submittedAt,
+          score: entry.attempt.score,
+          maxScore: entry.attempt.maxScore,
+          needsManualReview: entry.attempt.needsManualReview,
+        }
+      : null,
+  };
+}
+
+/** 题库条目只读投影：不含 config / answerKey / ownerId。 */
+export function toBankItemSummary(item: BankItem): BankItemSummary {
+  return {
+    id: item.id,
+    type: item.type,
+    stem: item.stem,
+    tags: Array.isArray(item.tags) ? item.tags : [],
+    difficulty: item.difficulty ?? null,
+    visibility: item.visibility === 'school' ? 'school' : 'private',
+    ownerIsSelf: Boolean(item.ownerIsSelf),
+    createdAt: item.createdAt,
+    updatedAt: item.updatedAt,
+  };
+}
+
+/** 组卷逐题只读投影（L2 敏感字段由调用方经 sensitive-props 追加）。 */
+export function toEditorItemSummary(
+  item: Pick<AssessmentItemView, 'id' | 'type' | 'stem' | 'maxScore'> & {
+    section?: string | null;
+    sortOrder?: number;
+  },
+  index: number,
+): AssessmentEditorItemSummary {
+  return {
+    id: item.id,
+    type: item.type,
+    stem: item.stem,
+    maxScore: item.maxScore,
+    section: item.section ?? null,
+    sortOrder: item.sortOrder ?? index,
   };
 }
 

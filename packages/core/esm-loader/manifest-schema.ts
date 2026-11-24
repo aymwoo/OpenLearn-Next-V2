@@ -12,6 +12,7 @@
  * 在插件安装/激活时校验 manifest.json，早失败并提供精确错误消息。
  */
 import { z } from 'zod';
+import { allowedSensitiveFields, isSensitiveField } from '../assessment/extension-sensitivity.js';
 
 // ── V3.0: Contribution schemas ───────────────────────────────────────────
 
@@ -669,10 +670,26 @@ const frontendSlotsShape = {
   'admin.user.action': z.array(frontendSlotEntrySchema).optional(),
   'header.status_pill': z.array(frontendSlotEntrySchema).optional(),
   'ai_sidebar.tab': z.array(frontendSlotEntrySchema).optional(),
-  // ── 测评子系统扩展槽（Issue #183）──
+  // ── 测评子系统扩展槽（Issue #183 / 扩展提案）──
   'assessment.list.card': z.array(frontendSlotEntrySchema).optional(),
   'assessment.attempt.toolbar': z.array(frontendSlotEntrySchema).optional(),
   'assessment.stats.card': z.array(frontendSlotEntrySchema).optional(),
+  // 题库（P1）
+  'assessment.bank.toolbar.action': z.array(frontendSlotEntrySchema).optional(),
+  'assessment.bank.item.action': z.array(frontendSlotEntrySchema).optional(),
+  'assessment.bank.import.source': z.array(frontendSlotEntrySchema).optional(),
+  'assessment.bank.filter': z.array(frontendSlotEntrySchema).optional(),
+  'assessment.bank.item.preview': z.array(frontendSlotEntrySchema).optional(),
+  // 组卷与发布（P1）
+  'assessment.editor.item.addon': z.array(frontendSlotEntrySchema).optional(),
+  'assessment.editor.settings.addon': z.array(frontendSlotEntrySchema).optional(),
+  'assessment.publish.preflight': z.array(frontendSlotEntrySchema).optional(),
+  // 批改 / 统计 / 学生端（P2）
+  'assessment.grading.toolbar.action': z.array(frontendSlotEntrySchema).optional(),
+  'assessment.grading.answer.addon': z.array(frontendSlotEntrySchema).optional(),
+  'assessment.stats.item.addon': z.array(frontendSlotEntrySchema).optional(),
+  'assessment.attempt.question.addon': z.array(frontendSlotEntrySchema).optional(),
+  'assessment.result.item.addon': z.array(frontendSlotEntrySchema).optional(),
   // ── 学案编辑器扩展槽：插件可新增活动类型并提供编辑 / 学生端渲染 ──
   'xuean.activity.type': z.array(xueanActivityTypeSchema).optional(),
   'xuean.activity.editor': z.array(xueanActivityRendererSchema).optional(),
@@ -726,6 +743,51 @@ const learningSurfaceRendererSchema = z
   })
   .strict()
   .refine((value) => !!value.view || !!value.entry, 'view 与 entry 至少声明一个');
+
+/**
+ * 敏感字段声明的安装期校验。
+ *
+ * 只允许 L2 槽位（`ASSESSMENT_SENSITIVE_SLOT_ALLOWLIST`）声明，且字段名必须在
+ * 合法集合内。学生可见槽位声明任何敏感字段都会被拒 —— 这类配置一旦静默通过，
+ * 运行期也拿不到数据，作者会误以为「声明了但没生效」。
+ */
+function validateSensitiveDeclarations(value: Record<string, unknown>, ctx: z.RefinementCtx): void {
+  for (const [slot, entries] of Object.entries(value)) {
+    if (!Array.isArray(entries)) continue;
+    entries.forEach((entry, index) => {
+      if (!entry || typeof entry !== 'object') return;
+      const declared = (entry as Record<string, unknown>).requiresSensitive;
+      if (declared === undefined) return;
+      const path = [slot, index, 'requiresSensitive'];
+      if (!Array.isArray(declared)) {
+        ctx.addIssue({
+          code: 'custom',
+          path,
+          message: `SENSITIVE_FIELD_INVALID_SHAPE: ${slot} 的 requiresSensitive 必须是字符串数组`,
+        });
+        return;
+      }
+      const allowed = new Set<string>(allowedSensitiveFields(slot));
+      for (const field of declared) {
+        if (!isSensitiveField(field)) {
+          ctx.addIssue({
+            code: 'custom',
+            path,
+            message: `SENSITIVE_FIELD_UNKNOWN: ${slot} 声明了未知敏感字段 "${String(field)}"`,
+          });
+          continue;
+        }
+        if (!allowed.has(field)) {
+          ctx.addIssue({
+            code: 'custom',
+            path,
+            message: `SENSITIVE_FIELD_NOT_ALLOWED_FOR_SLOT: ${slot} 不允许声明敏感字段 "${field}"`,
+          });
+        }
+      }
+    });
+  }
+}
 
 const contributesSchema = z
   .object({
@@ -857,6 +919,9 @@ const contributesSchema = z
     // 锚点条目的运行时校验由前端注册时（ExtensionPointConfig）完成。
   })
   .passthrough()
+  .superRefine((value, ctx) => {
+    validateSensitiveDeclarations(value as Record<string, unknown>, ctx);
+  })
   .optional();
 
 /**

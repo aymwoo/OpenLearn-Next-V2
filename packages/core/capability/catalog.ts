@@ -54,6 +54,9 @@ export const CAP_TASK_REGISTER = 'task:register';
 /** 授予读取学生个人敏感数据（积分流水、维度汇总等）所需。 */
 export const CAP_STUDENT_DATA_READ = 'student-data:read';
 
+/** 授予通过只读服务读取测评/题库摘要（`IAssessmentReadService`）所需。 */
+export const CAP_ASSESSMENT_READ = 'assessment:read';
+
 /** 授予写入/变更学生个人敏感数据（积分变动等）所需。 */
 export const CAP_STUDENT_DATA_WRITE = 'student-data:write';
 
@@ -98,6 +101,7 @@ export const CAP = {
   TASK_REGISTER: CAP_TASK_REGISTER,
   STUDENT_DATA_READ: CAP_STUDENT_DATA_READ,
   STUDENT_DATA_WRITE: CAP_STUDENT_DATA_WRITE,
+  ASSESSMENT_READ: CAP_ASSESSMENT_READ,
 
   // ── 平台内部 ─────────────────────────────────────────────────────────
   // 片段命令（segment gate）用，插件片段可声明；不在 AI 工具箱里。

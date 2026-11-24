@@ -53,6 +53,7 @@ import {
   IClassroomMessageServiceToken,
   IAssignmentSubmissionServiceToken,
   IXueanActivityProgressServiceToken,
+  IAssessmentReadServiceToken,
   ILessonReportServiceToken,
   IClassroomSelfMessageServiceToken,
   ISubmissionRegistryToken,
@@ -76,6 +77,7 @@ import type {
   IClassroomActivityCatalog,
   IClassroomMessageService,
   IAssignmentSubmissionService,
+  IAssessmentReadService,
   IXueanActivityProgressService,
   ILessonReportService,
   IClassroomSelfMessageService,
@@ -816,6 +818,9 @@ function wrapPluginRuntimeService<T>(
   if (tokenName === IAssignmentSubmissionServiceToken.name) {
     return wrapAssignmentSubmissionService(raw as IAssignmentSubmissionService, pluginId, capabilities) as T;
   }
+  if (tokenName === IAssessmentReadServiceToken.name) {
+    return wrapAssessmentReadService(raw as IAssessmentReadService, pluginId, capabilities) as T;
+  }
   if (tokenName === IXueanActivityProgressServiceToken.name) {
     return wrapXueanActivityProgressService(raw as IXueanActivityProgressService, pluginId, capabilities) as T;
   }
@@ -962,6 +967,45 @@ function wrapAssignmentSubmissionService(
     canShareSubmission: safe(async (assignmentId: string, studentId: string) => {
       assert('canShareSubmission');
       return service.canShareSubmission(assignmentId, studentId);
+    }),
+  };
+}
+
+/** 包装测评只读服务（`assessment:read`）。 */
+function wrapAssessmentReadService(
+  service: IAssessmentReadService,
+  pluginId: string,
+  capabilities?: readonly string[],
+): IAssessmentReadService {
+  const CAP = 'assessment:read';
+  const safe = <T extends (...args: never[]) => unknown>(fn: T): T => createSafeFunction(fn) as unknown as T;
+  const assert = (method: string) =>
+    assertManifestCapability(pluginId, capabilities, CAP, 'plugin.assessment_read', method);
+
+  return {
+    listAssessments: safe(async (filter?: { kind?: string; status?: string }) => {
+      assert('listAssessments');
+      return service.listAssessments(filter);
+    }),
+    getAssessmentBrief: safe(async (assessmentId: string) => {
+      assert('getAssessmentBrief');
+      return service.getAssessmentBrief(assessmentId);
+    }),
+    listAssignments: safe(async (assessmentId: string) => {
+      assert('listAssignments');
+      return service.listAssignments(assessmentId);
+    }),
+    getAssignmentStats: safe(async (assignmentId: string) => {
+      assert('getAssignmentStats');
+      return service.getAssignmentStats(assignmentId);
+    }),
+    listBankItems: safe(async (filter?: { type?: string }) => {
+      assert('listBankItems');
+      return service.listBankItems(filter);
+    }),
+    getAttemptSummary: safe(async (attemptId: string) => {
+      assert('getAttemptSummary');
+      return service.getAttemptSummary(attemptId);
     }),
   };
 }

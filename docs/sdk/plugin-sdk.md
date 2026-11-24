@@ -177,6 +177,7 @@ type Actor = PluginApiRequest['actor']; // ✅ 正确写法
 | `IActionRegistryServiceToken`           | `IActionRegistryService`           | AI Action 注册表                                                                                                         |
 | `IActivityRegistryToken`                | `ActivityRegistry`                 | 活动生态（见[活动生态开发指南](../reference/activity-ecosystem.md)） ⚠️ **只能按名字 resolve** ⚠️ **只能按名字 resolve** |
 | `IAssessmentGraderRegistryToken`        | `IAssessmentGraderRegistry`        | 测评批改器注册表（自定义 AI/规则批改器）                                                                                 |
+| `IAssessmentReadServiceToken`           | `IAssessmentReadService`           | 测评/题库只读服务（需 `assessment:read`；身份由宿主会话派生，不含标准答案）                                              |
 | `IAuthSessionBridgeToken`               | `IAuthSessionBridgeService`        | 统一安全会话桥接（LTI 1.3 / SSO 单点登录，v0.3.15+）                                                                     |
 | `ICapabilityRegistryToken`              | `CapabilityRegistry`               | AI 能力注册表                                                                                                            |
 | `ICapabilityRuntimeServiceToken`        | `ICapabilityRuntimeService`        | 能力运行时内核（见[能力 Provider 框架](../reference/capability-provider-framework.md)）                                  |

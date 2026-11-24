@@ -30,7 +30,7 @@ import {
   resetPluginBreaker,
   CRASH_BREAKER_THRESHOLD,
 } from './extension-breaker';
-import type { ExtensionSlot } from './types';
+import type { ExtensionPointConfig, ExtensionSlot } from './types';
 import { matchesDeclaredExtension } from '../../packages/core/assignment/file-preview-policy.js';
 import { extensionCoversSegmentType } from '../../packages/core/plugin-host/mode-pack';
 import { NullExtensionComponent } from './plugin-host';
@@ -290,6 +290,13 @@ export interface ExtensionPointRendererProps {
   excludePluginIds?: string[];
   /** 隐藏指定扩展（`pluginId/extensionId`），用于更细粒度的学生端收敛。 */
   excludeExtensionIds?: string[];
+  /**
+   * 可选：按扩展声明解析额外 props。
+   *
+   * 典型用途是测评 L2 槽位的敏感字段投影（`requiresSensitive` + 授予集合）。
+   * 返回值会在 `ext.slotProps` 之后、调用点 `slotProps` 之前合并；不会覆盖调用点入参。
+   */
+  resolveExtensionProps?: (ext: ExtensionPointConfig) => Record<string, unknown> | undefined;
 }
 
 /**
@@ -453,6 +460,7 @@ export function ExtensionPointRenderer({
   locked = false,
   excludePluginIds,
   excludeExtensionIds,
+  resolveExtensionProps,
 }: ExtensionPointRendererProps) {
   // 熔断降级告警去重（每个组件实例只告警一次/插件）
   const warnedPluginsRef = React.useRef<Set<string>>(new Set());
@@ -1192,7 +1200,58 @@ export function ExtensionPointRenderer({
         const isDOM = typeof ext.render === 'function';
         const hasView = Boolean(ext.slotProps?.view || ext.view);
         if (slot === 'teacher.dashboard.widget' && visibility.get(ext.pluginId) === false) return null;
-        if (!isReact && !isDOM && !hasView) return null;
+
+        const extraProps = resolveExtensionProps?.(ext) ?? {};
+        const commandType = typeof ext.slotProps?.commandType === 'string' ? ext.slotProps.commandType : '';
+        // 调用点显式传入 lessonId（含 null）时以它为准；否则回退全局选中课节。
+        const hasLessonOverride = slotProps != null && Object.prototype.hasOwnProperty.call(slotProps, 'lessonId');
+        const resolvedLessonId = hasLessonOverride ? (slotProps?.lessonId ?? null) : selectedLesson;
+
+        // 数据型贡献兜底（P0）：manifest 条目只有 { id, label, commandType } 时，
+        // 此前所有槽位都会走 `return null` —— 声明成功、界面空白。
+        // 这里渲染为行内按钮，与白板上下文菜单的 commandType 分支同一执行通道。
+        if (!isReact && !isDOM && !hasView) {
+          if (!commandType) return null;
+          const buttonLabel = ext.label || ext.id;
+          const basePayload =
+            typeof ext.slotProps?.payload === 'object' && ext.slotProps.payload !== null
+              ? (ext.slotProps.payload as Record<string, unknown>)
+              : {};
+          const contextPayload =
+            typeof slotProps?.commandPayload === 'object' && slotProps.commandPayload !== null
+              ? (slotProps.commandPayload as Record<string, unknown>)
+              : {};
+          return (
+            <button
+              key={`${ext.pluginId}/${ext.id}`}
+              type="button"
+              data-plugin-id={ext.pluginId}
+              data-extension-id={ext.id}
+              onClick={() => {
+                void frontendApi
+                  .post('/api/plugins/execute-command', {
+                    type: commandType,
+                    payload: { ...basePayload, ...contextPayload },
+                  })
+                  .then((res) => {
+                    if (!res.success) {
+                      uiStore.getState().addToast({
+                        id: `ext-cmd-err-${Date.now()}`,
+                        type: 'error',
+                        title: lang === 'en' ? 'Plugin action failed' : '插件命令执行失败',
+                        message: res.error || commandType,
+                      });
+                    }
+                  });
+              }}
+              className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-theme bg-surface text-2xs font-semibold text-main hover:bg-surface-secondary cursor-pointer whitespace-nowrap"
+              title={buttonLabel}
+            >
+              {ext.icon ? <PluginIconRenderer icon={ext.icon} size={13} /> : null}
+              <span>{buttonLabel}</span>
+            </button>
+          );
+        }
 
         // v0.7.0：显式错误态优先 —— 插件前端失败/被熔断时给出「错误 + 重试」
         const extError = pluginErrors.get(ext.pluginId);
@@ -1235,10 +1294,11 @@ export function ExtensionPointRenderer({
                 {isReact ? (
                   React.createElement(resolveExtensionComponent(ext), {
                     route: ext.route || route,
-                    lessonId: selectedLesson,
-                    classId: liveClassSelectedClassId,
+                    lessonId: resolvedLessonId,
+                    classId: slotProps?.classId || liveClassSelectedClassId,
                     dispatcher: getExtensionDispatcher(host, ext.pluginId, slotProps?.dispatcher),
                     ...ext.slotProps,
+                    ...extraProps,
                     ...slotProps,
                   })
                 ) : isDOM ? (
@@ -1246,10 +1306,11 @@ export function ExtensionPointRenderer({
                     ext={ext}
                     route={ext.route || route}
                     slotProps={{
-                      lessonId: selectedLesson,
-                      classId: liveClassSelectedClassId,
+                      lessonId: resolvedLessonId,
+                      classId: slotProps?.classId || liveClassSelectedClassId,
                       dispatcher: getExtensionDispatcher(host, ext.pluginId, slotProps?.dispatcher),
                       ...ext.slotProps,
+                      ...extraProps,
                       ...slotProps,
                     }}
                     slot={slot}
@@ -1260,10 +1321,11 @@ export function ExtensionPointRenderer({
                     view={String(ext.slotProps?.view || ext.view)}
                     label={ext.label}
                     slot={slot}
-                    lessonId={selectedLesson}
+                    lessonId={resolvedLessonId}
                     classId={slotProps?.classId || liveClassSelectedClassId}
                     studentId={slotProps?.studentId ?? null}
                     studentName={slotProps?.studentName ?? null}
+                    sandboxContext={{ ...ext.slotProps, ...extraProps, ...slotProps }}
                     variant={viewVariantFor(slot)}
                     locked={locked}
                     style={

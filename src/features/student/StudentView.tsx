@@ -109,7 +109,11 @@ export function StudentView() {
           }
         >
           {assessmentsOpen ? (
-            <StudentAssessmentsView lang={lang as 'zh' | 'en'} onExit={() => setAssessmentsOpen(false)} />
+            <StudentAssessmentsView
+              lang={lang as 'zh' | 'en'}
+              onExit={() => setAssessmentsOpen(false)}
+              studentUiPolicy={studentUiPolicy}
+            />
           ) : studentViewStatus === 'lesson' ? (
             <StudentLessonView
               students={students}

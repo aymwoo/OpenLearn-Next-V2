@@ -1,0 +1,1110 @@
+{
+  "schema": "openlearn.assessment-extension-slots/v1",
+  "status": "implemented",
+  "generatedAt": "2026-11-24",
+  "baseline": {
+    "platformVersion": "0.7.17",
+    "sdkVersion": "3.8.0",
+    "slotsContract": "docs/agent/contracts/slots.json",
+    "extensionSlotCount": 141,
+    "anchorSlotCount": 8,
+    "existingAssessmentSlotCount": 3
+  },
+  "principles": [
+    "props 一律白名单投影：answerKey / answer_key_json / 逐生作答默认永不进入 props",
+    "远程优先：每个槽位从立项起支持 manifest 声明式 view: 'storage/*.html'；commandType 在 P0 修复后必须可用",
+    "容器语义遵循 layoutVariant 四分类，FloatingOverlay 严禁 w-full/h-full",
+    "身份由宿主会话派生，插件不得自报 userId/role",
+    "无贡献不占位；单扩展崩溃隔离在 ErrorBoundary + 熔断内",
+    "槽位名 / props / manifest 键 / slots.json / 文档 五处同 PR 更新，drift_count 保持 0"
+  ],
+  "existingSlots": [
+    {
+      "id": "assessment.list.card",
+      "layoutVariant": "InlineCard",
+      "mount": {
+        "file": "src/features/assessment/AssessmentCenter.tsx",
+        "line": 302,
+        "host": "教师测评列表每张卡片底部"
+      },
+      "propsType": "{ assessment: AssessmentListCardSummary; viewer: 'teacher' | 'student'; lang?: 'zh' | 'en'; dispatcher?: IHostActionDispatcher }",
+      "whitelist": [
+        "assessment.id",
+        "assessment.kind",
+        "assessment.title",
+        "assessment.description",
+        "assessment.status",
+        "assessment.itemCount",
+        "assessment.totalScore",
+        "assessment.settings",
+        "assessment.createdAt",
+        "assessment.updatedAt",
+        "viewer",
+        "lang",
+        "dispatcher"
+      ],
+      "forbidden": ["answerKey", "answer_key_json", "studentId", "items[].answerKey"],
+      "defects": [
+        {
+          "code": "D1",
+          "summary": "viewer: 'student' 是死代码——学生端从未渲染该槽位",
+          "evidence": "StudentAssessmentsView.tsx EntryCard 无 ExtensionPointRenderer"
+        },
+        {
+          "code": "D2",
+          "summary": "声明 commandType 但不会渲染（通用分支只认 component/render/view）",
+          "evidence": "extension-point-renderer.tsx:1188-1196"
+        }
+      ]
+    },
+    {
+      "id": "assessment.stats.card",
+      "layoutVariant": "InlineCard",
+      "mount": {
+        "file": "src/features/assessment/StatsPanel.tsx",
+        "line": 112,
+        "host": "统计页 4 个汇总卡之后的同排网格"
+      },
+      "propsType": "{ assignmentId: string; stats: AssessmentStatsCardProps; lang?: 'zh' | 'en'; dispatcher?: IHostActionDispatcher }",
+      "whitelist": [
+        "assignmentId",
+        "stats.attemptCount",
+        "stats.submittedCount",
+        "stats.gradedCount",
+        "stats.needsManualReviewCount",
+        "stats.averageScore",
+        "stats.averagePercent",
+        "stats.maxScore",
+        "stats.items[].itemId",
+        "stats.items[].type",
+        "stats.items[].stem",
+        "stats.items[].maxScore",
+        "stats.items[].answered",
+        "stats.items[].graded",
+        "stats.items[].correct",
+        "stats.items[].correctRate",
+        "stats.items[].avgScore",
+        "stats.items[].distribution",
+        "lang",
+        "dispatcher"
+      ],
+      "forbidden": ["answerKey", "answer_key_json", "studentId", "perStudentAnswers"],
+      "defects": [
+        {
+          "code": "D2",
+          "summary": "声明 commandType 但不会渲染"
+        }
+      ]
+    },
+    {
+      "id": "assessment.attempt.toolbar",
+      "layoutVariant": "ActionItem",
+      "mount": {
+        "file": "src/features/assessment/student/StudentAssessmentsView.tsx",
+        "line": 625,
+        "host": "学生作答页顶部头部条、交卷按钮右侧"
+      },
+      "propsType": "{ assignmentId: string; attemptId: string; lang?: 'zh' | 'en'; dispatcher?: IHostActionDispatcher }",
+      "whitelist": ["assignmentId", "attemptId", "lang", "dispatcher"],
+      "forbidden": ["answerKey", "answers", "items", "studentId", "studentName"],
+      "defects": [
+        {
+          "code": "D2",
+          "summary": "声明 commandType 但不会渲染"
+        },
+        {
+          "code": "D3",
+          "summary": "文档写「底栏交卷按钮旁」，实际挂载在顶部头部条",
+          "evidence": "docs/reference/plugin-ui-extension-slots.md §12.1"
+        }
+      ]
+    }
+  ],
+  "phases": {
+    "P0": {
+      "goal": "修复既有 3 个槽位缺陷，并给出合法读写通道",
+      "breakingChange": false
+    },
+    "P1": {
+      "goal": "补齐题库域与组卷/发布",
+      "breakingChange": false
+    },
+    "P2": {
+      "goal": "补齐批改/统计/学生端与题型 UI 声明式化",
+      "breakingChange": false
+    }
+  },
+  "fixes": [
+    {
+      "id": "FIX-D1",
+      "phase": "P0",
+      "title": "启用 assessment.list.card 学生端渲染",
+      "change": "在 StudentAssessmentsView 的 EntryCard 内渲染同一槽位，viewer: 'student'，props 复用 toAssessmentListCardProps",
+      "acceptance": ["学生列表出现插件卡片", "viewer 断言为 student", "卡片不含成绩明细与答案"]
+    },
+    {
+      "id": "FIX-D2",
+      "phase": "P0",
+      "title": "通用渲染分支支持 commandType 行内按钮",
+      "change": "在 ExtensionPointRenderer 通用分支增加：无 component/render/view 但声明 commandType 时渲染按钮，复用 /api/plugins/execute-command 与白板上下文菜单实现",
+      "acceptance": [
+        "三个测评槽位均可只声明 {id,label,commandType} 显示按钮",
+        "命令经 manifest 前缀化后可派发",
+        "无 COMMAND_NOT_REGISTERED"
+      ]
+    },
+    {
+      "id": "FIX-D3",
+      "phase": "P0",
+      "title": "修正文档挂载位置与槽位数量口径",
+      "change": "attempt.toolbar 改为顶部头部条；140 槽位改为 141 + 8 锚点",
+      "acceptance": ["文档与调用点一致"]
+    },
+    {
+      "id": "FIX-D7",
+      "phase": "P1",
+      "title": "把后端已有能力接到 UI 入口",
+      "change": "抽题规则 settings.draw、/item-analysis*、/paper/export|import、题库 tags/difficulty 通过 P1/P2 槽位或宿主表单暴露",
+      "acceptance": ["教师可在 UI 配置抽题", "题库可设标签与难度", "试卷可导入导出"]
+    }
+  ],
+  "newSlots": [
+    {
+      "id": "assessment.bank.toolbar.action",
+      "phase": "P1",
+      "layoutVariant": "ActionItem",
+      "mount": {
+        "file": "src/features/assessment/QuestionBankPanel.tsx",
+        "anchor": "题库面板标题行右侧（「题库题目（N）」同行）",
+        "host": "教师 / 管理员"
+      },
+      "propsType": "{ filters: { type?: string }; lang?: 'zh' | 'en'; dispatcher?: IHostActionDispatcher }",
+      "whitelist": ["filters.type", "lang", "dispatcher"],
+      "forbidden": ["answerKey", "config", "ownerId", "studentId"],
+      "remote": { "manifestContributes": true, "view": "storage/*.html", "commandType": true, "inlineComponent": true },
+      "useCases": ["批量导入", "AI 批量生成题目", "批量打标签", "去重"],
+      "dependsOn": ["FIX-D2"]
+    },
+    {
+      "id": "assessment.bank.item.action",
+      "phase": "P1",
+      "layoutVariant": "ActionItem",
+      "mount": {
+        "file": "src/features/assessment/QuestionBankPanel.tsx",
+        "anchor": "题库条目行操作区（删除按钮左侧）",
+        "host": "教师 / 管理员"
+      },
+      "propsType": "{ item: BankItemSummary; lang?: 'zh' | 'en'; dispatcher?: IHostActionDispatcher }",
+      "propsShape": {
+        "item": {
+          "id": "string",
+          "type": "string",
+          "stem": "string",
+          "tags": "string[]",
+          "difficulty": "number | null",
+          "visibility": "'private' | 'school'",
+          "ownerIsSelf": "boolean",
+          "createdAt": "number",
+          "updatedAt": "number"
+        }
+      },
+      "whitelist": [
+        "item.id",
+        "item.type",
+        "item.stem",
+        "item.tags",
+        "item.difficulty",
+        "item.visibility",
+        "item.ownerIsSelf",
+        "item.createdAt",
+        "item.updatedAt",
+        "lang",
+        "dispatcher"
+      ],
+      "forbidden": ["item.config", "item.answerKey", "item.ownerId", "studentId"],
+      "remote": { "manifestContributes": true, "view": "storage/*.html", "commandType": true, "inlineComponent": true },
+      "useCases": ["加入试卷", "复制题目", "查看来源", "编辑扩展"],
+      "dependsOn": ["FIX-D2"]
+    },
+    {
+      "id": "assessment.bank.import.source",
+      "phase": "P1",
+      "layoutVariant": "ActionItem",
+      "mount": {
+        "file": "src/features/assessment/QuestionBankPanel.tsx",
+        "anchor": "「新增题库题目」卡片底部（与保存按钮同区）",
+        "host": "教师 / 管理员"
+      },
+      "propsType": "{ lang?: 'zh' | 'en'; dispatcher?: IHostActionDispatcher }",
+      "declarationFields": ["id", "label", "icon", "extensions", "mimeTypes", "view"],
+      "whitelist": ["lang", "dispatcher"],
+      "forbidden": ["answerKey", "config", "studentId"],
+      "remote": { "manifestContributes": true, "view": "storage/*.html", "commandType": true, "inlineComponent": true },
+      "useCases": ["国家智慧教育平台题库同步", "校本题库导入", "Moodle / QTI 导入"],
+      "notes": "对齐 timetable.import.source 的声明式数据贡献模式；宿主只负责渲染入口与派发命令，导入结果由插件自行落库或调用宿主命令"
+    },
+    {
+      "id": "assessment.bank.filter",
+      "phase": "P1",
+      "layoutVariant": "ActionItem",
+      "mount": {
+        "file": "src/features/assessment/QuestionBankPanel.tsx",
+        "anchor": "题库列表筛选栏（类型筛选右侧）",
+        "host": "教师 / 管理员"
+      },
+      "propsType": "{ activeFilters: { type?: string; tags?: string[]; difficultyMin?: number; difficultyMax?: number }; lang?: 'zh' | 'en'; onChange?: (patch: Record<string, unknown>) => void }",
+      "whitelist": [
+        "activeFilters.type",
+        "activeFilters.tags",
+        "activeFilters.difficultyMin",
+        "activeFilters.difficultyMax",
+        "lang"
+      ],
+      "forbidden": ["answerKey", "config", "ownerId", "studentId"],
+      "remote": {
+        "manifestContributes": true,
+        "view": "storage/*.html",
+        "commandType": false,
+        "inlineComponent": true
+      },
+      "useCases": ["知识点筛选", "标签体系", "难度区间筛选"],
+      "notes": "筛选为纯前端投影，宿主只负责把 patch 合并回本地筛选状态；不直接改 SQL"
+    },
+    {
+      "id": "assessment.bank.item.preview",
+      "phase": "P1",
+      "layoutVariant": "Panel",
+      "mount": {
+        "file": "src/features/assessment/QuestionBankPanel.tsx",
+        "anchor": "题库条目点击后的预览抽屉 / 弹层",
+        "host": "教师 / 管理员"
+      },
+      "propsType": "{ item: BankItemSummary; lang?: 'zh' | 'en' }",
+      "whitelist": [
+        "item.id",
+        "item.type",
+        "item.stem",
+        "item.tags",
+        "item.difficulty",
+        "item.visibility",
+        "item.ownerIsSelf",
+        "lang"
+      ],
+      "forbidden": ["item.config", "item.answerKey", "studentId"],
+      "remote": {
+        "manifestContributes": true,
+        "view": "storage/*.html",
+        "commandType": false,
+        "inlineComponent": true
+      },
+      "useCases": ["插件题型的自定义预览"],
+      "notes": "若插件需要 config 渲染预览，应通过 assessment:read 服务按 id 二次取数并自行承担展示责任"
+    },
+    {
+      "id": "assessment.editor.item.addon",
+      "phase": "P1",
+      "layoutVariant": "Panel",
+      "mount": {
+        "file": "src/features/assessment/AssessmentEditor.tsx",
+        "anchor": "组卷逐题卡片底部（题目操作按钮下方）",
+        "host": "教师 / 管理员"
+      },
+      "propsType": "({ sensitiveAccess: false; assessmentId: string; item: EditorItemSummaryBase; lang?: 'zh' | 'en'; dispatcher?: IHostActionDispatcher }) | ({ sensitiveAccess: true; assessmentId: string; item: EditorItemSummaryBase & { answerKey: unknown; config: Record<string, unknown> }; lang?: 'zh' | 'en'; dispatcher?: IHostActionDispatcher })",
+      "sensitiveTier": "L2",
+      "sensitiveFields": ["answerKey", "config"],
+      "requiresDeclaration": true,
+      "propsShape": {
+        "item": {
+          "id": "string",
+          "type": "string",
+          "stem": "string",
+          "maxScore": "number",
+          "section": "string | null",
+          "sortOrder": "number",
+          "answerKey": "unknown（仅 sensitiveAccess=true）",
+          "config": "Record<string, unknown>（仅 sensitiveAccess=true）"
+        }
+      },
+      "whitelist": [
+        "assessmentId",
+        "item.id",
+        "item.type",
+        "item.stem",
+        "item.maxScore",
+        "item.section",
+        "item.sortOrder",
+        "item.answerKey（L2 声明且授予）",
+        "item.config（L2 声明且授予）",
+        "lang",
+        "dispatcher"
+      ],
+      "forbidden": ["studentId", "studentAnswer", "settings", "ownerId"],
+      "remote": {
+        "manifestContributes": true,
+        "view": "storage/*.html",
+        "commandType": false,
+        "inlineComponent": true
+      },
+      "useCases": ["知识点标注", "难度标注", "AI 改编", "题目配图"],
+      "notes": "L2 敏感槽位之一：宿主 UI 本就在同一张卡片展示/编辑 answerKey，因此允许声明读取；未声明时 sensitiveAccess=false，拿不到 answerKey/config；详见 deepDives.Q2"
+    },
+    {
+      "id": "assessment.editor.settings.addon",
+      "phase": "P1",
+      "layoutVariant": "Panel",
+      "mount": {
+        "file": "src/features/assessment/AssessmentEditor.tsx",
+        "anchor": "「测评设置」区块底部（复选框组之后）",
+        "host": "教师 / 管理员"
+      },
+      "propsType": "{ assessmentId: string; kind: 'quiz' | 'exam' | 'survey'; settings: Record<string, unknown>; readOnly: boolean; onPatch?: (patch: Record<string, unknown>) => void; lang?: 'zh' | 'en' }",
+      "whitelist": ["assessmentId", "kind", "settings", "readOnly", "lang"],
+      "forbidden": ["answerKey", "ownerId", "studentId"],
+      "remote": {
+        "manifestContributes": true,
+        "view": "storage/*.html",
+        "commandType": false,
+        "inlineComponent": true
+      },
+      "useCases": ["抽题规则 settings.draw", "防作弊参数", "计分策略"],
+      "notes": "onPatch 只接受补丁；宿主负责白名单合并与 settings.ts 归一化，非法值回落默认，不因插件放宽约束"
+    },
+    {
+      "id": "assessment.publish.preflight",
+      "phase": "P1",
+      "layoutVariant": "ActionItem",
+      "mount": {
+        "file": "src/features/assessment/AssessmentEditor.tsx",
+        "anchor": "发布对话框确认按钮上方",
+        "host": "教师 / 管理员"
+      },
+      "propsType": "{ assessmentId: string; classId: string; itemCount: number; totalScore: number; lang?: 'zh' | 'en'; onResult?: (r: { level: 'error' | 'warn'; code: string; message: string }) => void }",
+      "whitelist": ["assessmentId", "classId", "itemCount", "totalScore", "lang"],
+      "forbidden": ["answerKey", "studentId", "students"],
+      "remote": {
+        "manifestContributes": true,
+        "view": "storage/*.html",
+        "commandType": false,
+        "inlineComponent": true
+      },
+      "useCases": ["题库余量校验", "题型未安装校验", "满分异常校验"],
+      "notes": "error 阻止发布，warn 仅提示；插件未实现则无任何检查"
+    },
+    {
+      "id": "assessment.grading.toolbar.action",
+      "phase": "P2",
+      "layoutVariant": "ActionItem",
+      "mount": {
+        "file": "src/features/assessment/GradingPanel.tsx",
+        "anchor": "批改面板顶部「刷新」按钮左侧",
+        "host": "教师 / 管理员"
+      },
+      "propsType": "{ assignmentId: string; attempts: TeacherAttempt[]; refresh: () => void; lang?: 'zh' | 'en' }",
+      "whitelist": [
+        "assignmentId",
+        "attempts[].id",
+        "attempts[].attemptNo",
+        "attempts[].status",
+        "attempts[].score",
+        "attempts[].needsManualReview",
+        "attempts[].anonymousLabel",
+        "lang"
+      ],
+      "forbidden": ["answerKey", "attempts[].answers", "attempts[].studentId"],
+      "remote": { "manifestContributes": true, "view": "storage/*.html", "commandType": true, "inlineComponent": true },
+      "useCases": ["AI 批量初评", "批改报告导出"],
+      "notes": "写数据后插件需自行调用 refresh()"
+    },
+    {
+      "id": "assessment.grading.answer.addon",
+      "phase": "P2",
+      "layoutVariant": "Panel",
+      "mount": {
+        "file": "src/features/assessment/GradingPanel.tsx",
+        "anchor": "逐题批改卡片评分表单下方",
+        "host": "教师 / 管理员"
+      },
+      "propsType": "({ sensitiveAccess: false; attemptId: string; item: GradingAnswerItemBase; onScoreChange?: (score: number) => void; lang?: 'zh' | 'en' }) | ({ sensitiveAccess: true; attemptId: string; item: GradingAnswerItemBase & { answerKey: unknown; config: Record<string, unknown>; answer: unknown }; onScoreChange?: (score: number) => void; lang?: 'zh' | 'en' })",
+      "teacherOnly": true,
+      "sensitiveTier": "L2",
+      "sensitiveFields": ["answerKey", "config", "studentAnswer", "studentIdentity"],
+      "requiresDeclaration": true,
+      "propsShape": {
+        "item": {
+          "itemId": "string",
+          "type": "string",
+          "stem": "string",
+          "maxScore": "number",
+          "score": "number | null",
+          "isCorrect": "boolean | null",
+          "needsManualReview": "boolean",
+          "feedback": "string | null",
+          "manualOverride": "boolean",
+          "answer": "unknown（仅 sensitiveAccess=true，声明 studentAnswer）",
+          "answerKey": "unknown（仅 sensitiveAccess=true，声明 answerKey）",
+          "config": "Record<string, unknown>（仅 sensitiveAccess=true，声明 config）"
+        }
+      },
+      "whitelist": [
+        "attemptId",
+        "item.itemId",
+        "item.type",
+        "item.stem",
+        "item.maxScore",
+        "item.score",
+        "item.isCorrect",
+        "item.needsManualReview",
+        "item.feedback",
+        "item.manualOverride",
+        "item.answer（L2 声明且授予）",
+        "item.answerKey（L2 声明且授予）",
+        "item.config（L2 声明且授予）",
+        "lang"
+      ],
+      "forbidden": ["otherStudents", "classRoster", "其他学生的作答"],
+      "remote": {
+        "manifestContributes": true,
+        "view": "storage/*.html",
+        "commandType": false,
+        "inlineComponent": true
+      },
+      "useCases": ["代码运行结果", "查重报告", "音视频回放"],
+      "notes": "L2 敏感槽位之一；不再无条件透传，未声明 requiresSensitive 时 sensitiveAccess=false；必须 viewer=teacher 且由宿主注入；评分状态由宿主表单持有，必须走 onScoreChange；详见 deepDives.Q2"
+    },
+    {
+      "id": "assessment.stats.item.addon",
+      "phase": "P2",
+      "layoutVariant": "Panel",
+      "mount": {
+        "file": "src/features/assessment/StatsPanel.tsx",
+        "anchor": "逐题统计表每行下方展开区",
+        "host": "教师 / 管理员"
+      },
+      "propsType": "{ assignmentId: string; item: StatsItemView; lang?: 'zh' | 'en' }",
+      "propsShape": {
+        "item": {
+          "itemId": "string",
+          "type": "string",
+          "stem": "string",
+          "maxScore": "number",
+          "answered": "number",
+          "graded": "number",
+          "correct": "number",
+          "correctRate": "number | null",
+          "avgScore": "number | null",
+          "distribution": "Record<string, number>"
+        }
+      },
+      "whitelist": [
+        "assignmentId",
+        "item.itemId",
+        "item.type",
+        "item.stem",
+        "item.maxScore",
+        "item.answered",
+        "item.graded",
+        "item.correct",
+        "item.correctRate",
+        "item.avgScore",
+        "item.distribution",
+        "lang"
+      ],
+      "forbidden": ["answerKey", "studentId", "perStudentAnswers"],
+      "remote": {
+        "manifestContributes": true,
+        "view": "storage/*.html",
+        "commandType": false,
+        "inlineComponent": true
+      },
+      "useCases": ["难度/区分度", "知识点掌握度", "错因分析"],
+      "notes": "选择行内附加而非任意追加列，避免多插件列数/表头协调（评审问题 Q5）"
+    },
+    {
+      "id": "assessment.attempt.question.addon",
+      "phase": "P2",
+      "layoutVariant": "ActionItem",
+      "mount": {
+        "file": "src/features/assessment/student/StudentAssessmentsView.tsx",
+        "anchor": "学生每题作答区旁（题号行右侧）",
+        "host": "学生"
+      },
+      "propsType": "{ assignmentId: string; attemptId: string; itemId: string; itemType: string; index: number; lang?: 'zh' | 'en' }",
+      "sensitiveTier": "L0",
+      "whitelist": ["assignmentId", "attemptId", "itemId", "itemType", "index", "lang"],
+      "forbidden": ["answerKey", "config", "answers", "studentId", "studentName"],
+      "remote": { "manifestContributes": true, "view": "storage/*.html", "commandType": true, "inlineComponent": true },
+      "useCases": ["草稿纸", "计算器", "公式输入"],
+      "notes": "L0 硬禁止：只给定位信息，不给题干配置与答案；声明 requiresSensitive 也不生效；默认折叠为小按钮；详见 deepDives.Q2"
+    },
+    {
+      "id": "assessment.result.item.addon",
+      "phase": "P2",
+      "layoutVariant": "Panel",
+      "mount": {
+        "file": "src/features/assessment/student/StudentAssessmentsView.tsx",
+        "anchor": "学生结果页逐题解析下方",
+        "host": "学生"
+      },
+      "propsType": "{ assignmentId: string; attemptId: string; item: ResultItemView; lang?: 'zh' | 'en' }",
+      "sensitiveTier": "L0（answerKey 仅随 showAnalysis）",
+      "propsShape": {
+        "item": {
+          "itemId": "string",
+          "type": "string",
+          "stem": "string",
+          "maxScore": "number",
+          "answer": "unknown",
+          "score": "number | null",
+          "isCorrect": "boolean | null",
+          "feedback": "string | null",
+          "answerKey": "unknown | undefined（仅 resultVisibility 允许且 showAnalysis 为真时出现）"
+        }
+      },
+      "whitelist": [
+        "assignmentId",
+        "attemptId",
+        "item.itemId",
+        "item.type",
+        "item.stem",
+        "item.maxScore",
+        "item.answer",
+        "item.score",
+        "item.isCorrect",
+        "item.feedback",
+        "item.answerKey（条件性）",
+        "lang"
+      ],
+      "forbidden": ["otherStudents", "classRoster", "perStudentAnswers"],
+      "remote": {
+        "manifestContributes": true,
+        "view": "storage/*.html",
+        "commandType": false,
+        "inlineComponent": true
+      },
+      "useCases": ["解析", "知识点推荐", "加入错题本"],
+      "notes": "answerKey 字段在不可见时缺省（不是空字符串）；宿主按 resultVisibility/showAnalysis 决定是否注入"
+    }
+  ],
+  "questionTypeExtension": {
+    "phase": "P2",
+    "status": "needs-separate-review",
+    "manifestKey": "assessment.question_type",
+    "entryShape": {
+      "id": "string（必须等于服务端已注册题型 type，格式 <pluginId>:<name>）",
+      "label": "string",
+      "labelEn": "string?",
+      "category": "'objective' | 'subjective'",
+      "supports": "Array<'quiz' | 'exam' | 'survey'>",
+      "autoGradable": "boolean",
+      "editorView": "string（storage/*.html）",
+      "answerView": "string（storage/*.html）"
+    },
+    "bridgeOpsToAdd": ["question.getConfig", "question.setConfig", "question.getValue", "question.setValue"],
+    "precedence": "同 type 时 inline ctx.ui.registerAssessmentQuestionType 优先（内建插件可覆盖）",
+    "constraints": [
+      "新增 bridge op 必须限定在当前题型上下文，拒绝任意 id 探测",
+      "不得绕过服务端 registerQuestionType：UI 声明不等于判分实现存在",
+      "安装期校验 id 与 manifest.id 命名空间一致，否则告警"
+    ]
+  },
+  "services": [
+    {
+      "token": "IAssessmentReadServiceToken",
+      "identifier": "@openlearn/core:IAssessmentReadService",
+      "phase": "P0",
+      "capabilityRequired": "assessment:read",
+      "degradation": "未授予或非 inline/worker/process 不支持时为 null（与 roster 同款）",
+      "methods": [
+        "listAssessments(actor, filter?)",
+        "getAssessmentBrief(actor, assessmentId)",
+        "listAssignments(actor, assessmentId)",
+        "getAssignmentStats(actor, assignmentId)",
+        "listBankItems(actor, filter?)",
+        "getAttemptSummary(actor, attemptId)"
+      ],
+      "constraints": [
+        "actor 由宿主会话派生，插件不得自报 userId/role",
+        "教师按 assessments.owner_id 校验归属；学生只能读自己的 attempt",
+        "返回值全部白名单投影，answerKey 永不出现"
+      ]
+    }
+  ],
+  "events": [
+    {
+      "type": "assessment.assignment.published",
+      "phase": "P0",
+      "payload": ["assessmentId", "assignmentId", "classId", "lessonId", "kind", "opensAt", "closesAt"],
+      "trigger": "AssessmentService.publish()"
+    },
+    {
+      "type": "assessment.assignment.released",
+      "phase": "P0",
+      "payload": ["assignmentId", "classId", "releasedAt"],
+      "trigger": "AssessmentService.release()"
+    },
+    {
+      "type": "assessment.assignment.closed",
+      "phase": "P0",
+      "payload": ["assignmentId", "classId", "closedAt"],
+      "trigger": "AssessmentService.closeAssignment()"
+    },
+    {
+      "type": "assessment.attempt.submitted",
+      "phase": "P0",
+      "payload": ["assignmentId", "attemptId", "submittedAt", "needsManualReview"],
+      "trigger": "AssessmentService.submit()"
+    },
+    {
+      "type": "assessment.attempt.graded",
+      "phase": "P0",
+      "payload": ["assignmentId", "attemptId", "score", "maxScore", "needsManualReview"],
+      "trigger": "自动判分 / regrade / 人工批改落分"
+    }
+  ],
+  "eventConstraints": {
+    "includeStudentId": false,
+    "forbidden": ["answerKey", "answer_key_json", "answers", "itemConfig"],
+    "reason": "默认最小暴露；需要学生维度的插件通过 assessment:read + student-data:read 二次取数"
+  },
+  "manifestChanges": {
+    "newContributes": [
+      "assessment.bank.toolbar.action",
+      "assessment.bank.item.action",
+      "assessment.bank.import.source",
+      "assessment.bank.filter",
+      "assessment.bank.item.preview",
+      "assessment.editor.item.addon",
+      "assessment.editor.settings.addon",
+      "assessment.publish.preflight",
+      "assessment.grading.toolbar.action",
+      "assessment.grading.answer.addon",
+      "assessment.stats.item.addon",
+      "assessment.attempt.question.addon",
+      "assessment.result.item.addon"
+    ],
+    "existingContributes": ["assessment.list.card", "assessment.attempt.toolbar", "assessment.stats.card"],
+    "optionalKey": "assessment.question_type",
+    "schemaNote": "继续使用 passthrough 的 frontendSlotEntrySchema，确保 view 字段不被 strip"
+  },
+  "capabilityChanges": {
+    "newCapabilities": [
+      {
+        "id": "assessment:read",
+        "kind": "method",
+        "gate": "IAssessmentReadService 调用方校验",
+        "catalogCountAfter": 32
+      }
+    ],
+    "deferred": ["assessment:write（本稿不开放写入服务）"],
+    "syncTargets": [
+      "packages/core/capability/catalog.ts",
+      "docs/agent/contracts/capabilities.json",
+      "docs/reference/plugin-capability-matrix.md",
+      "assertValidManifestCapabilities 相关测试"
+    ]
+  },
+  "compatibility": {
+    "dataModelChanges": [],
+    "migrations": [],
+    "behaviorChanges": [
+      {
+        "id": "FIX-D2",
+        "type": "fix",
+        "note": "声明了 commandType 但此前空白的测评贡献将开始显示按钮"
+      },
+      {
+        "id": "FIX-D1",
+        "type": "feature",
+        "note": "学生端列表开始渲染 assessment.list.card"
+      }
+    ],
+    "changelog": "CHANGELOG.md › Unreleased › ### Features"
+  },
+  "securityChecklist": [
+    "props 一律白名单构造，禁止 ...spread DB 行对象",
+    "学生端槽位不得携带其他学生的身份/成绩/作答",
+    "教师端 answerKey 仅 grading.answer.addon 显式提供且 viewer=teacher",
+    "学生端 view CSP 维持 connect-src 'none'",
+    "新增 bridge op 必须限定作用域，拒绝任意 id 探测",
+    "事件 payload 禁止携带标准答案与作答正文"
+  ],
+  "testPlan": [
+    "投影哨兵：每个投影函数断言不含 answerKey / answer_key_json / studentId",
+    "渲染：每个新槽位至少一条教师/学生可见性断言 + 空态断言",
+    "契约：manifestSchema.parse 遍历全部新键，断言 view 被保留",
+    "服务：跨教师/跨学生/未授权班级归属校验 + 能力未授予时为 null",
+    "事件：发布/交卷/判分各触发一次，payload 形状断言无答案字段",
+    "门禁：agent_facts.py --check、build-docs.sh、pnpm lint、pnpm test 全绿，drift_count = 0"
+  ],
+  "implementationChecklist": [
+    "src/plugin-host/types.ts：ExtensionSlot 联合 + *SlotProps",
+    "真实调用点：ExtensionPointRenderer（确认容器语义、locked、excludePluginIds）",
+    "packages/core/esm-loader/manifest-schema.ts：frontendSlotsShape 新键",
+    "packages/core/plugin-host/contribution-registry.ts：*Config + 联合类型",
+    "docs/reference/plugin-ui-extension-slots.md：挂载点 / props / 坑",
+    "docs/agent/contracts/slots.json + assets/test-harness/slot-registry.json",
+    "回归测试：投影哨兵 + 可见性 + view 保留",
+    "CHANGELOG.md：### Features"
+  ],
+  "deepDives": {
+    "Q1": {
+      "title": "学生端列表复用 assessment.list.card（判别联合 props）",
+      "decision": "复用既有槽位，不新增 assessment.student.list.card",
+      "rationale": [
+        "学生与教师都是「一张测评卡片」，语义同构，差异只在数据形状",
+        "新增槽位会让 manifest 键、props、文档、测试、slots.json 全部翻倍",
+        "学生分支此前是死代码，无存量插件依赖，改成判别字段的破坏面为零"
+      ],
+      "whyNotNewSlot": [
+        "多 1 个 ExtensionSlot 成员、1 个 SlotProps、1 个 manifest 键、1 行 slots.json、1 套文档、2+ 条测试",
+        "收益仅是插件少写一个 viewer 分支，与成本不成比例"
+      ],
+      "dataShapeDiff": {
+        "primaryKey": {
+          "teacher": "id = assessmentId",
+          "student": "id = assignmentId，另有 assessmentId"
+        },
+        "shared": ["kind", "title"],
+        "teacherOnly": ["description", "status", "itemCount", "totalScore", "settings", "createdAt", "updatedAt"],
+        "studentOnly": [
+          "classId",
+          "lessonId",
+          "opensAt",
+          "closesAt",
+          "durationSec",
+          "windowState",
+          "completed",
+          "attempt"
+        ],
+        "studentApiGap": "/api/me/assessments 不返回 description/itemCount/totalScore/settings；不要为扩展临时补聚合查询"
+      },
+      "propsUnion": {
+        "typeName": "AssessmentListCardSlotProps",
+        "discriminator": "viewer",
+        "teacher": {
+          "viewer": "teacher",
+          "assessment": "id/kind/title/description/status/itemCount/totalScore/settings/createdAt/updatedAt",
+          "common": ["lang", "dispatcher"]
+        },
+        "student": {
+          "viewer": "student",
+          "assessment": "id(=assignmentId)/assessmentId/kind/title/classId/lessonId/windowState/completed/opensAt/closesAt/durationSec",
+          "attempt": "attemptNo/status/submittedAt/score/maxScore/needsManualReview | null",
+          "common": ["lang", "dispatcher"]
+        },
+        "forbidden": ["settings（含 draw/strictProctor）", "studentId", "answerKey", "answer_key_json", "attempts"]
+      },
+      "projection": {
+        "file": "src/features/assessment/extension-slot-props.ts",
+        "newFunction": "toStudentAssessmentCardProps(entry: StudentAssignmentEntry)",
+        "note": "教师侧 toAssessmentListCardProps 保留，返回类型标注为 TeacherAssessmentCardProps；score 由 toStudentAttemptView 按可见性置 null，不得自行推断"
+      },
+      "renderPoint": {
+        "file": "src/features/assessment/student/StudentAssessmentsView.tsx",
+        "component": "EntryCard",
+        "change": "外层改为 flex flex-col gap-2，原横向主行保留，底部插入 ExtensionPointRenderer",
+        "slotProps": "toStudentAssessmentCardProps(entry) + { lang, classId: entry.classId, lessonId: entry.lessonId }",
+        "rendererProps": "excludePluginIds / excludeExtensionIds / lang"
+      },
+      "coRequiredFixes": [
+        {
+          "id": "Q1-FIX-1",
+          "issue": "view 分支硬编码 lessonId=selectedLesson，slotProps.lessonId 不生效",
+          "evidence": "src/plugin-host/extension-point-renderer.tsx:1263",
+          "fix": "改为 lessonId: slotProps?.lessonId ?? selectedLesson，与 classId 覆盖规则对齐"
+        },
+        {
+          "id": "Q1-FIX-2",
+          "issue": "StudentAssessmentsView 未接收 studentUiPolicy，教师隐藏的插件会在测评列表复活",
+          "evidence": "src/features/student/StudentView.tsx:112 只传 lang/onExit",
+          "fix": "StudentAssessmentsView 增加可选 studentUiPolicy prop，StudentView 透传 hiddenPlugins/hiddenExtensions"
+        },
+        {
+          "id": "Q1-FIX-3",
+          "issue": "每条测评一个 view iframe，长列表会挂几十个沙箱",
+          "fix": "契约要求折叠态（默认小按钮，展开时 ui.resize）；或宿主在 entries.length > 50 时只渲染前 50 条"
+        },
+        {
+          "id": "Q1-FIX-4",
+          "issue": "StudentInteractiveOverlay 也复用 StudentAssessmentsView，没有策略上下文",
+          "fix": "按「空策略 = 全部可见」处理，并在文档说明"
+        }
+      ],
+      "fileChanges": [
+        "src/features/assessment/extension-slot-props.ts：新增学生投影 + 教师返回类型",
+        "src/plugin-host/types.ts：AssessmentListCardSlotProps 改判别联合",
+        "src/features/assessment/student/StudentAssessmentsView.tsx：EntryCard 结构 + 槽位 + studentUiPolicy",
+        "src/features/student/StudentView.tsx：透传 studentUiPolicy",
+        "src/plugin-host/extension-point-renderer.tsx：view 分支 lessonId 支持覆盖",
+        "docs/reference/plugin-ui-extension-slots.md：删除死代码警告并补 props 说明"
+      ],
+      "edgeCases": [
+        "匿名问卷 score/maxScore 为 null，扩展不得按 0 分渲染",
+        "未开始/已截止以 windowState 为准，不得用 Date.now() 判断",
+        "单扩展崩溃隔离在 ErrorBoundary，不阻断 onOpen",
+        "无贡献时 Renderer 返回 null，不留额外空白"
+      ],
+      "tests": [
+        "学生 props 哨兵：不含 answerKey/answer_key_json/studentId/settings",
+        "未发布成绩时 score 为 null",
+        "教师列表 viewer=teacher，学生列表 viewer=student，互不串",
+        "hiddenPlugins 命中的插件在学生列表不渲染",
+        "view 型扩展收到 entry.lessonId（验证 renderer 修复）",
+        "教师端现有测试不改断言仍绿"
+      ]
+    },
+    "Q2": {
+      "title": "敏感字段分级 + 显式申请",
+      "decision": "分级（L0 硬禁止 / L1 默认不含 / L2 声明后授予），不做一刀切",
+      "rationale": [
+        "插件是第三方代码，以教师权限运行；教师可见不等于插件必要",
+        "rolesAllowed 配错不会报错，只会静默多暴露",
+        "出站通道存在，默认含答案等于全卷泄漏",
+        "默认不构造是唯一可靠默认值，授予必须显式且可审计"
+      ],
+      "tiers": {
+        "L0": {
+          "meaning": "无论声明什么都不构造敏感字段",
+          "slots": [
+            "assessment.list.card（学生分支）",
+            "assessment.attempt.toolbar",
+            "assessment.attempt.question.addon",
+            "assessment.result.item.addon（answerKey 仅跟随 showAnalysis）",
+            "assessment.bank.*"
+          ]
+        },
+        "L1": {
+          "meaning": "props 默认不含，声明也不生效",
+          "slots": [
+            "assessment.stats.item.addon",
+            "assessment.grading.toolbar.action",
+            "assessment.publish.preflight",
+            "assessment.editor.settings.addon"
+          ]
+        },
+        "L2": {
+          "meaning": "扩展显式声明 + 宿主校验通过后才注入",
+          "slots": ["assessment.grading.answer.addon", "assessment.editor.item.addon"]
+        }
+      },
+      "sensitiveFields": [
+        {
+          "id": "answerKey",
+          "reason": "标准答案，泄露即作弊",
+          "typicalUsers": ["批改辅助", "AI 改编"]
+        },
+        {
+          "id": "config",
+          "reason": "插件题型 config 可能含测试用例/评分细则/答案；内置题型 options 虽可见但统一按敏感处理",
+          "typicalUsers": ["代码题判分展示", "AI 改编"]
+        },
+        {
+          "id": "studentAnswer",
+          "reason": "学生个人作答",
+          "typicalUsers": ["查重", "代码运行", "AI 评语"]
+        },
+        {
+          "id": "studentIdentity",
+          "reason": "studentId / 姓名",
+          "typicalUsers": ["家校通知", "错题本"]
+        }
+      ],
+      "slotFieldMatrix": {
+        "assessment.grading.answer.addon": ["answerKey", "config", "studentAnswer", "studentIdentity"],
+        "assessment.editor.item.addon": ["answerKey", "config"],
+        "assessment.grading.toolbar.action": ["studentIdentity(anonymousLabel 优先)"],
+        "assessment.editor.settings.addon": [],
+        "assessment.publish.preflight": [],
+        "assessment.stats.item.addon": [],
+        "assessment.result.item.addon": [
+          "answerKey(仅 showAnalysis)",
+          "studentAnswer(仅本人)",
+          "studentIdentity(仅本人)"
+        ],
+        "assessment.attempt.question.addon": ["studentAnswer(仅本人，需声明)"],
+        "assessment.bank.*": []
+      },
+      "declaration": {
+        "manifestExample": {
+          "id": "ext-code/review",
+          "label": "代码评审",
+          "requiresSensitive": ["answerKey", "config", "studentAnswer"]
+        },
+        "runtimeExample": "ctx.ui.registerExtensionPoint('assessment.grading.answer.addon', { id, label, requiresSensitive, component })",
+        "schemaChanges": [
+          "ExtensionPointConfig 增加 requiresSensitive?: SensitiveField[]",
+          "frontendSlotEntrySchema 已 passthrough，但安装期必须按槽位 allowlist 校验",
+          "仅 AssessmentGradingAnswerConfig / AssessmentEditorItemConfig 增加该字段"
+        ],
+        "invalidCombination": {
+          "behavior": "安装失败",
+          "code": "SENSITIVE_FIELD_NOT_ALLOWED_FOR_SLOT"
+        }
+      },
+      "typeDesign": {
+        "propsType": "AssessmentGradingAnswerAddonProps = { sensitiveAccess: false; item: Base } | { sensitiveAccess: true; item: Base & { answerKey; config; answer } }",
+        "benefit": "插件必须判 sensitiveAccess 才能访问敏感字段，编译期拦截忘记判空"
+      },
+      "projectionFunction": {
+        "file": "src/features/assessment/sensitive-props.ts",
+        "name": "projectAssessmentSensitive",
+        "order": [
+          "学生可见槽位 → 空",
+          "槽位不在 L2 allowlist → 空",
+          "role 非 teacher/administrator → 空",
+          "未声明 requiresSensitive → 空",
+          "声明字段不在槽位允许集合 → 丢弃 + dev 警告",
+          "声明字段不在 granted → 丢弃",
+          "从 source 取值，缺失则不构造字段"
+        ],
+        "returns": "{ sensitiveAccess: boolean; fields: Partial<Record<SensitiveField, unknown>> }"
+      },
+      "grantModels": [
+        {
+          "id": "mvp",
+          "name": "仅声明 + 宿主 allowlist",
+          "cost": "无迁移",
+          "risk": "管理员安装时看不到风险"
+        },
+        {
+          "id": "hardened",
+          "name": "安装向导勾选 + plugins.sensitive_grants_json + 审计 assessment.sensitive_granted",
+          "cost": "1 个可空迁移 + 安装 UI",
+          "recommended": true
+        }
+      ],
+      "deferred": [
+        "不新增 assessment:answer_key 能力串：能力串是服务端 ActionDescriptor 闸门，与前端 props 投影不是同一套授权机制"
+      ],
+      "tests": [
+        "类型：sensitiveAccess=false 分支访问 answerKey 必须 @ts-expect-error",
+        "L0 槽位注入 sentinel answerKey，断言 JSON 不含",
+        "L1 槽位即使声明也不含",
+        "L2 未声明不含；声明未授予不含；声明+授予含",
+        "学生槽位声明 answerKey → manifest 校验失败，错误码正确",
+        "sensitiveAccess 两分支各一条渲染断言",
+        "GradingPanel 现有 AI 建议/保存评分行为不变",
+        "授予/撤销各写一条审计"
+      ],
+      "compatibility": [
+        "现有 3 个槽位：stats.card 维持 L1，list.card/attempt.toolbar 为 L0",
+        "不声明的插件行为与今天一致",
+        "加固方案新增可空列，历史插件默认无授予",
+        "联合类型会让 lint:strict 暴露存量分支，属预期收益"
+      ],
+      "finalRecommendation": [
+        "Q2 = B（分级 + 显式申请）",
+        "L2 首批仅开 grading.answer.addon 与 editor.item.addon",
+        "首版可用 MVP，但文档必须提示管理员审查 requiresSensitive；能做安装向导则直接上加固",
+        "学生侧永远 L0；result.item.addon 的 answerKey 只跟随 showAnalysis"
+      ]
+    }
+  },
+  "openQuestions": [
+    {
+      "id": "Q1",
+      "question": "学生端列表复用 assessment.list.card 还是新增 assessment.student.list.card？",
+      "options": ["A 复用（修死代码 + 判别联合）", "B 新增（语义清晰）"],
+      "recommendation": "A",
+      "detail": "deepDives.Q1"
+    },
+    {
+      "id": "Q2",
+      "question": "组卷/批改槽位是否允许 answerKey 进入 props？",
+      "options": ["A 永不", "B 分级 + 显式申请"],
+      "recommendation": "B（L2 仅 grading.answer.addon + editor.item.addon）",
+      "detail": "deepDives.Q2"
+    },
+    {
+      "id": "Q3",
+      "question": "新增 assessment:read 能力串还是复用现有能力？",
+      "options": ["A 新增", "B 复用 lesson:read", "C 不复用也不校验"],
+      "recommendation": "A"
+    },
+    {
+      "id": "Q4",
+      "question": "事件载荷是否带 studentId？",
+      "options": ["A 不带（按能力二次取）", "B 带"],
+      "recommendation": "A"
+    },
+    {
+      "id": "Q5",
+      "question": "统计表扩展用行内附加还是整列追加？",
+      "options": ["A 行内附加", "B 列扩展"],
+      "recommendation": "A"
+    },
+    {
+      "id": "Q6",
+      "question": "P0 是否包含 commandType 渲染器改造？",
+      "options": ["A 包含", "B 推迟到 P1"],
+      "recommendation": "A"
+    },
+    {
+      "id": "Q7",
+      "question": "题型 UI 声明式化是否单独立项？",
+      "options": ["A 单独提案", "B 并入本稿 P2"],
+      "recommendation": "A"
+    }
+  ],
+  "implementation": {
+    "implementedAt": "2026-11-24",
+    "slots": {
+      "total": 16,
+      "list": [
+        "assessment.list.card",
+        "assessment.attempt.toolbar",
+        "assessment.stats.card",
+        "assessment.attempt.question.addon",
+        "assessment.bank.filter",
+        "assessment.bank.import.source",
+        "assessment.bank.item.action",
+        "assessment.bank.item.preview",
+        "assessment.bank.toolbar.action",
+        "assessment.editor.item.addon",
+        "assessment.editor.settings.addon",
+        "assessment.grading.answer.addon",
+        "assessment.grading.toolbar.action",
+        "assessment.publish.preflight",
+        "assessment.result.item.addon",
+        "assessment.stats.item.addon"
+      ]
+    },
+    "decisions": {
+      "Q1": "A（复用 + 判别联合）",
+      "Q2": "B（L0/L1/L2 + requiresSensitive；L2 = grading.answer.addon / editor.item.addon / result.item.addon）",
+      "Q3": "A（新增 assessment:read）",
+      "Q4": "A（事件不带 studentId）",
+      "Q5": "A（统计行内附加）",
+      "Q6": "A（P0 含 commandType 渲染修复）",
+      "Q7": "A（题型 UI 声明式化单独立项，本轮未实现）"
+    },
+    "deviations": [
+      "IAssessmentReadService 不接收 actor 参数：身份由 currentLessonViewer() 派生，与 XueanActivityProgressService 同口径",
+      "Q2 授予模型为 MVP（声明即生效）；安装向导勾选与审计留待加固阶段",
+      "新增 PluginSandboxIframeView.sandboxContext（init.context / context-update），否则远程 view 插件拿不到槽位标识"
+    ],
+    "verification": [
+      "tsc --noEmit",
+      "tsc --noEmit -p tsconfig.strict.json",
+      "vitest run（全量）",
+      "bash scripts/build-docs.sh（-W）",
+      "bash audit-tools/run.sh（drift_count=0）",
+      "node scripts/check-lint-budget.mjs"
+    ]
+  },
+  "evidence": [
+    "src/plugin-host/types.ts:218-221",
+    "src/features/assessment/AssessmentCenter.tsx:302",
+    "src/features/assessment/StatsPanel.tsx:112",
+    "src/features/assessment/student/StudentAssessmentsView.tsx:625",
+    "src/features/assessment/extension-slot-props.ts",
+    "src/features/assessment/QuestionBankPanel.tsx",
+    "packages/core/plugin-host/contribution-registry.ts:676-699",
+    "src/plugin-host/plugin-host.ts:232-248",
+    "src/plugin-host/extension-point-renderer.tsx:1188-1196",
+    "packages/core/esm-loader/manifest-schema.ts:673-675",
+    "packages/core/plugin-host/sql-guard.ts:294-333",
+    "docs/reference/plugin-ui-extension-slots.md:1260-1294",
+    "docs/agent/contracts/slots.json"
+  ]
+}

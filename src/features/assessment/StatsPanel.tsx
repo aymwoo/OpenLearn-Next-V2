@@ -3,8 +3,8 @@
  *
  * 匿名问卷的导出由服务端保证不含身份信息（有单测），这里只放链接。
  */
-import React, { useCallback, useEffect, useState } from 'react';
-import { ArrowLeft, Download, Loader2, RefreshCw } from 'lucide-react';
+import React, { Fragment, useCallback, useEffect, useState } from 'react';
+import { ArrowLeft, Download, Loader2, Minus, Plus, RefreshCw } from 'lucide-react';
 import { assessmentApi, ApiError, type AssessmentAssignment, type AssessmentStats } from './api';
 import { ExtensionPointRenderer } from '../../plugin-host/extension-point-renderer';
 import { toAssessmentStatsCardProps } from './extension-slot-props';
@@ -23,6 +23,7 @@ export function StatsPanel({
   const [stats, setStats] = useState<AssessmentStats | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -139,26 +140,68 @@ export function StatsPanel({
                     <th scope="col" className="text-right px-3 py-2 font-semibold">
                       {zh ? '均分' : 'Avg score'}
                     </th>
+                    <th scope="col" className="px-2 py-2 font-semibold">
+                      <span className="sr-only">{zh ? '扩展详情' : 'Extension details'}</span>
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
-                  {stats.items.map((item, index) => (
-                    <tr key={item.itemId} className="border-t border-theme">
-                      <th scope="row" className="px-3 py-2 text-muted font-normal text-left">
-                        {index + 1}
-                      </th>
-                      <td className="px-3 py-2 text-main max-w-[320px] truncate" title={item.stem}>
-                        {item.stem}
-                      </td>
-                      <td className="px-3 py-2 text-right text-main">{item.answered}</td>
-                      <td className="px-3 py-2 text-right text-main">
-                        {item.correctRate === null ? '—' : `${item.correctRate}%`}
-                      </td>
-                      <td className="px-3 py-2 text-right text-main">
-                        {item.avgScore === null ? '—' : `${item.avgScore}/${item.maxScore}`}
-                      </td>
-                    </tr>
-                  ))}
+                  {stats.items.map((item, index) => {
+                    const isOpen = expanded.has(item.itemId);
+                    return (
+                      <Fragment key={item.itemId}>
+                        <tr className="border-t border-theme">
+                          <th scope="row" className="px-3 py-2 text-muted font-normal text-left">
+                            {index + 1}
+                          </th>
+                          <td className="px-3 py-2 text-main max-w-[320px] truncate" title={item.stem}>
+                            {item.stem}
+                          </td>
+                          <td className="px-3 py-2 text-right text-main">{item.answered}</td>
+                          <td className="px-3 py-2 text-right text-main">
+                            {item.correctRate === null ? '—' : `${item.correctRate}%`}
+                          </td>
+                          <td className="px-3 py-2 text-right text-main">
+                            {item.avgScore === null ? '—' : `${item.avgScore}/${item.maxScore}`}
+                          </td>
+                          <td className="px-2 py-2 text-right">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setExpanded((prev) => {
+                                  const next = new Set(prev);
+                                  if (next.has(item.itemId)) next.delete(item.itemId);
+                                  else next.add(item.itemId);
+                                  return next;
+                                })
+                              }
+                              aria-expanded={isOpen}
+                              aria-label={
+                                zh
+                                  ? `${isOpen ? '收起' : '展开'}第 ${index + 1} 题扩展`
+                                  : `${isOpen ? 'Collapse' : 'Expand'} item ${index + 1} addon`
+                              }
+                              className="p-1 rounded-md text-muted hover:text-main hover:bg-surface-secondary cursor-pointer"
+                            >
+                              {isOpen ? <Minus size={12} /> : <Plus size={12} />}
+                            </button>
+                          </td>
+                        </tr>
+                        {isOpen && (
+                          <tr className="border-t border-theme bg-surface-secondary/30">
+                            <td colSpan={6} className="px-3 py-2">
+                              {/* P2：逐题统计行内附加区（难度/区分度/错因） */}
+                              <ExtensionPointRenderer
+                                slot="assessment.stats.item.addon"
+                                slotProps={{ assignmentId: assignment.id, item, lang }}
+                                lang={lang}
+                              />
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
+                    );
+                  })}
                 </tbody>
               </table>
             </AccessibleTableRegion>

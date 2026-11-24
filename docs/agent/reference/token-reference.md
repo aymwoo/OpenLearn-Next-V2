@@ -236,16 +236,17 @@ export const PLUGIN_RESOLVABLE_TOKEN_NAMES: ReadonlySet<string> = new Set([
 
 ### 3.5 具名业务服务（8）
 
-| SDK 常量                                | Token 名                                           | TS 类型                            | 方法数          |
-| --------------------------------------- | -------------------------------------------------- | ---------------------------------- | --------------- |
-| `IClassroomLifecycleServiceToken`       | `@openlearn/core:IClassroomLifecycleService`       | `IClassroomLifecycleService`       | 4               |
-| `IInteractionRuntimeServiceToken`       | `@openlearn/core:IInteractionRuntimeService`       | `IInteractionRuntimeService`       | 3               |
-| `IClassroomCountdownServiceToken`       | `@openlearn/core:IClassroomCountdownService`       | `IClassroomCountdownService`       | 6               |
-| `IStageGuardServiceToken`               | `@openlearn/core:IStageGuardService`               | `IStageGuardService`               | 4               |
-| `ICoursewareRuntimeScriptRegistryToken` | `@openlearn/core:ICoursewareRuntimeScriptRegistry` | `ICoursewareRuntimeScriptRegistry` | 5               |
-| `IAssessmentGraderRegistryToken`        | `@openlearn/core:IAssessmentGraderRegistry`        | `IAssessmentGraderRegistry`        | 5 + `gradeItem` |
-| `ILessonOutlineServiceToken`            | `@openlearn/core:ILessonOutlineService`            | `ILessonOutlineService`            | 1 `getOutline`  |
-| `IAuthSessionBridgeToken`               | `@openlearn/core:IAuthSessionBridgeService`        | `IAuthSessionBridgeService`        | —               |
+| SDK 常量                                | Token 名                                           | TS 类型                            | 方法数                       |
+| --------------------------------------- | -------------------------------------------------- | ---------------------------------- | ---------------------------- |
+| `IClassroomLifecycleServiceToken`       | `@openlearn/core:IClassroomLifecycleService`       | `IClassroomLifecycleService`       | 4                            |
+| `IInteractionRuntimeServiceToken`       | `@openlearn/core:IInteractionRuntimeService`       | `IInteractionRuntimeService`       | 3                            |
+| `IClassroomCountdownServiceToken`       | `@openlearn/core:IClassroomCountdownService`       | `IClassroomCountdownService`       | 6                            |
+| `IStageGuardServiceToken`               | `@openlearn/core:IStageGuardService`               | `IStageGuardService`               | 4                            |
+| `ICoursewareRuntimeScriptRegistryToken` | `@openlearn/core:ICoursewareRuntimeScriptRegistry` | `ICoursewareRuntimeScriptRegistry` | 5                            |
+| `IAssessmentGraderRegistryToken`        | `@openlearn/core:IAssessmentGraderRegistry`        | `IAssessmentGraderRegistry`        | 5 + `gradeItem`              |
+| `IAssessmentReadServiceToken`           | `@openlearn/core:IAssessmentReadService`           | `IAssessmentReadService`           | 6（只读，`assessment:read`） |
+| `ILessonOutlineServiceToken`            | `@openlearn/core:ILessonOutlineService`            | `ILessonOutlineService`            | 1 `getOutline`               |
+| `IAuthSessionBridgeToken`               | `@openlearn/core:IAuthSessionBridgeService`        | `IAuthSessionBridgeService`        | —                            |
 
 ````{danger}
 `IAuthSessionBridgeToken` 是这组里唯一的**特权** Token：它的 `createSession()`

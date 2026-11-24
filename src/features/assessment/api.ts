@@ -125,6 +125,10 @@ export interface BankItem {
   answerKey: unknown;
   tags: string[];
   difficulty: number | null;
+  /** Issue #186：private（仅自己）| school（同实例教师可见） */
+  visibility: 'private' | 'school';
+  /** 当前登录教师是否为条目 owner（扩展槽用它区分「可编辑 / 只读」）。 */
+  ownerIsSelf: boolean;
   createdAt: number;
   updatedAt: number;
 }

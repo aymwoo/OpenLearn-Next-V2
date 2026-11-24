@@ -434,6 +434,22 @@ gradeItem(item: AssessmentItemRecord, answer: unknown,
 而不是自己调 `gradeItem`。
 ```
 
+#### `@openlearn/core:IAssessmentReadService`
+
+```typescript
+listAssessments(filter?: { kind?: string; status?: string }): Promise<AssessmentBrief[]>;
+getAssessmentBrief(assessmentId: string): Promise<AssessmentBrief | null>;
+listAssignments(assessmentId: string): Promise<AssessmentAssignmentBrief[]>;
+getAssignmentStats(assignmentId: string): Promise<AssessmentStatsView | null>;
+listBankItems(filter?: { type?: string }): Promise<AssessmentBankItemBrief[]>;
+getAttemptSummary(attemptId: string): Promise<AssessmentAttemptBrief | null>;
+```
+
+- 门禁：manifest 声明 `assessment:read`；未授予时 `ctx.resolve` 返回的代理直接拒绝。
+- 身份由宿主会话派生（`currentLessonViewer()`），插件不能自报 `userId/role`。
+- 教师只看自己名下（管理员看全部）；学生只看所在班级的已发布测评与自己的一次作答。
+- 返回值不含 `answerKey` / `answer_key_json` / 逐生作答；题库摘要不含 `config`。
+
 #### `@openlearn/core:ICoursewareRuntimeScriptRegistry`
 
 ```typescript

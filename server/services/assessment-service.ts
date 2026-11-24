@@ -332,6 +332,32 @@ export class AssessmentService {
     this.aiTimeoutMs = options.aiTimeoutMs ?? 15_000;
   }
 
+  /**
+   * 测评领域事件（P0）。
+   *
+   * 载荷刻意不含答案、作答正文与学生身份；需要学生维度的插件通过
+   * `assessment:read` + `student-data:read` 二次取数。
+   * 发布失败不影响主流程（只记日志）。
+   */
+  private publishDomainEvent(type: string, payload: Record<string, unknown>, correlationId?: string): void {
+    try {
+      void kernelContainer.eventBus
+        .publish({
+          id: `evt_${randomId()}`,
+          type,
+          source: 'server.assessment',
+          payload,
+          timestamp: this.now(),
+          correlationId,
+        })
+        .catch((err) => {
+          console.error(`[AssessmentService] Failed to publish ${type}:`, err);
+        });
+    } catch (err) {
+      console.error(`[AssessmentService] Failed to enqueue ${type}:`, err);
+    }
+  }
+
   /** 解析 AI 生成器：显式注入优先；null = 禁用；undefined = 运行时取内核服务。 */
   private resolveAi(): { generateText: (prompt: string) => Promise<string> } | null {
     if (this.aiOverride !== undefined) return this.aiOverride;
@@ -581,7 +607,21 @@ export class AssessmentService {
       }
     });
     tx();
-    return this.getAssignment(assignmentId);
+    const created = this.getAssignment(assignmentId);
+    this.publishDomainEvent(
+      'assessment.assignment.published',
+      {
+        assessmentId,
+        assignmentId,
+        classId: input.classId,
+        lessonId: input.lessonId ?? null,
+        kind: row.kind,
+        opensAt: input.opensAt ?? null,
+        closesAt: input.closesAt ?? null,
+      },
+      assignmentId,
+    );
+    return created;
   }
 
   /** 某份试卷的全部发布记录（含班级名），供测评中心列出可批改/可统计的布置。 */
@@ -630,7 +670,13 @@ export class AssessmentService {
     for (const attempt of inProgress) {
       this.finalizeAttempt(attempt, now, { forced: true });
     }
-    return this.getAssignment(asg.id);
+    const closed = this.getAssignment(asg.id);
+    this.publishDomainEvent(
+      'assessment.assignment.closed',
+      { assignmentId: asg.id, classId: asg.classId, closedAt: now },
+      asg.id,
+    );
+    return closed;
   }
 
   releaseScores(assignmentId: string, ownerId: string) {
@@ -650,7 +696,13 @@ export class AssessmentService {
     } catch (e) {
       console.warn('[AssessmentService] Failed to auto sync scores to gradebook on release:', e);
     }
-    return this.getAssignment(asg.id);
+    const released = this.getAssignment(asg.id);
+    this.publishDomainEvent(
+      'assessment.assignment.released',
+      { assignmentId: asg.id, classId: asg.classId, releasedAt: this.now() },
+      asg.id,
+    );
+    return released;
   }
 
   /**
@@ -924,7 +976,7 @@ export class AssessmentService {
     }
     sql += ' ORDER BY updated_at DESC';
     const rows = this.db.prepare(sql).all(...params) as Array<Record<string, any>>;
-    return rows.map((row) => this.toBankItemView(row));
+    return rows.map((row) => this.toBankItemView(row, ownerId));
   }
 
   createBankItem(input: {
@@ -977,7 +1029,7 @@ export class AssessmentService {
     if (!row) throw notFound('bank item');
     // Issue #186：共享条目允许同实例教师读取（写/删仍限 owner）
     if (row.owner_id !== ownerId && row.visibility !== 'school') throw forbidden('not the bank item owner');
-    return this.toBankItemView(row);
+    return this.toBankItemView(row, ownerId);
   }
 
   deleteBankItem(id: string, ownerId: string): void {
@@ -1152,10 +1204,23 @@ export class AssessmentService {
   /** 交卷：惰性结算 + 自动判分（幂等，manual_override 行不覆盖）。 */
   submitAttempt(attemptId: string, studentId: string, options: { forceSubmit?: boolean } = {}) {
     const attempt = this.requireAttemptForStudent(attemptId, studentId);
-    if (attempt.status === 'in_progress') {
+    const wasInProgress = attempt.status === 'in_progress';
+    if (wasInProgress) {
       this.finalizeAttempt(attempt, this.now(), { forced: Boolean(options.forceSubmit) });
     }
     const fresh = this.requireAttempt(attemptId);
+    if (wasInProgress) {
+      this.publishDomainEvent(
+        'assessment.attempt.submitted',
+        {
+          assignmentId: fresh.assignment_id,
+          attemptId: fresh.id,
+          submittedAt: fresh.submitted_at,
+          needsManualReview: fresh.needs_manual_review === 1,
+        },
+        fresh.id,
+      );
+    }
     return this.buildResultPayload(fresh);
   }
 
@@ -1273,6 +1338,17 @@ export class AssessmentService {
       );
     this.recomputeAttemptTotals(attemptId, now);
     const fresh = this.requireAttempt(attemptId);
+    this.publishDomainEvent(
+      'assessment.attempt.graded',
+      {
+        assignmentId: fresh.assignment_id,
+        attemptId: fresh.id,
+        score: fresh.score,
+        maxScore: fresh.max_score,
+        needsManualReview: fresh.needs_manual_review === 1,
+      },
+      fresh.id,
+    );
     return { attempt: toTeacherAttemptView(this.toAttemptViewRow(fresh), { revealIdentity: false }) };
   }
 
@@ -1406,6 +1482,17 @@ export class AssessmentService {
     if (attempt.status === 'in_progress') throw conflict('attempt is still in progress');
     this.regrade(attempt, this.now());
     const fresh = this.requireAttempt(attemptId);
+    this.publishDomainEvent(
+      'assessment.attempt.graded',
+      {
+        assignmentId: fresh.assignment_id,
+        attemptId: fresh.id,
+        score: fresh.score,
+        maxScore: fresh.max_score,
+        needsManualReview: fresh.needs_manual_review === 1,
+      },
+      fresh.id,
+    );
     return { attempt: toTeacherAttemptView(this.toAttemptViewRow(fresh), { revealIdentity: false }) };
   }
 
@@ -2046,7 +2133,7 @@ export class AssessmentService {
     return rows.map(toItemRecord);
   }
 
-  private toBankItemView(row: Record<string, any>) {
+  private toBankItemView(row: Record<string, any>, viewerId?: string) {
     return {
       id: row.id,
       type: row.type,
@@ -2055,6 +2142,9 @@ export class AssessmentService {
       answerKey: safeJsonParse(row.answer_key_json, null),
       tags: safeJsonParse<string[]>(row.tags_json, []),
       difficulty: row.difficulty ?? null,
+      // 扩展槽需要判断来源与共享状态；owner_id 本身不下发。
+      visibility: row.visibility === 'school' ? 'school' : 'private',
+      ownerIsSelf: typeof viewerId === 'string' && row.owner_id === viewerId,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     };

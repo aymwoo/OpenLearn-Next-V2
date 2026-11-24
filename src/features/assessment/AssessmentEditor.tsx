@@ -32,6 +32,9 @@ import { assessmentQuestionTypeUiRegistry } from './question-type-ui-registry';
 import './register-builtin-question-uis';
 import { GradingPanel } from './GradingPanel';
 import { StatsPanel } from './StatsPanel';
+import { ExtensionPointRenderer } from '../../plugin-host/extension-point-renderer';
+import { projectAssessmentSensitive } from './sensitive-props';
+import { toEditorItemSummary } from './extension-slot-props';
 
 /** 编辑期的题目草稿：`answerKey` 可能是 null（未设置 → 交卷后进人工批改）。 */
 interface DraftItem {
@@ -390,6 +393,21 @@ export function AssessmentEditor({
               </label>
             ))}
           </div>
+          {/* P1：卷面设置附加区（抽题规则 / 防作弊参数 / 计分策略） */}
+          <div className="mt-3 pt-3 border-t border-theme">
+            <ExtensionPointRenderer
+              slot="assessment.editor.settings.addon"
+              slotProps={{
+                assessmentId,
+                kind: detail.kind,
+                settings: detail.settings as unknown as Record<string, unknown>,
+                readOnly: !isDraft,
+                onPatch: (patch: Record<string, unknown>) => void applySettings(patch),
+                lang,
+              }}
+              lang={lang}
+            />
+          </div>
         </section>
 
         {/* 题目 */}
@@ -534,6 +552,28 @@ export function AssessmentEditor({
                           : `No editor registered for "${item.type}" (plugin missing or disabled).`}
                       </p>
                     )}
+                    {/* P1：组卷逐题扩展。answerKey/config 属 L2，需声明 requiresSensitive */}
+                    <ExtensionPointRenderer
+                      slot="assessment.editor.item.addon"
+                      slotProps={{
+                        assessmentId,
+                        item: toEditorItemSummary(item, index),
+                        lang,
+                        commandPayload: { itemId: item.id },
+                      }}
+                      resolveExtensionProps={(ext) => {
+                        const result = projectAssessmentSensitive(ext, {
+                          slot: 'assessment.editor.item.addon',
+                          viewer: 'teacher',
+                          role: 'teacher',
+                          source: { answerKey: item.answerKey, config: item.config },
+                        });
+                        return result.sensitive
+                          ? { sensitiveAccess: true, sensitive: result.sensitive }
+                          : { sensitiveAccess: false };
+                      }}
+                      lang={lang}
+                    />
                   </li>
                 );
               })}
@@ -611,10 +651,16 @@ function PublishSection({
   const [durationMin, setDurationMin] = useState('');
   const [closesAt, setClosesAt] = useState('');
   const [busy, setBusy] = useState(false);
+  const [preflight, setPreflight] = useState<Array<{ level: 'error' | 'warn'; code: string; message: string }>>([]);
+  const preflightErrors = preflight.filter((item) => item.level === 'error');
 
   const publish = async () => {
     if (!classId) {
       onError(zh ? '请选择班级' : 'Pick a class first');
+      return;
+    }
+    if (preflightErrors.length > 0) {
+      onError(preflightErrors.map((item) => item.message).join('；'));
       return;
     }
     setBusy(true);
@@ -687,12 +733,39 @@ function PublishSection({
           <button
             type="button"
             onClick={() => void publish()}
-            disabled={busy}
+            disabled={busy || preflightErrors.length > 0}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700 disabled:opacity-50 cursor-pointer"
           >
             {busy && <Loader2 size={13} className="animate-spin" />}
             {zh ? '发布' : 'Publish'}
           </button>
+        </div>
+      )}
+      {!disabled && (
+        <div className="space-y-1">
+          {/* P1：发布前检查；error 阻止发布，warn 仅提示 */}
+          <ExtensionPointRenderer
+            slot="assessment.publish.preflight"
+            slotProps={{
+              assessmentId: detail.id,
+              classId,
+              itemCount: detail.itemCount,
+              totalScore: detail.totalScore,
+              lang,
+              onResult: (result: { level: 'error' | 'warn'; code: string; message: string }) => {
+                setPreflight((prev) => [...prev.filter((item) => item.code !== result.code), result]);
+              },
+            }}
+            lang={lang}
+          />
+          {preflight.map((item) => (
+            <p
+              key={item.code}
+              className={`text-2xs ${item.level === 'error' ? 'text-rose-600' : 'text-amber-700 dark:text-amber-300'}`}
+            >
+              {item.message}
+            </p>
+          ))}
         </div>
       )}
 

@@ -591,12 +591,20 @@ export type {
   ILessonReportService,
   ClassroomSelfMessageInput,
   IClassroomSelfMessageService,
+  AssessmentBrief,
+  AssessmentAssignmentBrief,
+  AssessmentStatsItemView,
+  AssessmentStatsView,
+  AssessmentBankItemBrief,
+  AssessmentAttemptBrief,
+  IAssessmentReadService,
 } from '../core/di/interfaces.js';
 export {
   IAssignmentSubmissionServiceToken,
   IXueanActivityProgressServiceToken,
   ILessonReportServiceToken,
   IClassroomSelfMessageServiceToken,
+  IAssessmentReadServiceToken,
 } from '../core/di/interfaces.js';
 
 // ── 文件存储三插槽扩展（LayoutPolicy / StorageBackend / FileProcessor） ──

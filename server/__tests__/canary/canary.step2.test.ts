@@ -56,6 +56,7 @@ import {
   IAuthSessionBridgeToken,
   IStageGuardServiceToken,
   IAssessmentGraderRegistryToken,
+  IAssessmentReadServiceToken,
   IPluginHostToken,
   INetworkProxyServiceToken,
   IFileStorageExtensionRegistryToken,
@@ -81,6 +82,7 @@ import { CreditAwardService } from '../../../packages/core/di/credit-award-servi
 import { ClassroomMessageService } from '../../../packages/core/di/classroom-message-service.js';
 import { AssignmentSubmissionService } from '../../../packages/core/di/assignment-submission-service.js';
 import { XueanActivityProgressService } from '../../../packages/core/di/xuean-activity-progress-service.js';
+import { AssessmentReadService } from '../../../packages/core/di/assessment-read-service.js';
 import { LessonReportService } from '../../../packages/core/di/lesson-report-service.js';
 import { ClassroomSelfMessageService } from '../../../packages/core/di/classroom-self-message-service.js';
 import { SubmissionRegistry, SubmissionAggregator } from '../../../packages/core/submission-adapter/index.js';
@@ -347,6 +349,7 @@ describe('金丝雀第 2 步：探针报告与 Token/require 扫描', () => {
       [IStageGuardServiceToken, extra.stageGuard],
       // 测评题型注册表：生产 kernel 启动时注册（Issue #100）
       [IAssessmentGraderRegistryToken, assessmentGraderRegistry],
+      [IAssessmentReadServiceToken, new AssessmentReadService(db as never)],
       [INetworkProxyServiceToken, extra.networkProxy],
       [IFileStorageExtensionRegistryToken, new FileStorageExtensionRegistry()],
       // ClassroomFlowServer 系列服务（与生产 kernel 启动一致；金丝雀 token 探针依赖）

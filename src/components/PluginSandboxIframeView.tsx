@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { AlertCircle, ChevronUp, Loader2 } from 'lucide-react';
 import { PLUGIN_VIEW_CHANNEL } from '../plugin-host/sandbox-frame';
 import { useAppStore, appStore } from '../store/appStore';
@@ -18,6 +18,14 @@ export interface PluginSandboxIframeViewProps {
    */
   studentId?: string | null;
   studentName?: string | null;
+  /**
+   * 槽位上下文快照（JSON 安全子集）。
+   *
+   * 远程 view 插件此前只能拿到 lessonId/classId/studentId；测评类槽位需要
+   * assessmentId / attemptId / itemId 等标识才能取数。这里只接收**数据**：
+   * 函数、超深对象、超大 payload 会被剥离，且总大小限制 16KB。
+   */
+  sandboxContext?: Record<string, unknown> | null;
   className?: string;
   onResize?: (height: number) => void;
   /**
@@ -54,6 +62,45 @@ export interface PluginSandboxIframeViewProps {
 export type PluginViewVariant = 'panel' | 'floating';
 
 /**
+ * 把槽位上下文收敛为 JSON 安全子集：剥函数、限深度/数组长度、限制 16KB。
+ *
+ * 目的不是「信任插件」，而是避免把 React 回调或整张统计表塞进 postMessage。
+ */
+export function sanitizeSandboxContext(raw: unknown): Record<string, unknown> | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const walk = (value: unknown, depth: number): unknown => {
+    if (depth > 4) return undefined;
+    if (value === null) return null;
+    const type = typeof value;
+    if (type === 'string' || type === 'number' || type === 'boolean') return value;
+    if (type === 'function' || type === 'undefined' || type === 'symbol' || type === 'bigint') return undefined;
+    if (Array.isArray(value)) {
+      return value
+        .slice(0, 50)
+        .map((item) => walk(item, depth + 1))
+        .filter((item) => item !== undefined);
+    }
+    if (type === 'object') {
+      const out: Record<string, unknown> = {};
+      for (const key of Object.keys(value as Record<string, unknown>)) {
+        const next = walk((value as Record<string, unknown>)[key], depth + 1);
+        if (next !== undefined) out[key] = next;
+      }
+      return out;
+    }
+    return undefined;
+  };
+  try {
+    const clean = walk(raw, 0);
+    if (!clean || typeof clean !== 'object' || Array.isArray(clean)) return null;
+    if (JSON.stringify(clean).length > 16 * 1024) return null;
+    return clean as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * 校验并净化插件自定义页面路径，防止跨目录遍历或协议注入。
  */
 export function sanitizeViewPath(rawView: string): string | null {
@@ -86,6 +133,7 @@ export function PluginSandboxIframeView({
   classId: propClassId,
   studentId,
   studentName,
+  sandboxContext,
   className,
   onResize,
   variant = 'panel',
@@ -116,6 +164,11 @@ export function PluginSandboxIframeView({
   const lessonId = propLessonId !== undefined ? propLessonId : storeLessonId;
   const classId = propClassId !== undefined ? propClassId : storeClassId;
 
+  // 槽位上下文：只在内容真正变化时重新序列化，避免每次渲染都深拷贝。
+  const contextKey = JSON.stringify(sandboxContext ?? null);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- contextKey 是 sandboxContext 的稳定指纹
+  const safeSandboxContext = useMemo(() => sanitizeSandboxContext(sandboxContext), [contextKey]);
+
   const cleanView = sanitizeViewPath(view);
 
   const postInit = useCallback(() => {
@@ -133,6 +186,7 @@ export function PluginSandboxIframeView({
           classId,
           studentId: studentId ?? null,
           studentName: studentName ?? null,
+          context: safeSandboxContext,
           lang,
           theme,
           themeMeta,
@@ -162,6 +216,7 @@ export function PluginSandboxIframeView({
     classId,
     studentId,
     studentName,
+    safeSandboxContext,
     lang,
     theme,
     resolvedColorScheme,
@@ -321,6 +376,7 @@ export function PluginSandboxIframeView({
           classId,
           studentId: studentId ?? null,
           studentName: studentName ?? null,
+          context: safeSandboxContext,
           lang,
           theme,
           themeMeta,
@@ -333,6 +389,7 @@ export function PluginSandboxIframeView({
     classId,
     studentId,
     studentName,
+    safeSandboxContext,
     lang,
     theme,
     resolvedColorScheme,

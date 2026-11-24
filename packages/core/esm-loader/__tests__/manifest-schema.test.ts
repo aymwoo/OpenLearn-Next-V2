@@ -113,6 +113,51 @@ describe('manifestSchema', () => {
     expect((parsed.contributes as any)['assessment.stats.card']).toEqual([{ id: 'chart', label: '自定义图表' }]);
   });
 
+  it('should accept requiresSensitive on L2 assessment slots', () => {
+    const manifest = {
+      id: 'ext-assessment-tools',
+      name: 'Assessment Tools',
+      version: '1.0.0',
+      main: 'index.js',
+      contributes: {
+        'assessment.grading.answer.addon': [
+          { id: 'review', label: '代码评审', requiresSensitive: ['answerKey', 'config'] },
+        ],
+      },
+    };
+    const parsed = manifestSchema.parse(manifest);
+    expect((parsed.contributes as any)['assessment.grading.answer.addon'][0].requiresSensitive).toEqual([
+      'answerKey',
+      'config',
+    ]);
+  });
+
+  it('should reject requiresSensitive on L0/L1 assessment slots', () => {
+    const manifest = {
+      id: 'ext-assessment-tools',
+      name: 'Assessment Tools',
+      version: '1.0.0',
+      main: 'index.js',
+      contributes: {
+        'assessment.list.card': [{ id: 'badge', label: '角标', requiresSensitive: ['answerKey'] }],
+      },
+    };
+    expect(() => manifestSchema.parse(manifest)).toThrow(/SENSITIVE_FIELD_NOT_ALLOWED_FOR_SLOT/);
+  });
+
+  it('should reject unknown sensitive field names', () => {
+    const manifest = {
+      id: 'ext-assessment-tools',
+      name: 'Assessment Tools',
+      version: '1.0.0',
+      main: 'index.js',
+      contributes: {
+        'assessment.grading.answer.addon': [{ id: 'review', label: '评审', requiresSensitive: ['answer_key'] }],
+      },
+    };
+    expect(() => manifestSchema.parse(manifest)).toThrow(/SENSITIVE_FIELD_UNKNOWN/);
+  });
+
   it('should accept manifest with empty optional arrays', () => {
     const manifest = {
       id: 'ext-quiz',

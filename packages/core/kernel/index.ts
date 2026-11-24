@@ -46,6 +46,7 @@ import {
   ILessonEngineServiceToken,
   IStageGuardServiceToken,
   IAssessmentGraderRegistryToken,
+  IAssessmentReadServiceToken,
   IClassroomRuntimeServiceToken,
   IPresenceEngineServiceToken,
   ITeachingCollaborationServiceToken,
@@ -75,6 +76,7 @@ import { StorageService } from '../di/storage-service.js';
 import { AIService } from '../di/ai-service.js';
 import { SemesterGradeService } from '../di/semester-grade-service.js';
 import { ClassRosterService } from '../di/roster-service.js';
+import { AssessmentReadService } from '../di/assessment-read-service.js';
 import { LessonOutlineService } from '../di/lesson-outline-service.js';
 import { lessonViewerFromActorId, setLessonViewerResolver } from '../di/lesson-viewer.js';
 import { PointsDimensionRegistry } from '../di/points-dimension-registry.js';
@@ -367,6 +369,8 @@ export class Kernel {
     // 测评题型注册表（Issue #100）：内置 5 种题型 + 插件题型共用同一实例。
     // 必须在这里注册而不是 server.ts —— canary 会断言 PLUGIN_RESOLVABLE_TOKENS 全部可解析。
     this.serviceRegistry.register(IAssessmentGraderRegistryToken, assessmentGraderRegistry as any);
+    // 测评只读服务（P0）：身份由宿主会话派生，返回白名单投影。
+    this.serviceRegistry.register(IAssessmentReadServiceToken, new AssessmentReadService(this.db));
 
     // 提交适配器（成绩采集闭环）：官方课件与插件提交共用 NormalizedSubmission 契约。
     // gradeWriter 端口绑定到内核 db，成绩写入仍走 grade-writer 唯一入口（守手动分保护）。

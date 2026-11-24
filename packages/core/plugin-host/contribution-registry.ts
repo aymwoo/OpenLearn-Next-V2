@@ -15,6 +15,7 @@
 
 import { warnDeprecation } from '../extension-points/index.js';
 import { assertSlotExists } from '../extension-registry/extension-points.js';
+import type { SensitiveField } from '../assessment/extension-sensitivity.js';
 
 // ── Contribution Config Types ────────────────────────────────────────────
 
@@ -673,13 +674,14 @@ export interface CourseListToolbarActionConfig {
   commandType?: string;
 }
 
-// ── 测评子系统扩展槽（Issue #183）────────────────────────────────────────
+// ── 测评子系统扩展槽（Issue #183 / 扩展提案）────────────────────────────
 /** A contribution to the assessment.list.card slot. */
 export interface AssessmentListCardConfig {
   id: string;
   label: string;
   icon?: string;
   commandType?: string;
+  view?: string;
 }
 
 /** A contribution to the assessment.attempt.toolbar slot. */
@@ -688,6 +690,7 @@ export interface AssessmentAttemptToolbarConfig {
   label: string;
   icon?: string;
   commandType?: string;
+  view?: string;
 }
 
 /** A contribution to the assessment.stats.card slot. */
@@ -696,7 +699,37 @@ export interface AssessmentStatsCardConfig {
   label: string;
   icon?: string;
   commandType?: string;
+  view?: string;
 }
+
+/**
+ * 新增测评槽位共用的数据型贡献形状。
+ *
+ * `view` 让远程 ZIP 插件无需 inline 即可渲染；`requiresSensitive` 仅对 L2 槽位生效
+ * （安装期会按槽位 allowlist 校验，见 `packages/core/assessment/extension-sensitivity.ts`）。
+ */
+export interface AssessmentSlotContributionConfig {
+  id: string;
+  label: string;
+  icon?: string;
+  commandType?: string;
+  view?: string;
+  requiresSensitive?: SensitiveField[];
+}
+
+export type AssessmentBankToolbarConfig = AssessmentSlotContributionConfig;
+export type AssessmentBankItemActionConfig = AssessmentSlotContributionConfig;
+export type AssessmentBankImportSourceConfig = AssessmentSlotContributionConfig;
+export type AssessmentBankFilterConfig = AssessmentSlotContributionConfig;
+export type AssessmentBankItemPreviewConfig = AssessmentSlotContributionConfig;
+export type AssessmentEditorItemAddonConfig = AssessmentSlotContributionConfig;
+export type AssessmentEditorSettingsAddonConfig = AssessmentSlotContributionConfig;
+export type AssessmentPublishPreflightConfig = AssessmentSlotContributionConfig;
+export type AssessmentGradingToolbarConfig = AssessmentSlotContributionConfig;
+export type AssessmentGradingAnswerAddonConfig = AssessmentSlotContributionConfig;
+export type AssessmentStatsItemAddonConfig = AssessmentSlotContributionConfig;
+export type AssessmentAttemptQuestionAddonConfig = AssessmentSlotContributionConfig;
+export type AssessmentResultItemAddonConfig = AssessmentSlotContributionConfig;
 
 /** A contribution to the course.card.action slot. */
 export interface CourseCardActionConfig {
@@ -1039,6 +1072,7 @@ export type ContributionConfig =
   | AssessmentListCardConfig
   | AssessmentAttemptToolbarConfig
   | AssessmentStatsCardConfig
+  | AssessmentSlotContributionConfig
   | CourseCardActionConfig
   | CourseCardBadgeConfig
   | EditorSegmentActionConfig

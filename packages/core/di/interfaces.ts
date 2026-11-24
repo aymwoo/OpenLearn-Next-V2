@@ -1351,6 +1351,114 @@ export interface IAssessmentQuestionTypeSummary {
   pluginId?: string;
 }
 
+/**
+ * 测评只读摘要（P0，`assessment:read`）。
+ *
+ * 教师/管理员：自己名下（管理员为全部）的试卷。
+ * 学生：其所在班级的已发布/已关闭试卷。
+ */
+export interface AssessmentBrief {
+  id: string;
+  kind: string;
+  title: string;
+  description: string | null;
+  status: string;
+  itemCount: number;
+  totalScore: number;
+  academicYear: string | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
+/** 试卷的发布记录摘要（不含学生名单与作答）。 */
+export interface AssessmentAssignmentBrief {
+  id: string;
+  assessmentId: string;
+  classId: string;
+  lessonId: string | null;
+  opensAt: number | null;
+  closesAt: number | null;
+  durationSec: number | null;
+  status: string;
+  scoreReleased: boolean;
+  createdAt: number;
+}
+
+/** 逐题聚合统计（不含标准答案与逐生作答）。 */
+export interface AssessmentStatsItemView {
+  itemId: string;
+  type: string;
+  stem: string;
+  maxScore: number;
+  answered: number;
+  graded: number;
+  correct: number;
+  correctRate: number | null;
+  avgScore: number | null;
+  distribution: Record<string, number>;
+}
+
+/** 单次发布的统计投影。 */
+export interface AssessmentStatsView {
+  assignmentId: string;
+  assessmentId: string;
+  attemptCount: number;
+  submittedCount: number;
+  gradedCount: number;
+  needsManualReviewCount: number;
+  averageScore: number | null;
+  averagePercent: number | null;
+  maxScore: number;
+  items: AssessmentStatsItemView[];
+}
+
+/** 题库条目只读摘要：不含 config / answerKey / ownerId。 */
+export interface AssessmentBankItemBrief {
+  id: string;
+  type: string;
+  stem: string;
+  tags: string[];
+  difficulty: number | null;
+  visibility: 'private' | 'school';
+  ownerIsSelf: boolean;
+  createdAt: number;
+  updatedAt: number;
+}
+
+/** 作答摘要：不含作答内容、学生身份与匿名键。 */
+export interface AssessmentAttemptBrief {
+  attemptId: string;
+  assignmentId: string;
+  attemptNo: number;
+  status: string;
+  submittedAt: number | null;
+  score: number | null;
+  maxScore: number | null;
+  needsManualReview: boolean;
+}
+
+/**
+ * 测评只读服务（P0）。
+ *
+ * 为什么需要：`assessments` / `assessment_items` / `question_bank_items` 不在
+ * 插件前缀内，sql-guard 直接拒绝；此前插件只有「注册题型」一条通道，无法做
+ * 学情联动、错题本或统计看板。
+ *
+ * 身份由宿主会话派生（`currentLessonViewer()`），插件不能自报 userId/role。
+ * 所有返回值走白名单投影：`answerKey` / `answer_key_json` / 逐生作答永不出现。
+ * 门禁：manifest 声明 `assessment:read`；未授予时服务为 `null`。
+ */
+export interface IAssessmentReadService {
+  listAssessments(filter?: { kind?: string; status?: string }): Promise<AssessmentBrief[]>;
+  getAssessmentBrief(assessmentId: string): Promise<AssessmentBrief | null>;
+  listAssignments(assessmentId: string): Promise<AssessmentAssignmentBrief[]>;
+  getAssignmentStats(assignmentId: string): Promise<AssessmentStatsView | null>;
+  listBankItems(filter?: { type?: string }): Promise<AssessmentBankItemBrief[]>;
+  getAttemptSummary(attemptId: string): Promise<AssessmentAttemptBrief | null>;
+}
+
+export const IAssessmentReadServiceToken = new Token<IAssessmentReadService>('@openlearn/core:IAssessmentReadService');
+
 export interface IAssessmentGraderRegistry {
   /** 注册题型（含判分实现）。`pluginId` 非空表示插件题型，卸载时按 pluginId 批量清理。 */
   registerQuestionType(
@@ -1424,6 +1532,7 @@ export const PLUGIN_RESOLVABLE_TOKENS = [
   IInteractionRuntimeServiceToken,
   IClassroomCountdownServiceToken,
   IAssessmentGraderRegistryToken,
+  IAssessmentReadServiceToken,
   ICreditAwardServiceToken,
   IRewardCatalogServiceToken,
   ICreditRedemptionServiceToken,

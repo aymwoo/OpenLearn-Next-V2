@@ -18,3 +18,4 @@ export * from './timing.js';
 export * from './serialize.js';
 export * from './registry-service.js';
 export * from './item-analysis.js';
+export * from './extension-sensitivity.js';

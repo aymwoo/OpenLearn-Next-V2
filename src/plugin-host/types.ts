@@ -215,10 +215,26 @@ export type ExtensionSlot =
   | 'classroom.alert.banner' // 课堂中控台顶部横幅通知扩展
   | 'classroom.stage.display.ticker' // 大屏展台跑马灯通知扩展
   | 'classroom.post_class.exporter' // 课后复盘导出通道扩展（智慧教育大数据直报等）
-  // ── 测评子系统扩展槽位（Issue #183）──
-  | 'assessment.list.card' // 测评列表卡片扩展（教师/学生视图按 props 区分）
+  // ── 测评子系统扩展槽位（Issue #183 / 扩展提案）──
+  | 'assessment.list.card' // 测评列表卡片扩展（教师/学生视图按 viewer 判别）
   | 'assessment.attempt.toolbar' // 作答页工具条扩展（计算器、草稿、插件题型工具）
   | 'assessment.stats.card' // 统计页卡片扩展（自定义图表、导出入口）
+  // 题库（P1）
+  | 'assessment.bank.toolbar.action' // 题库面板顶部操作扩展（批量导入 / AI 生成 / 打标）
+  | 'assessment.bank.item.action' // 题库条目行操作扩展（加入试卷 / 复制 / 来源）
+  | 'assessment.bank.import.source' // 题库导入源扩展（对齐 timetable.import.source）
+  | 'assessment.bank.filter' // 题库筛选维度扩展（知识点 / 标签 / 难度）
+  | 'assessment.bank.item.preview' // 题库条目预览扩展（插件题型自定义预览）
+  // 组卷与发布（P1）
+  | 'assessment.editor.item.addon' // 组卷逐题附加区扩展（知识点 / 难度 / AI 改编）
+  | 'assessment.editor.settings.addon' // 测评设置附加区扩展（抽题规则 / 防作弊）
+  | 'assessment.publish.preflight' // 发布前检查扩展（题库余量 / 题型未安装）
+  // 批改 / 统计 / 学生端（P2）
+  | 'assessment.grading.toolbar.action' // 批改面板顶部操作扩展（AI 批量初评 / 报告导出）
+  | 'assessment.grading.answer.addon' // 逐题批改卡片附加区扩展（代码运行 / 查重 / 回放）
+  | 'assessment.stats.item.addon' // 逐题统计行内附加区扩展（难度 / 区分度 / 错因）
+  | 'assessment.attempt.question.addon' // 学生每题作答区附加工具（草稿纸 / 计算器）
+  | 'assessment.result.item.addon' // 学生结果页逐题解析附加区扩展（知识点 / 错题本）
   // ── 现代教务与排课调度域扩展槽位 ──
   | 'timetable.toolbar.action' // 课表中心工具栏操作扩展（外部日历同步等）
   | 'timetable.card.badge' // 周历卡片状态角标扩展
@@ -323,6 +339,14 @@ export interface ExtensionPointConfig {
   render?: (props?: Record<string, any>) => React.ReactNode;
   /** 可选自定义沙箱 HTML 页面相对路径（如 'index.html' 或 'dashboard.html'），用于独立可视沙箱渲染 */
   view?: string;
+  /**
+   * 敏感字段声明（仅测评 L2 槽位有效）。
+   *
+   * 声明 ≠ 授予：宿主还会校验槽位 allowlist、viewer 角色与安装期授予集合。
+   * 未声明 / 未授予时扩展仍渲染，只是拿到 `sensitiveAccess: false` 且不含敏感字段。
+   * 学生可见槽位声明任何敏感字段都不生效。
+   */
+  requiresSensitive?: import('../../packages/core/assessment/extension-sensitivity.js').SensitiveField[];
   /**
    * 注册来源。决定「插件前端出问题时该扩展点是否被摘除」：
    *
@@ -804,27 +828,73 @@ export interface CourseCardBadgeSlotProps {
   dispatcher?: IHostActionDispatcher;
 }
 
-// ── 测评子系统扩展槽 props（Issue #183）──
+// ── 测评子系统扩展槽 props（Issue #183 / 扩展提案）──
 // 白名单视图：只携带摘要字段，绝不含 answerKey / answer_key_json / 学生身份等敏感数据。
 
-/** Props passed to assessment.list.card extensions（教师/学生按 viewer 区分） */
-export interface AssessmentListCardSlotProps {
-  assessment: {
-    id: string;
-    kind: string;
-    title: string;
-    description: string | null;
-    status: string;
-    itemCount: number;
-    totalScore: number;
-    settings: Record<string, unknown>;
-    createdAt: number;
-    updatedAt: number;
-  };
-  viewer: 'teacher' | 'student';
+/** 教师侧测评卡摘要（与 AssessmentSummary 同源）。 */
+export interface TeacherAssessmentCardSummary {
+  id: string;
+  kind: string;
+  title: string;
+  description: string | null;
+  status: string;
+  itemCount: number;
+  totalScore: number;
+  settings: Record<string, unknown>;
+  createdAt: number;
+  updatedAt: number;
+}
+
+/**
+ * 学生侧测评卡摘要。
+ *
+ * `id` 是 **assignmentId**（不是 assessmentId）；`settings` 刻意不下发，
+ * 避免抽题规则 / 防作弊配置泄漏给扩展。
+ */
+export interface StudentAssessmentCardSummary {
+  id: string;
+  assessmentId: string;
+  kind: string;
+  title: string;
+  classId: string;
+  lessonId: string | null;
+  windowState: 'before_open' | 'open' | 'after_close' | 'untimed';
+  completed: boolean;
+  opensAt: number | null;
+  closesAt: number | null;
+  durationSec: number | null;
+}
+
+export interface StudentAssessmentAttemptSummary {
+  attemptNo: number;
+  status: string;
+  submittedAt: number | null;
+  /** 服务端已按可见性置 null；扩展不得据此推断 */
+  score: number | null;
+  maxScore: number | null;
+  needsManualReview: boolean;
+}
+
+export interface AssessmentListCardCommon {
   lang?: string;
   dispatcher?: IHostActionDispatcher;
 }
+
+/** Props passed to assessment.list.card extensions（教师视图） */
+export interface TeacherAssessmentListCardProps extends AssessmentListCardCommon {
+  viewer: 'teacher';
+  assessment: TeacherAssessmentCardSummary;
+}
+
+/** Props passed to assessment.list.card extensions（学生视图） */
+export interface StudentAssessmentListCardProps extends AssessmentListCardCommon {
+  viewer: 'student';
+  assessment: StudentAssessmentCardSummary;
+  attempt: StudentAssessmentAttemptSummary | null;
+}
+
+/** Props passed to assessment.list.card extensions（按 viewer 判别） */
+export type AssessmentListCardSlotProps = TeacherAssessmentListCardProps | StudentAssessmentListCardProps;
 
 /** Props passed to assessment.attempt.toolbar extensions */
 export interface AssessmentAttemptToolbarSlotProps {
@@ -840,6 +910,208 @@ export interface AssessmentStatsCardSlotProps {
   stats: Record<string, unknown>;
   lang?: string;
   dispatcher?: IHostActionDispatcher;
+}
+
+/** 题库条目只读投影：不含 config / answerKey / ownerId。 */
+export interface BankItemSummary {
+  id: string;
+  type: string;
+  stem: string;
+  tags: string[];
+  difficulty: number | null;
+  visibility: 'private' | 'school';
+  ownerIsSelf: boolean;
+  createdAt: number;
+  updatedAt: number;
+}
+
+/** Props passed to assessment.bank.toolbar.action extensions */
+export interface AssessmentBankToolbarSlotProps {
+  filters: { type?: string };
+  lang?: string;
+  dispatcher?: IHostActionDispatcher;
+}
+
+/** Props passed to assessment.bank.item.action extensions */
+export interface AssessmentBankItemActionSlotProps {
+  item: BankItemSummary;
+  lang?: string;
+  dispatcher?: IHostActionDispatcher;
+}
+
+/** Props passed to assessment.bank.import.source extensions */
+export interface AssessmentBankImportSourceSlotProps {
+  lang?: string;
+  dispatcher?: IHostActionDispatcher;
+}
+
+/** Props passed to assessment.bank.filter extensions */
+export interface AssessmentBankFilterSlotProps {
+  activeFilters: {
+    type?: string;
+    tags?: string[];
+    difficultyMin?: number;
+    difficultyMax?: number;
+  };
+  lang?: string;
+  onChange?: (patch: Record<string, unknown>) => void;
+}
+
+/** Props passed to assessment.bank.item.preview extensions */
+export interface AssessmentBankItemPreviewSlotProps {
+  item: BankItemSummary;
+  lang?: string;
+}
+
+/** 组卷逐题只读投影（L2 时通过 sensitive 追加 answerKey / config）。 */
+export interface AssessmentEditorItemSummary {
+  id: string;
+  type: string;
+  stem: string;
+  maxScore: number;
+  section: string | null;
+  sortOrder: number;
+}
+
+/** Props passed to assessment.editor.item.addon extensions */
+export type AssessmentEditorItemAddonProps =
+  | {
+      sensitiveAccess: false;
+      assessmentId: string;
+      item: AssessmentEditorItemSummary;
+      lang?: string;
+      dispatcher?: IHostActionDispatcher;
+    }
+  | {
+      sensitiveAccess: true;
+      assessmentId: string;
+      item: AssessmentEditorItemSummary;
+      sensitive: {
+        answerKey?: unknown;
+        config?: Record<string, unknown>;
+      };
+      lang?: string;
+      dispatcher?: IHostActionDispatcher;
+    };
+
+/** Props passed to assessment.editor.settings.addon extensions */
+export interface AssessmentEditorSettingsAddonProps {
+  assessmentId: string;
+  kind: string;
+  settings: Record<string, unknown>;
+  readOnly: boolean;
+  onPatch?: (patch: Record<string, unknown>) => void;
+  lang?: string;
+}
+
+/** Props passed to assessment.publish.preflight extensions */
+export interface AssessmentPublishPreflightSlotProps {
+  assessmentId: string;
+  classId: string;
+  itemCount: number;
+  totalScore: number;
+  lang?: string;
+  onResult?: (result: { level: 'error' | 'warn'; code: string; message: string }) => void;
+}
+
+/** Props passed to assessment.grading.toolbar.action extensions */
+export interface AssessmentGradingToolbarSlotProps {
+  assignmentId: string;
+  attempts: Array<{
+    id: string;
+    attemptNo: number;
+    status: string;
+    score: number | null;
+    needsManualReview: boolean;
+    anonymousLabel?: string | null;
+  }>;
+  refresh: () => void;
+  lang?: string;
+}
+
+/** 批改逐题视图：基础字段不含敏感内容。 */
+export interface AssessmentGradingAnswerItemBase {
+  itemId: string;
+  type: string;
+  stem: string;
+  maxScore: number;
+  score: number | null;
+  isCorrect: boolean | null;
+  needsManualReview: boolean;
+  feedback: string | null;
+  manualOverride: boolean;
+}
+
+/** Props passed to assessment.grading.answer.addon extensions（L2 槽位） */
+export type AssessmentGradingAnswerAddonProps =
+  | {
+      sensitiveAccess: false;
+      attemptId: string;
+      item: AssessmentGradingAnswerItemBase;
+      onScoreChange?: (score: number) => void;
+      lang?: string;
+    }
+  | {
+      sensitiveAccess: true;
+      attemptId: string;
+      item: AssessmentGradingAnswerItemBase;
+      sensitive: {
+        answerKey?: unknown;
+        config?: Record<string, unknown>;
+        /** 当前学生的作答（声明 studentAnswer 后提供） */
+        studentAnswer?: unknown;
+        studentId?: string | null;
+        studentName?: string | null;
+      };
+      onScoreChange?: (score: number) => void;
+      lang?: string;
+    };
+
+/** Props passed to assessment.stats.item.addon extensions */
+export interface AssessmentStatsItemAddonProps {
+  assignmentId: string;
+  item: {
+    itemId: string;
+    type: string;
+    stem: string;
+    maxScore: number;
+    answered: number;
+    graded: number;
+    correct: number;
+    correctRate: number | null;
+    avgScore: number | null;
+    distribution: Record<string, number>;
+  };
+  lang?: string;
+}
+
+/** Props passed to assessment.attempt.question.addon extensions */
+export interface AssessmentAttemptQuestionAddonProps {
+  assignmentId: string;
+  attemptId: string;
+  itemId: string;
+  itemType: string;
+  index: number;
+  lang?: string;
+}
+
+/** Props passed to assessment.result.item.addon extensions（学生本人） */
+export interface AssessmentResultItemAddonProps {
+  assignmentId: string;
+  attemptId: string;
+  item: {
+    itemId: string;
+    type: string;
+    stem: string;
+    maxScore: number;
+    answer: unknown;
+    score: number | null;
+    isCorrect: boolean | null;
+    feedback: string | null;
+    /** 仅 resultVisibility 允许且 showAnalysis 为真时出现 */
+    answerKey?: unknown;
+  };
+  lang?: string;
 }
 
 /** Props passed to course.card.action extensions */

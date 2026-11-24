@@ -6,8 +6,12 @@
  * 这里用哨兵字段做全量断言 —— 与 packages/core/assessment/serialize.ts 的单测同一条原则。
  */
 import { describe, expect, it } from 'vitest';
-import { toAssessmentListCardProps, toAssessmentStatsCardProps } from '../extension-slot-props';
-import type { AssessmentStats, AssessmentSummary } from '../api';
+import {
+  toAssessmentListCardProps,
+  toAssessmentStatsCardProps,
+  toStudentAssessmentListCardProps,
+} from '../extension-slot-props';
+import type { AssessmentStats, AssessmentSummary, StudentAssignmentEntry } from '../api';
 
 const SENTINEL = 'SENTINEL_ANSWER_KEY_DO_NOT_LEAK';
 
@@ -110,5 +114,47 @@ describe('测评扩展槽 props 白名单（Issue #183）', () => {
         'type',
       ].sort(),
     );
+  });
+
+  it('学生 list.card props 以 assignmentId 为主键，不含 settings / 答案 / 身份', () => {
+    const entry = {
+      assignmentId: 'asg-1',
+      assessmentId: 'asm-1',
+      kind: 'quiz',
+      title: 'Q1 小测',
+      classId: 'class-1',
+      lessonId: 'lesson-1',
+      opensAt: 1,
+      closesAt: 2,
+      durationSec: 600,
+      windowState: 'open',
+      completed: true,
+      attempt: {
+        id: 'att-1',
+        assignmentId: 'asg-1',
+        attemptNo: 1,
+        status: 'submitted',
+        startedAt: 1,
+        submittedAt: 2,
+        deadlineAt: 3,
+        remainingSeconds: 0,
+        score: null,
+        maxScore: 10,
+        needsManualReview: true,
+        // 哨兵：投影不得透传
+        studentId: SENTINEL,
+        answerKey: SENTINEL,
+      },
+    } as unknown as StudentAssignmentEntry;
+
+    const props = toStudentAssessmentListCardProps(entry);
+    const json = JSON.stringify(props);
+    expect(json).not.toContain(SENTINEL);
+    expect(json).not.toContain('settings');
+    expect(props.viewer).toBe('student');
+    expect(props.assessment.id).toBe('asg-1');
+    expect(props.assessment.assessmentId).toBe('asm-1');
+    // 分数未发布时服务端已置 null，投影不得改写成 0
+    expect(props.attempt?.score).toBeNull();
   });
 });

@@ -13,6 +13,8 @@ import {
   type AssessmentAssignment,
   type TeacherAttempt,
 } from './api';
+import { ExtensionPointRenderer } from '../../plugin-host/extension-point-renderer';
+import { projectAssessmentSensitive } from './sensitive-props';
 
 interface TeacherItemView {
   itemId: string;
@@ -188,6 +190,26 @@ export function GradingPanel({
           <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
           {zh ? '刷新' : 'Refresh'}
         </button>
+        {/* P2：批改面板顶部扩展（AI 批量初评 / 报告导出） */}
+        <ExtensionPointRenderer
+          slot="assessment.grading.toolbar.action"
+          slotProps={{
+            assignmentId: assignment.id,
+            attempts: (attempts ?? []).map((attempt) => ({
+              id: attempt.id,
+              attemptNo: attempt.attemptNo,
+              status: attempt.status,
+              score: attempt.score,
+              needsManualReview: attempt.needsManualReview,
+              anonymousLabel: attempt.anonymousLabel ?? null,
+            })),
+            refresh: () => {
+              void loadAttempts();
+            },
+            lang,
+          }}
+          lang={lang}
+        />
       </div>
 
       {(error || notice) && (
@@ -378,6 +400,51 @@ export function GradingPanel({
                       {zh ? '保存评分' : 'Save'}
                     </button>
                   </div>
+                  {/* P2：逐题批改扩展（L2：声明后可读 answerKey/config/answer/studentIdentity） */}
+                  <ExtensionPointRenderer
+                    slot="assessment.grading.answer.addon"
+                    slotProps={{
+                      attemptId: detail.attempt.id,
+                      item: {
+                        itemId: item.itemId,
+                        type: item.type,
+                        stem: item.stem,
+                        maxScore: item.maxScore,
+                        score: item.score,
+                        isCorrect: item.isCorrect,
+                        needsManualReview: item.needsManualReview,
+                        feedback: item.feedback,
+                        manualOverride: item.manualOverride,
+                      },
+                      onScoreChange: (score: number) => {
+                        setScores((prev) => ({ ...prev, [item.itemId]: String(score) }));
+                      },
+                      lang,
+                    }}
+                    resolveExtensionProps={(ext) => {
+                      const result = projectAssessmentSensitive(ext, {
+                        slot: 'assessment.grading.answer.addon',
+                        viewer: 'teacher',
+                        role: 'teacher',
+                        source: {
+                          answerKey: item.answerKey,
+                          config: item.config,
+                          studentAnswer: item.answer,
+                          studentIdentity: { id: detail.attempt.studentId, name: null },
+                        },
+                      });
+                      if (!result.sensitive) return { sensitiveAccess: false };
+                      const { studentIdentity, ...rest } = result.sensitive;
+                      const identity = studentIdentity as { id?: string | null; name?: string | null } | undefined;
+                      return {
+                        sensitiveAccess: true,
+                        sensitive: identity
+                          ? { ...rest, studentId: identity.id ?? null, studentName: identity.name ?? null }
+                          : rest,
+                      };
+                    }}
+                    lang={lang}
+                  />
                 </li>
               ))}
             </ul>
