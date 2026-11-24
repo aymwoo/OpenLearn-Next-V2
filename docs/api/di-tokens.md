@@ -12,7 +12,7 @@
 
 插件在 `activate(ctx)` 中拿到 `PluginContext`（`ctx`）。平台服务通过两种方式获取：
 
-1. **`ctx.resolve(Token)` —— 通用 DI 路径**。除了下方 9 个核心服务代理之外，任何已注册的 Token 都走这条路：
+1. **`ctx.resolve(Token)` —— 通用 DI 路径**。除了下方预接线的服务代理之外，任何已注册的 Token 都走这条路：
 
    ```typescript
    import { IPluginLifecycleManagerToken, IDatabaseToken, IAuthSessionBridgeToken } from '@openlearn/plugin-sdk';
@@ -22,13 +22,13 @@
    const authBridge = await ctx.resolve(IAuthSessionBridgeToken); // 类型: IAuthSessionBridgeService
    ```
 
-2. **`ctx.services.X` —— 仅 9 个核心服务的便捷代理**（与对应 Token 解析出的实例相同）。
+2. **`ctx.services.X` —— 预接线服务的便捷代理**（与对应 Token 解析出的实例相同）。
 
 `PluginContext` 完整形态（`packages/core/plugin-host/types.ts`）：
 
 ```typescript
 interface PluginContext {
-  // (a) 预接线的 9 个核心服务代理。每个 key 的运行时契约都是 T | null：
+  // (a) 预接线的服务代理。每个 key 的运行时契约都是 T | null：
   //     D-12 降级（manifest.optional 的 Token 版本不兼容）会把它置 null，
   //     消费前必须判空。见 packages/core/plugin-host/types.ts。
   services: {
@@ -43,6 +43,10 @@ interface PluginContext {
     pointsLedger: IPointsLedgerService | null;
     roster: IClassRosterService | null; // 受管名册（management:read）
     lessonOutline: ILessonOutlineService | null; // 课节标题（lesson:read）
+    assignmentSubmission: IAssignmentSubmissionService | null; // 作业提交只读（assignment:read）
+    xueanActivityProgress: IXueanActivityProgressService | null; // 学案进度只读（lesson:read）
+    lessonReport: ILessonReportService | null; // 课后报告摘要（lesson:read）
+    classroomSelfMessage: IClassroomSelfMessageService | null; // 学生 self 消息（classroom:message:self）
   };
   pluginId: string; // plugins 表的行 UUID，不是 manifest.id
   manifest: Manifest;
@@ -65,7 +69,7 @@ interface PluginContext {
 
 ---
 
-## 2. 完整 Token 列表（SDK 值导出 34 个，以 `packages/plugin-sdk/index.ts` 导出为准）
+## 2. 完整 Token 列表（SDK 值导出 47 个，以 `packages/plugin-sdk/index.ts` 导出为准）
 
 `Token<T>` 本身是一个运行时常量（`packages/core/di/token.ts`），其 `name` 形如 `@openlearn/core:ICommandBusService`，`T` 仅用于编译期类型携带。
 
@@ -166,22 +170,35 @@ interface PluginContext {
 | ------------------------------------ | ------------------------------- | ----------------------------------------------- |
 | `IClassRosterServiceToken`           | `IClassRosterService`           | `@openlearn/core:IClassRosterService`           |
 | `ILessonOutlineServiceToken`         | `ILessonOutlineService`         | `@openlearn/core:ILessonOutlineService`         |
+| `IAssignmentSubmissionServiceToken`  | `IAssignmentSubmissionService`  | `@openlearn/core:IAssignmentSubmissionService`  |
+| `IXueanActivityProgressServiceToken` | `IXueanActivityProgressService` | `@openlearn/core:IXueanActivityProgressService` |
+| `ILessonReportServiceToken`          | `ILessonReportService`          | `@openlearn/core:ILessonReportService`          |
 | `IFileStorageExtensionRegistryToken` | `IFileStorageExtensionRegistry` | `@openlearn/core:IFileStorageExtensionRegistry` |
 
 ### J. ClassroomFlowServer / 通讯协议 / 提交适配器 Token
 
-| 导出 Token                      | 解析类型                   | 标识字符串                                  |
-| ------------------------------- | -------------------------- | ------------------------------------------- |
-| `ICreditAwardServiceToken`      | `ICreditAwardService`      | `@openlearn/core:ICreditAwardService`       |
-| `IRewardCatalogServiceToken`    | `IRewardCatalogReader`     | `@openlearn/core:IRewardCatalogService`     |
-| `ICreditRedemptionServiceToken` | `ICreditRedemptionService` | `@openlearn/core:ICreditRedemptionService`  |
-| `IClassroomMessageServiceToken` | `IClassroomMessageService` | `@openlearn/core:IClassroomMessageService`  |
-| `ISubmissionRegistryToken`      | `SubmissionRegistry`       | `@openlearn/submission-adapter:IRegistry`   |
-| `ISubmissionAggregatorToken`    | `SubmissionAggregator`     | `@openlearn/submission-adapter:IAggregator` |
+| 导出 Token                          | 解析类型                       | 标识字符串                                     |
+| ----------------------------------- | ------------------------------ | ---------------------------------------------- |
+| `ICreditAwardServiceToken`          | `ICreditAwardService`          | `@openlearn/core:ICreditAwardService`          |
+| `IRewardCatalogServiceToken`        | `IRewardCatalogReader`         | `@openlearn/core:IRewardCatalogService`        |
+| `ICreditRedemptionServiceToken`     | `ICreditRedemptionService`     | `@openlearn/core:ICreditRedemptionService`     |
+| `IClassroomMessageServiceToken`     | `IClassroomMessageService`     | `@openlearn/core:IClassroomMessageService`     |
+| `IClassroomSelfMessageServiceToken` | `IClassroomSelfMessageService` | `@openlearn/core:IClassroomSelfMessageService` |
+| `ISubmissionRegistryToken`          | `SubmissionRegistry`           | `@openlearn/submission-adapter:IRegistry`      |
+| `ISubmissionAggregatorToken`        | `SubmissionAggregator`         | `@openlearn/submission-adapter:IAggregator`    |
 
 > 统一学分发放 / 奖励目录 / 兑换见 `/api/classroomflowserver/*`；通讯协议 `ctx.resolve(IClassroomMessageServiceToken)` 后经 `registerChannel({ name, shared?, rolesAllowed?, requiredPayloadFields? })` 注册消息频道（owner 由宿主按 pluginId 注入，插件不可自报），再用 `send()` / `ack()` / `replay()` 收发可靠消息。提交适配器经 `ctx.resolve(ISubmissionRegistryToken)` 的 `register(adapter)`（`descriptor.owner` 由宿主按 pluginId 注入）扩展成绩采集，把第三方教学模式的作答投影为 `NormalizedSubmission` 进入统一成绩面板。
 
 > `IFileStorageExtensionRegistryToken` 仅面向内核宿主与同进程受信任扩展（布局策略 / 存储后端 / 文件处理器）；第三方 `process` / `worker` 插件不跨 IPC 传递二进制流插槽，见[文件存储扩展设计](../architecture/file-storage-extension-design.md) §4。
+
+> **P0 安全扩展服务**（`assignment_submissions` / `activity_progress` / `classroom_sessions` 均在 sql-guard 禁读表里）：
+>
+> - `ctx.services.assignmentSubmission`（`assignment:read`）—— 学生仅本人；教师仅自己班级；`canShareSubmission` 复用同一可见性判定。
+> - `ctx.services.xueanActivityProgress`（`lesson:read`）—— 当前学生只能读自己的进度与提交。
+> - `ctx.services.lessonReport`（`lesson:read`）—— 仅教师 / 管理员；返回聚合摘要，不返回原始行。
+> - `ctx.services.classroomSelfMessage`（`classroom:message:self`）—— sender 由宿主派生为 `user:<studentId>:student`，校验 channel `rolesAllowed`、班级成员与定向目标同班，**不要求 `lesson:write`**。
+>
+> 这四个服务仅 **inline** 模式注入；`worker` / `process` 隔离模式下对应键为 `undefined`（不是 `null`），消费前请用真值判断或按 `T | null | undefined` 处理。
 
 > `ILessonOutlineServiceToken` / `ctx.services.lessonOutline.getOutline(lessonId)` 是进程插件读取课节标题的通道。`lessons` 仍在 sql-guard 黑名单。返回 `{ id, title, segments }`，`segments` 只含时间线环节的 id 与 title。需 `lesson:read`。没有当前登录用户，或该用户在 `GET /api/lessons/:id` 中看不见这节课，则拒绝；课节不存在返回 `null`。
 

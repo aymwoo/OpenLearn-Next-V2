@@ -49,10 +49,21 @@ host.registerExtensionPoint('classroom.active_segment.student_main', {
 - 作答真值可落自有表；面板投影经 `SubmissionAdapter`；教师批改只经 `grade-writer`。
 - 可靠消息：`registerChannel` + `classroom.sendMessage`（见 `docs/reference/classroom-flow-server.md`）。
 
-## 4. 备课与大纲
+## 4. 备课、大纲与宿主消费面
 
-- 备课：贡献 `prepContributionId`；flag 开时进入统一备课壳，按当前环节类型决议面。
-- 大纲：贡献 `outlineContributionId`；课中侧栏按环节类型切换白板页列表 / 学案活动列表等。
+模式包通过 manifest 声明能力，宿主按下表消费；插件不需要改宿主代码，但要注册对应贡献。
+
+| 声明字段                | 宿主消费点                                                         | 缺失时行为                                             |
+| ----------------------- | ------------------------------------------------------------------ | ------------------------------------------------------ |
+| `prepContributionId`    | 统一备课壳 `ModePackPrepShell` → 扩展槽位 `classroom.prep`         | **回退白板备课面**（`LessonEditorView`），记录一次告警 |
+| `outlineContributionId` | 课中侧栏 `ClassroomTimelineSidebar` → 扩展槽位 `classroom.outline` | **回退白板页面大纲**                                   |
+| `teacherWorkspaceId`    | `classroom.active_segment.main`                                    | 不接管，使用宿主默认内容                               |
+| `studentWorkspaceId`    | `classroom.active_segment.student_main`                            | 同上                                                   |
+| `adapterIds`            | 课中提交面板按当前包过滤 `SubmissionAdapter`                       | 不做过滤（向后兼容）                                   |
+| `channels`              | `classroom.sendMessage` 的 channel 归属校验                        | 发送时报错                                             |
+
+- 备课 / 大纲贡献通过 `host.registerExtensionPoint('classroom.prep' | 'classroom.outline', …)` 注册；宿主按 `targetType` / `segment.type` 分发。
+- 绑定第三方模式包的课时会自动启用 Mode Packs，不依赖全局开关；内置白板包仍受全局开关控制。
 - **不要**把活动并入 timeline 表；用 `segment.type` + 外键/约定（如 `config_json.segmentId`）关联。
 
 ## 5. 不变式（宿主强制）
@@ -67,10 +78,22 @@ host.registerExtensionPoint('classroom.active_segment.student_main', {
 
 ## 6. 验收自检
 
-- [ ] flag 关闭：平台行为无变化
-- [ ] flag 开启 + 本包 `segment.type`：双端 primary 工作区挂载
+- [ ] flag 关闭 + 未绑定第三方包：平台行为无变化
+- [ ] 绑定第三方包：即使全局 flag 关闭，Mode Packs 自动启用
+- [ ] 本包 `segment.type`：双端 primary 工作区挂载，且新建环节默认类型来自 `segmentTypes`
 - [ ] 不抢无 type / 白板默认环节
-- [ ] 成绩进统一面板（若声明 adapter）
+- [ ] 备课面命中 `classroom.prep`；未注册时回退白板备课面
+- [ ] 大纲命中 `classroom.outline`；未注册时回退白板页面大纲
+- [ ] 声明 `adapterIds` 后，课中提交面板只显示本包适配器；成绩写回进入统一成绩册
+- [ ] 声明 `channels` 后，`classroom.sendMessage` 可正常收发；未注册时目录返回 `warnings`
 - [ ] 文档与 `ModePackContribution` 字段一致，无需改 `LiveClassroomView`
 
 参考实现：`src/features/classroom/mode-pack/`（`@openlearn/mode-whiteboard` / `@openlearn/mode-xuean`）。
+
+## 7. 阶段 8 实施清单（已完成）
+
+1. **目录、开关与环节类型**：前端模式包目录保留完整 `ModePackContribution`；绑定非内置包自动启用 Mode Packs；插件的 `segmentTypes` 自动注册进环节类型选择器，插件停用时清理。
+2. **大纲、工作区与默认环节**：`classroom.outline` 槽位与白板回退；`hasSegmentMainExtension` 按当前 `segment.type` 过滤；`TimelineRail` 默认类型取包的 `segmentTypes`。
+3. **适配器、消息通道与成绩**：提交聚合与 `/api/classroomflowserver/submissions` 支持 `adapterIds` 过滤；`/api/mode-packs` 返回缺失 adapter / channel 的 `warnings`；成绩写回沿用 `grade-writer`。
+4. **备课面（后置）**：`classroom.prep` 槽位；第三方包命中扩展，缺失时回退白板备课面并记录告警。
+5. **文档与门禁**：同步 `plugin-ui-extension-slots.md`、`classroom-flow-server.md`、CHANGELOG，执行全量门禁与 audit。

@@ -11,6 +11,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Features
 
+- **第三方插件 P0 安全扩展服务**：新增 `IAssignmentSubmissionService`、`IXueanActivityProgressService`、`ILessonReportService`、`IClassroomSelfMessageService` 及对应 Token 与视图类型。`PluginContext.services` 新增 `assignmentSubmission` / `xueanActivityProgress` / `lessonReport` / `classroomSelfMessage` 四个字段（inline 模式可能为 `null`，worker / process 模式下为 `undefined`；消费前请判空）。前三个是 sql-guard 禁读表的只读替代通道；`classroomSelfMessage.sendAsSelf()` 把 sender 派生为当前学生 actor，不要求 `lesson:write`，需声明 `classroom:message:self`。纯新增导出，无破坏性变更。
+
 - **`IAIService.listProviders()`**（平台 Issue #561）：可选方法，返回 `AIProviderSummary[]`。字段与 `GET /api/ai-providers` 的列表项一致，但永不包含 `api_key`。需 `ai:invoke`。纯新增，旧插件与旧 mock 不必实现。不是活动生态的 `ActivityRegistry.listProviders()`。
 
 - **课节标题只读服务**：新增 `ILessonOutlineService`、`LessonOutline`、`LessonSegmentTitle` 与 `ILessonOutlineServiceToken`。`PluginContext.services.lessonOutline.getOutline(lessonId)` 返回 `{ id, title, segments }`。需 `lesson:read`。不放宽 sql-guard。
@@ -21,6 +23,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 - **文件存储三插槽扩展接口与 DI Token 导出（平台 Issue #504）**：
   - 在 `packages/plugin-sdk/index.ts` 与 `packages/plugin-sdk/openlearn.d.ts` 新增导出 `IFileStorageExtensionRegistryToken` 及 `IFileStorageExtensionRegistry`、`FileStorageBackend`、`FileStorageBackendCapabilities`、`FileProcessor`、`FileProcessorContext`、`FileProcessorResult`、`FileProcessorStage`、`FileLayoutTokenResolver`、`FileAssetContext`、`FilePurpose`、`FileAccessScope` 等类型（面向内核宿主与同进程可信扩展；`process` 模式隔离插件不跨 IPC 传递字节流）。
+
+### Fixes
+
+- **P0 扩展服务类型与数据源校正**：`AssignmentSubmissionView` 新增可选 `source` / `textContent` / `linkUrl` / `files`，作业中心提交优先于 legacy 投影；4 个新 `PluginContext.services` 键类型改为 `T | null | undefined`，与 worker / process 模式的运行时行为一致；`classroomSelfMessage` 的非法 `targetUserIds` 改为抛错，不再退化为广播。
 
 ### Deprecated
 

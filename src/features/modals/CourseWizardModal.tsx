@@ -3,11 +3,53 @@ import Markdown from 'react-markdown';
 import AccessibleDialog from '../../components/AccessibleDialog';
 import { BookOpen, Sparkles, Activity, Plus, CheckCircle2, ChevronRight, Database, Loader2 } from 'lucide-react';
 import { ExtensionPointRenderer } from '../../plugin-host/extension-point-renderer';
-import { getDefaultWizardTimeline, getDefaultXueanTimeline } from '../../hooks/useCourseWizard';
+import {
+  getDefaultWizardTimeline,
+  getDefaultXueanTimeline,
+  type WizardModePackChoice,
+} from '../../hooks/useCourseWizard';
 import {
   resolveCourseDeliveryMode,
   type CourseDeliveryMode,
 } from '../../../packages/core/plugin-host/course-delivery-mode';
+import {
+  BUILTIN_WHITEBOARD_MODE_PACK_ID,
+  BUILTIN_XUEAN_MODE_PACK_ID,
+} from '../../../packages/core/plugin-host/mode-pack';
+
+/** 内置模式的中文展示文案；插件包直接使用 manifest 的 label。 */
+const BUILTIN_MODE_CHOICE_META: Record<string, { zh: string; en: string; hintZh: string; hintEn: string }> = {
+  [BUILTIN_WHITEBOARD_MODE_PACK_ID]: {
+    zh: '白板模式',
+    en: 'Whiteboard',
+    hintZh: '用课堂时间轴和互动白板备课、上课。',
+    hintEn: 'Plan and teach with a timeline and the interactive whiteboard.',
+  },
+  [BUILTIN_XUEAN_MODE_PACK_ID]: {
+    zh: '学案模式',
+    en: 'Guided study',
+    hintZh: '用学案活动组织预习、研读和练习。开课走学案课堂，不必再开全局 Mode Pack。',
+    hintEn:
+      'Organize preview, study, and practice. Class uses the guided-study flow without a global Mode Pack switch.',
+  },
+};
+
+const FALLBACK_MODE_CHOICES: WizardModePackChoice[] = [
+  {
+    id: BUILTIN_WHITEBOARD_MODE_PACK_ID,
+    label: '白板模式',
+    labelEn: 'Whiteboard',
+    source: 'builtin',
+    segmentTypes: ['whiteboard'],
+  },
+  {
+    id: BUILTIN_XUEAN_MODE_PACK_ID,
+    label: '学案模式',
+    labelEn: 'Guided study',
+    source: 'builtin',
+    segmentTypes: ['xuean'],
+  },
+];
 
 export interface WizardSegment {
   id: string;
@@ -48,6 +90,12 @@ export interface CourseWizardModalProps {
   handleDeployWizardCourse: () => void;
   wizardDeliveryMode?: CourseDeliveryMode;
   setWizardDeliveryMode?: (mode: CourseDeliveryMode) => void;
+  /** 当前选中的模式包 id（内置或插件）。 */
+  wizardModePackId?: string;
+  /** 可选模式包列表，来自 `/api/mode-packs`。 */
+  modePackChoices?: WizardModePackChoice[];
+  /** 选择非内置模式包时调用。 */
+  selectWizardModePack?: (modePackId: string) => void;
 }
 
 export function CourseWizardModal(props: CourseWizardModalProps) {
@@ -74,8 +122,33 @@ export function CourseWizardModal(props: CourseWizardModalProps) {
     handleDeployWizardCourse,
     wizardDeliveryMode = 'whiteboard',
     setWizardDeliveryMode = () => {},
+    wizardModePackId,
+    modePackChoices,
+    selectWizardModePack = () => {},
   } = props;
   const deliveryMode = resolveCourseDeliveryMode(wizardDeliveryMode);
+  // 选中态以模式包 id 为准；旧调用方只传 deliveryMode 时按包 id 反推。
+  const activeModePackId =
+    wizardModePackId ?? (deliveryMode === 'xuean' ? BUILTIN_XUEAN_MODE_PACK_ID : BUILTIN_WHITEBOARD_MODE_PACK_ID);
+  const modeChoices = (modePackChoices && modePackChoices.length > 0 ? modePackChoices : FALLBACK_MODE_CHOICES).map(
+    (pack) => {
+      const meta = BUILTIN_MODE_CHOICE_META[pack.id];
+      const warningZh = pack.warnings?.length ? `（${pack.warnings.join('；')}）` : '';
+      const warningEn = pack.warnings?.length ? ` (${pack.warnings.join('; ')})` : '';
+      return {
+        id: pack.id,
+        zh: meta?.zh ?? pack.label,
+        en: meta?.en ?? pack.labelEn ?? pack.label,
+        hintZh: meta?.hintZh ?? `由插件提供的教学模式。${warningZh}`,
+        hintEn: meta?.hintEn ?? `Teaching mode contributed by a plugin.${warningEn}`,
+      };
+    },
+  );
+  const handleModeChange = (id: string) => {
+    if (id === BUILTIN_WHITEBOARD_MODE_PACK_ID) setWizardDeliveryMode('whiteboard');
+    else if (id === BUILTIN_XUEAN_MODE_PACK_ID) setWizardDeliveryMode('xuean');
+    else selectWizardModePack(id);
+  };
   const xueanWizard = deliveryMode === 'xuean';
   const wizardSteps = xueanWizard
     ? [
@@ -198,37 +271,19 @@ export function CourseWizardModal(props: CourseWizardModalProps) {
                 {lang === 'zh' ? '课程模式' : 'Course mode'}
               </legend>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {(
-                  [
-                    {
-                      id: 'whiteboard' as const,
-                      zh: '白板模式',
-                      en: 'Whiteboard',
-                      hintZh: '用课堂时间轴和互动白板备课、上课。',
-                      hintEn: 'Plan and teach with a timeline and the interactive whiteboard.',
-                    },
-                    {
-                      id: 'xuean' as const,
-                      zh: '学案模式',
-                      en: 'Guided study',
-                      hintZh: '用学案活动组织预习、研读和练习。开课走学案课堂，不必再开全局 Mode Pack。',
-                      hintEn:
-                        'Organize preview, study, and practice. Class uses the guided-study flow without a global Mode Pack switch.',
-                    },
-                  ] as const
-                ).map((choice) => (
+                {modeChoices.map((choice) => (
                   <label
                     key={choice.id}
                     className={`flex items-start gap-2 rounded-lg border p-3 cursor-pointer ${
-                      deliveryMode === choice.id ? 'border-indigo-400 bg-indigo-50' : 'border-gray-200 bg-white'
+                      activeModePackId === choice.id ? 'border-indigo-400 bg-indigo-50' : 'border-gray-200 bg-white'
                     }`}
                   >
                     <input
                       type="radio"
                       name="course-delivery-mode"
                       value={choice.id}
-                      checked={deliveryMode === choice.id}
-                      onChange={() => setWizardDeliveryMode(choice.id)}
+                      checked={activeModePackId === choice.id}
+                      onChange={() => handleModeChange(choice.id)}
                       className="mt-1"
                     />
                     <span>

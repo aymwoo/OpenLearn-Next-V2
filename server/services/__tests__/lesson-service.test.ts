@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { v7 as uuidv7 } from 'uuid';
 import { kernelContainer } from '../../../packages/core/kernel/index.js';
 import { LessonService, stripOuterCodeFence } from '../lesson-service.js';
+import { BUILTIN_XUEAN_MODE_PACK_ID } from '../../../packages/core/plugin-host/mode-pack.js';
 
 describe('LessonService 领域服务单元测试 (路线图 E3 深化)', () => {
   let service: LessonService;
@@ -160,6 +161,50 @@ describe('LessonService 领域服务单元测试 (路线图 E3 深化)', () => {
       expect(saved.creator_id).toBe(teacherAliceId);
 
       // 清理
+      service.deleteLessonCascade(created.lessonId);
+    });
+
+    it('createLesson 应落库模式包绑定并推导兼容 delivery_mode', async () => {
+      const created = (await service.createLesson(
+        {
+          title: 'Guided Reading',
+          content: 'Xuean pack',
+          creatorId: teacherAliceId,
+          modePackId: BUILTIN_XUEAN_MODE_PACK_ID,
+        },
+        teacherAliceActor,
+      )) as any;
+      expect(created.modeBinding).toEqual({
+        modePackId: BUILTIN_XUEAN_MODE_PACK_ID,
+        deliveryMode: 'xuean',
+        fallback: false,
+      });
+
+      const saved = service.getLesson(created.lessonId);
+      expect(saved.mode_pack_id).toBe(BUILTIN_XUEAN_MODE_PACK_ID);
+      expect(saved.delivery_mode).toBe('xuean');
+
+      service.deleteLessonCascade(created.lessonId);
+    });
+
+    it('不可用模式包应回落白板并保留原因', async () => {
+      const created = (await service.createLesson(
+        {
+          title: 'Missing Pack',
+          content: 'fallback',
+          creatorId: teacherAliceId,
+          modePackId: 'ext-missing:mode',
+        },
+        teacherAliceActor,
+      )) as any;
+      expect(created.modeBinding.fallback).toBe(true);
+      expect(created.modeBinding.deliveryMode).toBe('whiteboard');
+
+      const saved = service.getLesson(created.lessonId);
+      expect(saved.mode_pack_id).toBeNull();
+      expect(saved.delivery_mode).toBe('whiteboard');
+
+      expect(created.modeBinding.modePackId).toBeNull();
       service.deleteLessonCascade(created.lessonId);
     });
 

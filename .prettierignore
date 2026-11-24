@@ -15,6 +15,10 @@ packages/plugin-sdk/scaffold/templates/
 # prettier 解析它必然报 SyntaxError —— 它就该保持坏着。
 packages/core/esm-loader/__tests__/fixtures/syntax-error.js
 
+# 本地多分支工作树：各自是完整仓库副本，位于 .git/info/exclude；
+# prettier 不读 .git/info/exclude，需在此显式排除，避免误扫其他 worktree。
+.worktrees/
+
 # ══════════════════════════════════════════════════════════════════════════════
 # 自动生成的类型声明：build 时被覆盖，格式化它等于跟生成器对着干
 # ══════════════════════════════════════════════════════════════════════════════
@@ -32,3 +36,7 @@ packages/core/esm-loader/__tests__/fixtures/syntax-error.js
 # 结论：生成物由生成器负责，prettier 不碰。真正需要人维护的是
 # packages/plugin-sdk/openlearn.d.ts（手写契约），那个文件照常参与格式化。
 packages/plugin-sdk/generated.d.ts
+
+# Agent 事实表由 audit-tools/agent_facts.py 生成（键序与换行由脚本决定），
+# prettier 化后下次生成会再次改写，造成无意义 diff。
+docs/agent/contracts/

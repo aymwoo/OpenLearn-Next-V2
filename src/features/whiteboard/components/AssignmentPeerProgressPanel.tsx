@@ -4,8 +4,8 @@ import { AlertTriangle, CheckCircle2, Loader2, RefreshCw, Shuffle, Users } from 
 /**
  * 教师端互评进度面板：分配互评、查看完成情况与异常标记。
  *
- * 数据来自 `GET /api/assignments/:id` 的 `peerProgress`（教师请求才携带，含学生姓名），
- * 分配动作走 `POST /api/assignments/:id/assign-peer-reviews`。
+ * 数据来自 `GET /api/learning-surface-assignments/:id` 的 `peerProgress`（教师请求才携带，含学生姓名），
+ * 分配动作走 `POST /api/learning-surface-assignments/:id/assign-peer-reviews`。
  */
 
 export interface PeerProgress {
@@ -74,7 +74,7 @@ export function AssignmentPeerProgressPanel({
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/assignments/${encodeURIComponent(assignmentId)}`);
+      const res = await fetch(`/api/learning-surface-assignments/${encodeURIComponent(assignmentId)}`);
       const data = await res.json().catch(() => null);
       if (!res.ok || data?.success === false) {
         throw new Error(data?.error || `HTTP ${res.status}`);
@@ -98,14 +98,17 @@ export function AssignmentPeerProgressPanel({
     try {
       const parsedCount = Math.max(1, Math.min(10, Math.round(Number(reviewerCount) || 2)));
       const dueAt = dueValue ? new Date(dueValue).getTime() : undefined;
-      const res = await fetch(`/api/assignments/${encodeURIComponent(assignmentId)}/assign-peer-reviews`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          reviewerCount: parsedCount,
-          dueAt: dueAt && Number.isFinite(dueAt) ? dueAt : undefined,
-        }),
-      });
+      const res = await fetch(
+        `/api/learning-surface-assignments/${encodeURIComponent(assignmentId)}/assign-peer-reviews`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            reviewerCount: parsedCount,
+            dueAt: dueAt && Number.isFinite(dueAt) ? dueAt : undefined,
+          }),
+        },
+      );
       const data = await res.json().catch(() => null);
       if (!res.ok || data?.success === false) {
         throw new Error(data?.error || `HTTP ${res.status}`);

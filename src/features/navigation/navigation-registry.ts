@@ -23,7 +23,6 @@
 import React from 'react';
 import {
   BookOpen,
-  BookOpenCheck,
   Presentation,
   Users,
   ClipboardList,
@@ -32,9 +31,7 @@ import {
   Puzzle,
   Shield,
   HelpCircle,
-  PenTool,
 } from 'lucide-react';
-import { isModePacksEnabled } from '../classroom/mode-pack/flags';
 
 export type NavigationGroupKey = 'teaching' | 'system' | 'extensions' | 'support';
 
@@ -96,14 +93,6 @@ export const BUILTIN_NAV_ITEMS: BuiltinNavItem[] = [
     icon: BookOpen,
     group: 'teaching',
     position: 10,
-  },
-  {
-    id: 'xuean_editor',
-    tab: 'xuean_editor',
-    label: { zh: '学案编辑器', en: 'Xuean Editor' },
-    icon: BookOpenCheck,
-    group: 'teaching',
-    position: 15,
   },
   {
     id: 'live_class',
@@ -195,37 +184,19 @@ export interface ResolvedNavItem {
  * @param lang 界面语言
  */
 export function resolveBuiltinNavigationItems(role: 'teacher' | 'administrator', lang: 'zh' | 'en'): ResolvedNavItem[] {
-  const modePacksOn = isModePacksEnabled();
   return BUILTIN_NAV_ITEMS.filter((item) => !item.administratorOnly || role === 'administrator')
-    .map((item) => {
-      // Mode Pack flag 开：学案平行入口并入统一备课壳（lesson_editor → ModePackPrepShell）
-      if (modePacksOn && item.tab === 'xuean_editor') {
-        return {
-          id: 'lesson_editor',
-          tab: 'lesson_editor',
-          label: lang === 'en' ? 'Lesson Prep' : '备课',
-          labelZh: '备课',
-          labelEn: 'Lesson Prep',
-          icon: PenTool,
-          group: item.group,
-          position: item.position,
-          administratorOnly: item.administratorOnly ?? false,
-          highlight: item.highlight ?? false,
-        };
-      }
-      return {
-        id: item.id,
-        tab: item.tab,
-        label: item.label[lang] ?? item.label.zh,
-        labelZh: item.label.zh,
-        labelEn: item.label.en,
-        icon: item.icon,
-        group: item.group,
-        position: item.position,
-        administratorOnly: item.administratorOnly ?? false,
-        highlight: item.highlight ?? false,
-      };
-    })
+    .map((item) => ({
+      id: item.id,
+      tab: item.tab,
+      label: item.label[lang] ?? item.label.zh,
+      labelZh: item.label.zh,
+      labelEn: item.label.en,
+      icon: item.icon,
+      group: item.group,
+      position: item.position,
+      administratorOnly: item.administratorOnly ?? false,
+      highlight: item.highlight ?? false,
+    }))
     .sort((a, b) => {
       const ga = NAVIGATION_GROUPS[a.group].position;
       const gb = NAVIGATION_GROUPS[b.group].position;

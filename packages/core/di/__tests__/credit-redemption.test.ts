@@ -121,6 +121,29 @@ describe('CreditRedemptionService — 学分兑换扣减事务', () => {
     expect(logs).toBe(1);
   });
 
+  it('幂等键复用到不同奖励：拒绝，不返回另一奖励的回执', () => {
+    grant('stu-3', 'cls-1', 100);
+    const r1 = service.redeem({
+      studentId: 'stu-3',
+      classId: 'cls-1',
+      rewardId: 'free-activity-3',
+      costPoints: 20,
+      idempotencyKey: 'fa3:session-1',
+    });
+    const r2 = service.redeem({
+      studentId: 'stu-3',
+      classId: 'cls-1',
+      rewardId: 'free-activity-4',
+      costPoints: 20,
+      idempotencyKey: 'fa3:session-1',
+    });
+
+    expect(r1.ok).toBe(true);
+    expect(r2.ok).toBe(false);
+    expect(r2.code).toBe('IDEMPOTENCY_KEY_CONFLICT');
+    expect(service.getBalance('stu-3', 'cls-1')).toBe(80);
+  });
+
   it('不同 idempotencyKey 可多次兑换，余额累加扣减', () => {
     grant('stu-4', 'cls-1', 100);
     service.redeem({

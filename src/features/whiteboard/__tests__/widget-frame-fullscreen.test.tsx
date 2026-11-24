@@ -354,7 +354,6 @@ describe('浏览器全屏 · 学生端跟随', () => {
 describe('浏览器全屏 · 集成路径（宿主真实渲染）', () => {
   const CASES = [
     { type: 'plugin', extra: { pluginId: 'ext-demo' }, label: '第三方 widget' },
-    { type: 'html-applet', extra: { title: '互动课件' }, label: '互动课件' },
     { type: 'assignment', extra: { title: '作业' }, label: '作业' },
     { type: 'rollcall', extra: { title: '点名' }, label: '随机点名' },
     { type: 'quiz', extra: { title: '快问快答', options: ['A', 'B'] }, label: '快问快答' },
@@ -412,8 +411,16 @@ describe('浏览器全屏 · 集成路径（宿主真实渲染）', () => {
         elements={[
           {
             id: 'el-1',
-            type: 'html-applet',
-            data: JSON.stringify({ title: '互动课件', x: 20, y: 20, width: 400, height: 300 }),
+            type: 'assignment',
+            data: JSON.stringify({
+              title: '作业',
+              description: '作业内容',
+              assignmentId: 'a-1',
+              x: 20,
+              y: 20,
+              width: 400,
+              height: 300,
+            }),
           },
         ]}
         onElementAdd={dummyAdd}
@@ -432,28 +439,6 @@ describe('浏览器全屏 · 集成路径（宿主真实渲染）', () => {
     const content = host.querySelector('[data-testid="browser-fullscreen-content"]') as HTMLElement;
     expect(content.style.width).toBe('1024px');
     expect(content.style.height).toBe('768px');
-  });
-
-  it('html-applet 也被宿主 WidgetFrame 包裹（与第三方 widget 同一套窗口能力）', async () => {
-    const { container } = render(
-      <InteractiveWhiteboard
-        lessonId="l1"
-        elements={[
-          {
-            id: 'el-1',
-            type: 'html-applet',
-            data: JSON.stringify({ title: '互动课件', x: 20, y: 20, width: 400, height: 300 }),
-          },
-        ]}
-        onElementAdd={dummyAdd}
-        onElementUpdate={dummyUpdate}
-        userRole="teacher"
-        hidePageBar
-      />,
-    );
-    await act(async () => {});
-
-    expect(container.querySelector('[data-widget-frame="true"]')).toBeTruthy();
   });
 });
 
@@ -489,10 +474,7 @@ describe('白板全屏 · 渲染真实组件', () => {
     });
   }
 
-  for (const c of [
-    { type: 'html-applet', data: { title: '互动课件' } },
-    { type: 'assignment', data: { title: '作业', description: '作业内容', assignmentId: 'a-1' } },
-  ]) {
+  for (const c of [{ type: 'assignment', data: { title: '作业', description: '作业内容', assignmentId: 'a-1' } }]) {
     it(`${c.type}：白板全屏渲染真实组件，而非字段预览兜底`, async () => {
       await enterBoardFullscreen(c.type, c.data);
 
@@ -513,7 +495,7 @@ describe('白板全屏 · 渲染真实组件', () => {
   }
 
   it('白板全屏内容被 Stage 包裹（konva 节点离开 Stage 会抛 FiberProvider 错误）', async () => {
-    await enterBoardFullscreen('html-applet', { title: '互动课件' });
+    await enterBoardFullscreen('assignment', { title: '作业', description: '作业内容', assignmentId: 'a-1' });
 
     const overlay = document.querySelector('[data-testid="fullscreen-content"]') as HTMLElement;
     // 关键：renderElement 返回 konva 节点，必须有 <Stage> 提供 FiberProvider 上下文，

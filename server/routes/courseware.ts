@@ -6,6 +6,7 @@ import { injectLmsSdk, setCoursewareDocumentCsp } from './shared.js';
 import { sendSafeError } from '../utils/error-handler.js';
 import { mintCoursewareToken, verifyCoursewareToken } from '../utils/courseware-access.js';
 import { CoursewareService } from '../services/courseware-service.js';
+import { resolveCoursewareHost } from '../services/courseware-host-catalog.js';
 import {
   authorizeClass,
   isAdministrator,
@@ -45,6 +46,12 @@ export function registerCoursewareRoutes(ctx: ServerContext) {
     } catch (e: any) {
       sendSafeError(res, e);
     }
+  });
+
+  // 当前生效的课件宿主（内置 / 插件接管）。前端容器与运维排查共用；
+  // 必须在 `/api/courseware/:id` 之前注册，避免被动态段吞掉。
+  app.get('/api/courseware/host', requireScopedAuth('authenticated'), (_req, res) => {
+    res.json({ ok: true, data: resolveCoursewareHost() });
   });
 
   app.get('/api/courseware', requireScopedAuth('authenticated'), async (req, res) => {

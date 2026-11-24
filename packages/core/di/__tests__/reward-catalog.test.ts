@@ -55,6 +55,16 @@ describe('RewardCatalogService + 目录驱动兑换', () => {
     expect(catalog.getById('free-lunch')?.status).toBe('inactive');
   });
 
+  it('目录字段非法值在入口拒绝：NaN 库存/有效期不会被当成“无限制”', () => {
+    expect(() => catalog.create({ id: 'bad-stock', name: 'x', costPoints: 1, stock: Number.NaN })).toThrow(/stock/);
+    expect(() => catalog.create({ id: 'bad-from', name: 'x', costPoints: 1, availableFrom: Number.NaN })).toThrow(
+      /availableFrom/,
+    );
+    expect(() =>
+      catalog.create({ id: 'bad-range', name: 'x', costPoints: 1, availableFrom: 2, availableUntil: 1 }),
+    ).toThrow(/availableUntil/);
+  });
+
   it('权威定价：忽略客户端自报 costPoints，按目录价格扣减', () => {
     catalog.create({ id: 'reward-a', name: '奖励A', costPoints: 40 });
     grant('stu-1', 'cls-1', 100);

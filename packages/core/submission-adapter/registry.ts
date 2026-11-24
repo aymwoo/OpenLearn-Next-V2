@@ -63,10 +63,12 @@ export class SubmissionAggregator {
     private gradeWriter: GradeWriterPort,
   ) {}
 
-  /** 聚合所有（或指定 mode 的）适配器提交，去重 + 排序 */
+  /** 聚合所有（或指定 mode / adapter 的）适配器提交，去重 + 排序 */
   async list(filter: SubmissionFilter, modeId?: string): Promise<AggregatedSubmissionsResult> {
+    const wantedAdapters = filter.adapterIds && filter.adapterIds.length > 0 ? new Set(filter.adapterIds) : null;
     const all = this.registry
       .list()
+      .filter((a) => !wantedAdapters || wantedAdapters.has(a.descriptor.id))
       .filter(
         (a) =>
           !a.descriptor.modeIds ||
@@ -107,7 +109,15 @@ export class SubmissionAggregator {
     adapterId: string,
     submissionId: string,
     filter: SubmissionFilter,
-    grade: { score: number; feedback?: string | null; overrideProtected?: boolean; reason?: string | null },
+    grade: {
+      score: number;
+      feedback?: string | null;
+      overrideProtected?: boolean;
+      reason?: string | null;
+      /** 操作者 actor（宿主注入），用于 graded_by 与审计历史；缺省保持旧行为。 */
+      actorId?: string | null;
+      actorRole?: string | null;
+    },
   ): Promise<{ ok: boolean; reason?: string; historyId?: string }> {
     const adapter = this.registry.list().find((a) => a.descriptor.id === adapterId);
     if (!adapter || !adapter.toGradeInput) {
@@ -115,19 +125,39 @@ export class SubmissionAggregator {
     }
     const items = await adapter.listSubmissions(filter);
     const sub = items.find((s) => s.id === submissionId);
-    if (!sub) return { ok: false, reason: 'submission-not-found' };
+    // 不能只信适配器自己的过滤：写分是特权操作，命中后必须再按本次授权的
+    // classId/lessonId/studentId 复核归属，避免用 A 班授权改到 B 班提交。
+    if (
+      !sub ||
+      (filter.classId && sub.classId !== filter.classId) ||
+      (filter.lessonId && sub.lessonId !== filter.lessonId) ||
+      (filter.studentId && sub.studentId !== filter.studentId)
+    ) {
+      return { ok: false, reason: 'submission-not-found' };
+    }
     const mapped = adapter.toGradeInput(sub);
     if (!mapped) return { ok: false, reason: 'not-gradeable' };
     // 分数、评语和是否越过手动分保护以教师本次请求为准。适配器只提供作业与学生映射。
-    return this.gradeWriter.applyGradeChange({
+    const result = this.gradeWriter.applyGradeChange({
       assignmentId: mapped.assignmentId,
       studentId: mapped.studentId,
       score: grade.score,
-      status: mapped.status,
+      // 本通道只承接教师显式打分（score 必填且 0..100），落库状态即为 graded。
+      status: 'graded',
       feedback: grade.feedback ?? null,
       source: 'manual',
       reason: grade.reason ?? mapped.reason ?? 'classroom-flow grade',
       overrideProtected: grade.overrideProtected === true,
+      actorId: grade.actorId ?? null,
+      actorRole: grade.actorRole ?? null,
     });
+    if (result.ok && adapter.afterGrade) {
+      try {
+        adapter.afterGrade(sub, { score: grade.score, status: 'graded' });
+      } catch {
+        // 插件侧回写失败不回滚平台成绩册
+      }
+    }
+    return result;
   }
 }

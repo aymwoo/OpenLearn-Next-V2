@@ -47,10 +47,9 @@ export type {
   IUnifiedPluginContext,
   IPluginLifecycleManager,
   IPluginCapabilityGateway,
-  IUnifiedExtensionRegistry,
+  IExtensionCatalog,
   IPluginDistributionManager,
   CapabilityMetadata,
-  ExtensionItemMetadata,
 } from '../core/plugin-host/index.js';
 
 // ⚠️ 7 个宿主内部类：**只以类型形式**对外暴露（3.7.2 起）。
@@ -96,7 +95,7 @@ export type { PluginCapabilityGateway } from '../core/plugin-host/plugin-capabil
  * @deprecated [SDK 3.9.0] 宿主内部实现门面，非插件开发者 API，计划于 SDK 4.0.0 移除。
  * 扩展注册请使用 `ContributionRegistry`（`IContributionRegistryToken`）；内核侧请从 `packages/core/plugin-host/` 导入。
  */
-export type { UnifiedExtensionRegistry } from '../core/plugin-host/unified-extension-registry.js';
+export type { ExtensionCatalog, ExtensionCatalogSources } from '../core/plugin-host/extension-catalog.js';
 export type { PluginDistributionManager } from '../core/plugin-host/plugin-distribution-manager.js';
 
 // ── Configuration Service (V3.2) ────────────────────────────────────────
@@ -141,6 +140,7 @@ export type {
   PostClassWidgetConfig,
   CoursewareViewerToolbarConfig,
   CoursewareViewerOverlayConfig,
+  CoursewareHostConfig,
   PortalTelemetryConfig,
   PortalCourseBadgeConfig,
   PortalTeachingModeConfig,
@@ -227,6 +227,9 @@ export type { Manifest, ManifestV3 } from '../core/esm-loader/manifest-schema.js
 export type { ModePackContribution } from '../core/plugin-host/mode-pack.js';
 export {
   DEFAULT_MODE_PACK_SEGMENT_TYPE,
+  BUILTIN_WHITEBOARD_MODE_PACK_ID,
+  BUILTIN_XUEAN_MODE_PACK_ID,
+  BUILTIN_MODE_PACKS,
   normalizeSegmentType,
   extensionCoversSegmentType,
   modePackCoversSegmentType,
@@ -288,6 +291,7 @@ export {
   ICapabilityRuntimeServiceToken,
   IPlatformServiceRegistryToken,
   IPluginLifecycleManagerToken,
+  IExtensionCatalogToken,
   IPluginDistributionManagerToken,
   ICapabilityRegistryToken,
   IAuthSessionBridgeToken,
@@ -301,7 +305,7 @@ export {
 // 但**零生产 resolve** —— 全仓唯一的提及是本文件顶部的一段注释示例。
 // D-2/D-6 决策：标 `@deprecated` 并移出导出。
 //
-// 影响面已核实：`grep -rlE "IUnifiedExtensionRegistry|IPluginCapabilityGateway|
+// 影响面已核实：`grep -rlE "IPluginCapabilityGateway|
 // IPluginRuntimeComposition" v2_plugins/ assets/` 零命中，三个脚手架模板也都没用到。
 //
 // 内核侧引用不受影响（走 packages/core 相对路径）。若将来接入真实消费者，把它们
@@ -514,6 +518,7 @@ export type {
   ClassroomStageGuard,
   IClassroomLifecycleService,
   QuickActivityDescriptor,
+  IClassroomActivityCatalog,
   IInteractionRuntimeService,
   ClassroomCountdownDescriptor,
   IClassroomCountdownService,
@@ -525,6 +530,7 @@ export type {
 
 export {
   IClassroomLifecycleServiceToken,
+  IClassroomActivityCatalogToken,
   IInteractionRuntimeServiceToken,
   IClassroomCountdownServiceToken,
   IAssessmentGraderRegistryToken,
@@ -571,6 +577,27 @@ export { IClassRosterServiceToken } from '../core/di/interfaces.js';
 // 当前登录用户在 GET /api/lessons/:id 里也能看到的课节。
 export type { ILessonOutlineService, LessonOutline, LessonSegmentTitle } from '../core/di/interfaces.js';
 export { ILessonOutlineServiceToken } from '../core/di/interfaces.js';
+
+// ── P0 第三方插件安全扩展：作业提交 / 学案进度 / 课后报告 / 学生自发消息 ──
+// 前三个是只读替代通道（目标表在 sql-guard 禁读清单里）；最后一个把课堂消息的
+// sender 从 plugin 换成宿主派生的学生 actor，不要求 lesson:write。
+export type {
+  AssignmentSubmissionView,
+  IAssignmentSubmissionService,
+  XueanActivityProgressView,
+  IXueanActivityProgressService,
+  ClassroomReportSessionSummary,
+  LessonReportSummary,
+  ILessonReportService,
+  ClassroomSelfMessageInput,
+  IClassroomSelfMessageService,
+} from '../core/di/interfaces.js';
+export {
+  IAssignmentSubmissionServiceToken,
+  IXueanActivityProgressServiceToken,
+  ILessonReportServiceToken,
+  IClassroomSelfMessageServiceToken,
+} from '../core/di/interfaces.js';
 
 // ── 文件存储三插槽扩展（LayoutPolicy / StorageBackend / FileProcessor） ──
 export type {

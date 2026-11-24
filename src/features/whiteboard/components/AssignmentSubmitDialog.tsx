@@ -21,11 +21,11 @@ import { AssignmentFilePreview } from '../../../components/AssignmentFilePreview
  * 学生端「提交作业」弹窗 —— 课程编辑器里「课堂作业任务」对象的真实落地入口。
  *
  * 数据链路（与作业中心 Assignment Hub 一致）：
- *   GET    /api/assignments/:id                    读取作业要求、我的提交版本与成绩
- *   GET    /api/assignments/:id/files              我的附件（未随提交归档的才可重新提交）
- *   POST   /api/assignments/:id/files              原始二进制体上传（X-File-Name 需 URL 编码）
- *   DELETE /api/assignments/:id/files/:fileId      删除未归档附件
- *   POST   /api/assignments/:id/submit             以 fileIds + 文本 + 链接提交不可变版本
+ *   GET    /api/learning-surface-assignments/:id                    读取作业要求、我的提交版本与成绩
+ *   GET    /api/learning-surface-assignments/:id/files              我的附件（未随提交归档的才可重新提交）
+ *   POST   /api/learning-surface-assignments/:id/files              原始二进制体上传（X-File-Name 需 URL 编码）
+ *   DELETE /api/learning-surface-assignments/:id/files/:fileId      删除未归档附件
+ *   POST   /api/learning-surface-assignments/:id/submit             以 fileIds + 文本 + 链接提交不可变版本
  *
  * 归属由服务端按会话确定：普通学生一律写到自己名下，教师代交需显式指定学生。
  */
@@ -151,8 +151,8 @@ export function AssignmentSubmitDialog({ assignmentId, onClose, onToast, lang = 
       setLoadError(null);
       try {
         const [detailRes, filesRes] = await Promise.all([
-          fetch(`/api/assignments/${encodeURIComponent(assignmentId)}`),
-          fetch(`/api/assignments/${encodeURIComponent(assignmentId)}/files`),
+          fetch(`/api/learning-surface-assignments/${encodeURIComponent(assignmentId)}`),
+          fetch(`/api/learning-surface-assignments/${encodeURIComponent(assignmentId)}/files`),
         ]);
         const detailData = await detailRes.json().catch(() => null);
         if (!detailRes.ok || detailData?.success === false) {
@@ -202,7 +202,7 @@ export function AssignmentSubmitDialog({ assignmentId, onClose, onToast, lang = 
         }
         const xhr = new XMLHttpRequest();
         xhrRef.current.set(key, xhr);
-        xhr.open('POST', `/api/assignments/${encodeURIComponent(assignmentId)}/files`, true);
+        xhr.open('POST', `/api/learning-surface-assignments/${encodeURIComponent(assignmentId)}/files`, true);
         // 中文文件名不能直接进 HTTP 头，服务端会 decodeURIComponent
         xhr.setRequestHeader('X-File-Name', encodeURIComponent(file.name));
         xhr.setRequestHeader('Content-Type', 'application/octet-stream');
@@ -303,9 +303,12 @@ export function AssignmentSubmitDialog({ assignmentId, onClose, onToast, lang = 
   const removeRemoteFile = useCallback(
     async (fileId: string) => {
       try {
-        const res = await fetch(`/api/assignments/${encodeURIComponent(assignmentId)}/files/${fileId}`, {
-          method: 'DELETE',
-        });
+        const res = await fetch(
+          `/api/learning-surface-assignments/${encodeURIComponent(assignmentId)}/files/${fileId}`,
+          {
+            method: 'DELETE',
+          },
+        );
         const data = await res.json().catch(() => null);
         if (!res.ok || data?.success === false) {
           notify(zh ? '删除失败' : 'Delete failed', data?.error || `HTTP ${res.status}`, 'error');
@@ -341,7 +344,7 @@ export function AssignmentSubmitDialog({ assignmentId, onClose, onToast, lang = 
     setSubmitting(true);
     setSubmitError(null);
     try {
-      const res = await fetch(`/api/assignments/${encodeURIComponent(assignmentId)}/submit`, {
+      const res = await fetch(`/api/learning-surface-assignments/${encodeURIComponent(assignmentId)}/submit`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -765,7 +768,7 @@ export function AssignmentSubmitDialog({ assignmentId, onClose, onToast, lang = 
         </div>
       </div>
 
-      {/* 附件预览：走带鉴权的 /api/assignments/:id/files/:fileId，不经过任何静态目录 */}
+      {/* 附件预览：走带鉴权的 /api/learning-surface-assignments/:id/files/:fileId，不经过任何静态目录 */}
       {previewFile && (
         <AssignmentFilePreview
           assignmentId={assignmentId}

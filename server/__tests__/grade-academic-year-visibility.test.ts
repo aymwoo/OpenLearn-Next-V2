@@ -146,7 +146,9 @@ describe('课件成绩 — 学年可见性、稳定关联与可观测性', () =>
     const otherYear = grading
       .computeSemesterGrades(classId, semester, '2024-2025')
       .students.find((s) => s.studentId === studentId)!;
-    expect(otherYear.assignmentScore).toBe(0);
+    // 其他学年没有任何已发布作业 ⇒ 按「无作业」记 100，88 分不会被带入；
+    // 但也不能因为别的学年有作业而把该学年误判为「缺交 0 分」。
+    expect(otherYear.assignmentScore).toBe(100);
 
     // 可观测性：成功录入留下一条可审计的结构化日志
     const log = infoSpy.mock.calls.find(([tag]) => tag === '[courseware.promote] recorded');

@@ -224,11 +224,11 @@ WhiteboardEventSlot
 > `hello-world`（`HelloWorldWrapper`）为示例组件，无对应的全屏与属性编辑器注册。
 > 全屏列的「宿主注入真实组件」指 `FullscreenOverlay` 的 `renderContent` 回调 —— 见 `FullscreenRendererRegistry.tsx` 的 `getEffectiveRenderer`：只有**插件注册**（带 `pluginId`）或显式 `registerHostBuiltin`（当前仅 `quiz`）的渲染器才从注册表生效，其余走宿主注入的真实组件路径。
 
-## iframe postMessage 监听（`HtmlAppletFrame`）
+## iframe postMessage 监听（`CoursewareHost`）
 
 **问题**：之前白板内 `html-applet` 组件 iframe 内调 `LMS.submit` / `OpenLearn.submit` 时，**白板容器没有监听 message 事件**，导致成绩上报静默丢失。
 
-**修复**（`src/features/whiteboard/components/HtmlAppletFrame.tsx`）：组件挂载后注册 `window.addEventListener('message')`，仅信任本组件的 iframe（通过 `event.source === iframe.contentWindow` 过滤）。识别以下协议：
+**修复**（`src/features/courseware/CoursewareHost.tsx`）：组件挂载后注册 `window.addEventListener('message')`，仅信任本组件的 iframe（通过 `event.source === iframe.contentWindow` 过滤）。识别以下协议：
 
 | `event.data.type`                             | 归一化事件                                              |
 | --------------------------------------------- | ------------------------------------------------------- |

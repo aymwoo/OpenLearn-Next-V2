@@ -305,7 +305,7 @@ export function ClassAssignmentsPanel(props: ClassAssignmentsPanelProps) {
                             const s = cStudents[Math.floor(Math.random() * cStudents.length)];
                             const subText = window.prompt(`Simulate student '${s.name}' submitting:`);
                             if (subText) {
-                              const res = await fetch(`/api/assignments/${ast.id}/submissions`, {
+                              const res = await fetch(`/api/learning-surface-assignments/${ast.id}/submissions`, {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify({ studentId: s.id, content: subText }),
@@ -460,7 +460,7 @@ export function ClassAssignmentsPanel(props: ClassAssignmentsPanelProps) {
                           setIsGrading((p) => ({ ...p, [`${sub.assignment_id}-${sub.student_id}`]: true }));
                           try {
                             const res = await fetch(
-                              `/api/assignments/${sub.assignment_id}/submissions/${sub.student_id}/grade`,
+                              `/api/learning-surface-assignments/${sub.assignment_id}/submissions/${sub.student_id}/grade`,
                               { method: 'POST' },
                             );
                             if (res.ok) await fetchClassDashboard(cls.id);

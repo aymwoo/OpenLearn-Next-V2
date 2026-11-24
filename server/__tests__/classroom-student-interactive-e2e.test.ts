@@ -20,6 +20,7 @@ import { io as ioClient, type Socket as ClientSocket } from 'socket.io-client';
 import { registerClassroomRoutes } from '../routes/classroom.js';
 import { registerLessonsRoutes } from '../routes/lessons.js';
 import { registerAssignmentsRoutes } from '../routes/assignments.js';
+import { registerLearningSurfaceAssignmentRoutes } from '../routes/learning-surface-assignments.js';
 import { ClassroomRuntimeService } from '../services/classroom-runtime-service.js';
 import { setupRealtimeBridge } from '../realtime-bridge.js';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
@@ -95,6 +96,7 @@ describe('课堂学生互动与教师采集全链路自动化测试 (End-to-End 
     registerClassroomRoutes(ctx, classroomService);
     registerLessonsRoutes(ctx);
     registerAssignmentsRoutes(ctx);
+    registerLearningSurfaceAssignmentRoutes(ctx);
 
     setupRealtimeBridge({
       eventBus: kernelContainer.eventBus,
@@ -451,14 +453,14 @@ describe('课堂学生互动与教师采集全链路自动化测试 (End-to-End 
   describe('随堂作业（Assignment）提交与教师批改记录', () => {
     it('学生提交作业内容，越权提交他人被拒绝', async () => {
       // 学生 2 试图冒充学生 1 提交作业应被 403 拒绝
-      const fakeRes = await post(`/api/assignments/${assignmentId}/submissions`, student2Token, {
+      const fakeRes = await post(`/api/learning-surface-assignments/${assignmentId}/submissions`, student2Token, {
         studentId: student1Id,
         content: '恶意冒充他人提交',
       });
       expect(fakeRes.status).toBe(403);
 
       // 学生 1 提交自己的作业
-      const sub1Res = await post(`/api/assignments/${assignmentId}/submissions`, student1Token, {
+      const sub1Res = await post(`/api/learning-surface-assignments/${assignmentId}/submissions`, student1Token, {
         studentId: student1Id,
         content: JSON.stringify({ ans: 'Ek = h*nu - W0', steps: ['计算截止频率', '带入逸出功'] }),
       });
@@ -466,7 +468,7 @@ describe('课堂学生互动与教师采集全链路自动化测试 (End-to-End 
       expect((await sub1Res.json()).success).toBe(true);
 
       // 学生 2 提交自己的作业
-      const sub2Res = await post(`/api/assignments/${assignmentId}/submissions`, student2Token, {
+      const sub2Res = await post(`/api/learning-surface-assignments/${assignmentId}/submissions`, student2Token, {
         studentId: student2Id,
         content: JSON.stringify({ ans: 'Ek = 1/2 m v^2' }),
       });
@@ -475,7 +477,7 @@ describe('课堂学生互动与教师采集全链路自动化测试 (End-to-End 
 
     it('教师端拉取全部提交，批改并记录成绩与评语', async () => {
       // 教师端获取作业提交列表
-      const listRes = await get(`/api/assignments/${assignmentId}/submissions`, teacherToken);
+      const listRes = await get(`/api/learning-surface-assignments/${assignmentId}/submissions`, teacherToken);
       expect(listRes.status).toBe(200);
       const list: any[] = await listRes.json();
       expect(list.length).toBeGreaterThanOrEqual(2);

@@ -64,7 +64,7 @@
     "clean": "rm -rf dist server.js .vite-cache",
     "lint": "tsc --noEmit",
     "lint:strict": "tsc --noEmit -p tsconfig.strict.json",
-    "lint:eslint": "eslint . --ext .ts,.tsx --ignore-pattern dist --ignore-pattern node_modules",
+    "lint:eslint": "eslint . --ext .ts,.tsx --ignore-pattern dist --ignore-pattern node_modules --ignore-pattern .worktrees",
     "lint:encoding": "node scripts/check-source-encoding.mjs",
     "lint:i18n": "node scripts/check-i18n.mjs",
     "format": "prettier --write .",

@@ -32,11 +32,8 @@ export {
   type IPluginCapabilityGateway,
   type CapabilityMetadata,
 } from './plugin-capability-gateway.js';
-export {
-  UnifiedExtensionRegistry,
-  type IUnifiedExtensionRegistry,
-  type ExtensionItemMetadata,
-} from './unified-extension-registry.js';
+export { ExtensionCatalog, type ExtensionCatalogSources } from './extension-catalog.js';
+export type { IExtensionCatalog } from '../activity-contract/index.js';
 export {
   PluginDistributionManager,
   LocalRepositoryAdapter,

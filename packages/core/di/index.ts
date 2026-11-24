@@ -79,6 +79,14 @@ export type {
   MessageEventPublisher,
   MessageSideEffectEnqueuer,
 } from './classroom-message-service.js';
+export { AssignmentSubmissionService, AssignmentSubmissionAccessError } from './assignment-submission-service.js';
+export { XueanActivityProgressService, XueanActivityProgressAccessError } from './xuean-activity-progress-service.js';
+export { LessonReportService, LessonReportAccessError } from './lesson-report-service.js';
+export {
+  ClassroomSelfMessageService,
+  ClassroomSelfMessageAccessError,
+  ClassroomSelfMessageInputError,
+} from './classroom-self-message-service.js';
 export { DbSideEffectEnqueuer } from './pending-side-effect-enqueuer.js';
 export { CreditAwardService, BUILTIN_AWARD_SOURCES } from './credit-award-service.js';
 export type {

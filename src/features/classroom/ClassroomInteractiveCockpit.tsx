@@ -32,6 +32,7 @@ import { isTerminalResourceStatus } from '../../utils/polling-guard';
 import { ClassroomAttributionModal } from './ClassroomAttributionModal';
 import { ClassroomLeaderboardModal } from './ClassroomLeaderboardModal';
 import { getOptionalSocket } from '../../services/socket-service';
+import { useClassroomToolbarVisibility } from './classroomToolbarVisibility';
 
 export interface ClassroomInteractiveCockpitProps {
   lessonId: string | null;
@@ -42,8 +43,11 @@ export interface ClassroomInteractiveCockpitProps {
   currentStage?: string;
   onStageChange?: (stage: string) => void;
   students?: any[];
-  /** 白板课：阶段和互动按钮收进「课堂工具」，条上只留当前阶段。 */
+  /** 白板课：阶段和互动按钮收进「课堂工具」，默认隐藏整条，由顶栏「课堂工具」按钮控制。 */
   compact?: boolean;
+  /** 受控展开状态（顶栏按钮与面板共享）；不传时组件内部维护。 */
+  toolsOpen?: boolean;
+  onToolsOpenChange?: (open: boolean) => void;
 }
 
 /** 课程预设投票题数据结构 */
@@ -111,6 +115,8 @@ export function ClassroomInteractiveCockpit({
   onStageChange,
   students = [],
   compact = false,
+  toolsOpen: controlledToolsOpen,
+  onToolsOpenChange,
 }: ClassroomInteractiveCockpitProps) {
   const [internalStage, setInternalStage] = useState<string>('IN_CLASS_TEACHING');
   const currentStage = propStage !== undefined ? propStage : internalStage;
@@ -121,7 +127,9 @@ export function ClassroomInteractiveCockpit({
   };
 
   const [isStageModalOpen, setIsStageModalOpen] = useState(false);
-  const [toolsOpen, setToolsOpen] = useState(false);
+  const [internalToolsOpen, setInternalToolsOpen] = useState(false);
+  const toolsOpen = controlledToolsOpen !== undefined ? controlledToolsOpen : internalToolsOpen;
+  const { isEnabled } = useClassroomToolbarVisibility();
   // 大屏展台走独立窗口；fallbackOpen 仅在浏览器拦截 window.open 时启用
   const {
     fallbackOpen: stageFallbackOpen,
@@ -525,48 +533,11 @@ export function ClassroomInteractiveCockpit({
   return (
     <>
       <ExtensionPointRenderer slot="classroom.alert.banner" slotProps={{ classId, lessonId, currentStage }} />
-      <div id="classroom-interactive-cockpit" className="bg-surface border-b border-border/80">
-        {compact ? (
-          <div className="px-4 py-2 flex items-center justify-between gap-3">
-            <p className="text-sm font-medium text-main" data-testid="teacher-current-stage">
-              {lang === 'zh'
-                ? stages.find((st) => st.id === currentStage)?.labelZh
-                : stages.find((st) => st.id === currentStage)?.labelEn}
-            </p>
-            <div className="flex items-center gap-2">
-              {activePoll && activePoll.status === 'ACTIVE' ? (
-                <button
-                  type="button"
-                  onClick={handleClosePoll}
-                  className="px-3 py-1.5 bg-amber-700 text-white font-bold rounded-lg cursor-pointer"
-                >
-                  {lang === 'zh'
-                    ? `结束投票 (${activePoll.totalVotes || 0}人)`
-                    : `Close Poll (${activePoll.totalVotes || 0})`}
-                </button>
-              ) : null}
-              {activeBuzzer ? (
-                <button
-                  type="button"
-                  onClick={handleResetBuzzer}
-                  className="px-3 py-1.5 bg-rose-600 text-white font-bold rounded-lg cursor-pointer"
-                >
-                  {lang === 'zh' ? '重置抢答' : 'Reset Buzzer'}
-                </button>
-              ) : null}
-              <button
-                type="button"
-                data-testid="teacher-whiteboard-tools"
-                aria-expanded={toolsOpen}
-                aria-controls="teacher-whiteboard-tools-panel"
-                onClick={() => setToolsOpen((open) => !open)}
-                className="rounded-full px-3 py-1.5 text-sm font-medium cursor-pointer bg-white text-gray-800 border border-gray-200"
-              >
-                {lang === 'zh' ? '课堂工具' : 'Class tools'}
-              </button>
-            </div>
-          </div>
-        ) : null}
+      {/* 白板课不再单独占一行：整条面板由顶栏「课堂工具」按钮控制，收起时完全隐藏。 */}
+      <div
+        id="classroom-interactive-cockpit"
+        className={compact && !toolsOpen ? 'hidden' : 'bg-surface border-b border-border/80'}
+      >
         <div
           id="teacher-whiteboard-tools-panel"
           data-testid="teacher-whiteboard-tools-panel"
@@ -575,144 +546,156 @@ export function ClassroomInteractiveCockpit({
           className="px-4 py-2.5 flex flex-wrap items-center justify-between gap-3 select-none text-xs transition-colors"
         >
           {/* 阶段控制导航 (Stepper) */}
-          <div
-            data-testid="classroom-stage-stepper"
-            className="flex items-center gap-1.5 bg-surface-secondary/70 p-1 rounded-xl border border-border/60 shadow-3xs"
-          >
-            {stages.map((st, idx) => {
-              const isActive = currentStage === st.id;
-              const canTransition = isActive || isStageTransitionAllowed(currentStage, st.id);
-              const blockReason = getStageTransitionBlockReason(currentStage, st.id, lang as 'zh' | 'en');
-              const tooltip = isActive
-                ? lang === 'zh'
-                  ? '当前处于此阶段'
-                  : 'Current stage'
-                : canTransition
+          {isEnabled('stage_stepper') && (
+            <div
+              data-testid="classroom-stage-stepper"
+              className="flex items-center gap-1.5 bg-surface-secondary/70 p-1 rounded-xl border border-border/60 shadow-3xs"
+            >
+              {stages.map((st, idx) => {
+                const isActive = currentStage === st.id;
+                const canTransition = isActive || isStageTransitionAllowed(currentStage, st.id);
+                const blockReason = getStageTransitionBlockReason(currentStage, st.id, lang as 'zh' | 'en');
+                const tooltip = isActive
                   ? lang === 'zh'
-                    ? `点击切换至 ${st.labelZh}`
-                    : `Switch to ${st.labelEn}`
-                  : blockReason || (lang === 'zh' ? '当前环节不可直接切换' : 'Not available directly');
+                    ? '当前处于此阶段'
+                    : 'Current stage'
+                  : canTransition
+                    ? lang === 'zh'
+                      ? `点击切换至 ${st.labelZh}`
+                      : `Switch to ${st.labelEn}`
+                    : blockReason || (lang === 'zh' ? '当前环节不可直接切换' : 'Not available directly');
 
-              return (
-                <button
-                  key={st.id}
-                  disabled={!canTransition}
-                  aria-disabled={!canTransition}
-                  title={tooltip}
-                  onClick={() => handleStageTransition(st.id)}
-                  className={`px-3 py-1.5 rounded-lg font-bold flex items-center gap-1.5 transition-all ${
-                    isActive
-                      ? 'bg-primary-solid text-white shadow-sm ring-2 ring-primary-theme/20 cursor-default'
-                      : canTransition
-                        ? 'text-muted hover:text-foreground hover:bg-surface cursor-pointer'
-                        : 'opacity-40 text-muted/60 cursor-not-allowed hover:bg-transparent'
-                  }`}
-                >
-                  <span
-                    className={`w-4 h-4 rounded-full flex items-center justify-center text-[11px] font-bold ${
-                      isActive ? 'bg-white/20' : canTransition ? 'bg-foreground/10' : 'bg-muted/20'
+                return (
+                  <button
+                    key={st.id}
+                    disabled={!canTransition}
+                    aria-disabled={!canTransition}
+                    title={tooltip}
+                    onClick={() => handleStageTransition(st.id)}
+                    className={`px-3 py-1.5 rounded-lg font-bold flex items-center gap-1.5 transition-all ${
+                      isActive
+                        ? 'bg-primary-solid text-white shadow-sm ring-2 ring-primary-theme/20 cursor-default'
+                        : canTransition
+                          ? 'text-muted hover:text-foreground hover:bg-surface cursor-pointer'
+                          : 'opacity-40 text-muted/60 cursor-not-allowed hover:bg-transparent'
                     }`}
                   >
-                    {idx + 1}
-                  </span>
-                  <span>{lang === 'zh' ? st.labelZh : st.labelEn}</span>
-                </button>
-              );
-            })}
-          </div>
+                    <span
+                      className={`w-4 h-4 rounded-full flex items-center justify-center text-[11px] font-bold ${
+                        isActive ? 'bg-white/20' : canTransition ? 'bg-foreground/10' : 'bg-muted/20'
+                      }`}
+                    >
+                      {idx + 1}
+                    </span>
+                    <span>{lang === 'zh' ? st.labelZh : st.labelEn}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
 
           {/* 中部快捷互动栏 */}
           <div className="flex items-center gap-2">
             {/* 口播单选投票 */}
-            {activePoll && activePoll.status === 'ACTIVE' ? (
-              compact ? null : (
+            {isEnabled('quick_poll') &&
+              (activePoll && activePoll.status === 'ACTIVE' ? (
+                compact ? null : (
+                  <button
+                    onClick={handleClosePoll}
+                    className="px-3 py-1.5 bg-amber-700 text-white font-bold rounded-lg hover:bg-amber-800 transition-colors flex items-center gap-1.5 shadow-3xs cursor-pointer animate-pulse"
+                  >
+                    <CheckCircle2 size={13} />
+                    <span>
+                      {lang === 'zh'
+                        ? `结束投票 (${activePoll.totalVotes || 0}人)`
+                        : `Close Poll (${activePoll.totalVotes || 0})`}
+                    </span>
+                  </button>
+                )
+              ) : (
                 <button
-                  onClick={handleClosePoll}
-                  className="px-3 py-1.5 bg-amber-700 text-white font-bold rounded-lg hover:bg-amber-800 transition-colors flex items-center gap-1.5 shadow-3xs cursor-pointer animate-pulse"
+                  onClick={() => setIsPollDialogOpen(true)}
+                  className="px-3 py-1.5 bg-surface-secondary hover:bg-surface border border-border/80 text-foreground font-semibold rounded-lg transition-colors flex items-center gap-1.5 shadow-3xs cursor-pointer"
                 >
-                  <CheckCircle2 size={13} />
-                  <span>
-                    {lang === 'zh'
-                      ? `结束投票 (${activePoll.totalVotes || 0}人)`
-                      : `Close Poll (${activePoll.totalVotes || 0})`}
-                  </span>
+                  <Sparkles size={13} className="text-amber-700 dark:text-amber-400" />
+                  <span>{lang === 'zh' ? '极速投票' : 'Quick Poll'}</span>
                 </button>
-              )
-            ) : (
-              <button
-                onClick={() => setIsPollDialogOpen(true)}
-                className="px-3 py-1.5 bg-surface-secondary hover:bg-surface border border-border/80 text-foreground font-semibold rounded-lg transition-colors flex items-center gap-1.5 shadow-3xs cursor-pointer"
-              >
-                <Sparkles size={13} className="text-amber-700 dark:text-amber-400" />
-                <span>{lang === 'zh' ? '极速投票' : 'Quick Poll'}</span>
-              </button>
-            )}
+              ))}
 
             {/* 毫秒抢答器 */}
-            {activeBuzzer ? (
-              compact ? null : (
+            {isEnabled('buzzer') &&
+              (activeBuzzer ? (
+                compact ? null : (
+                  <button
+                    onClick={handleResetBuzzer}
+                    className="px-3 py-1.5 bg-rose-600 text-white font-bold rounded-lg hover:bg-rose-700 transition-colors flex items-center gap-1.5 shadow-3xs cursor-pointer"
+                  >
+                    <RotateCcw size={13} />
+                    <span>{lang === 'zh' ? '重置抢答' : 'Reset Buzzer'}</span>
+                  </button>
+                )
+              ) : (
                 <button
-                  onClick={handleResetBuzzer}
-                  className="px-3 py-1.5 bg-rose-600 text-white font-bold rounded-lg hover:bg-rose-700 transition-colors flex items-center gap-1.5 shadow-3xs cursor-pointer"
+                  onClick={handleStartBuzzer}
+                  className="px-3 py-1.5 bg-surface-secondary hover:bg-surface border border-border/80 text-foreground font-semibold rounded-lg transition-colors flex items-center gap-1.5 shadow-3xs cursor-pointer"
                 >
-                  <RotateCcw size={13} />
-                  <span>{lang === 'zh' ? '重置抢答' : 'Reset Buzzer'}</span>
+                  <Bell size={13} className="text-rose-700 dark:text-rose-400" />
+                  <span>{lang === 'zh' ? '发起抢答' : 'Start Buzzer'}</span>
                 </button>
-              )
-            ) : (
-              <button
-                onClick={handleStartBuzzer}
-                className="px-3 py-1.5 bg-surface-secondary hover:bg-surface border border-border/80 text-foreground font-semibold rounded-lg transition-colors flex items-center gap-1.5 shadow-3xs cursor-pointer"
-              >
-                <Bell size={13} className="text-rose-700 dark:text-rose-400" />
-                <span>{lang === 'zh' ? '发起抢答' : 'Start Buzzer'}</span>
-              </button>
-            )}
+              ))}
 
             {/* 结课通票快捷按钮 */}
-            <button
-              onClick={() => handleStageTransition('WRAP_UP_EXIT_TICKET')}
-              className="px-3 py-1.5 bg-surface-secondary hover:bg-surface border border-border/80 text-foreground font-semibold rounded-lg transition-colors flex items-center gap-1.5 shadow-3xs cursor-pointer"
-              title="发起 60 秒下课通票"
-            >
-              <CheckCircle2 size={13} className="text-indigo-500" />
-              <span>{lang === 'zh' ? '60s 通票' : 'Exit Ticket'}</span>
-            </button>
+            {isEnabled('exit_ticket') && (
+              <button
+                onClick={() => handleStageTransition('WRAP_UP_EXIT_TICKET')}
+                className="px-3 py-1.5 bg-surface-secondary hover:bg-surface border border-border/80 text-foreground font-semibold rounded-lg transition-colors flex items-center gap-1.5 shadow-3xs cursor-pointer"
+                title="发起 60 秒下课通票"
+              >
+                <CheckCircle2 size={13} className="text-indigo-500" />
+                <span>{lang === 'zh' ? '60s 通票' : 'Exit Ticket'}</span>
+              </button>
+            )}
 
             {/* 大屏展台：主路径是「新开独立窗口」投到副屏/投影，
             弹窗被拦截时降级为同页模态框（见 useStageDisplayWindow） */}
-            <button
-              onClick={handleOpenStageDisplay}
-              className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/40 dark:hover:bg-blue-900/50 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 font-bold rounded-lg transition-colors flex items-center gap-1.5 shadow-3xs cursor-pointer"
-              title={
-                lang === 'zh'
-                  ? '新开窗口投放大屏展台到副屏/投影，授课界面留在当前窗口'
-                  : 'Open the stage display in a new window for a second screen'
-              }
-            >
-              <MonitorPlay size={13} className="text-blue-500" />
-              <span>{lang === 'zh' ? '打开大屏展台' : 'Stage Display'}</span>
-            </button>
+            {isEnabled('stage_display') && (
+              <button
+                onClick={handleOpenStageDisplay}
+                className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/40 dark:hover:bg-blue-900/50 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 font-bold rounded-lg transition-colors flex items-center gap-1.5 shadow-3xs cursor-pointer"
+                title={
+                  lang === 'zh'
+                    ? '新开窗口投放大屏展台到副屏/投影，授课界面留在当前窗口'
+                    : 'Open the stage display in a new window for a second screen'
+                }
+              >
+                <MonitorPlay size={13} className="text-blue-500" />
+                <span>{lang === 'zh' ? '打开大屏展台' : 'Stage Display'}</span>
+              </button>
+            )}
 
             {/* 随机抽问与归因加分 (Stitch 88b094e6) */}
-            <button
-              onClick={() => setIsAttributionModalOpen(true)}
-              className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/40 dark:hover:bg-indigo-900/50 border border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 font-bold rounded-lg transition-colors flex items-center gap-1.5 shadow-3xs cursor-pointer"
-              title={lang === 'zh' ? '随机抽问与归因表现激励' : 'Random Pick & Attribution Points'}
-            >
-              <Dices size={13} className="text-indigo-500" />
-              <span>{lang === 'zh' ? '随机抽问' : 'Roll Call'}</span>
-            </button>
+            {isEnabled('roll_call') && (
+              <button
+                onClick={() => setIsAttributionModalOpen(true)}
+                className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/40 dark:hover:bg-indigo-900/50 border border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 font-bold rounded-lg transition-colors flex items-center gap-1.5 shadow-3xs cursor-pointer"
+                title={lang === 'zh' ? '随机抽问与归因表现激励' : 'Random Pick & Attribution Points'}
+              >
+                <Dices size={13} className="text-indigo-500" />
+                <span>{lang === 'zh' ? '随机抽问' : 'Roll Call'}</span>
+              </button>
+            )}
 
             {/* 班级积分榜 (Stitch 00e4f919) */}
-            <button
-              onClick={() => setIsLeaderboardModalOpen(true)}
-              className="px-3 py-1.5 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/40 dark:hover:bg-amber-900/50 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300 font-bold rounded-lg transition-colors flex items-center gap-1.5 shadow-3xs cursor-pointer"
-              title={lang === 'zh' ? '全班积分榜与小组联赛' : 'Class Points & Team Leaderboard'}
-            >
-              <Trophy size={13} className="text-amber-700 dark:text-amber-400" />
-              <span>{lang === 'zh' ? '积分榜' : 'Leaderboard'}</span>
-            </button>
+            {isEnabled('leaderboard') && (
+              <button
+                onClick={() => setIsLeaderboardModalOpen(true)}
+                className="px-3 py-1.5 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/40 dark:hover:bg-amber-900/50 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300 font-bold rounded-lg transition-colors flex items-center gap-1.5 shadow-3xs cursor-pointer"
+                title={lang === 'zh' ? '全班积分榜与小组联赛' : 'Class Points & Team Leaderboard'}
+              >
+                <Trophy size={13} className="text-amber-700 dark:text-amber-400" />
+                <span>{lang === 'zh' ? '积分榜' : 'Leaderboard'}</span>
+              </button>
+            )}
 
             {/* 扩展卡槽：第三方插件注册自定义快捷互动 */}
             <ExtensionPointRenderer
@@ -763,47 +746,49 @@ export function ClassroomInteractiveCockpit({
               }}
             />
 
-            <button
-              onClick={() => setShowPacingDashboard(true)}
-              className="flex items-center gap-1.5 px-2 py-1 rounded-xl hover:bg-surface-secondary transition-colors cursor-pointer group"
-              title={lang === 'zh' ? '打开课堂反馈情绪仪表盘' : 'Open feedback dashboard'}
-            >
-              <div className="flex items-center gap-1 text-[11px] font-semibold text-muted group-hover:text-main">
-                <TrendingUp size={12} className="text-primary-ink" />
-                <span>{lang === 'zh' ? '节奏晴雨表:' : 'Barometer:'}</span>
-                {activeSegmentId && segmentTitles[activeSegmentId] && (
-                  <span className="text-xs text-primary-ink font-medium truncate max-w-[100px]">
-                    [{segmentTitles[activeSegmentId]}]
+            {isEnabled('pacing_barometer') && (
+              <button
+                onClick={() => setShowPacingDashboard(true)}
+                className="flex items-center gap-1.5 px-2 py-1 rounded-xl hover:bg-surface-secondary transition-colors cursor-pointer group"
+                title={lang === 'zh' ? '打开课堂反馈情绪仪表盘' : 'Open feedback dashboard'}
+              >
+                <div className="flex items-center gap-1 text-[11px] font-semibold text-muted group-hover:text-main">
+                  <TrendingUp size={12} className="text-primary-ink" />
+                  <span>{lang === 'zh' ? '节奏晴雨表:' : 'Barometer:'}</span>
+                  {activeSegmentId && segmentTitles[activeSegmentId] && (
+                    <span className="text-xs text-primary-ink font-medium truncate max-w-[100px]">
+                      [{segmentTitles[activeSegmentId]}]
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span
+                    className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 font-bold text-[11px]"
+                    title="理解 / 节奏适宜"
+                  >
+                    💡 {pacingSignals.CLEAR || 0}
                   </span>
-                )}
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span
-                  className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 font-bold text-[11px]"
-                  title="理解 / 节奏适宜"
-                >
-                  💡 {pacingSignals.CLEAR || 0}
-                </span>
-                <span
-                  className="px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-700 dark:text-amber-400 font-bold text-[11px]"
-                  title="困惑"
-                >
-                  ❓ {pacingSignals.CONFUSED || 0}
-                </span>
-                <span
-                  className="px-2 py-0.5 rounded-full bg-rose-500/10 text-rose-700 dark:text-rose-400 font-bold text-[11px]"
-                  title="慢一点（讲太快）"
-                >
-                  🐇 {pacingSignals.TOO_FAST || 0}
-                </span>
-                <span
-                  className="px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-bold text-[11px]"
-                  title="快一点（讲太慢）"
-                >
-                  🐢 {pacingSignals.SLOW || 0}
-                </span>
-              </div>
-            </button>
+                  <span
+                    className="px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-700 dark:text-amber-400 font-bold text-[11px]"
+                    title="困惑"
+                  >
+                    ❓ {pacingSignals.CONFUSED || 0}
+                  </span>
+                  <span
+                    className="px-2 py-0.5 rounded-full bg-rose-500/10 text-rose-700 dark:text-rose-400 font-bold text-[11px]"
+                    title="慢一点（讲太快）"
+                  >
+                    🐇 {pacingSignals.TOO_FAST || 0}
+                  </span>
+                  <span
+                    className="px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-bold text-[11px]"
+                    title="快一点（讲太慢）"
+                  >
+                    🐢 {pacingSignals.SLOW || 0}
+                  </span>
+                </div>
+              </button>
+            )}
           </div>
         </div>
 

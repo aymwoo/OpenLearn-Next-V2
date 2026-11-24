@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { Suspense, lazy, useState } from 'react';
 import { copyToClipboard } from '../../utils/clipboard';
 import {
   BookOpen,
@@ -25,7 +25,20 @@ import { useAppStore } from '../../store/appStore';
 import { useAppData } from '../../context/AppDataContext';
 import { ExtensionPointRenderer } from '../../plugin-host/extension-point-renderer';
 import { extractCourseSummary } from '../../utils/courseSummary';
-import { resolveCourseDeliveryMode } from '../../../packages/core/plugin-host/course-delivery-mode';
+import {
+  resolveLessonDeliveryMode,
+  resolveLessonModeBadge,
+  useModePackCatalog,
+} from '../classroom/mode-pack/useModePackCatalog';
+import { isModePacksEnabled } from '../classroom/mode-pack/flags';
+import { resolveLessonModePackDeliveryMode } from '../../../packages/core/plugin-host/course-delivery-mode';
+
+// 课程编辑页内展开：按课时交付模式懒加载白板/学案备课面，不再切换系统导航。
+const LessonEditorView = lazy(() => import('./LessonEditorView').then((m) => ({ default: m.LessonEditorView })));
+const XueanEditor = lazy(() => import('./xuean/XueanEditor').then((m) => ({ default: m.XueanEditor })));
+const ModePackPrepShell = lazy(() =>
+  import('../classroom/mode-pack/ModePackPrepShell').then((m) => ({ default: m.ModePackPrepShell })),
+);
 
 interface CourseStats {
   whiteboardCount: number;
@@ -76,6 +89,14 @@ export function CourseManagement() {
 
   const [filterMyLessons, setFilterMyLessons] = useState(false);
   const [filterDeliveryMode, setFilterDeliveryMode] = useState<'all' | 'whiteboard' | 'xuean'>('all');
+  const courseEditingLessonId = useAppStore((s) => s.courseEditingLessonId);
+  const setCourseEditingLessonId = useAppStore((s) => s.setCourseEditingLessonId);
+  const editingLesson = courseEditingLessonId ? lessons.find((item) => item.id === courseEditingLessonId) : undefined;
+  const openCourseEditor = (lessonId: string) => {
+    onViewCourse(lessonId);
+    setCourseEditingLessonId(lessonId);
+  };
+  const modePacks = useModePackCatalog();
   const [deleteTarget, setDeleteTarget] = useState<Lesson | null>(null);
   const [deleteStats, setDeleteStats] = useState<CourseStats | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
@@ -128,6 +149,33 @@ export function CourseManagement() {
       setDeleteLoading(false);
     }
   };
+
+  // 课程编辑在「课程管理」页内展开：白板课与学案课都走同一入口，不再切换导航。
+  if (editingLesson) {
+    const deliveryMode = resolveLessonModePackDeliveryMode(editingLesson.mode_pack_id, editingLesson.delivery_mode);
+    return (
+      // 必须是 flex 容器：编辑器（XueanEditor / LessonEditorView / ModePackPrepShell）
+      // 内部用 flex-1 + 绝对定位面板铺满高度，块级父容器会让内容高度塌成 0。
+      <div data-testid="course-editor-host" className="flex-1 min-h-0 overflow-hidden flex flex-col">
+        <Suspense
+          fallback={
+            <div className="flex items-center justify-center h-full text-sm text-gray-400 gap-2">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              {lang === 'zh' ? '加载课程编辑器…' : 'Loading course editor…'}
+            </div>
+          }
+        >
+          {isModePacksEnabled() ? (
+            <ModePackPrepShell />
+          ) : deliveryMode === 'xuean' ? (
+            <XueanEditor />
+          ) : (
+            <LessonEditorView />
+          )}
+        </Suspense>
+      </div>
+    );
+  }
 
   return (
     <div className="flex-1 flex flex-col gap-6 h-full overflow-y-auto">
@@ -326,10 +374,7 @@ export function CourseManagement() {
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
               {filteredLessons
                 .filter((lesson) => {
-                  if (
-                    filterDeliveryMode !== 'all' &&
-                    resolveCourseDeliveryMode(lesson.delivery_mode) !== filterDeliveryMode
-                  ) {
+                  if (filterDeliveryMode !== 'all' && resolveLessonDeliveryMode(lesson) !== filterDeliveryMode) {
                     return false;
                   }
                   if (!filterMyLessons) return true;
@@ -346,6 +391,7 @@ export function CourseManagement() {
                     lesson.creator_id === effectiveSession?.userId ||
                     lesson.creator_id === effectiveSession?.username;
                   const canManage = isAdmin || isOwner;
+                  const modeBadge = resolveLessonModeBadge(lesson, modePacks, lang);
 
                   return (
                     <div
@@ -357,7 +403,7 @@ export function CourseManagement() {
                           data-testid="course-title"
                           className="font-semibold text-gray-800 text-lg truncate cursor-pointer hover:text-indigo-600 transition-colors"
                           title={lesson.title}
-                          onClick={() => onViewCourse(lesson.id)}
+                          onClick={() => openCourseEditor(lesson.id)}
                         >
                           {lesson.title}
                         </div>
@@ -365,19 +411,14 @@ export function CourseManagement() {
                           <ExtensionPointRenderer slot="course.card.badge" slotProps={{ course: lesson }} />
                           <span
                             data-testid="course-delivery-mode-badge"
+                            title={modeBadge.title}
                             className={`text-xs font-medium px-1.5 py-0.5 rounded border ${
-                              resolveCourseDeliveryMode(lesson.delivery_mode) === 'xuean'
+                              modeBadge.mode === 'xuean'
                                 ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
                                 : 'bg-sky-50 text-sky-800 border-sky-200'
                             }`}
                           >
-                            {resolveCourseDeliveryMode(lesson.delivery_mode) === 'xuean'
-                              ? lang === 'zh'
-                                ? '学案'
-                                : 'Guided study'
-                              : lang === 'zh'
-                                ? '白板'
-                                : 'Whiteboard'}
+                            {modeBadge.label}
                           </span>
                           {lesson.creator_name ? (
                             <span
@@ -438,7 +479,7 @@ export function CourseManagement() {
                         </button>
                         <div className="flex items-center gap-0.5">
                           <button
-                            onClick={() => onViewCourse(lesson.id)}
+                            onClick={() => openCourseEditor(lesson.id)}
                             className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors cursor-pointer"
                             title={
                               canManage

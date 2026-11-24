@@ -12,6 +12,40 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Features
 
+- **学案成绩显式同步到成绩册**：新增 `POST /api/lesson-activities/:id/sync-grade`、`POST /api/lessons/:lessonId/activities/:activityId/sync-grade` 与 `POST /api/lessons/:lessonId/activity-grades/sync`。教师批阅（`progress/verify`）仍只写 `activity_progress`；同步动作把 `verified=1` 且有分的记录按 `xuean-activity:<activityId>` 写入 `assignments` / `assignment_submissions`，复用 SubmissionAggregator 与 grade-writer 的审计、手动分保护与幂等；`graded_by` / `assignment_grade_history` 记录教师 actor。学案教师进度面板新增「同步已批阅成绩」批量按钮与逐学生「同步」按钮，并在面板内提示「批阅后需同步到成绩册，学期总评才会计入」。
+- **第三方插件 P0 安全扩展服务**：新增 4 个宿主侧入口，避免插件为读核心数据而直查 sql-guard 禁读表或申请过宽权限：
+  - `ctx.services.assignmentSubmission`（`assignment:read`）：`getMySubmission` / `getSubmissionForViewer` / `canShareSubmission`；学生仅本人、教师仅自己班级、管理员不限，返回体不含名册字段。
+  - `ctx.services.xueanActivityProgress`（`lesson:read`）：学生读取本人活动进度与 `submission_json`，可见性走 `canSeeLesson`。
+  - `ctx.services.lessonReport`（`lesson:read`）：课节 / 会话课后聚合摘要（会话、作业完成度、活动参与度），仅教师与管理员。
+  - `ctx.services.classroomSelfMessage`（`classroom:message:self`）：以当前学生身份发送课堂消息，sender 由宿主派生为 `user:<studentId>:student`，校验 channel `rolesAllowed`、班级成员与定向目标同班，**不要求 `lesson:write`**；`messageId` 幂等。
+  - 新增扩展槽 `assignment.submission.actions`：学生已提交作业卡片底部的操作区，透传 `{ assignment, submission, studentId, lessonId, isSelf, lang, refresh }`。
+  - SDK（`openlearn.d.ts` / `index.ts`）、`docs/agent/contracts`、DI Token 字典、槽位目录与能力矩阵已同步。
+- **白板课开课前功能设置**：教师进入白板授课视图时先弹出「开课前功能设置」，默认沿用上一次保存的开关选择；可在开始上课前调整课堂工具与快捷动作的显隐，确认后关闭，设置即时生效并持久化。学案课不弹出该面板。
+- **学案内置活动模块（阅读 / 作品提交 / 测验 / 调查 / 填表 / 讨论）**：`lesson_activities` 新增「调查」类型，教师端「新增活动」按统一命名提供六类活动；阅读、作品提交、调查、填表、讨论支持类型专属配置（阅读正文与链接、练习要求与作答方式、单选/多选/填空题、文本/数字/下拉/勾选字段、讨论话题与回复开关），配置写入 `config_json`。学生端按类型渲染对应模块：阅读可标记已读、作品提交支持文字或作品链接、调查与填表提交结构化答案、讨论复用 `lesson_discussions` 发帖与回复；答案统一写入 `activity_progress.submission_json`，教师可在进度面板继续批阅。讨论列表补充作者姓名并限制回复必须属于同一活动。
+- **白板课堂工具统一入口与「控制」页**：顶栏原本分开的「课堂工具」与「更多」合并为一个「课堂工具」入口，展开后同时显示阶段导航、极速投票 / 抢答 / 通票 / 大屏展台 / 随机抽问 / 积分榜、快捷动作与课堂管理按钮；「课堂面板」菜单新增「控制」页，用开关逐项启用 / 关闭这些功能，设置写入 `localStorage` 即时生效，被关闭的按钮在顶栏与工具面板中不再渲染，也可一键「全部恢复显示」。
+- **白板课堂去掉中栏标题行并把倒计时移入白板工具栏**：移除中栏「课堂面板 / LIVE BROADCASTER CONNECTED」整行（白板课）；「课堂面板」下拉与「展开大纲」入口并入顶部标题栏，广播连接状态不再单独占一行。课堂倒计时从标题栏移入白板工具栏右侧（`WhiteboardToolbar` 新增 `toolbarExtras`），由工具栏承载显示，顶栏与画布之间的空白进一步减少；学案课不显示该倒计时。
+- **白板课堂顶栏精简**：把「课堂工具」按钮移到顶部标题栏，删除原本单独占一行的「课中授课」阶段条（阶段切换仍保留在展开后的课堂工具面板里）；面板默认收起，关闭时整条不再渲染，减少顶部空白，把垂直空间留给白板与大纲。
+- **学案活动编辑面板加宽**：编辑 / 新增活动弹窗由窄单列改为 `max-w-3xl` 宽面板，活动类型与标题、提交物类型与发布 / 截止时间、评价量规与学习面内容分组并排；面板高度限制为一屏并支持内部滚动（`overscroll-contain`），底部「取消 / 保存」吸底，不再竖向撑满屏幕。
+- **学生学案课堂页聚焦活动内容**：移除学生学案课堂左侧的「环节 / 资料 / 笔记」工具导航与抽屉，学案正文直接占满主区域。`StudentXueanView` 顶部新增横向活动导航（`tablist`），按序列出「学案首页」与全部活动名称，完成显示 ✓、进行中显示蓝点，点击即可切换；导航改用序号徽标 + 选中下划线的样式，头部加一条完成进度条，单行横向滚动（隐藏滚动条、吸附对齐），切换时自动把选中项滚入可视区；中间一次只渲染当前活动，底部提供「上一活动 / 下一活动」与序号进度。学案课堂去掉居中的 `max-w-4xl` 窄栏，头部与正文卡片铺满整个可用屏幕宽度并撑满高度。首帧直接派生当前项，避免加载后短暂出现空态。`XueanModeWorkspace` 学生端不再显示「Mode Pack · 学案工作区」标题行。
+- **课程编辑收口到课程管理**：系统导航栏移除「备课 / 学案编辑器」入口；在「课程管理」点击任一课程（白板或学案）仍在当前页内展开对应编辑器，并提供「返回课程管理」，不再切换系统导航 tab。`onViewCourse` 只更新当前课时选择，页内按课时交付模式懒加载 `ModePackPrepShell` / `LessonEditorView` / `XueanEditor`。课程向导创建完成后、互动课堂「编辑本课」也统一回到课程管理页内展开；旧书签 hash（`#/lesson_editor`、`#/xuean_editor`）自动回落到课程管理，编辑中的课程 id 存入 `appStore.courseEditingLessonId`，从任意入口都能复用同一编辑面。修复页内编辑器宿主缺少 flex 容器导致学案编辑器主体高度塌陷、活动编排区域空白的问题。统一备课壳的顶部环节切换条改为**仅混排课时显示**：纯学案 / 纯白板课时的所有环节都落到同一备课面，切换条不再展示，避免与下方可拖拽的学案活动列表重复。学案编辑器子面板顺序调整为「学案首页 → 活动编排 → 进度面板」；学案首页简化为单条 `xuean_home` 块，只设置简介文字与背景图（新增 `POST /api/uploads/image` 上传，≤5MB），移除多块新增 / 排序 / JSON 编辑；学生端将学案首页置顶渲染为带背景图的简介头图。学生端学案活动卡片移除手动「开始 / 提交 / 重新提交」按钮与提交弹窗，活动完成与提交统一由活动内部功能（引用试卷、学习面、插件活动）驱动。
+- **学案编辑器整合与增强**：课程编辑页按「当前环节 → 课时模式包 / 交付模式 → 入口 tab」自动进入白板或学案编辑器（`resolvePrepFace`），学案课程即使没有环节也能直达学案面。「活动编排」新增**引用现有试卷**的试题活动（原子接口复用 / 发布 assignment，校验班级与课时关联），学生端复用 `AssessmentRunner` 作答并把结果回写活动进度。学案首页块与活动学习面共用新的 `CoursewarePicker`：可视化列出 / 搜索 / 上传 HTML 与 ZIP 互动课件，ZIP 多入口时可选入口页。首页块与活动均支持拖拽排序（保留上下按钮），数组型首页块改为逐条编辑、`free_html` 提供文本预览，列表与重排补齐加载 / 保存错误态。插件新增 `xuean.activity.type`（服务端命名空间校验）、`xuean.activity.editor`、`xuean.activity.student` 三个扩展槽位，第三方可声明并渲染新的活动形式。
+- **第三方模式包浏览器 E2E 与测试库回收（阶段 13）**：新增 `e2e/mode-pack-install.spec.ts`，用示例包走真实浏览器链路：API 安装并激活 → 课程管理向导出现「探究学习」→ 绑定课时的课程卡显示包徽标 → 停用插件后徽标消失，并自动清理课时、插件安装物与专用管理员账号。`vitest.setup.ts` 增加死进程 pid 回收与逐文件容错（此前并发 worker 删除同一文件会中断整轮清理，导致 `/tmp/openlearn_test_dbs` 堆积数 GB 并触发 SQLite `disk I/O error`）；判定逻辑抽到 `packages/core/db/test-db-files.ts` 并补单测。
+- **第三方模式包真实安装与班级读端点下线（阶段 12）**：新增示例包 `packages/mode-pack-lab`（manifest 声明 `mode.pack`，`segmentTypes: ['inquiry-lab']`）与 `scripts/build-mode-pack-lab.mjs`；新增真实链路集成测试，覆盖 ZIP 结构校验 → `POST /api/plugins/upload-zip-raw` 安装 → 激活 → `GET /api/mode-packs` 出现且无 `warnings` → 创建课时落库 `mode_pack_id` → 停用后目录移除并回落白板。`GET /api/classes/:classId/assignments` 同步下线为 `410 LEGACY_ASSIGNMENT_READ_DISABLED` + `Link`，班级读取统一走 `/api/classes/:classId/learning-surface-assignments`；修复压测脚本仍调用旧写路径的问题。
+- **第三方模式包验收与旧读端点下线（阶段 11）**：新增共享 fixture `packages/core/plugin-host/__tests__/fixtures/mode-pack-lab.ts`，覆盖 `mode.pack` 全字段与备课 / 大纲 / 双端工作区扩展点声明；服务端与前端共用同一份 fixture，把第三方包接入文档 §6 的验收清单落成用例（manifest 校验、目录收录与能力 `warnings`、课时绑定不回落、环节类型前缀路由、工作区 / 大纲决议、环节类型自动注册与清理、课程徽标）。前端已全部使用 `/api/learning-surface-assignments/*`，旧 `GET /api/assignments*` 正式下线：认证通过后返回 `410 LEGACY_ASSIGNMENT_READ_DISABLED` 并带 `Link` 指向新路径；巡检脚本与公测 E2E 同步切换到新端点。
+- **Surface 无障碍与宿主级全屏（阶段 10）**：`LearningSurfaceHost` 加载态使用 `role="status"` / `aria-live` / `aria-busy`，错误态 `role="alert"`，就绪态提供 `role="region"` 与标题；演示文稿、作业与课件渲染器补齐空态/错误态语义。课堂 `SurfaceLiveSummaryPanel` 增加 `aria-live` / `aria-busy` / `aria-controls` 与范围分组标签。新增 `useSurfaceFullscreen`：宿主级全屏、`fullscreenchange` 反向同步、原生被拒时 Esc 降级退出、退出后焦点回到触发按钮；课件、演示文稿与沙箱统一使用宿主全屏按钮，演示文稿内部全屏保留以兼容白板。
+- **Surface 快捷键与焦点隔离（阶段 9.1）**：新增 `learning-surface/keyboard.ts` 统一判定输入目标与 Surface 焦点范围。演示文稿在 Surface 内只在焦点位于本 Surface 时响应 `←/→`、`PageUp/PageDown`、`Space`、`Home/End`，输入框 / contentEditable 不再被抢键；白板内旧组件保持全局方向键行为。演示文稿、HTML 课件与沙箱容器统一可聚焦并标记 `data-surface-scope`，同一页多个 Surface 不再串键；白板 `Alt+方向键` 平铺快捷键补 typing 守卫。
+- **第三方 Mode Pack 完整接入（阶段 8）**：前端模式包目录保留完整 `ModePackContribution`；绑定非内置包的课时自动启用 Mode Packs（内置白板仍受全局开关控制）。插件包的 `mode.pack.segmentTypes` 自动注册进备课端环节类型选择器，插件停用时清理。新增 `classroom.prep` / `classroom.outline` 扩展槽位：第三方包可接管备课面与课中大纲，缺少贡献时回退白板备课面 / 白板页面大纲；`TimelineRail` 新建环节默认取绑定包的第一个环节类型。课中提交聚合支持 `adapterIds` 过滤，`/api/mode-packs` 对未注册的 `adapterIds` / `channels` 返回 `warnings`，成绩写回继续统一走 `grade-writer`。
+- **LearningSurface 运行时统一与课堂内分析（阶段 7）**：课堂顶栏 compact 与课程列表筛选 / 徽标统一走 `resolveLessonModePackDeliveryMode`（`mode_pack_id` 优先，`delivery_mode` 回落），新增前端模式包目录缓存 `mode-pack/useModePackCatalog.ts`，徽标优先展示第三方包名。作业读路径收口：抽出 `server/routes/assignment-read.ts` 供新旧路径共用，新增 `/api/learning-surface-assignments/*` 与 `/api/classes/:classId/learning-surface-assignments` 读端点，前端调用全部切换；旧 `GET /api/assignments*` 继续可用并返回 `Deprecation` / `Link` 头。新增课时级 `learning-surface-summary` 聚合与课堂「学生提交数据」顶部的 Surface 完成概览面板：当前环节 / 本课切换、20 秒轮询、排除教师预览、每个学生取最新 attempt、分数按满分归一并列出未交名单。
+- **LearningSurface 验收与旧路径清理（阶段 6）**：删除 `HtmlAppletFrame`、`CoursewarePropertiesModal`、`CoursewareEntrySelectorModal` 及白板 `html-applet` 的渲染 / 属性 / 调色板 / 拖放 / 全屏分支，学案区块不再保留旧 `CoursewareHost` 回退。课件成绩浮层迁出为 `CoursewareScoresOverlay` 并由 `html_courseware` 渲染器叠加。`whiteboard.draw` 收到 `html-applet` 时由服务端自动转换为 `learning_surface`（手写 HTML 幂等落 `system_resources`），AI 与旧插件无需改动。作品展示改为从 Surface 读取课件引用并保留旧形态兼容。课程包格式升级到 `version: 2`：原生导出 `learning_surface`（携带 `contentRef`，不导出本机 `surfaceId`），导入时在新环境重建 Surface；v1 的 `html-applet` 包继续按内容引用转换导入。
+- **LearningSurface 存量迁移（阶段 5）**：迁移 `076` 把白板 `html-applet` 元素原地迁移为 `learning_surface`（元素 id 不变，`data` 只保留 `surfaceId` 与几何 / 分页字段），按 `coursewareUuid` / `resourceId` / 手写 `code` 生成 `kind='whiteboard_element'` 的 Surface；手写 HTML 幂等落到 `system_resources`（`inline-mig-*`），快照行同步迁移。迁移 `077` 为学案首页 `interactive_courseware` 块新增 `kind='lesson_block'` 的 Surface 与 `lesson_activity_blocks.surface_id`。课程包导入时直接落新模型；导出在阶段 6 升级为 v2 原生 Surface，旧版本课程包仍可导入。学生端学案首页块优先走统一宿主。
+- **LearningSurface 内置渲染器与插件沙箱（阶段 4）**：新增前端渲染器注册表与 `useLearningSurfaceAttempt`（恢复最近 attempt、progress 1 秒防抖、submit 幂等、只读态统一）。内置 `presentation` 复用 Reveal 封装，支持资源库 `.md/.pdf/.pptx` 与内联 Markdown（`config.markdown`，64KB 上限）；`assignment_submission` 覆盖作业定义与课时级随堂提交，复用现有提交弹窗 / 随堂面板并新增教师统计概览，attempt 由作业域桥接维护；`html_courseware` 迁入注册表。插件渲染器通过目录项 `pluginId + view` 走严格沙箱，新增 `bridge.surface.progress / submit / onStatePatch` 事件通道与 `state.patch` 恢复，宿主校验来源、事件名、64KB 上限与数值范围。`manifest-schema` 新增 `contributes['learning.surface']` 安装期 strict 校验（`view` 拒绝穿越 / 协议 / 绝对路径，`view` 与 `entry` 至少一个）。
+- **LearningSurface 宿主与放置（阶段 3）**：新增前端 `LearningSurfaceHost` 与白板 `learning_surface` 元素（元素 `data` 只存 `surfaceId`，尺寸 / 层级沿用白板能力，属性栏可按渲染器与资源绑定内容）。迁移 `075` 给 `lesson_activities` 加 `surface_id`（部分唯一索引，一个活动最多一个 Surface）；学案活动保存时按 `surface` 字段创建 / 更新 Surface，`surface: null` 或删除活动只软删 Surface，`attempt` 保留可追溯。新增 `GET /api/learning-surfaces/:id` 供宿主读取内容引用（学生限本课时，教师本课，管理员全量）。阶段 3 只接通内置 `html_courseware`（复用 `CoursewareHost` 沙箱、访问 token、主题 / 字号与 Bridge），其余渲染器显示占位，留待阶段 4。
+- **作业域迁移到 LearningSurface（阶段 2）**：迁移 `073` 给 `assignment_submissions`、`plugin_submissions` / 版本 / 附件 / 互评任务 / 互评 / 评分 / 成绩历史补 `attempt_id`，并在单事务内把存量提交回填为 `kind='assignment'` 的 Surface 与 attempt（班级级作业 `lesson_id` 为空字符串）；迁移 `074` 把课时级随堂提交（`assignment_id IS NULL`）回填为 `kind='lesson_eval'` 的 Surface 与 attempt。新增 `/api/learning-surface-assignments/*` 与 `/api/learning-surface-lessons/*` 统一写通道（作业定义、AI 生成、附件、提交、互评、随堂提交、传统作业提交 / 评分），旧 `/api/assignments/*` 与 `/api/lessons/:lessonId/eval-submissions*` 写端点统一返回 `410 LEGACY_ASSIGNMENT_WRITE_DISABLED`，读端点保持不变；前端作业中心、互评、成绩与出题入口已切换到新通道。
+- **LearningSurface 状态底座（阶段 1）**：新增迁移 `072` 的 `learning_surfaces`（容器 → 内容引用的稳定身份，`UNIQUE(kind, owner_id)`，软删保留 attempt）与 `learning_surface_attempts`（学生 × Surface × 尝试的统一状态，含 `is_preview` 教师预览）。新增 `server/services/learning-surface-service.ts` 与 `server/routes/learning-surfaces.ts`：渲染器目录、Surface 管理、attempt 懒创建 / 续用 / 进度 / 幂等提交 / 教师评分覆盖，权限复用 `class-access`（学生仅本人、教师本课、管理员全量）。白板元素与学案活动的宿主接线、内置渲染器与存量迁移按设计文档后续阶段推进。
+- **教学模式包目录与课时级绑定**：新增 `GET /api/mode-packs`，返回内置白板 / 学案包与**已激活**插件 `contributes['mode.pack']`（逐条过 manifest 校验，坏配置与重复 id 不进目录）。课程向导改为按目录渲染交付模式；新建课时额外写入 `lessons.mode_pack_id`（迁移 `071`），读取时优先于 `delivery_mode`。请求的模式包不可用（插件停用/卸载）时回落内置白板，并在创建响应里返回 `modeBinding.reason`、写一条告警日志。旧课无 `mode_pack_id` 时行为不变。
+- **独立课件容器 `CoursewareHost`**：从白板 `HtmlAppletFrame` 抽出的沙箱渲染宿主，统一处理 `coursewareUuid` / `resourceId` / 插件内容源 / 手写 HTML 四种来源、短时访问 token、懒挂载与并发上限、主题与字号广播、LMS Bridge 事件归一化。白板元素仍在其上叠加成绩榜；学案与后续第三方工作区可直接复用。
+- **学案「互动课件」区块**：学案区块新增 `interactive_courseware`，只存内容源描述（`coursewareUuid` / `resourceId` / 可选 `title`），服务端校验并规范化，拒绝空来源与多余字段；学生端用 `CoursewareHost` 在沙箱 iframe 中渲染，不再需要切到白板模式。
+- **课件宿主扩展槽 `courseware.host`**：插件可在 manifest 声明自己的课件宿主，`replaces: 'builtin'` + `priority` 申请接管。服务端按优先级决出唯一生效宿主，冲突记录告警并回落内置；`GET /api/courseware/host` 暴露决议结果。只声明远程 `entry`、没有可 iframe 的 `view` 时不接管，保证安全回落。
 - **课程交付模式**：新建课程时选择学案或白板，两条向导分开，上课也按这门课的模式走。学案课直接使用学案 Mode Pack，不必再开全局 Mode Pack 开关。旧课没有该字段时仍按白板，课堂路径不变。门户上的讲授 / 探究等标签不参与这次选择。
 - **学生课堂页**：进课后按交付模式进入白板页或学案页。白板页以画布为主，学案页以学案正文为主；大纲、课件、作业、签到等收在可关闭的侧栏里。学生不能在本地改全班环节或阶段。
 - **白板课堂减负**：教师端和学生端的白板课默认只留课题、画布、锁定和当前阶段。返回门户、投票、提交、成绩等从「更多」「课堂工具」「课堂面板」或学生「工具」里打开。学案课的教师顶栏不变。
@@ -47,7 +81,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - 学生平行学案 tab：flag 开默认隐藏，调试入口 `__OPENLEARN_DEBUG_XUEAN_TAB__`。
   - 新增第三方 Mode Pack 接入指南 `docs/tutorials/mode-pack-third-party.md`。
 
+- **活动扩展协议收敛（canonical 路由 + 兼容别名）**：
+  - 活动定义与运行拆分为 `GET /api/activity-providers`、`POST /api/activity-providers/:providerId/runs`、`GET /api/activity-runs` 与 `POST /api/activity-runs/:runId/{pause,resume,finish}`；学案内容走 `/api/lesson-activities/*`。旧 `/api/activities*` 保留为 **307** 兼容别名，响应带 `Deprecation: true` 与 `Link: rel="successor-version"`；前端已全部迁移到新路径。
+  - 新增统一 `activity.completed` 事件（`ecosystem` / `lesson-activity` / `classroom-interaction` 三类来源），内核事件总线照常入库；新增内存聚合器与管理员只读接口 `GET /api/system/activity-completions`。课堂全景学情简报追加按课节聚合的 `activityCompletions` 字段，既有字段保持不变。
+  - 服务重启后未完成的 `running/paused` 运行恢复为 `interrupted` 终态，不再伪装成可继续；管理弹层显示「已中断」并隐藏恢复/结束操作，避免稳定触发 409。
+  - 新增 `GET /api/system/extension-points`（未知扩展槽与当前 strict/warn/lenient 模式）与 `GET /api/system/legacy-activity-routes`（旧别名按 `METHOD + 路由模式` 的调用计数），为后续摘除别名提供数据。
+
+### Fixes
+
+- **学期作业分分母与学年口径统一**：学期总评的作业分改为「本学年已发布作业数」为分母，未交 / 未出分按 0 计入；本学年没有任何已发布作业时按 100 分处理，不再被其他学年的作业拖成 0 分。作业成绩查询对 `assignment_submissions.academic_year` 兼容 `NULL`（以父作业学年为权威口径），避免旧数据因冗余列缺失被整段丢掉。学案同步补建的 `xuean-activity:*` 作业壳会按排课 / 课堂会话解析并写入 `academic_year`（旧壳为空时补写），保证同步后的学案成绩能在对应学年的学期总评里被统计。
+- **互动课堂入口不再先显示进行中会话列表**：进入互动课堂时始终先落到起始门户（课程选择 + 当前会话提示条），有进行中的课堂就在门户顶部通过「课堂进行中 → 回到课堂」进入，不再先跳到独立的进行中会话列表页；刷新恢复、班级锁定与一键开课信号的行为保持不变。
+- **归档并结束课堂后回到起始门户**：在学情简报页点击「归档并结束课堂」成功后，清理当前会话状态并返回起始门户，不再停留在原简报页；服务端归档仍保持幂等。
+
 ### Docs
+
+- **学案成绩同步文档**：`docs/architecture/xuean-activities.md` 明确「批阅 ≠ 进成绩册」，补充单活动同步与整课批量同步端点；`docs/ai-reference/api/http-endpoints.md` 同步新增路由与鉴权。
+- **活动协议参考同步**：`docs/ai-reference/api/http-endpoints.md` 新增「活动协议路由族」小节，记录 `/api/activity-providers`、`/api/activity-runs`、`/api/lesson-activities` 的 canonical 路径、鉴权与 307 别名映射，以及 `/api/system/extension-points`、`/api/system/activity-completions`、`/api/system/legacy-activity-routes` 三个管理员观测端点；`docs/ai-reference/subsystems/ai-and-assessment.md` 同步活动生态入口口径，不再把 `/api/activities` 当作规范路径。
 
 - **仓库平台模型切换为 Gitee 单平台**：Gitee 成为本仓库 **Issue / PR / 分支 / 合并 的唯一入口**，GitHub 仓库降级为归档副本（其 Actions 仍跑自动化 CI，但不参与协作流程）。
   - `AGENTS.md`：协作规范由「双平台（GitHub 主仓 / Gitee 镜像）」改写为「Gitee 单平台」；Issue / PR / 合并的命令行口径由 `gh issue create` / `gh pr create` / `gh pr merge` 统一改为 `gitee` CLI；补充「Gitee 侧合并不触发 GitHub Actions（未接入 Gitee Go 流水线），**本地全套质量门禁是唯一自动化防线**」的显式告警。
@@ -76,6 +125,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - 5 个迁移（057–061）、SDK Token 与类型导出、6 个内核服务、命令与事件文档、新开发指南 `docs/reference/classroom-flow-server.md`；全量测试 688 文件 / 5645 用例通过。
 
 ### Fixes
+
+- **P0 插件扩展服务评审修复**：
+  - `classroomSelfMessage` 的 `targetUserIds` 仅在未指定时表示广播；非数组或含空/非字符串元素时直接抛 `ClassroomSelfMessageInputError`，不再静默降级为广播。同时校验 `classId` 与 `lessonId` 的归属关系，避免消息带错误班级标签进入课节补投流。
+  - `assignmentSubmission` 优先读取作业中心 `plugin_submissions` / `plugin_submission_versions`，再回落 legacy `assignment_submissions`；新增 `source` / `textContent` / `linkUrl` / `files` 字段，`canShareSubmission` 识别仅链接或仅附件的提交，避免成绩投影的空 content 遮住真实作答。
+  - `xueanActivityProgress` 补 `visible = 1` 与 `release_at` 过滤，与学生端活动接口口径一致。
+  - SDK 将 4 个新 services 键标注为 `T | null | undefined`，明确 worker / process 模式下为 `undefined`。
+- **白板课中大纲按环节正确展示多页**：课中大纲此前在页面没有 `segmentId` 绑定时按索引把页面 1:1 分给各环节（页数与环节数相等时每个环节只剩一页），与课程编辑器里看到的多页不一致。现在优先按环节的 `targetPages`（课程大纲 / AI 教案写入）取页；没有该字段时沿用编辑器的共享页规则 —— 共享页在每个环节都可见，`segmentId` 绑定页只在本环节可见，`excludedSegmentIds` 命中则隐藏。广播环节时同时跳到该环节大纲的第一页，避免停留在其它环节的页面。
+- **白板课中栏不再卡在空的「环节工作区」**：当前环节没有匹配的 `classroom.active_segment.main` 扩展时，中栏自动回退到演示白板。此前若中栏停留在 `segment_main`（例如切换环节后扩展不再覆盖该类型），中栏会只剩空白，白板不挂载，大纲里的白板页面列表也随之为空 —— 表现为「看不到白板，也看不到大纲页面内容」。新增回归测试覆盖回退与保留扩展两条路径。
+- **右侧「学生专注力监控」可折叠**：面板头部新增收起按钮，收起后保留 40px 窄条（含展开按钮与在线人数），把宽度让给白板与大纲；展开 / 收起状态在课中阶段切换时保持。
+
+- **移除学生看板欢迎头部的重复「返回课堂」**：课堂进行中时，顶部绿色横幅（`StudentActiveClassBanner`）已提供返回入口，欢迎头部（`StudentDashboardHeader`）不再重复渲染同一按钮；同步移除该组件不再使用的 `activeSession` / `onReturnToClass` 入参与图标依赖。
 
 - **按环节删除白板页，不再误删其它环节的同序号页（Issue #557）**：备课大纲按 `activeSegmentId` 展示，但删除仍按共享 `page_meta` 的全局下标摘页，并按 `data.page === N` 清理元素。多环节课里各环节内容经常共用同一个页码，删掉环节 A 的第 N 页会让环节 B 的大纲和内容一起消失。现在删除以页面 `id` 为身份：本环节专属页只移除那一条；没有 `segmentId` 的共享页只对当前环节写入 `excludedSegmentIds`，并只删除该环节自己的元素。
 

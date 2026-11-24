@@ -42,6 +42,7 @@ const DEFAULT_ELEMENT_SIZE: Record<string, { width: number; height: number }> = 
   assignment: { width: 340, height: 400 },
   rollcall: { width: 340, height: 420 },
   'html-applet': { width: 400, height: 300 },
+  learning_surface: { width: 640, height: 400 },
   'code-sandbox': { width: 400, height: 320 },
   'math-graph': { width: 400, height: 350 },
   presentation: { width: 600, height: 400 },

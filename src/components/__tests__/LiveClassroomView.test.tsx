@@ -5,6 +5,10 @@ import { LiveClassroomView } from '../LiveClassroomView';
 import { AppDataProvider } from '../../context/AppDataContext';
 import { appStore } from '../../store/appStore';
 import { uiStore } from '../../store/uiStore';
+import {
+  resetClassroomToolbarVisibility,
+  setClassroomToolbarFeatureEnabled,
+} from '../../features/classroom/classroomToolbarVisibility';
 
 // Mock child components & dependencies
 vi.mock('../LazyWhiteboard', () => ({
@@ -113,10 +117,20 @@ describe('LiveClassroomView - Student Pop-up & Sync', () => {
   afterEach(() => {
     cleanup();
     vi.unstubAllGlobals();
+    vi.restoreAllMocks();
     vi.clearAllMocks();
     // Issue #91：会话恢复记忆写在 sessionStorage，用例之间必须隔离
     window.sessionStorage.clear();
+    resetClassroomToolbarVisibility();
   });
+
+  /** 白板课进入授课视图会先弹出开课前功能设置，交互前先确认关闭。 */
+  const dismissToolbarSetup = () => {
+    const dialog = screen.queryByTestId('classroom-toolbar-setup-dialog');
+    if (dialog) {
+      fireEvent.click(within(dialog).getByRole('button', { name: '开始上课' }));
+    }
+  };
 
   it('renders "学生视角预览 (独立Tab)" button instead of the old inline role toggle', () => {
     render(
@@ -129,8 +143,8 @@ describe('LiveClassroomView - Student Pop-up & Sync', () => {
     expect(screen.queryByText('👨‍🏫 教师模式')).toBeNull();
     expect(screen.queryByText('🎓 学生模式')).toBeNull();
 
-    // New independent tab button should exist inside 更多
-    fireEvent.click(screen.getByTestId('teacher-whiteboard-more'));
+    // New independent tab button should exist inside 课堂工具
+    fireEvent.click(screen.getByTestId('teacher-whiteboard-tools'));
     const tabButton = screen.getByRole('button', { name: /学生视角预览 \(独立Tab\)/ });
     expect(tabButton).toBeTruthy();
   });
@@ -148,7 +162,7 @@ describe('LiveClassroomView - Student Pop-up & Sync', () => {
       </AppDataProvider>,
     );
 
-    fireEvent.click(screen.getByTestId('teacher-whiteboard-more'));
+    fireEvent.click(screen.getByTestId('teacher-whiteboard-tools'));
     const tabButton = screen.getByRole('button', { name: /学生视角预览 \(独立Tab\)/ });
     fireEvent.click(tabButton);
 
@@ -219,7 +233,7 @@ describe('LiveClassroomView - Student Pop-up & Sync', () => {
       </AppDataProvider>,
     );
 
-    fireEvent.click(screen.getByTestId('teacher-whiteboard-more'));
+    fireEvent.click(screen.getByTestId('teacher-whiteboard-tools'));
     const tabButton = screen.getByRole('button', { name: /学生视角预览 \(独立Tab\)/ });
     fireEvent.click(tabButton);
 
@@ -456,47 +470,28 @@ describe('LiveClassroomView - Student Pop-up & Sync', () => {
     appStore.setState({ liveClassSelectedClassId: null });
   });
 
-  it('Issue #91：有进行中会话时先进「进行中会话列表」而不是授课视图，继续上课后才进课并保持班级锁定', async () => {
+  it('进入互动课堂始终先显示起始门户，进行中课程通过当前会话提示条进入', async () => {
     window.history.replaceState({}, '', '/?classId=class-other#/live_class');
     appStore.setState({ liveClassSelectedClassId: 'class-other' });
-    const pendingPerLesson: Array<(value: unknown) => void> = [];
     const setClass = vi.fn();
     vi.stubGlobal(
       'fetch',
       vi.fn().mockImplementation((url: string) => {
-        // 列表端点：/api/classroom/sessions?status=active（注意不是 /sessions/<lessonId>）
-        if (String(url).includes('/api/classroom/sessions?')) {
+        if (String(url).includes('/api/classroom/sessions/')) {
           return Promise.resolve({
             ok: true,
             json: async () => ({
-              items: [
-                {
-                  id: 'sess-1',
-                  lessonId: 'lesson-101',
-                  lessonTitle: '物理探究实验课',
-                  classId: 'class-g1',
-                  className: '高一1班',
-                  teacherId: 'teacher',
-                  stage: 'IN_CLASS_TEACHING',
-                  teachingModeId: null,
-                  teachingModeName: null,
-                  checkinCode: null,
-                  focusMode: false,
-                  startedAt: Date.now() - 60000,
-                  endedAt: null,
-                  createdAt: Date.now() - 60000,
-                  stats: { pollCount: 0, exitTicketCount: 0, feedCount: 0 },
-                  presentCount: 2,
-                },
-              ],
-              total: 1,
+              hasActiveSession: true,
+              stage: 'IN_CLASS_TEACHING',
+              session: { class_id: 'class-g1' },
             }),
           });
         }
-        if (String(url).includes('/api/classroom/sessions/')) {
-          return new Promise((resolve) => {
-            pendingPerLesson.push(resolve);
-          });
+        if (String(url).includes('/api/schedules/today')) {
+          return Promise.resolve({ ok: true, json: async () => ({ success: true, schedules: [] }) });
+        }
+        if (String(url).includes('/api/classroom/teaching-modes')) {
+          return Promise.resolve({ ok: true, json: async () => ({ success: true, modes: [] }) });
         }
         return Promise.resolve({ ok: true, json: async () => ({}) });
       }),
@@ -512,45 +507,23 @@ describe('LiveClassroomView - Student Pop-up & Sync', () => {
       </AppDataProvider>,
     );
 
-    // 第一屏就是「进行中会话」这一屏（先加载态），不再先渲染门户、也不直接进授课视图
-    expect(screen.getByTestId('in-progress-sessions-loading')).toBeTruthy();
-    expect(screen.queryByTestId('live-class-entry-pending')).toBeNull();
-    expect(screen.queryByText(/下一节/)).toBeNull();
+    // 不再出现独立的「进行中会话列表」首屏；直接显示课程选择门户。
+    expect(screen.queryByTestId('in-progress-session-list')).toBeNull();
+    expect(await screen.findByTestId('active-session-banner')).toBeTruthy();
     expect(screen.queryByText('🔴 在线课堂')).toBeNull();
-    await waitFor(() => expect(pendingPerLesson.length).toBeGreaterThan(0));
-
-    for (const resolve of pendingPerLesson) {
-      resolve({
-        ok: true,
-        json: async () => ({
-          hasActiveSession: true,
-          stage: 'IN_CLASS_TEACHING',
-          session: { class_id: 'class-g1' },
-        }),
-      });
-    }
-
-    // 关键行为变更：落到「进行中会话列表」，授课视图尚未进入
-    expect(await screen.findByTestId('in-progress-session-list')).toBeTruthy();
-    expect(screen.queryByText('🔴 在线课堂')).toBeNull();
-    expect(screen.queryByText(/下一节/)).toBeNull();
     await waitFor(() => expect(setClass).toHaveBeenCalledWith('class-g1'));
     expect(setClass).not.toHaveBeenCalledWith('class-other');
 
-    // 教师显式「继续上课」后才进授课视图
-    fireEvent.click(screen.getByRole('button', { name: /继续上课/ }));
+    // 通过门户内的当前会话提示条进入授课视图
+    fireEvent.click(screen.getByRole('button', { name: /回到课堂/ }));
     expect(await screen.findByTestId('teacher-learning-topic')).toBeTruthy();
-    expect(screen.queryByTestId('in-progress-session-list')).toBeNull();
     appStore.setState({ liveClassSelectedClassId: null });
   });
 
-  it('Issue #91：会话列表为空时回退到起始门户，并显示班级锁定提示', async () => {
+  it('没有进行中会话时，起始门户显示课程选择与开课入口', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockImplementation((url: string) => {
-        if (String(url).includes('/api/classroom/sessions?')) {
-          return Promise.resolve({ ok: true, json: async () => ({ items: [], total: 0 }) });
-        }
         if (String(url).includes('/api/classroom/sessions/')) {
           return Promise.resolve({
             ok: true,
@@ -573,36 +546,16 @@ describe('LiveClassroomView - Student Pop-up & Sync', () => {
       </AppDataProvider>,
     );
 
-    await waitFor(() => expect(screen.queryByTestId('in-progress-session-list')).toBeNull());
-    expect(await screen.findByText(/下一节课|开始上课/)).toBeTruthy();
+    expect(await screen.findByText(/开始上课/)).toBeTruthy();
+    expect(screen.queryByTestId('in-progress-session-list')).toBeNull();
+    expect(screen.queryByTestId('active-session-banner')).toBeNull();
   });
 
-  it('Issue #91：显式「继续上课」后重新挂载（刷新/切标签页回来）直接回到授课视图，不再要求重选', async () => {
+  it('从当前会话进入后重新挂载（刷新/切标签页回来）直接回到授课视图', async () => {
     appStore.setState({ liveClassSelectedClassId: 'class-g1' });
-    const listItem = {
-      id: 'sess-1',
-      lessonId: 'lesson-101',
-      lessonTitle: '物理探究实验课',
-      classId: 'class-g1',
-      className: '高一1班',
-      teacherId: 'teacher',
-      stage: 'IN_CLASS_TEACHING',
-      teachingModeId: null,
-      teachingModeName: null,
-      checkinCode: null,
-      focusMode: false,
-      startedAt: Date.now() - 60000,
-      endedAt: null,
-      createdAt: Date.now() - 60000,
-      stats: { pollCount: 0, exitTicketCount: 0, feedCount: 0 },
-      presentCount: 2,
-    };
     vi.stubGlobal(
       'fetch',
       vi.fn().mockImplementation((url: string) => {
-        if (String(url).includes('/api/classroom/sessions?')) {
-          return Promise.resolve({ ok: true, json: async () => ({ items: [listItem], total: 1 }) });
-        }
         if (String(url).includes('/api/classroom/sessions/')) {
           return Promise.resolve({
             ok: true,
@@ -612,6 +565,12 @@ describe('LiveClassroomView - Student Pop-up & Sync', () => {
               session: { class_id: 'class-g1' },
             }),
           });
+        }
+        if (String(url).includes('/api/schedules/today')) {
+          return Promise.resolve({ ok: true, json: async () => ({ success: true, schedules: [] }) });
+        }
+        if (String(url).includes('/api/classroom/teaching-modes')) {
+          return Promise.resolve({ ok: true, json: async () => ({ success: true, modes: [] }) });
         }
         return Promise.resolve({ ok: true, json: async () => ({}) });
       }),
@@ -623,9 +582,9 @@ describe('LiveClassroomView - Student Pop-up & Sync', () => {
       </AppDataProvider>,
     );
 
-    // 第一次进入：先看到会话列表
-    expect(await screen.findByTestId('in-progress-session-list')).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: /继续上课/ }));
+    // 第一次进入：起始门户显示「课堂进行中」，点击回到课堂
+    expect(await screen.findByTestId('active-session-banner')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /回到课堂/ }));
     expect(await screen.findByTestId('teacher-learning-topic')).toBeTruthy();
 
     // 模拟刷新 / 切标签页回来：卸载后用同样的 props 重新挂载
@@ -637,7 +596,7 @@ describe('LiveClassroomView - Student Pop-up & Sync', () => {
     );
 
     expect(await screen.findByTestId('teacher-learning-topic')).toBeTruthy();
-    expect(screen.queryByTestId('in-progress-session-list')).toBeNull();
+    expect(screen.queryByTestId('active-session-banner')).toBeNull();
     appStore.setState({ liveClassSelectedClassId: null });
   });
 
@@ -648,6 +607,8 @@ describe('LiveClassroomView - Student Pop-up & Sync', () => {
       </AppDataProvider>,
     );
 
+    dismissToolbarSetup();
+
     expect(screen.getByTestId('teacher-learning-topic')).toBeTruthy();
     expect(screen.getByRole('button', { name: /全班专注/ })).toBeTruthy();
     expect(screen.queryByRole('button', { name: '返回门户' })).toBeNull();
@@ -655,10 +616,159 @@ describe('LiveClassroomView - Student Pop-up & Sync', () => {
     expect(screen.queryByText('极速投票')).toBeNull();
     expect(screen.queryByText('学生提交数据')).toBeNull();
 
-    fireEvent.click(screen.getByTestId('teacher-whiteboard-more'));
+    fireEvent.click(screen.getByTestId('teacher-whiteboard-tools'));
     expect(screen.getByRole('button', { name: '返回门户' })).toBeTruthy();
     expect(screen.getByRole('button', { name: '课堂异常告警中心' })).toBeTruthy();
     expect(screen.getByTestId('teacher-learning-topic').isConnected).toBe(true);
+  });
+
+  it('控制 tab 可从课堂面板进入，关闭的功能不再渲染按钮', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation((url: string) => {
+        if (String(url).includes('/api/classroom/sessions/')) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({
+              hasActiveSession: true,
+              stage: 'IN_CLASS_TEACHING',
+              session: { class_id: 'class-g1' },
+            }),
+          });
+        }
+        if (String(url).includes('/api/schedules/today')) {
+          return Promise.resolve({ ok: true, json: async () => ({ success: true, schedules: [] }) });
+        }
+        if (String(url).includes('/api/classroom/teaching-modes')) {
+          return Promise.resolve({ ok: true, json: async () => ({ success: true, modes: [] }) });
+        }
+        return Promise.resolve({ ok: true, json: async () => ({}) });
+      }),
+    );
+
+    render(
+      <AppDataProvider value={defaultProps as any}>
+        <LiveClassroomView initialPortalOpen={false} />
+      </AppDataProvider>,
+    );
+
+    dismissToolbarSetup();
+
+    fireEvent.click(screen.getByTestId('teacher-whiteboard-panels'));
+    fireEvent.click(screen.getByRole('button', { name: '控制' }));
+    expect(await screen.findByTestId('classroom-toolbar-control-page')).toBeTruthy();
+
+    const diagnosticSwitch = screen.getByRole('switch', { name: '课堂异常告警中心' });
+    expect(diagnosticSwitch.getAttribute('aria-checked')).toBe('true');
+    fireEvent.click(diagnosticSwitch);
+    expect(diagnosticSwitch.getAttribute('aria-checked')).toBe('false');
+
+    // 打开统一的「课堂工具」面板后，被关闭的按钮不再渲染
+    fireEvent.click(screen.getByTestId('teacher-whiteboard-tools'));
+    expect(screen.queryByRole('button', { name: '课堂异常告警中心' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'AI 实时学情预测' })).toBeTruthy();
+  });
+
+  it('白板课进入授课视图先弹出开课前设置，并沿用上次选择', async () => {
+    setClassroomToolbarFeatureEnabled('diagnostic_center', false);
+
+    render(
+      <AppDataProvider value={defaultProps as any}>
+        <LiveClassroomView initialPortalOpen={false} />
+      </AppDataProvider>,
+    );
+
+    const dialog = await screen.findByTestId('classroom-toolbar-setup-dialog');
+    const diagnosticSwitch = within(dialog).getByRole('switch', { name: '课堂异常告警中心' });
+    expect(diagnosticSwitch.getAttribute('aria-checked')).toBe('false');
+
+    fireEvent.click(within(dialog).getByRole('button', { name: '开始上课' }));
+    expect(screen.queryByTestId('classroom-toolbar-setup-dialog')).toBeNull();
+
+    fireEvent.click(screen.getByTestId('teacher-whiteboard-tools'));
+    expect(screen.queryByRole('button', { name: '课堂异常告警中心' })).toBeNull();
+  });
+
+  it('学案课不弹出开课前功能设置', async () => {
+    render(
+      <AppDataProvider
+        value={
+          {
+            ...defaultProps,
+            lessons: [{ id: 'lesson-101', title: '物理探究实验课', delivery_mode: 'xuean' }],
+          } as any
+        }
+      >
+        <LiveClassroomView initialPortalOpen={false} />
+      </AppDataProvider>,
+    );
+
+    expect(screen.queryByTestId('classroom-toolbar-setup-dialog')).toBeNull();
+  });
+
+  it('归档并结束课堂后回到起始门户', async () => {
+    let archived = false;
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    const fetchMock = vi.fn().mockImplementation((url: string) => {
+      const u = String(url);
+      if (u.endsWith('/archive')) {
+        archived = true;
+        return Promise.resolve({ ok: true, json: async () => ({ success: true }) });
+      }
+      if (u.includes('/panoramic-report')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ session: { durationMin: 40 }, metrics: {}, students: [] }),
+        });
+      }
+      if (u.includes('/api/classroom/stage/')) {
+        return Promise.resolve({ ok: true, json: async () => ({ pacing: {} }) });
+      }
+      if (u.includes('/api/classroom/sessions/')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            hasActiveSession: !archived,
+            stage: 'ARCHIVED_REPORT',
+            session: { id: 'sess-1', stage: 'ARCHIVED_REPORT', ended_at: archived ? Date.now() : null },
+          }),
+        });
+      }
+      if (u.includes('/api/schedules/today')) {
+        return Promise.resolve({ ok: true, json: async () => ({ success: true, schedules: [] }) });
+      }
+      if (u.includes('/api/classroom/teaching-modes')) {
+        return Promise.resolve({ ok: true, json: async () => ({ success: true, modes: [] }) });
+      }
+      if (u.includes('/api/lessons/')) {
+        return Promise.resolve({ ok: true, json: async () => ({}) });
+      }
+      return Promise.resolve({ ok: true, json: async () => ({}) });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(
+      <AppDataProvider value={defaultProps as any}>
+        <LiveClassroomView initialPortalOpen={false} />
+      </AppDataProvider>,
+    );
+
+    dismissToolbarSetup();
+
+    const archiveButton = await screen.findByText('归档并结束课堂');
+    // 等简报页把最新会话（归档目标）拉回来后再点击
+    await waitFor(() =>
+      expect(fetchMock.mock.calls.some(([url]) => String(url) === '/api/classroom/sessions/lesson-101')).toBe(true),
+    );
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    fireEvent.click(archiveButton);
+
+    await waitFor(() => expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith('/archive'))).toBe(true));
+
+    // 归档即结束课堂：离开简报页，回到起始门户
+    expect(await screen.findByText('选择授课课程')).toBeTruthy();
+    expect(screen.queryByText('归档并结束课堂')).toBeNull();
+    expect(screen.queryByTestId('active-session-banner')).toBeNull();
   });
 
   it('returns to the entry portal where an in-progress class cannot be changed', async () => {
@@ -698,7 +808,7 @@ describe('LiveClassroomView - Student Pop-up & Sync', () => {
       </AppDataProvider>,
     );
 
-    fireEvent.click(screen.getByTestId('teacher-whiteboard-more'));
+    fireEvent.click(screen.getByTestId('teacher-whiteboard-tools'));
     fireEvent.click(screen.getByRole('button', { name: '返回门户' }));
     expect(await screen.findByTestId('portal-class-lock-hint')).toBeTruthy();
     const other = screen.getByRole('button', { name: /高二2班/ });
@@ -729,7 +839,7 @@ describe('LiveClassroomView - Student Pop-up & Sync', () => {
       </AppDataProvider>,
     );
 
-    fireEvent.click(screen.getByTestId('teacher-whiteboard-more'));
+    fireEvent.click(screen.getByTestId('teacher-whiteboard-tools'));
     const selectEl = screen.getByRole('combobox');
     const switchBtn = screen.getByRole('button', { name: /切换/ });
 

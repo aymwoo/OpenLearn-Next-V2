@@ -53,7 +53,7 @@ export default function App() {
 
   const lessonId = stageLessonParam || selectedLesson;
   const activeLesson = lessons.find((lesson) => lesson.id === lessonId);
-  setActiveCourseDeliveryMode(activeLesson?.delivery_mode ?? null);
+  setActiveCourseDeliveryMode(activeLesson?.delivery_mode ?? null, activeLesson?.mode_pack_id ?? null);
 
   React.useEffect(() => {
     return () => setActiveCourseDeliveryMode(null);

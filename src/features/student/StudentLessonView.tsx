@@ -316,7 +316,7 @@ export function StudentLessonView(props: StudentLessonViewProps) {
     ) : null;
 
   const lesson = lessons.find((item) => item.id === selectedLesson);
-  const classroomMode = resolveStudentClassroomMode(lesson?.delivery_mode);
+  const classroomMode = resolveStudentClassroomMode(lesson?.delivery_mode, lesson?.mode_pack_id);
   const lessonTitle = lesson?.title || (lang === 'zh' ? '课堂' : 'Class');
   const segmentTitle = segmentForWorkspace?.title?.trim() || '';
   const topic = segmentTitle || lessonTitle;

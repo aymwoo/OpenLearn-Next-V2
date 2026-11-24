@@ -56,7 +56,7 @@ import {
   IPluginLifecycleManagerToken,
   IPluginDistributionManagerToken,
   IPluginRuntimeCompositionToken,
-  IUnifiedExtensionRegistryToken,
+  IExtensionCatalogToken,
   IPluginCapabilityGatewayToken,
   ICapabilityRegistryToken,
   IAuthSessionBridgeToken,
@@ -66,6 +66,10 @@ import {
   IRewardCatalogServiceToken,
   ICreditRedemptionServiceToken,
   IClassroomMessageServiceToken,
+  IAssignmentSubmissionServiceToken,
+  IXueanActivityProgressServiceToken,
+  ILessonReportServiceToken,
+  IClassroomSelfMessageServiceToken,
 } from '../di/interfaces.js';
 import { StorageService } from '../di/storage-service.js';
 import { AIService } from '../di/ai-service.js';
@@ -79,6 +83,10 @@ import { RewardCatalogService } from '../di/reward-catalog-service.js';
 import { CreditRedemptionService } from '../di/credit-redemption-service.js';
 import { CreditAwardService } from '../di/credit-award-service.js';
 import { ClassroomMessageService } from '../di/classroom-message-service.js';
+import { AssignmentSubmissionService } from '../di/assignment-submission-service.js';
+import { XueanActivityProgressService } from '../di/xuean-activity-progress-service.js';
+import { LessonReportService } from '../di/lesson-report-service.js';
+import { ClassroomSelfMessageService } from '../di/classroom-self-message-service.js';
 import { DbSideEffectEnqueuer } from '../di/pending-side-effect-enqueuer.js';
 import { AuthSessionBridgeService } from '../di/auth-session-bridge-service.js';
 import { CoursewareRuntimeScriptRegistry } from '../di/courseware-runtime-script-registry.js';
@@ -103,7 +111,9 @@ import { ServiceRegistryKernel } from '../service-registry/index.js';
 import { PluginRuntimeComposition } from '../plugin-host/plugin-runtime-composition.js';
 import { PluginDistributionManager } from '../plugin-host/plugin-distribution-manager.js';
 import { PluginCapabilityGateway } from '../plugin-host/plugin-capability-gateway.js';
-import { UnifiedExtensionRegistry } from '../plugin-host/unified-extension-registry.js';
+import { ExtensionCatalog } from '../plugin-host/extension-catalog.js';
+import { CONTRIBUTES_SLOT_KEYS } from '../esm-loader/manifest-schema.js';
+import { assertExtensionPointsAligned, resolveExtensionSlotMode } from '../extension-registry/extension-points.js';
 import { PluginLifecycleManager } from '../plugin-host/plugin-lifecycle-manager.js';
 import { CapabilityRegistry } from '../ai-capability/registry/capability-registry.js';
 import path from 'path';
@@ -134,7 +144,7 @@ export class Kernel {
   public readonly pluginRuntimeComposition: PluginRuntimeComposition;
   public readonly pluginLifecycleManager: PluginLifecycleManager;
   public readonly pluginDistributionManager: PluginDistributionManager;
-  public readonly unifiedExtensionRegistry: UnifiedExtensionRegistry;
+  public readonly extensionCatalog: ExtensionCatalog;
   public readonly capabilityRegistry: CapabilityRegistry;
   public readonly pluginCapabilityGateway: PluginCapabilityGateway;
   public readonly lessonRuntime: LessonRuntime;
@@ -240,7 +250,17 @@ export class Kernel {
     this.pluginRuntimeComposition = new PluginRuntimeComposition(this.pluginHost, this.workerManager);
     this.pluginLifecycleManager = new PluginLifecycleManager(this.pluginHost);
     this.pluginDistributionManager = new PluginDistributionManager(this.pluginHost);
-    this.unifiedExtensionRegistry = new UnifiedExtensionRegistry();
+    this.extensionCatalog = new ExtensionCatalog({
+      listSlots: () =>
+        this.pluginHost.contributions.listAll().flatMap((entry) =>
+          entry.configs.map((config) => ({
+            slot: entry.slot,
+            pluginId: entry.pluginId,
+            id: config.id,
+          })),
+        ),
+      listHooks: () => this.classroomRuntime.hooksManager.listHooks(),
+    });
     this.capabilityRegistry = capabilityRegistry;
     this.pluginCapabilityGateway = new PluginCapabilityGateway(capabilityRegistry);
 
@@ -261,7 +281,7 @@ export class Kernel {
     this.serviceRegistry.register(IPluginLifecycleManagerToken, this.pluginLifecycleManager);
     this.serviceRegistry.register(IPluginDistributionManagerToken, this.pluginDistributionManager);
     this.serviceRegistry.register(IPluginRuntimeCompositionToken, this.pluginRuntimeComposition);
-    this.serviceRegistry.register(IUnifiedExtensionRegistryToken, this.unifiedExtensionRegistry);
+    this.serviceRegistry.register(IExtensionCatalogToken, this.extensionCatalog);
     this.serviceRegistry.register(IPluginCapabilityGatewayToken, this.pluginCapabilityGateway);
     this.serviceRegistry.register(ICapabilityRegistryToken, this.capabilityRegistry);
     this.serviceRegistry.register(ISemesterGradeServiceToken, new SemesterGradeService(this.db as any));
@@ -291,9 +311,18 @@ export class Kernel {
       }),
     );
     // 通讯协议可靠投递：与发放共用事件总线与补偿入队器。
+    const classroomMessageService = new ClassroomMessageService(flowDb, this.eventBus, sideEffectEnqueuer);
+    this.serviceRegistry.register(IClassroomMessageServiceToken, classroomMessageService);
+
+    // P0 第三方插件安全扩展：作业提交 / 学案进度 / 课后报告 / 学生自发消息。
+    // 前三个是只读替代通道（对应表在 sql-guard 禁读清单里）；最后一个把 sender
+    // 从 plugin 换成宿主派生的学生 actor，避免学生为了发消息被迫拿到 lesson:write。
+    this.serviceRegistry.register(IAssignmentSubmissionServiceToken, new AssignmentSubmissionService(flowDb));
+    this.serviceRegistry.register(IXueanActivityProgressServiceToken, new XueanActivityProgressService(flowDb));
+    this.serviceRegistry.register(ILessonReportServiceToken, new LessonReportService(flowDb));
     this.serviceRegistry.register(
-      IClassroomMessageServiceToken,
-      new ClassroomMessageService(flowDb, this.eventBus, sideEffectEnqueuer),
+      IClassroomSelfMessageServiceToken,
+      new ClassroomSelfMessageService(flowDb, classroomMessageService),
     );
 
     // Issue #366：受管名册读取（插件禁止直查 classes / students / class_students 的替代通道）
@@ -353,6 +382,8 @@ export class Kernel {
           source: input.source,
           reason: input.reason,
           overrideProtected: input.overrideProtected,
+          actorId: input.actorId,
+          actorRole: input.actorRole,
         }),
     });
     this.serviceRegistry.register(ISubmissionRegistryToken, submissionRegistry);
@@ -571,6 +602,14 @@ export class Kernel {
     } catch (err) {
       console.error('[Kernel] Failed to restore active plugins:', err);
     }
+
+    // Phase 1.4：扩展点单一事实源对账。恢复完插件后，registry 中的 slot 必须
+    // 全部属于 manifest schema 的 canonical 名单，否则启动 fail-fast。
+    assertExtensionPointsAligned(
+      this.pluginHost.contributions.listAll().map((entry) => entry.slot),
+      CONTRIBUTES_SLOT_KEYS,
+      resolveExtensionSlotMode(),
+    );
   }
 
   /**

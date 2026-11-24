@@ -52,7 +52,7 @@ function describeSubmission(sub: any): string {
 /** 附件下载地址：作业中心的文件存在 `plugin_assignment_files`，必须走带权限的下载端点 */
 function fileHref(sub: any, file: any): string | null {
   if (!file?.fileId || !sub?.assignment_id) return null;
-  return `/api/assignments/${sub.assignment_id}/files/${file.fileId}`;
+  return `/api/learning-surface-assignments/${sub.assignment_id}/files/${file.fileId}`;
 }
 
 export function StudentAssignmentEvalPanel({ lessonId, studentId, lang, addToast }: StudentAssignmentEvalPanelProps) {
@@ -123,7 +123,7 @@ export function StudentAssignmentEvalPanel({ lessonId, studentId, lang, addToast
     try {
       // v0.6.1 数据真实性：改走 lesson 作用域学生提交端点 —— 此前走教师专用
       // /api/commands，学生必 403
-      const res = await fetch(`/api/lessons/${lessonId}/eval-submissions`, {
+      const res = await fetch(`/api/learning-surface-lessons/${lessonId}/eval-submissions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -166,7 +166,7 @@ export function StudentAssignmentEvalPanel({ lessonId, studentId, lang, addToast
     setReviewLoading((prev) => ({ ...prev, [submissionId]: true }));
     try {
       // v0.6.1 数据真实性：互评走 lesson 作用域学生互评端点
-      const res = await fetch(`/api/lessons/${lessonId}/eval-submissions/${submissionId}/reviews`, {
+      const res = await fetch(`/api/learning-surface-lessons/${lessonId}/eval-submissions/${submissionId}/reviews`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -337,6 +337,20 @@ export function StudentAssignmentEvalPanel({ lessonId, studentId, lang, addToast
                   lessonId,
                   isSelf: true,
                   lang,
+                }}
+              />
+
+              {/* 第三方作业提交操作扩展槽（重新提交 / 分享 / 导出等） */}
+              <ExtensionPointRenderer
+                slot="assignment.submission.actions"
+                slotProps={{
+                  assignment: { id: mySubmission.assignment_id ?? null, lessonId },
+                  submission: mySubmission,
+                  studentId,
+                  lessonId,
+                  isSelf: true,
+                  lang,
+                  refresh: () => fetchData(true),
                 }}
               />
             </div>

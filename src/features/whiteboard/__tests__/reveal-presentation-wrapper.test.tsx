@@ -146,4 +146,51 @@ describe('RevealPresentationWrapper (Presentation & PPTX Async Loading)', () => 
     );
     expect(screen.queryByTestId('course-package-file-clear')).toBeNull();
   });
+
+  it('白板内演示文稿保持全局方向键行为', () => {
+    const onSlideChange = vi.fn();
+    render(
+      <RevealPresentationWrapper
+        elementId="pres-wb"
+        data={{ markdown: '# Slide 1\n---\n## Slide 2', fileType: 'md' }}
+        userRole="teacher"
+        onSlideChange={onSlideChange}
+      />,
+    );
+
+    fireEvent.keyDown(window, { key: 'ArrowRight' });
+    expect(onSlideChange).toHaveBeenCalledWith(1, 2);
+  });
+
+  it('Surface 内方向键只在焦点位于本 Surface 时生效', () => {
+    const onSlideChange = vi.fn();
+    const { container } = render(
+      <div data-surface-scope="pres-scope" tabIndex={0}>
+        <RevealPresentationWrapper
+          elementId="pres-scope"
+          data={{ markdown: '# Slide 1\n---\n## Slide 2', fileType: 'md', isSurface: true }}
+          userRole="teacher"
+          onSlideChange={onSlideChange}
+        />
+      </div>,
+    );
+    const scope = container.querySelector('[data-surface-scope]') as HTMLElement;
+
+    // 未聚焦：不响应
+    fireEvent.keyDown(window, { key: 'ArrowRight' });
+    expect(onSlideChange).not.toHaveBeenCalled();
+
+    // 聚焦本 Surface：响应
+    scope.focus();
+    fireEvent.keyDown(window, { key: 'ArrowRight' });
+    expect(onSlideChange).toHaveBeenCalledWith(1, 2);
+
+    // 输入框内：不抢键
+    onSlideChange.mockClear();
+    const input = document.createElement('input');
+    scope.appendChild(input);
+    input.focus();
+    fireEvent.keyDown(window, { key: 'ArrowRight' });
+    expect(onSlideChange).not.toHaveBeenCalled();
+  });
 });

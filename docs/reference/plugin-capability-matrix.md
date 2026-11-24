@@ -26,7 +26,7 @@
 
 ## 1. 完整权限字符串全集（按模块）
 
-权限字符串的**唯一权威清单是 `packages/core/capability/catalog.ts` 的 `CAP` / `CAPABILITIES`**（Issue #368 收敛后的单点真源）：守卫、方法策略、SDK 校验与 manifest 校验全部从那里取值，`assertValidManifestCapabilities` 报错时列出的合法值就是 `CAPABILITIES`（**31** 条）。本页是它的可读镜像。
+权限字符串的**唯一权威清单是 `packages/core/capability/catalog.ts` 的 `CAP` / `CAPABILITIES`**（Issue #368 收敛后的单点真源）：守卫、方法策略、SDK 校验与 manifest 校验全部从那里取值，`assertValidManifestCapabilities` 报错时列出的合法值就是 `CAPABILITIES`（**32** 条）。本页是它的可读镜像。
 
 > ⚠️ 若你只查到其中一部分（只查 `ActionDescriptor.capabilityRequired`，或只查 `method-policy` 的常量），就会把另一部分的**真实权限**误判成「捏造串」并删掉——删掉后运行期是**静默 403 / `PluginCapabilityDeniedError`**，比误报更难排查。真实事故见 Issue #368：4 个插件的 `pointsLedger.addPoints` 因此全部失效。
 
@@ -36,14 +36,14 @@
 | ---------- | ---- | ----------------------------------------------- | --------------------------- |
 | 资源型     | 19   | `ActionDescriptor.capabilityRequired`           | ✅                          |
 | 方法级     | 8    | `method-policy` 的服务代理 / Security Barrier 3 | ✅                          |
-| 仅可声明项 | 3    | 无闸门（声明无害，也不构成约束）                | ✅                          |
+| 仅可声明项 | 4    | 无闸门（声明无害，也不构成约束）                | ✅                          |
 | 平台内部   | 1    | 片段命令 gate                                   | ✅（插件片段可声明）        |
 
 实测口径（`python3 audit-tools/agent_facts.py --check` 校验契约 `docs/agent/contracts/capabilities.json`）：
 
 - **19 个**字符串用作 `ActionDescriptor.capabilityRequired`（`packages/plugins/*.ts` 口径）
 - **9 个**方法级字符串用于 `method-policy` 的方法闸门（§1.2.1）
-- **3 个**仅可声明项（§1.2）+ **1 个**平台内部字符串 `segment:gate_eval`（§1.2.2）
+- **4 个**仅可声明项（§1.2 / §1.2.3）+ **1 个**平台内部字符串 `segment:gate_eval`（§1.2.2）
 - `segment:gate_eval` **不是** `ActionDescriptor.capabilityRequired`（它只出现在 SDK 注释里）；SDK 注释建议片段命令同时声明它，见 §1.1 的口径说明
 
 ### 1.1 作为 `capabilityRequired` 使用的 19 个字符串（当前实测；逐项以 `grep -rn capabilityRequired` 为准）
@@ -113,6 +113,12 @@
 | `student-data:write` | `CAP_STUDENT_DATA_WRITE` | 授予写入 / 变更学生个人敏感数据（积分变动等）所需（§5.3）             |
 
 > ⚠️ `ai:invoke` **同时**也是第 2 套 `RuntimePermission` 的成员（§1.3）。两个登记互不相干、但字符串同名：写进 `capabilitiesProposed` 是声明「插件可驱动 AI 生成」（方法级闸门）；活动生态的 `permissions: ['ai:invoke']` 是运行时开关。**两处都要写才都有权限**。
+
+#### 1.2.3 P0 服务级能力（1 条）
+
+| 权限                     | 常量                         | 含义与消费点                                                                                                                                                                 |
+| ------------------------ | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `classroom:message:self` | `CAP.CLASSROOM_MESSAGE_SELF` | 授予 `ctx.services.classroomSelfMessage.sendAsSelf()`。sender 由宿主派生为当前学生 actor；仍校验 channel `rolesAllowed`、班级成员与定向目标同班。**不要求 `lesson:write`**。 |
 
 #### 1.2.2 平台内部可声明（1 条）
 

@@ -6,6 +6,7 @@ import { randomId } from './utils/id.js';
 import { createLogger } from '../packages/core/observability/logger.js';
 import { kernelContainer } from '../packages/core/kernel/index.js';
 import { CLASS_LOCK_MESSAGE, loadInProgressSessionClass, loadLessonClassId } from './services/classroom-class-lock.js';
+import { authorizeClass, authorizeClassroomRead } from './services/class-access.js';
 
 const plog = createLogger('presence');
 export interface PresenceDeps {
@@ -60,6 +61,7 @@ export interface PresenceDeps {
       classId?: string | null;
       sinceSeq: number;
       viewerId: string;
+      staffView?: boolean;
       limit?: number;
     }): Array<{
       seq: number;
@@ -69,6 +71,25 @@ export interface PresenceDeps {
       correlationId: string | null;
       payload: unknown;
     }>;
+    replayPage(query: {
+      lessonId?: string | null;
+      classId?: string | null;
+      sinceSeq: number;
+      viewerId: string;
+      staffView?: boolean;
+      limit?: number;
+    }): {
+      messages: Array<{
+        seq: number;
+        id: string;
+        channel: string;
+        msgType: string;
+        correlationId: string | null;
+        payload: unknown;
+      }>;
+      cursor: number;
+      hasMore: boolean;
+    };
   };
 }
 
@@ -218,6 +239,7 @@ export const WHITEBOARD_FULLSCREEN_CHANGED = 'whiteboard-fullscreen-changed';
  */
 let globalOnlineStudentsGetter: (() => string[]) | null = null;
 let globalActiveLessonsGetter: (() => Record<string, string>) | null = null;
+let globalMarkCheckedIn: ((lessonId: string, studentId: string) => boolean) | null = null;
 
 /** 读取当前实时在线的学生 ID 列表 */
 export function getOnlineStudentIds(): string[] {
@@ -247,6 +269,18 @@ export function getPresentStudentIds(lessonId: string | null | undefined): strin
     if (activeLessonId === lessonId && online.has(studentId)) present.push(studentId);
   }
   return present;
+}
+
+/**
+ * 签到成功后由 /checkin 调用，确保刚签到但未 enter-lesson 的学生
+ * 也能被 getPresentStudentIds 立即计入。幂等。
+ *
+ * 只对已在线的学生生效：离线学生没有 socket 在场事实，不应伪造在线状态。
+ *
+ * @returns 是否实际新增（已存在/离线/参数为空返回 false）
+ */
+export function markStudentCheckedIn(lessonId: string, studentId: string): boolean {
+  return globalMarkCheckedIn ? globalMarkCheckedIn(lessonId, studentId) : false;
 }
 
 export function setupPresence({
@@ -316,6 +350,15 @@ export function setupPresence({
         emitPresenceNow();
       }
     }, 500);
+  };
+
+  globalMarkCheckedIn = (lessonId: string, studentId: string): boolean => {
+    if (!lessonId || !studentId) return false;
+    if (!onlineStudents.has(studentId)) return false;
+    if (activeStudentLessons.get(studentId) === lessonId) return false;
+    activeStudentLessons.set(studentId, lessonId);
+    broadcastPresence();
+    return true;
   };
 
   io.on('connection', (socket: any) => {
@@ -773,21 +816,50 @@ export function setupPresence({
           ack?.({ ok: false, error: 'unauthenticated' });
           return;
         }
+        // 生产连接必有 session（握手层拦截）；测试连接按既有约定视为特权。
+        if (!session && process.env.NODE_ENV !== 'test') {
+          ack?.({ ok: false, error: 'unauthenticated' });
+          return;
+        }
+        // 补投曾经不校验课节/班级归属：任意已登录学生只要知道 lessonId，
+        // 就能拉到该课节的广播消息。与 HTTP GET /messages 保持同一套授权。
+        if (session) {
+          if (data.lessonId) {
+            const read = authorizeClassroomRead(kernelContainer.db, session, data.lessonId);
+            if (!read.ok) {
+              ack?.({ ok: false, error: read.error });
+              return;
+            }
+          }
+          if (data.classId) {
+            const member = authorizeClass(
+              kernelContainer.db,
+              session,
+              data.classId,
+              isTeacherOrAdmin ? 'staff' : 'member',
+            );
+            if (!member.ok) {
+              ack?.({ ok: false, error: member.error });
+              return;
+            }
+          }
+        }
         const sinceSeq = Number.isFinite(data.lastSeq) ? Number(data.lastSeq) : 0;
         try {
-          const pending = messageService.replay({
+          const page = messageService.replayPage({
             lessonId: data.lessonId ?? null,
             classId: data.classId ?? null,
             sinceSeq,
             viewerId,
+            staffView: isTeacherOrAdmin,
           });
-          for (const msg of pending) {
+          for (const msg of page.messages) {
             socket.emit('classroom:message', {
               ...msg,
               _meta: { correlationId: msg.correlationId ?? msg.id, type: 'classroom.message' },
             });
           }
-          ack?.({ ok: true, count: pending.length, lastSeq: pending.at(-1)?.seq ?? sinceSeq });
+          ack?.({ ok: true, count: page.messages.length, lastSeq: page.cursor, hasMore: page.hasMore });
         } catch (err) {
           plog.warn({ err }, '[Presence] message-resume failed');
           ack?.({ ok: false, error: 'replay failed' });

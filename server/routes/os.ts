@@ -5,7 +5,6 @@ import { kernelContainer } from '../../packages/core/kernel/index.js';
 import { detectPromptInjection } from '../utils/crypto.js';
 import { getCookieToken, getValidSession, getActorId, requireAuth } from '../middleware/auth.js';
 import { requireScopedAuth } from '../middleware/data-scope.js';
-import { createActivityContext } from '../../packages/activity-ecosystem/index.js';
 import { validateMagicBytes, BLOCKED_EXTENSIONS } from './shared.js';
 import {
   AdminPersonaError,
@@ -23,8 +22,10 @@ import { runWithLessonViewer } from '../../packages/core/di/lesson-viewer.js';
 import { lessonViewerFromRequest } from '../services/lesson-viewer-http.js';
 import { getFileStorageService } from '../services/file-storage/index.js';
 import { resolveAccessibleAiProvider } from '../services/ai-provider-resolver.js';
-import type { Request } from 'express';
+import type { Request, Response, NextFunction } from 'express';
 import type { ServerContext, StoredAIProvider, AgentChatAttachment, AgentChatRequest } from '../context.js';
+import { ActivityRunService } from '../services/activity-run-service.js';
+import { legacyActivityRouteKey, recordLegacyActivityRouteHit } from '../services/legacy-activity-route-usage.js';
 
 function getSharedProviderInfoMap(): Map<string, { name: string; modelName: string }> {
   const map = new Map<string, { name: string; modelName: string }>();
@@ -55,8 +56,13 @@ function decoratePersonaForResponse(
   };
 }
 
-export function registerOsRoutes(ctx: ServerContext) {
+export function registerOsRoutes(ctx: ServerContext, runService?: ActivityRunService) {
   const { app, runOpenAIAgentChat, activityRegistry, aiLimiter } = ctx;
+  // 测试/旧调用方可省略；省略时构造一个内存优先的默认实例。
+  runService ??= new ActivityRunService(
+    activityRegistry,
+    kernelContainer.db as unknown as import('better-sqlite3').Database,
+  );
 
   // 轻量连通性探测端点：课堂启动门户的顶部遥测岛用它测 HTTP 往返时延。
   // 刻意不鉴权、不访问数据库、无副作用，以便在登录页等未认证场景也能复用。
@@ -156,6 +162,48 @@ export function registerOsRoutes(ctx: ServerContext) {
     }
   });
 
+  // 学案首页背景图上传（教师/管理员）。图片走统一文件资产，返回 /api/files/:assetId。
+  app.post('/api/uploads/image', requireAuth('teacher', 'administrator'), async (req, res) => {
+    try {
+      const { filename, base64Data } = req.body || {};
+      if (!filename || !base64Data) {
+        return res.status(400).json({ error: 'Filename and base64Data are required' });
+      }
+      const ext = path.extname(String(filename)).toLowerCase();
+      const imageMime: Record<string, string> = {
+        '.jpg': 'image/jpeg',
+        '.jpeg': 'image/jpeg',
+        '.png': 'image/png',
+        '.gif': 'image/gif',
+        '.webp': 'image/webp',
+      };
+      if (BLOCKED_EXTENSIONS.includes(ext) || !imageMime[ext]) {
+        return res.status(400).json({ error: 'Only image files (jpg / png / gif / webp) are allowed' });
+      }
+      const fileBuffer = Buffer.from(String(base64Data).replace(/^data:[^;]+;base64,/, ''), 'base64');
+      if (fileBuffer.length > 5 * 1024 * 1024) {
+        return res.status(413).json({ error: 'Image must be smaller than 5MB' });
+      }
+      if (!validateMagicBytes(fileBuffer, String(filename))) {
+        return res.status(400).json({ error: 'File content does not match the declared image type' });
+      }
+      const session = (req as Request & { session?: { userId?: string } }).session;
+      const stored = await getFileStorageService().store({
+        buffer: fileBuffer,
+        originalName: String(filename),
+        mime: imageMime[ext],
+        context: {
+          purpose: 'lesson-cover',
+          accessScope: 'authenticated',
+          authorId: session?.userId ?? null,
+        },
+      });
+      res.json({ success: true, assetId: stored.assetId, fileUrl: stored.fileUrl });
+    } catch (e: unknown) {
+      sendSafeError(res, e);
+    }
+  });
+
   // OS Capability: Submit Command Manually via Web App Shell API (SEC: 仅限教师与管理员调用)
   app.post('/api/commands', requireAuth('teacher', 'administrator'), async (req, res) => {
     try {
@@ -196,140 +244,52 @@ export function registerOsRoutes(ctx: ServerContext) {
     }
   });
 
-  // ── Activity Ecosystem REST (Sprint P7-01) ──────────────────────────────
-  // List registered activity providers, filtered by role. Reuses the same
-  // registry the Workspace and plugins share. No business logic is duplicated.
-  app.get('/api/activities', requireScopedAuth('authenticated'), async (req, res) => {
-    try {
-      const role = (req.query.role as string) || 'all';
-      const list =
-        role === 'all'
-          ? activityRegistry.listDescriptors()
-          : activityRegistry
-              .listByRole(role as Parameters<typeof activityRegistry.listByRole>[0])
-              .map((p) => p.descriptor);
-      res.json({ activities: list });
-    } catch (err: unknown) {
-      sendSafeError(res, err);
-    }
-  });
+  // ── Activity Ecosystem REST — 兼容别名（canonical 见 activity-providers.ts）──
+  // 旧路由按“子路径/方法”静态分派：start|running|pause|resume|finish 属 provider；
+  // 学案 item 级路由仍留在 lesson-activities.ts，按方法分派。
+  const markLegacyActivityRoute = (req: Request, res: Response, next: NextFunction) => {
+    res.setHeader('Deprecation', 'true');
+    res.setHeader('Link', '</api/activity-providers>; rel="successor-version"');
+    // 摘除别名前统计真实调用；内存计数，不影响响应
+    recordLegacyActivityRouteHit(legacyActivityRouteKey(req));
+    next();
+  };
+  const redirectLegacy307 = (req: Request, res: Response, target: string) => {
+    const query = req.originalUrl.includes('?') ? req.originalUrl.slice(req.originalUrl.indexOf('?') + 1) : '';
+    const separator = target.includes('?') ? '&' : '?';
+    return res.redirect(307, query ? `${target}${separator}${query}` : target);
+  };
 
-  // Start an activity: builds an ActivityContext from the existing kernel
-  // services and drives the provider lifecycle (reuses Command Bus + Event Bus
-  // + Permission runtime). Permission isolation is enforced by startActivity().
-  app.post('/api/activities/:id/start', requireScopedAuth('authenticated'), async (req, res) => {
-    try {
-      const { payload, actorId } = req.body || {};
-      const context = createActivityContext({
-        commandBus: kernelContainer.commandBus,
-        eventBus: kernelContainer.eventBus,
-        actionRegistry: kernelContainer.actionRegistry,
-        capability: kernelContainer.capabilityGuard as any,
-        ai: kernelContainer.aiService,
-      });
-      const result = await activityRegistry.startActivity(req.params.id, context, payload ?? {}, actorId);
-      res.json({ ok: true, ...result });
-    } catch (err: unknown) {
-      const code =
-        typeof err === 'object' && err !== null && 'code' in err ? (err as { code?: unknown }).code : undefined;
-      const status = code === 'PERMISSION_DENIED' ? 403 : 500;
-      sendSafeError(res, err, status);
-    }
-  });
+  app.get('/api/activities', requireScopedAuth('authenticated'), markLegacyActivityRoute, (req, res) =>
+    redirectLegacy307(req, res, '/api/activity-providers'),
+  );
 
-  // List activities that are currently in progress (running or paused). Used by
-  // the dashboard "Activity Center" status monitor — it shows live status and
-  // hides itself when nothing is running. State is in-memory on the provider
-  // instances, so this reflects the live server process only.
-  app.get('/api/activities/running', requireScopedAuth('authenticated'), (_req, res) => {
-    try {
-      const activities = activityRegistry
-        .listProviders()
-        .filter((p) => p.state === 'running' || p.state === 'paused')
-        .map((p) => ({
-          id: p.descriptor.id,
-          name: p.descriptor.name,
-          icon: p.descriptor.icon,
-          category: p.descriptor.category,
-          provider: p.descriptor.provider,
-          state: p.state,
-          startedAt: p.startedAt ?? null,
-        }));
-      res.json({ activities });
-    } catch (err: unknown) {
-      sendSafeError(res, err);
-    }
-  });
+  // Start an activity: 307 到 canonical provider run 入口。
+  app.post('/api/activities/:id/start', requireScopedAuth('authenticated'), markLegacyActivityRoute, (req, res) =>
+    redirectLegacy307(req, res, `/api/activity-providers/${encodeURIComponent(req.params.id)}/runs`),
+  );
 
-  // Finish (end) a running activity — the management action exposed to the
-  // dashboard. Reuses the same ActivityContext as start().
-  app.post('/api/activities/:id/finish', requireScopedAuth('authenticated'), async (req, res) => {
-    try {
-      const provider = activityRegistry.getProvider(req.params.id);
-      if (!provider) {
-        return res.status(404).json({ ok: false, error: 'Activity provider not found' });
-      }
-      const context = createActivityContext({
-        commandBus: kernelContainer.commandBus,
-        eventBus: kernelContainer.eventBus,
-        actionRegistry: kernelContainer.actionRegistry,
-        capability: kernelContainer.capabilityGuard as unknown as Parameters<
-          typeof createActivityContext
-        >[0]['capability'],
-        ai: kernelContainer.aiService,
-      });
-      await provider.finish(context);
-      res.json({ ok: true });
-    } catch (err: unknown) {
-      sendSafeError(res, err);
-    }
-  });
+  // 旧 running 语义 = running + paused；canonical 用 ?active=1 保留。
+  app.get('/api/activities/running', requireScopedAuth('authenticated'), markLegacyActivityRoute, (req, res) =>
+    redirectLegacy307(req, res, '/api/activity-runs?active=1'),
+  );
 
-  // Pause a running activity (dashboard management action).
-  app.post('/api/activities/:id/pause', requireScopedAuth('authenticated'), async (req, res) => {
-    try {
-      const provider = activityRegistry.getProvider(req.params.id);
-      if (!provider) {
-        return res.status(404).json({ ok: false, error: 'Activity provider not found' });
-      }
-      const context = createActivityContext({
-        commandBus: kernelContainer.commandBus,
-        eventBus: kernelContainer.eventBus,
-        actionRegistry: kernelContainer.actionRegistry,
-        capability: kernelContainer.capabilityGuard as unknown as Parameters<
-          typeof createActivityContext
-        >[0]['capability'],
-        ai: kernelContainer.aiService,
-      });
-      await provider.pause(context);
-      res.json({ ok: true });
-    } catch (err: unknown) {
-      sendSafeError(res, err);
-    }
-  });
-
-  // Resume a paused activity (dashboard management action).
-  app.post('/api/activities/:id/resume', requireScopedAuth('authenticated'), async (req, res) => {
-    try {
-      const provider = activityRegistry.getProvider(req.params.id);
-      if (!provider) {
-        return res.status(404).json({ ok: false, error: 'Activity provider not found' });
-      }
-      const context = createActivityContext({
-        commandBus: kernelContainer.commandBus,
-        eventBus: kernelContainer.eventBus,
-        actionRegistry: kernelContainer.actionRegistry,
-        capability: kernelContainer.capabilityGuard as unknown as Parameters<
-          typeof createActivityContext
-        >[0]['capability'],
-        ai: kernelContainer.aiService,
-      });
-      await provider.resume(context);
-      res.json({ ok: true });
-    } catch (err: unknown) {
-      sendSafeError(res, err);
-    }
-  });
+  for (const action of ['finish', 'pause', 'resume'] as const) {
+    app.post(
+      `/api/activities/:id/${action}`,
+      requireScopedAuth('authenticated'),
+      markLegacyActivityRoute,
+      (req, res) => {
+        const run = runService.latestActiveRun(req.params.id);
+        if (!run) {
+          return res.status(404).json({
+            error: 'No active run for provider; use /api/activity-providers/:id/runs to start',
+          });
+        }
+        return redirectLegacy307(req, res, `/api/activity-runs/${encodeURIComponent(run.runId)}/${action}`);
+      },
+    );
+  }
 
   // OS Agent interaction
   // P2: ai.agent.persona —— 角色模板列表（按当前用户角色过滤 visibility 与启用态；管理员传 scope=all 查看全量）

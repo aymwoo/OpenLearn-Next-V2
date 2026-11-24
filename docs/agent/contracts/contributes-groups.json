@@ -3,6 +3,7 @@
   "_source": "packages/core/esm-loader/manifest-schema.ts:542（frontendSlotsShape）/ :594（contributesSchema）",
   "a_strict_keys": [
     "locales",
+    "learning.surface",
     "classroom.tool",
     "teacher.tab",
     "teacher.dashboard.widget",
@@ -36,6 +37,7 @@
     "classroom.post_class.widget",
     "courseware.viewer.toolbar",
     "courseware.viewer.overlay",
+    "courseware.host",
     "classroom.portal.telemetry",
     "classroom.portal.course_badge",
     "classroom.portal.teaching_mode",
@@ -82,6 +84,7 @@
     "stage.display.overlay",
     "stage.display.action",
     "assignment.submission.preview",
+    "assignment.submission.actions",
     "assignment.file.preview",
     "student.classroom.overlay",
     "student.profile.tab",
@@ -119,17 +122,23 @@
     "ai_sidebar.tab",
     "assessment.list.card",
     "assessment.attempt.toolbar",
-    "assessment.stats.card"
+    "assessment.stats.card",
+    "xuean.activity.type",
+    "xuean.activity.editor",
+    "xuean.activity.student"
   ],
-  "a_total": 73,
-  "b_total": 43,
+  "a_total": 75,
+  "b_total": 47,
   "a_not_in_extension_slot": [
     "ai.persona.provider",
+    "learning.surface",
     "locales",
     "mode.pack",
     "palette.items",
     "teacher.cockpit.widget",
     "timeline.segments"
   ],
-  "b_not_in_extension_slot": ["workspace.view"]
+  "b_not_in_extension_slot": [
+    "workspace.view"
+  ]
 }

@@ -80,6 +80,22 @@ export class RewardCatalogService {
     if (!input.id || !input.name || !Number.isFinite(input.costPoints) || input.costPoints <= 0) {
       throw new Error('id, name 必填，costPoints 必须为正数');
     }
+    // 库存/有效期直接参与发放判定，NaN 会被当成「无限制」，必须在入口拒绝。
+    if (input.stock !== null && input.stock !== undefined && (!Number.isInteger(input.stock) || input.stock < 0)) {
+      throw new Error('stock 必须为非负整数或 null');
+    }
+    for (const [label, value] of [
+      ['availableFrom', input.availableFrom],
+      ['availableUntil', input.availableUntil],
+      ['sortOrder', input.sortOrder],
+    ] as const) {
+      if (value !== null && value !== undefined && !Number.isFinite(value)) {
+        throw new Error(`${label} 必须为有限数值或 null`);
+      }
+    }
+    if (input.availableFrom != null && input.availableUntil != null && input.availableUntil <= input.availableFrom) {
+      throw new Error('availableUntil 必须晚于 availableFrom');
+    }
     const now = Date.now();
     this.db
       .prepare(

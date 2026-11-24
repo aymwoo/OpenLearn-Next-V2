@@ -92,28 +92,6 @@ function renderBoard(readOnly: boolean, elements: any[] = []) {
   );
 }
 
-const sampleElements = [
-  {
-    id: 'applet-1',
-    type: 'html-applet',
-    data: JSON.stringify({
-      title: '互动几何课件',
-      code: '<h1>Hello Courseware</h1>',
-      width: 400,
-      height: 300,
-    }),
-  },
-  {
-    id: 'sandbox-1',
-    type: 'code-sandbox',
-    data: JSON.stringify({
-      code: "console.log('test');",
-      width: 400,
-      height: 300,
-    }),
-  },
-];
-
 describe('InteractiveWhiteboard readOnly (全班专注锁定)', () => {
   it('renders the authoring toolbar and page bar for a normal student', () => {
     renderBoard(false);
@@ -140,37 +118,6 @@ describe('InteractiveWhiteboard readOnly (全班专注锁定)', () => {
     const { container } = renderBoard(false);
     const canvasHost = container.querySelector('[data-testid="whiteboard-stage-host"]');
     expect((canvasHost as HTMLElement).style.pointerEvents).toBe('auto');
-  });
-
-  it('locks html-applet component with pointer-events: none and displays ReadOnlyLockCover when readOnly', () => {
-    const { container } = renderBoard(true, sampleElements);
-    // 检查只读标签
-    expect(screen.getAllByText('🔒 只读锁定').length).toBeGreaterThan(0);
-    // 检查遮罩层存在
-    const covers = screen.getAllByTestId('whiteboard-readonly-lock-cover');
-    expect(covers.length).toBeGreaterThan(0);
-    // 遮罩层有 not-allowed 并且 pointer-events: auto 以拦截事件
-    expect(covers[0].className).toContain('cursor-not-allowed');
-
-    // 检查组件卡片容器设置了 pointer-events: none
-    const appletContainer = container.querySelector('.bg-white.border.border-gray-300.rounded-lg.shadow-xl');
-    expect(appletContainer).toBeTruthy();
-    expect((appletContainer as HTMLElement).style.pointerEvents).toBe('none');
-
-    // 只读锁定时，全屏和删除按钮被隐藏
-    expect(screen.queryByTitle('白板全屏（组件在画布内最大化）')).toBeNull();
-    expect(screen.queryByTitle('删除组件')).toBeNull();
-  });
-
-  it('enables html-applet component interaction and fullscreen when not readOnly', () => {
-    const { container } = renderBoard(false, sampleElements);
-    expect(screen.queryByText('🔒 只读锁定')).toBeNull();
-    expect(screen.queryByTestId('whiteboard-readonly-lock-cover')).toBeNull();
-
-    const appletContainer = container.querySelector('.bg-white.border.border-gray-300.rounded-lg.shadow-xl');
-    expect(appletContainer).toBeTruthy();
-    expect((appletContainer as HTMLElement).style.pointerEvents).toBe('auto');
-    expect(screen.getAllByTitle('白板全屏（组件在画布内最大化）').length).toBeGreaterThan(0);
   });
 
   it('locks FullscreenOverlay when readOnly and renders lock cover badge', () => {

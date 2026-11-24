@@ -194,7 +194,7 @@ grep -c 'actionRegistry\.register(' packages/plugins/*.ts server/routes/*.ts
 | manifest zod schema      | `packages/core/esm-loader/manifest-schema.ts → manifestSchema（L787）`；`id` 不含 `:` 的 refine（L795）、`main: z.string().min(1)`（L798） |
 | 依赖解析 / 自动安装      | `packages/core/plugin-host/dependency-resolver.ts`、`dependency-install.ts`                                                                |
 | 贡献注册表               | `packages/core/plugin-host/contribution-registry.ts`                                                                                       |
-| 统一扩展注册表           | `packages/core/plugin-host/unified-extension-registry.ts`                                                                                  |
+| 规范扩展点清单           | `packages/core/extension-registry/extension-points.ts`                                                                                     |
 | 贡献键 A 组 71 / B 组 38 | `docs/agent/contracts/contributes-groups.json`                                                                                             |
 | 插件分发 / 更新          | `packages/core/plugin-host/plugin-distribution-manager.ts`                                                                                 |
 | 卸载                     | `packages/core/plugin-host/uninstall.ts`                                                                                                   |

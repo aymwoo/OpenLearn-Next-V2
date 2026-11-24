@@ -19,7 +19,6 @@ export function useLiveClassroomSessionPolling(options: {
   setEntryDecisionReady: Dispatch<SetStateAction<boolean>>;
   setHasActiveSession: Dispatch<SetStateAction<boolean>>;
   setLessonAccessError: Dispatch<SetStateAction<LessonAccessError>>;
-  setShowSessionPicker: Dispatch<SetStateAction<boolean>>;
   setShowEntryPortal: Dispatch<SetStateAction<boolean>>;
   setSelectedLesson: (id: string | null) => void;
   setLiveClassSelectedClassId: (id: string | null) => void;
@@ -41,7 +40,6 @@ export function useLiveClassroomSessionPolling(options: {
     setEntryDecisionReady,
     setHasActiveSession,
     setLessonAccessError,
-    setShowSessionPicker,
     setShowEntryPortal,
     setSelectedLesson,
     setLiveClassSelectedClassId,
@@ -88,7 +86,6 @@ export function useLiveClassroomSessionPolling(options: {
               setSessionStartedAt(null);
               reportLessonAccessError(res.status, 'session');
               if (initialPortalOpen && (res.status === 403 || res.status === 404)) {
-                setShowSessionPicker(false);
                 setShowEntryPortal(true);
                 setSelectedLesson(null);
               }
@@ -114,10 +111,10 @@ export function useLiveClassroomSessionPolling(options: {
           const sessionClassId = data.session?.class_id ? String(data.session.class_id) : null;
           const classLocked = Boolean(data.hasActiveSession) && isInProgressClassLocked(data.stage);
           // 刷新 / ?classId= 不能改掉进行中会话的班级。URL 上的 classId 故意不读取。
-          // Issue #91：不再直接跳进授课视图，改为先把「进行中的会话」交还给教师选择。
+          // 统一落回起始门户：门户内的「课堂进行中」提示条负责恢复当前会话，
+          // 不再把教师先送到独立的进行中会话列表页。
           if (classLocked && !userReturnedToPortalRef.current && !enteredClassroomRef.current) {
-            setShowEntryPortal(false);
-            setShowSessionPicker(true);
+            setShowEntryPortal(true);
           }
           const currentClassId = appStore.getState().liveClassSelectedClassId;
           if (classLocked && sessionClassId && currentClassId !== sessionClassId) {

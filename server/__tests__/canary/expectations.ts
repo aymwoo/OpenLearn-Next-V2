@@ -33,7 +33,7 @@ export const PROBE_MATRIX: ProbeExpectation[] = [
 /** 双模式行为差异（模式差异优先级高于通用矩阵） */
 export const MODE_DIFFS = {
   inline: {
-    '2.2-services': /keys=11, pointsDimension=set/,
+    '2.2-services': /keys=15, pointsDimension=set/,
     '4.3-sql-semicolon': /\[SEC\] createTable schema must not contain ";" \(multiple statements are not allowed\)/,
     '4.7-db-exec': /^sync$/,
     '4.8-db-transaction': /^function$/,
@@ -54,7 +54,7 @@ export const MODE_DIFFS = {
   },
 } as const;
 
-/** 33 个 DI Token 扫描清单 */
+/** 34 个 DI Token 扫描清单 */
 export const TOKEN_SWEEP = [
   'ICommandBusServiceToken',
   'IEventBusServiceToken',
@@ -79,11 +79,12 @@ export const TOKEN_SWEEP = [
   'ICapabilityRegistryToken',
   'IPluginLifecycleManagerToken',
   'IPluginCapabilityGatewayToken',
-  'IUnifiedExtensionRegistryToken',
+  'IExtensionCatalogToken',
   'IPluginDistributionManagerToken',
   'IPluginRuntimeCompositionToken',
   'ICoursewareRuntimeScriptRegistryToken',
   'IClassroomLifecycleServiceToken',
+  'IClassroomActivityCatalogToken',
   'IInteractionRuntimeServiceToken',
   'IActivityRegistryToken',
   'IAuthSessionBridgeToken',

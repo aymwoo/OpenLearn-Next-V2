@@ -15,7 +15,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { PointsDimensionRegistry } from '../../di/points-dimension-registry.js';
-import { UnifiedExtensionRegistry } from '../unified-extension-registry.js';
+import { ContributionRegistry } from '../contribution-registry.js';
 import { PluginHost } from '../index.js';
 import { EsmLoader } from '../../esm-loader/esm-loader.js';
 import { ServiceRegistry } from '../../di/service-registry.js';
@@ -51,59 +51,26 @@ describe('D-1a：积分维度可注销，且内置维度受保护', () => {
   });
 });
 
-describe('D-2：UnifiedExtensionRegistry 可按 provider 批量注销', () => {
-  let registry: UnifiedExtensionRegistry;
+describe('D-2：ContributionRegistry 可按 plugin 批量注销', () => {
+  let registry: ContributionRegistry;
 
   beforeEach(() => {
-    registry = new UnifiedExtensionRegistry();
+    registry = new ContributionRegistry();
   });
 
-  it('只移除指定 provider 的扩展项，保留其它 provider 的', () => {
-    registry.registerExtension('classroom.tool', 'p1-tool', {}, { providerId: 'plugin-a' });
-    registry.registerExtension('classroom.tool', 'p2-tool', {}, { providerId: 'plugin-b' });
-    registry.registerExtension('teacher.tab', 'p1-tab', {}, { providerId: 'plugin-a' });
+  it('只移除指定 plugin 的贡献，保留其它 plugin 的', () => {
+    registry.registerClassroomTools('plugin-a', [{ id: 'p1-tool', name: 'P1', commandType: 'noop' }]);
+    registry.registerClassroomTools('plugin-b', [{ id: 'p2-tool', name: 'P2', commandType: 'noop' }]);
 
-    const removed = registry.unregisterProvider('plugin-a');
+    registry.unregister('plugin-a');
 
-    expect(removed).toBe(2);
-    const ids = registry.listExtensions().map((e) => e.id);
+    const ids = registry.getBySlot('classroom.tool').map((config) => config.id);
     expect(ids).toEqual(['p2-tool']);
-    expect(registry.hasExtension('classroom.tool', 'p1-tool')).toBe(false);
-    expect(registry.hasExtension('teacher.tab', 'p1-tab')).toBe(false);
-    expect(registry.hasExtension('classroom.tool', 'p2-tool')).toBe(true);
   });
 
-  it('移除后不再残留空分类', () => {
-    registry.registerExtension('teacher.tab', 'only-tab', {}, { providerId: 'plugin-a' });
-    expect(registry.listCategories()).toContain('teacher.tab');
-
-    registry.unregisterProvider('plugin-a');
-    expect(registry.listCategories()).not.toContain('teacher.tab');
-  });
-
-  it('对未注册的 provider 返回 0（幂等）', () => {
-    expect(registry.unregisterProvider('nobody')).toBe(0);
-    expect(registry.unregisterProvider('nobody')).toBe(0);
-  });
-
-  it('清理后可重新注册同一 id（不再被「重复即跳过」卡住）', () => {
-    registry.registerExtension('classroom.tool', 't', {}, { providerId: 'plugin-a' });
-    registry.unregisterProvider('plugin-a');
-
-    // 修复前：条目仍在，重复注册会被跳过或抛错
-    expect(() => registry.registerExtension('classroom.tool', 't', {}, { providerId: 'plugin-a' })).not.toThrow();
-    expect(registry.listExtensions()).toHaveLength(1);
-  });
-
-  it('syncContributionRegistry 后按 pluginId 清理生效', () => {
-    const fakeContributionRegistry = {
-      listAll: () => [{ slot: 'classroom.tool', pluginId: 'ext-x', configs: [{ id: 'x-tool', name: 'X' }] }],
-    };
-    registry.syncContributionRegistry(fakeContributionRegistry as never);
-    expect(registry.listExtensions().map((e) => e.id)).toEqual(['x-tool']);
-
-    registry.unregisterProvider('ext-x');
-    expect(registry.listExtensions()).toEqual([]);
+  it('注销不存在的 plugin 是幂等的', () => {
+    expect(() => registry.unregister('nobody')).not.toThrow();
+    expect(registry.getBySlot('classroom.tool')).toEqual([]);
   });
 });
 

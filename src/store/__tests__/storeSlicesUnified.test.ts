@@ -115,6 +115,15 @@ describe('Store Slices Unified Architecture (PERF-03 / Stage 5)', () => {
       expect(feed[49].id).toBe('feed-59');
     });
 
+    it('clears the in-page course editor state when leaving Course Management', () => {
+      appStore.getState().setTeacherTab('courses');
+      appStore.getState().setCourseEditingLessonId('lesson-1');
+      expect(appStore.getState().courseEditingLessonId).toBe('lesson-1');
+
+      appStore.getState().setTeacherTab('dashboard');
+      expect(appStore.getState().courseEditingLessonId).toBeNull();
+    });
+
     it('triggers vanilla subscription listeners regardless of whether action was called from facade or appStore', () => {
       let notifyCount = 0;
       const unsubscribe = appStore.subscribe(() => {

@@ -5,6 +5,7 @@ import path from 'path';
 import os from 'os';
 import nodeFs from 'fs';
 import { fileURLToPath } from 'url';
+import { shouldReclaimTestDbFile } from './packages/core/db/test-db-files.js';
 
 /**
  * 全局守卫：还原被测试用例修改的 global.fetch。
@@ -61,7 +62,7 @@ if (!/^[0-9a-fA-F]{64}$/.test((process.env.ENCRYPTION_KEY || '').trim())) {
   nodeFs.mkdirSync(testDbDir, { recursive: true });
 
   /**
-   * 回收旧进程留下的库文件（按小时粒度，不碰当前进程的库）。
+   * 回收旧进程留下的库文件（不碰当前进程与存活进程的库）。
    *
    * 库文件名带 `process.pid`（见 `packages/core/db/index.ts` 的 `VITEST` 分支），
    * 所以**每个 worker 进程天然拿到一份全新的库**：不需要“启动时删除”，也就没有
@@ -69,22 +70,40 @@ if (!/^[0-9a-fA-F]{64}$/.test((process.env.ENCRYPTION_KEY || '').trim())) {
    * 新一轮复用到同一 pid 就跳过重置，带着上一轮残留的 `_migrations` 行再跑迁移，
    * 实测报 `UNIQUE constraint failed: _migrations.name`。
    *
-   * 代价是旧 pid 的文件会留在 /tmp：这里按 24h 粗粒度收回（24 小时前的文件不可能是
-   * 正在跑的套件），避免无限堆积。失败不影响测试。
+   * 阶段 13.1：优先按「pid 已不存在」回收，比 24 小时更及时；判定在
+   * `packages/core/db/test-db-files.ts`，有独立单测。清理必须**逐文件容错** ——
+   * 此前整轮包在一个 try 里，并发 worker 删除同一文件时 `statSync` 抛错会中断
+   * 后续所有文件，最终把 /tmp 堆到数 GB 并触发 SQLite `disk I/O error`。
    */
+  const isProcessAlive = (pid: number): boolean => {
+    try {
+      process.kill(pid, 0);
+      return true;
+    } catch (error) {
+      // EPERM：进程存在但不属于当前用户，仍视为存活。
+      return (error as NodeJS.ErrnoException).code === 'EPERM';
+    }
+  };
+
   try {
     const now = Date.now();
     for (const entry of nodeFs.readdirSync(testDbDir)) {
-      if (!/^openlearn_test_.*\.db(-wal|-shm)?$/.test(entry)) continue;
-      const full = path.join(testDbDir, entry);
-      if (now - nodeFs.statSync(full).mtimeMs > 24 * 60 * 60 * 1000) nodeFs.rmSync(full, { force: true });
-    }
-    // 清理历史遗留的 pid 哨兵（旧方案产物）。
-    for (const entry of nodeFs.readdirSync(testDbDir)) {
-      if (entry.startsWith('.reset-')) nodeFs.rmSync(path.join(testDbDir, entry), { force: true });
+      try {
+        const full = path.join(testDbDir, entry);
+        const reclaim = shouldReclaimTestDbFile({
+          entry,
+          mtimeMs: nodeFs.statSync(full).mtimeMs,
+          now,
+          currentPid: process.pid,
+          isAlive: isProcessAlive,
+        });
+        if (reclaim) nodeFs.rmSync(full, { force: true });
+      } catch {
+        // 并发 worker 可能已删除同一文件；单文件失败不影响整轮回收。
+      }
     }
   } catch {
-    // 回收失败不影响测试正确性。
+    // 目录暂不可读不影响测试正确性。
   }
 
   const ambientDbPath = process.env.OPENLEARN_DB_PATH;

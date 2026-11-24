@@ -43,6 +43,7 @@ import {
   finishActivity,
   pauseActivity,
   resumeActivity,
+  describeRunState,
   type ActivityProviderDescriptor,
   type ActivityRole,
   type RunningActivity,
@@ -204,6 +205,7 @@ export const ActivityWorkspaceWidget: React.FC<ActivityWorkspaceWidgetProps> = (
     if (statusError || running.length === 0) return null;
 
     const managed = running.find((r) => r.id === manageId) || null;
+    const managedView = managed ? describeRunState(managed.state, lang) : null;
 
     return (
       <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm">
@@ -219,7 +221,15 @@ export const ActivityWorkspaceWidget: React.FC<ActivityWorkspaceWidgetProps> = (
 
         <div className="flex flex-col gap-2">
           {running.map((a) => {
-            const isRunning = a.state === 'running';
+            const view = describeRunState(a.state, lang);
+            const toneClass =
+              view.tone === 'running'
+                ? 'bg-emerald-100 text-emerald-700'
+                : view.tone === 'paused'
+                  ? 'bg-amber-100 text-amber-700'
+                  : view.tone === 'interrupted'
+                    ? 'bg-rose-100 text-rose-700'
+                    : 'bg-slate-100 text-slate-600';
             return (
               <button
                 key={a.id}
@@ -232,13 +242,7 @@ export const ActivityWorkspaceWidget: React.FC<ActivityWorkspaceWidgetProps> = (
                   {a.category && <div className="text-xs text-slate-500 truncate">{a.category}</div>}
                 </div>
                 <div className="flex flex-col items-end gap-1 shrink-0">
-                  <span
-                    className={`text-xs font-bold px-2 py-0.5 rounded-full ${
-                      isRunning ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
-                    }`}
-                  >
-                    {isRunning ? (lang === 'zh' ? '进行中' : 'Running') : lang === 'zh' ? '已暂停' : 'Paused'}
-                  </span>
+                  <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${toneClass}`}>{view.label}</span>
                   <span className="text-xs text-slate-400 flex items-center gap-1">
                     <Clock size={10} /> {formatElapsed(a.startedAt, lang)}
                   </span>
@@ -265,46 +269,51 @@ export const ActivityWorkspaceWidget: React.FC<ActivityWorkspaceWidgetProps> = (
                 </button>
               </div>
               <div className="text-sm text-slate-500 mb-1">
-                {lang === 'zh' ? '状态' : 'Status'}:{' '}
-                {managed.state === 'running'
-                  ? lang === 'zh'
-                    ? '进行中'
-                    : 'Running'
-                  : lang === 'zh'
-                    ? '已暂停'
-                    : 'Paused'}
+                {lang === 'zh' ? '状态' : 'Status'}: {managedView?.label}
               </div>
               <div className="text-sm text-slate-500 mb-4">
                 {lang === 'zh' ? '开始时间' : 'Started'}:{' '}
                 {managed.startedAt ? new Date(managed.startedAt).toLocaleString() : '-'}
               </div>
+              {managedView?.tone === 'interrupted' && (
+                <div className="text-xs text-rose-600 mb-2">
+                  {lang === 'zh'
+                    ? '该运行在服务重启后已中断，无法继续或结束。'
+                    : 'This run was interrupted after a server restart and can no longer be resumed or ended.'}
+                </div>
+              )}
               {finishError && <div className="text-xs text-rose-600 mb-2">{finishError}</div>}
-              <div className="flex gap-2">
-                {managed.state === 'running' ? (
-                  <button
-                    disabled={actionBusy}
-                    onClick={handlePause}
-                    className="flex-1 flex items-center justify-center gap-1 bg-amber-500 hover:bg-amber-600 disabled:opacity-60 text-white rounded-lg py-2 text-sm font-bold"
-                  >
-                    <Pause size={14} /> {lang === 'zh' ? '暂停' : 'Pause'}
-                  </button>
-                ) : (
-                  <button
-                    disabled={actionBusy}
-                    onClick={handleResume}
-                    className="flex-1 flex items-center justify-center gap-1 bg-indigo-500 hover:bg-indigo-600 disabled:opacity-60 text-white rounded-lg py-2 text-sm font-bold"
-                  >
-                    <Play size={14} /> {lang === 'zh' ? '恢复' : 'Resume'}
-                  </button>
-                )}
-                <button
-                  disabled={actionBusy}
-                  onClick={handleFinish}
-                  className="flex-1 flex items-center justify-center gap-1 bg-rose-600 hover:bg-rose-700 disabled:opacity-60 text-white rounded-lg py-2 text-sm font-bold"
-                >
-                  {actionBusy ? (lang === 'zh' ? '处理中…' : 'Working…') : lang === 'zh' ? '结束' : 'End'}
-                </button>
-              </div>
+              {(managedView?.canPause || managedView?.canResume || managedView?.canFinish) && (
+                <div className="flex gap-2">
+                  {managedView?.canPause && (
+                    <button
+                      disabled={actionBusy}
+                      onClick={handlePause}
+                      className="flex-1 flex items-center justify-center gap-1 bg-amber-500 hover:bg-amber-600 disabled:opacity-60 text-white rounded-lg py-2 text-sm font-bold"
+                    >
+                      <Pause size={14} /> {lang === 'zh' ? '暂停' : 'Pause'}
+                    </button>
+                  )}
+                  {managedView?.canResume && (
+                    <button
+                      disabled={actionBusy}
+                      onClick={handleResume}
+                      className="flex-1 flex items-center justify-center gap-1 bg-indigo-500 hover:bg-indigo-600 disabled:opacity-60 text-white rounded-lg py-2 text-sm font-bold"
+                    >
+                      <Play size={14} /> {lang === 'zh' ? '恢复' : 'Resume'}
+                    </button>
+                  )}
+                  {managedView?.canFinish && (
+                    <button
+                      disabled={actionBusy}
+                      onClick={handleFinish}
+                      className="flex-1 flex items-center justify-center gap-1 bg-rose-600 hover:bg-rose-700 disabled:opacity-60 text-white rounded-lg py-2 text-sm font-bold"
+                    >
+                      {actionBusy ? (lang === 'zh' ? '处理中…' : 'Working…') : lang === 'zh' ? '结束' : 'End'}
+                    </button>
+                  )}
+                </div>
+              )}
               <button
                 onClick={handleEnterClassroom}
                 className="w-full mt-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg py-2 text-sm font-bold"

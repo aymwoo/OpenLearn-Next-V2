@@ -169,6 +169,10 @@ interface PluginContext {
     pointsLedger: IPointsLedgerService | null; // 积分账本
     roster: IClassRosterService | null; // 受管名册读取（需 management:read）
     lessonOutline: ILessonOutlineService | null; // 课节标题只读（需 lesson:read）
+    assignmentSubmission: IAssignmentSubmissionService | null; // 本人作业提交（assignment:read）
+    xueanActivityProgress: IXueanActivityProgressService | null; // 本人学案进度（lesson:read）
+    lessonReport: ILessonReportService | null; // 课后聚合摘要（lesson:read，仅教师/管理员）
+    classroomSelfMessage: IClassroomSelfMessageService | null; // 学生 self 消息（classroom:message:self）
   };
   pluginId: string; // 插件 ID
   manifest: Manifest; // 插件 manifest

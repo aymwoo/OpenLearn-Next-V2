@@ -6,9 +6,9 @@ import { AlertCircle, CheckCircle2, Loader2, Link2, Plus, RefreshCw, Unlink } fr
  *
  * 白板对象本身只是投影片段，作业数据一律以 `plugin_assignments` 为真源，
  * 因此这里通过 HTTP 端点读写（教师身份由会话决定）：
- *   GET  /api/assignments?lessonId=…   列出本课时的作业
- *   GET  /api/assignments/:id          读取绑定作业的详情
- *   POST /api/assignments              按当前标题/描述新建作业并绑定
+ *   GET  /api/learning-surface-assignments?lessonId=…   列出本课时的作业
+ *   GET  /api/learning-surface-assignments/:id          读取绑定作业的详情
+ *   POST /api/learning-surface-assignments              按当前标题/描述新建作业并绑定
  *
  * 绑定结果写回白板元素的 payload（assignmentId），学生端据此打开真正的提交弹窗。
  */
@@ -76,7 +76,7 @@ export function AssignmentBindingField({
       if (!silent) setLoading(true);
       setError(null);
       try {
-        const res = await fetch(`/api/assignments?lessonId=${encodeURIComponent(lessonId)}`);
+        const res = await fetch(`/api/learning-surface-assignments?lessonId=${encodeURIComponent(lessonId)}`);
         const data = await res.json().catch(() => null);
         if (!res.ok || data?.success === false) {
           throw new Error(data?.error || `HTTP ${res.status}`);
@@ -97,7 +97,7 @@ export function AssignmentBindingField({
       return;
     }
     try {
-      const res = await fetch(`/api/assignments/${encodeURIComponent(value)}`);
+      const res = await fetch(`/api/learning-surface-assignments/${encodeURIComponent(value)}`);
       const data = await res.json().catch(() => null);
       if (res.ok && data?.success !== false) setBound(data.assignment || null);
     } catch {
@@ -117,7 +117,7 @@ export function AssignmentBindingField({
     if (creating || !lessonId) return;
     setCreating(true);
     try {
-      const res = await fetch('/api/assignments', {
+      const res = await fetch('/api/learning-surface-assignments', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

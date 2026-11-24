@@ -5,7 +5,7 @@ import { liveClassStore } from '../store/liveClassStore';
 import { useAppData } from '../context/AppDataContext';
 import type { WhiteboardPageItem, WhiteboardHandle } from '../features/whiteboard/InteractiveWhiteboard';
 import { extensionCoversSegmentType, normalizeSegmentType } from '../../packages/core/plugin-host/mode-pack';
-import { resolveCourseDeliveryMode } from '../../packages/core/plugin-host/course-delivery-mode';
+import { resolveLessonModePackDeliveryMode } from '../../packages/core/plugin-host/course-delivery-mode';
 import { useOptionalPluginHost } from '../plugin-host/plugin-host-context';
 import {
   isModePacksEnabled,
@@ -19,9 +19,9 @@ import { getOptionalSocket, onSocketInstance } from '../services/socket-service'
 import { buildShowcaseDiffCandidateWorks } from '../features/classroom/showcase-diff/build-diff-works';
 import { useErrorStore } from '../store/errorStore';
 import { ClassroomInteractiveCockpit } from '../features/classroom/ClassroomInteractiveCockpit';
+import { ClassroomToolbarSetupDialog } from '../features/classroom/ClassroomToolbarSetupDialog';
 import { ClassroomEntryPortal } from '../features/classroom/ClassroomEntryPortal';
 import { ClassroomSessionManager, type ClassroomSessionItem } from '../features/classroom/ClassroomSessionManager';
-import { InProgressSessionList } from '../features/classroom/InProgressSessionList';
 import { readRememberedActiveLesson, rememberActiveLesson } from '../features/classroom/live-class-resume-memory';
 import { useClassroomLiveData } from '../features/classroom/hooks/useClassroomLiveData';
 import { resolveSegmentDuration } from '../utils/timeline-duration';
@@ -43,8 +43,23 @@ import { useClassroomPluginTools } from '../features/classroom/hooks/useClassroo
 import { LiveClassroomAccessErrorBanner } from '../features/classroom/LiveClassroomAccessErrorBanner';
 import { LiveClassroomSwitchLessonModal } from '../features/classroom/LiveClassroomSwitchLessonModal';
 import { LiveClassroomStageRouter } from '../features/classroom/LiveClassroomStageRouter';
+import { ClassroomCountdownWidget } from '../features/classroom/ClassroomCountdownWidget';
+import { createLiveTimeRemainingHandler } from '../features/classroom/liveTimeRemaining';
 import { useLiveClassroomMacroEngine } from '../features/classroom/hooks/useLiveClassroomMacroEngine';
 export { FINISHED_STATUSES, IN_PROGRESS_STATUSES };
+
+/**
+ * 课程编辑统一回到「课程管理」页内展开，不再跳到已下线的备课页。
+ * 抽成独立函数，便于回归测试固定课堂内各「编辑」入口的导航目标。
+ */
+export function navigateToCourseEditor(lessonId: string, setTeacherTab?: (tab: string) => void): void {
+  appStore.getState().setCourseEditingLessonId(lessonId);
+  if (setTeacherTab) {
+    setTeacherTab('courses');
+  } else {
+    appStore.getState().setTeacherTab('courses');
+  }
+}
 
 export function LiveClassroomView({
   initialPortalOpen = true,
@@ -221,13 +236,6 @@ export function LiveClassroomView({
   );
   /** 是否展示「课堂会话与档案管理」看板 */
   const [showSessionManager, setShowSessionManager] = useState(false);
-  /**
-   * Issue #91：进入互动课堂的第一屏是「进行中的课堂会话」列表。
-   * 常规路径（initialPortalOpen）先看列表，列表为空时由 `onEmpty` 回退到起始门户。
-   */
-  const [showSessionPicker, setShowSessionPicker] = useState(
-    initialPortalOpen && !resumeRememberedSession && !initialLaunchSignal,
-  );
   // 刷新时先确认进行中会话的班级，避免起始门户（含「下一节课」）在判定前可点。
   const [entryDecisionReady, setEntryDecisionReady] = useState(
     !initialPortalOpen || resumeRememberedSession || !!initialLaunchSignal,
@@ -283,8 +291,7 @@ export function LiveClassroomView({
   /** 课程/会话鉴权或资源缺失（401/403/404）后立即停止轮询并向教师展示清晰提示 */
   const [lessonAccessError, setLessonAccessError] = useState<{ status: number; endpoint: string } | null>(null);
   const notifiedAccessErrorKeyRef = useRef<string | null>(null);
-  const isActiveClassroomView =
-    Boolean(selectedLesson) && !showSessionManager && !showSessionPicker && !showEntryPortal;
+  const isActiveClassroomView = Boolean(selectedLesson) && !showSessionManager && !showEntryPortal;
 
   const reportLessonAccessError = useCallback(
     (status: number, endpoint: string) => {
@@ -334,7 +341,6 @@ export function LiveClassroomView({
     setEntryDecisionReady,
     setHasActiveSession,
     setLessonAccessError,
-    setShowSessionPicker,
     setShowEntryPortal,
     setSelectedLesson,
     setLiveClassSelectedClassId,
@@ -344,6 +350,15 @@ export function LiveClassroomView({
   });
 
   const [middleTab, setMiddleTab] = useState<TeacherMiddleTab>('whiteboard');
+  // 白板课「课堂工具」面板：按钮在顶栏，面板挂在 Cockpit 内，共用这一份展开状态。
+  const [classroomToolsOpen, setClassroomToolsOpen] = useState(false);
+  // 进入白板授课视图时先弹出功能开关设置；同一课节确认一次。
+  const [toolbarSetupLessonId, setToolbarSetupLessonId] = useState<string | null>(null);
+
+  useEffect(() => {
+    // 回到入口门户后重新进入课堂时再次弹出，沿用上次保存的选择。
+    if (showEntryPortal) setToolbarSetupLessonId(null);
+  }, [showEntryPortal]);
 
   const {
     attempts,
@@ -597,14 +612,42 @@ export function LiveClassroomView({
     userReturnedToPortalRef.current = false;
     enteredClassroomRef.current = true;
     rememberActiveLesson(lessonId);
-    setShowSessionPicker(false);
     setShowEntryPortal(false);
+  };
+
+  /** 归档并结束课堂：清掉当前会话状态并回到起始门户，避免停留在学情简报页。 */
+  const handleClassArchived = () => {
+    viewingSpecificReportRef.current = null;
+    setReportSessionId(null);
+    userReturnedToPortalRef.current = true;
+    enteredClassroomRef.current = false;
+    rememberActiveLesson(null);
+    setEntryDecisionReady(true);
+    setClassroomStage('PRE_CLASS_READY');
+    setHasActiveSession(false);
+    setLiveClassIsActive(false);
+    setShowSessionManager(false);
+    setShowEntryPortal(true);
   };
 
   const host = useOptionalPluginHost();
   const segmentMainExtensions = host?.getExtensions('classroom.active_segment.main') || [];
-  const hasSegmentMainExtension = segmentMainExtensions.length > 0;
   const currentActiveSegment = timelineSegments.find((s) => s.id === activeSegmentId);
+  const currentSegmentType = isModePacksEnabled()
+    ? normalizeSegmentType((currentActiveSegment as { type?: string } | undefined)?.type)
+    : (currentActiveSegment as { type?: string } | undefined)?.type;
+  // 只统计覆盖当前环节类型的贡献：别的包注册了工作区，不应让白板课出现空的中栏 tab。
+  const hasSegmentMainExtension = currentSegmentType
+    ? segmentMainExtensions.some((ext) => {
+        const e = ext as { targetType?: string; slotProps?: Record<string, unknown> };
+        const cfg = e.slotProps ?? {};
+        const declared = e.targetType ?? cfg.segmentType ?? cfg.targetType;
+        return extensionCoversSegmentType(
+          typeof declared === 'string' ? declared : declared == null ? null : String(declared),
+          currentSegmentType,
+        );
+      })
+    : segmentMainExtensions.length > 0;
 
   // Mode Pack 灰度：仅 flag 开启时注册内置白板/学案工作区；关闭时卸载，保持既有路径。
   useEffect(() => {
@@ -860,6 +903,13 @@ export function LiveClassroomView({
   const handleStartSegment = (seg: any) => {
     setActiveSegmentId(seg.id);
     setExpandedSegmentMap((prev) => ({ ...prev, [seg.id]: true }));
+    // 切到该环节时跳到它大纲里的第一页，避免停留在其它环节的页面上。
+    const segIdx = timelineSegments.findIndex((s) => s.id === seg.id);
+    if (segIdx >= 0) {
+      const segPages = getPagesForSegmentPure(seg, segIdx, whiteboardPages, timelineSegments);
+      const firstPage = segPages[0];
+      if (firstPage) whiteboardRef.current?.switchPage?.(firstPage.globalIdx);
+    }
     const secs = resolveSegmentDuration(seg, { fallbackSeconds: 300 }).seconds ?? 300;
     // R-8：计时写入 liveClassStore（不经过 AppDataContext）
     liveClassStore.getState().setLiveClassTimeRemaining(secs);
@@ -970,11 +1020,7 @@ export function LiveClassroomView({
     if (fetchElements) {
       void fetchElements(lessonId);
     }
-    if (setTeacherTab) {
-      setTeacherTab('lesson_editor');
-    } else {
-      appSetTeacherTab('lesson_editor');
-    }
+    navigateToCourseEditor(lessonId, setTeacherTab ?? appSetTeacherTab);
   };
 
   // 起始门户中的「前往课表设置」按钮回调。
@@ -1002,7 +1048,6 @@ export function LiveClassroomView({
           rememberActiveLesson(null);
           setEntryDecisionReady(true);
           setShowSessionManager(false);
-          setShowSessionPicker(false);
           setShowEntryPortal(true);
         }}
         onResumeSession={(session: ClassroomSessionItem) => {
@@ -1015,7 +1060,6 @@ export function LiveClassroomView({
           if (session.classId) setLiveClassSelectedClassId(session.classId);
           setClassroomStage(session.stage || 'IN_CLASS_TEACHING');
           setShowSessionManager(false);
-          setShowSessionPicker(false);
           setShowEntryPortal(false);
         }}
         onViewReport={(session: ClassroomSessionItem) => {
@@ -1046,50 +1090,8 @@ export function LiveClassroomView({
             enteredClassroomRef.current = false;
             rememberActiveLesson(null);
             setEntryDecisionReady(true);
-            setShowSessionPicker(false);
             setShowEntryPortal(true);
           }
-        }}
-      />
-    );
-  }
-
-  // Issue #91：第一屏 —— 进行中的课堂会话列表（空列表时自动回退到起始门户）
-  if (showSessionPicker) {
-    return (
-      <InProgressSessionList
-        lang={lang}
-        currentLessonId={selectedLesson}
-        addToast={addToast}
-        onResume={(session: ClassroomSessionItem) => {
-          viewingSpecificReportRef.current = null;
-          setReportSessionId(null);
-          userReturnedToPortalRef.current = false;
-          enteredClassroomRef.current = true;
-          rememberActiveLesson(session.lessonId);
-          setSelectedLesson(session.lessonId);
-          if (session.classId) setLiveClassSelectedClassId(session.classId);
-          setClassroomStage(session.stage || 'IN_CLASS_TEACHING');
-          setShowSessionPicker(false);
-          setShowEntryPortal(false);
-        }}
-        onStartNew={() => {
-          // 开始一节新课走既有起始门户；进行中的会话不受影响。
-          userReturnedToPortalRef.current = true;
-          enteredClassroomRef.current = false;
-          rememberActiveLesson(null);
-          setEntryDecisionReady(true);
-          setShowSessionPicker(false);
-          setShowEntryPortal(true);
-        }}
-        onOpenArchive={() => {
-          setShowSessionPicker(false);
-          setShowSessionManager(true);
-        }}
-        onEmpty={() => {
-          // 一场进行中的会话都没有 → 直接显示起始门户（与旧行为一致）
-          setShowSessionPicker(false);
-          if (!enteredClassroomRef.current) setShowEntryPortal(true);
         }}
       />
     );
@@ -1142,12 +1144,35 @@ export function LiveClassroomView({
     );
   }
 
+  const currentLesson = lessons.find((item) => item.id === selectedLesson);
+  const isXueanLesson =
+    resolveLessonModePackDeliveryMode(currentLesson?.mode_pack_id, currentLesson?.delivery_mode) === 'xuean';
+  const showToolbarSetup =
+    Boolean(currentLesson) && Boolean(selectedLesson) && !isXueanLesson && toolbarSetupLessonId !== selectedLesson;
+
+  const handleLiveTimeRemainingChange = createLiveTimeRemainingHandler({
+    lang,
+    addToast,
+    prevTimerRunningRef,
+    setLiveClassIsActive,
+    syncChannelRef,
+  });
+  // 白板课把倒计时放进白板工具栏（腾出顶栏空间）；学案课不显示。
+  const classroomCountdownNode = (
+    <ClassroomCountdownWidget
+      variant="header"
+      lessonId={selectedLesson}
+      lang={lang === 'zh' ? 'zh' : 'en'}
+      syncChannel={syncChannelRef.current}
+      onlineStudentCount={onlineStudentIds?.length || liveClassAcknowledgedMap.size || 0}
+      onTimeRemainingChange={handleLiveTimeRemainingChange}
+    />
+  );
+
   return (
     <div className="flex-grow flex-1 flex flex-col min-h-0 bg-surface border border-theme rounded-2xl shadow-xl text-main overflow-hidden font-sans">
       <LiveClassroomHeaderBar
-        compact={
-          resolveCourseDeliveryMode(lessons.find((item) => item.id === selectedLesson)?.delivery_mode) !== 'xuean'
-        }
+        compact={!isXueanLesson}
         lang={lang}
         liveClassIsActive={liveClassIsActive}
         classes={classes}
@@ -1155,7 +1180,6 @@ export function LiveClassroomView({
         userReturnedToPortalRef={userReturnedToPortalRef}
         enteredClassroomRef={enteredClassroomRef}
         setEntryDecisionReady={setEntryDecisionReady}
-        setShowSessionPicker={setShowSessionPicker}
         setShowEntryPortal={setShowEntryPortal}
         setShowSessionManager={setShowSessionManager}
         pendingLessonId={pendingLessonId}
@@ -1182,18 +1206,27 @@ export function LiveClassroomView({
         syncChannelRef={syncChannelRef}
         onlineStudentIds={onlineStudentIds}
         liveClassAcknowledgedMap={liveClassAcknowledgedMap}
-        setLiveClassIsActive={setLiveClassIsActive}
-        addToast={addToast}
-        prevTimerRunningRef={prevTimerRunningRef}
+        onTimeRemainingChange={handleLiveTimeRemainingChange}
+        classroomToolsOpen={classroomToolsOpen}
+        onToggleClassroomTools={() => setClassroomToolsOpen((v) => !v)}
+        panelsMenu={{
+          middleTab,
+          hasSegmentMainExtension,
+          currentActiveSegment: currentActiveSegment
+            ? { id: currentActiveSegment.id, title: currentActiveSegment.title }
+            : null,
+          onSelect: (tab) => setMiddleTab(tab),
+          onFinishTeaching: () => handleStageChange('WRAP_UP_EXIT_TICKET'),
+        }}
+        leftSidebarCollapsed={isLeftSidebarCollapsed}
+        onExpandLeftSidebar={() => setIsLeftSidebarCollapsed(false)}
       />
 
       {accessErrorBanner}
 
       {/* Interactive Classroom Cockpit (Stages, Polls, Buzzers, Exit Tickets, Stage Display) */}
       <ClassroomInteractiveCockpit
-        compact={
-          resolveCourseDeliveryMode(lessons.find((item) => item.id === selectedLesson)?.delivery_mode) !== 'xuean'
-        }
+        compact={!isXueanLesson}
         lessonId={selectedLesson}
         lessonTitle={lessons.find((l) => l.id === selectedLesson)?.title}
         classId={liveClassSelectedClassId}
@@ -1202,6 +1235,8 @@ export function LiveClassroomView({
         currentStage={classroomStage}
         onStageChange={(newStage) => setClassroomStage(newStage)}
         students={classProfiles}
+        toolsOpen={classroomToolsOpen}
+        onToolsOpenChange={setClassroomToolsOpen}
       />
 
       <LiveClassroomStageRouter
@@ -1214,6 +1249,7 @@ export function LiveClassroomView({
         isLeftSidebarCollapsed={isLeftSidebarCollapsed}
         onToggleClassLock={() => handleToggleClassLock(!isClassLocked)}
         onStageChange={handleStageChange}
+        onClassArchived={handleClassArchived}
         preClassProps={{
           selectedClassId: liveClassSelectedClassId,
           className: classes.find((c) => c.id === liveClassSelectedClassId)?.name || '',
@@ -1288,8 +1324,8 @@ export function LiveClassroomView({
           getPagesForSegment,
         }}
         middleWorkspaceProps={{
-          compact:
-            resolveCourseDeliveryMode(lessons.find((item) => item.id === selectedLesson)?.delivery_mode) !== 'xuean',
+          compact: !isXueanLesson,
+          toolbarExtras: isXueanLesson ? null : classroomCountdownNode,
           isLeftSidebarCollapsed,
           setIsLeftSidebarCollapsed,
           middleTab,
@@ -1446,6 +1482,13 @@ export function LiveClassroomView({
 
       {/* 课中快捷设置工作台侧滑抽屉 */}
       <ClassroomInContextDrawer />
+
+      {/* 白板课开课前功能开关设置 */}
+      <ClassroomToolbarSetupDialog
+        open={showToolbarSetup}
+        lang={lang === 'zh' ? 'zh' : 'en'}
+        onDismiss={() => setToolbarSetupLessonId(selectedLesson)}
+      />
     </div>
   );
 }

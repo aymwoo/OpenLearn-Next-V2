@@ -167,7 +167,7 @@ export function useAppComposer() {
     setTeacherTab,
     teacherTab: session.teacherTab,
     onViewCourse: (lessonId: string) => {
-      setTeacherTab('lesson_editor');
+      // 课程编辑统一留在「课程管理」页内展开，不再切换系统导航 tab。
       setSelectedLesson(lessonId);
     },
     t,

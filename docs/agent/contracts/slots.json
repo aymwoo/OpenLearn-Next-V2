@@ -15,6 +15,7 @@
     "assignment.grade.item.addon",
     "assignment.grade.rubric.addon",
     "assignment.grade.toolbar.action",
+    "assignment.submission.actions",
     "assignment.submission.preview",
     "class.batch.action",
     "class.tab",
@@ -37,6 +38,7 @@
     "classroom.macro_runner.action",
     "classroom.monitor.header_action",
     "classroom.notification.tabs",
+    "classroom.outline",
     "classroom.pacing.dashboard",
     "classroom.portal.course_badge",
     "classroom.portal.insight",
@@ -48,6 +50,7 @@
     "classroom.post_class.widget",
     "classroom.preclass.passcode_action",
     "classroom.preclass.passcode_addon",
+    "classroom.prep",
     "classroom.quick_activity",
     "classroom.seating.legend",
     "classroom.seating.seat_actions",
@@ -73,6 +76,7 @@
     "course.card.badge",
     "course.list.toolbar.action",
     "course.wizard.quick_apply",
+    "courseware.host",
     "courseware.viewer.overlay",
     "courseware.viewer.toolbar",
     "editor.header.action",
@@ -135,7 +139,10 @@
     "whiteboard.pagebar.action",
     "whiteboard.properties.addon",
     "whiteboard.renderer",
-    "whiteboard.selection.toolbar"
+    "whiteboard.selection.toolbar",
+    "xuean.activity.editor",
+    "xuean.activity.student",
+    "xuean.activity.type"
   ],
   "anchor_slots": [
     "anchor:classroom-attribution:awards",
@@ -147,5 +154,5 @@
     "anchor:whiteboard-toolbar:presentation",
     "anchor:whiteboard-toolbar:rollcall"
   ],
-  "total": 134
+  "total": 141
 }

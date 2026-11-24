@@ -3,6 +3,7 @@ import express from 'express';
 import { createServer, type Server } from 'http';
 import type { AddressInfo } from 'net';
 import { registerLessonsRoutes } from '../routes/lessons.js';
+import { registerLearningSurfaceLessonEvalRoutes } from '../routes/learning-surface-lesson-evals.js';
 import type { ServerContext } from '../context.js';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
 
@@ -48,7 +49,7 @@ describe('互评提交接口的对象级授权（#217）', () => {
   const cookie = (token: string) => ({ Cookie: `edu_os_token=${token}` });
 
   const postReview = (token: string, submissionId: string, lesson = lessonId, body: Record<string, unknown> = {}) =>
-    fetch(`${baseUrl}/api/lessons/${lesson}/eval-submissions/${submissionId}/reviews`, {
+    fetch(`${baseUrl}/api/learning-surface-lessons/${lesson}/eval-submissions/${submissionId}/reviews`, {
       method: 'POST',
       headers: { ...cookie(token), 'Content-Type': 'application/json' },
       body: JSON.stringify({ score: 100, ...body }),
@@ -138,6 +139,7 @@ describe('互评提交接口的对象级授权（#217）', () => {
     app = express();
     app.use(express.json());
     registerLessonsRoutes({ app, io: { emit: () => {} } } as unknown as ServerContext);
+    registerLearningSurfaceLessonEvalRoutes({ app } as unknown as ServerContext);
     server = createServer(app);
     await new Promise<void>((resolve) => server.listen(0, resolve));
     baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;

@@ -105,6 +105,7 @@ export type ExtensionSlot =
   // ── 课件播放器扩展槽位（P1）──
   | 'courseware.viewer.toolbar'
   | 'courseware.viewer.overlay'
+  | 'courseware.host'
   // ── 课表中心与管理后台扩展（双渲染态）──
   | 'timetable.tab'
   | 'admin.tab'
@@ -114,6 +115,7 @@ export type ExtensionSlot =
   | 'student.classroom.overlay'
   // ── 作业评估与多模态预览扩展槽位 ──
   | 'assignment.submission.preview'
+  | 'assignment.submission.actions'
   | 'assignment.file.preview'
   // ── 全局壳层扩展槽位（底座解耦）──
   | 'header.action'
@@ -179,6 +181,8 @@ export type ExtensionSlot =
   // ── 课堂主工作区接管与课表导入 ──
   | 'classroom.active_segment.main'
   | 'classroom.active_segment.student_main'
+  | 'classroom.prep'
+  | 'classroom.outline'
   | 'timetable.import.source'
   | 'timetable.entry.action'
   // ── 全局壳层后台任务 ──
@@ -191,7 +195,11 @@ export type ExtensionSlot =
   | 'classroom.showcase_diff.action' // 「多屏对比投屏批注」模态窗顶栏动作扩展
   | 'classroom.macro_runner.action' // 「课堂宏动作编排中枢」动作区扩展
   | 'classroom.hardware_bridge.addon' // 「硬件教具生态网关」设置与监控面板扩展
-  | 'classroom.sessions.action'; // 「课堂会话与档案管理」顶栏动作扩展
+  | 'classroom.sessions.action' // 「课堂会话与档案管理」顶栏动作扩展
+  // ── 学案编辑器活动类型扩展 ──
+  | 'xuean.activity.type' // 声明新的学案活动类型（进入教师端类型下拉）
+  | 'xuean.activity.editor' // 活动类型的教师端编辑器（按 activityType 分发）
+  | 'xuean.activity.student'; // 活动类型的学生端渲染器（按 activityType 分发）
 
 // v0.2.6: 锚点槽位（开放命名空间）
 export type AnchorSlot = `anchor:${string}`;
@@ -252,7 +260,7 @@ export type AnyExtensionSlot = ExtensionSlot | AnchorSlot | (string & {});
 
 实测口径：遍历 `src/**/*.tsx`（排除 `__tests__`），解析 `<ExtensionPointRenderer ... slot="…">`。
 
-- 生产调用点上的**固定名槽位值随版本增长**（本节 98 为历史实测；当前联合类型 120 个成员，其中 **116 个**在 `src/**/*.tsx` 有 `<ExtensionPointRenderer>` 生产调用点。剩余 4 个 —— `command_palette.item` / `quick_insert.item` / `ai.prompt.template` / `ai.skill.provider` —— 是**数据型或服务端消费**槽位，不经过渲染器，契约见 §12.7。消费率口径见文末统计节，复核命令见下）；
+- 生产调用点上的**固定名槽位值随版本增长**（本节 98 为历史实测；当前联合类型 141 个成员，其中 **117 个**在 `src/**/*.tsx` 有 `<ExtensionPointRenderer>` 生产调用点。剩余 4 个 —— `command_palette.item` / `quick_insert.item` / `ai.prompt.template` / `ai.skill.provider` —— 是**数据型或服务端消费**槽位，不经过渲染器，契约见 §12.7。消费率口径见文末统计节，复核命令见下）；
 - 另有 **8 个** `anchor:*` 锚点槽位（见 §1.1 附注）。
 
 | 槽位                                    | 渲染调用点（`src/` 下）                                                                                                                 | 调用点传入的 `slotProps`                                                                                                       |
@@ -325,6 +333,7 @@ export type AnyExtensionSlot = ExtensionSlot | AnchorSlot | (string & {});
 | `whiteboard.autosave.action`            | `src/features/teacher/LessonEditorView.tsx`                                                                                             | `{ lessonId, flush }`                                                                                                          |
 | `courseware.viewer.toolbar`             | `src/features/courseware/InteractiveCoursewareViewer.tsx`                                                                               | 无                                                                                                                             |
 | `courseware.viewer.overlay`             | `src/features/courseware/InteractiveCoursewareViewer.tsx`                                                                               | 无                                                                                                                             |
+| `courseware.host`                       | `src/features/courseware/CoursewareHost.tsx`（由 `GET /api/courseware/host` 决议）                                                      | 无（宿主接管：需 `replaces: 'builtin'` + 可选 `priority`；只声明 `entry` 时不接管，回落内置宿主）                              |
 | `peer_review.rubric.dimension`          | `src/features/classroom/peer-review/PeerReviewRubricModal.tsx`、`src/features/classroom/peer-review/PeerReviewRubricStats.tsx`          | 无（仅 `route?`）                                                                                                              |
 | `peer_review.badge`                     | `src/features/classroom/peer-review/PeerReviewMatrixPanel.tsx`                                                                          | 无（仅 `route?`）                                                                                                              |
 | `peer_review.action`                    | `src/features/classroom/peer-review/PeerReviewTelemetryHeader.tsx`、`src/features/classroom/peer-review/PeerReviewLeaderboardPanel.tsx` | 无（仅 `route?`）                                                                                                              |
@@ -335,6 +344,7 @@ export type AnyExtensionSlot = ExtensionSlot | AnchorSlot | (string & {});
 | `admin.tab`（button 形态）              | `src/components/AdminPanel.tsx`                                                                                                         | `{ renderType: 'button', adminActiveTab, setAdminActiveTab }`                                                                  |
 | `admin.tab`（panel 形态）               | `src/components/AdminPanel.tsx`                                                                                                         | `{ renderType: 'panel', adminActiveTab, currentUserId, currentUserRole, lang, siteInfo }`                                      |
 | `assignment.submission.preview`         | `src/components/StudentAssignmentEvalPanel.tsx`                                                                                         | `{ submission, studentId, lessonId, isSelf, lang }`                                                                            |
+| `assignment.submission.actions`         | `src/components/StudentAssignmentEvalPanel.tsx`                                                                                         | `{ assignment, submission, studentId, lessonId, isSelf, lang, refresh }`                                                       |
 | `assignment.file.preview`               | `src/components/AssignmentFilePreview.tsx`                                                                                              | `{ file, fileExtension, assignmentId, downloadUrl, inlineUrl, lang }`                                                          |
 | `header.action`                         | `src/components/AppHeader.tsx`                                                                                                          | `{ session, currentRole, lang }`                                                                                               |
 | `statusbar.item`                        | `src/components/AppStatusBar.tsx`（由 `src/App.tsx` 挂载；无插件贡献时不渲染）                                                          | `{ session, currentRole, lang, isOnline }`                                                                                     |
@@ -384,6 +394,8 @@ export type AnyExtensionSlot = ExtensionSlot | AnchorSlot | (string & {});
 | `student.academic_year.metric_card`     | `src/features/student/StudentAcademicYearComparison.tsx`                                                                                | `{ studentId, comparisonData, selectedYears, lang }`                                                                           |
 | `classroom.active_segment.main`         | `src/components/LiveClassroomView.tsx`（活跃环节主工作区，含兜底分支）                                                                  | `{ segment, lessonId, classId, lang, onRefresh, flow }`                                                                        |
 | `classroom.active_segment.student_main` | `src/features/student/StudentLessonView.tsx`（学生端对称工作区，按 segment.type 路由）                                                  | `{ segment, lessonId, classId, lang, flow }`                                                                                   |
+| `classroom.prep`                        | `src/features/classroom/mode-pack/ModePackPrepShell.tsx`（第三方模式包备课面；未注册时回退白板备课面）                                  | `{ packId, prepContributionId, segment, lessonId, lang }`                                                                      |
+| `classroom.outline`                     | `src/features/classroom/ClassroomTimelineSidebar.tsx`（第三方模式包课中大纲；未注册时回退白板页面大纲）                                 | `{ packId, outlineContributionId, segment, lessonId, lang }`                                                                   |
 | `timetable.import.source`               | `src/components/timetable/sub-views/TimetableOcrView.tsx`                                                                               | `{ lang, onImportEntries }`                                                                                                    |
 | `timetable.entry.action`                | `src/components/timetable/sub-views/TimetableCalendarView.tsx`（周历卡片 + 列表行两处）                                                 | `{ schedule, lang, onEdit }`                                                                                                   |
 | `header.async_task.item`                | `src/components/AppHeader.tsx`                                                                                                          | `{ lang, activeRole, teacherTab, setTeacherTab }`                                                                              |
@@ -397,6 +409,8 @@ export type AnyExtensionSlot = ExtensionSlot | AnchorSlot | (string & {});
 | `classroom.macro_runner.action`         | `src/features/classroom/ecosystem/macro-engine/ClassroomMacroRunnerModal.tsx`                                                           | `{ selectedMacroId, status, lessonId, classId }`                                                                               |
 | `classroom.hardware_bridge.addon`       | `src/features/classroom/ecosystem/hardware-bridge/HardwareBridgeSettingsModal.tsx`                                                      | `{ simEnabled, eventCount }`                                                                                                   |
 | `classroom.sessions.action`             | `src/features/classroom/ClassroomSessionManager.tsx`                                                                                    | `{ totalSessions, lang }`                                                                                                      |
+| `xuean.activity.editor`                 | `src/features/teacher/xuean/XueanActivitiesPanel.tsx`（活动编辑弹窗内，仅当 `activityType` 命中插件类型）                               | `{ activityType, activity, lessonId, onSaved }`                                                                                |
+| `xuean.activity.student`                | `src/features/student/xuean/StudentXueanView.tsx`（学生学案活动卡片，仅当 `activity.type` 命中插件类型）                                | `{ activity, activityType, lessonId }`                                                                                         |
 
 #### 1.1 锚点槽位（`anchor:*`，8 个）
 
@@ -435,7 +449,7 @@ export type AnyExtensionSlot = ExtensionSlot | AnchorSlot | (string & {});
 
 ### 1.1.1 槽位容器语义分类（layoutVariant）
 
-平台将 120 个扩展槽位按照挂载上下文的容器模型划分为 4 种语义类型：
+平台将 140 个扩展槽位按照挂载上下文的容器模型划分为 4 种语义类型：
 
 | 容器语义分类 (`layoutVariant`)                           | 核心特征与宿主环境                                                                                                    | 典型槽位                                                                                          | 插件视图样式规范与禁止项                                                                                                                                                                                                                                                                                                                                                                           |
 | :------------------------------------------------------- | :-------------------------------------------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------------ | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -1175,7 +1189,7 @@ export interface AssignmentFilePreviewSlotProps {
 
 ### 安全口径
 
-1. 所有内容都走**带鉴权**的 `/api/assignments/:assignmentId/files/:fileId`，
+1. 所有内容都走**带鉴权**的 `/api/learning-surface-assignments/:assignmentId/files/:fileId`，
    不经过任何静态目录（`storage/` 从未被 `express.static` 暴露）。
 2. 服务端按**扩展名**推导 Content-Type，绝不采信上传时客户端自报的 mime。
 3. `text/html` / `image/svg+xml` 这类**可执行文档**一律强制下载（`attachment`），
@@ -1340,6 +1354,8 @@ export default function SandboxConfig({ segmentType, segment, readOnly, onPatch 
 
 > 不要把主工作区做成 `h-screen` 全屏——容器是受限高度的 `flex-grow` 区域。需要全屏就用 `ctx.ui.registerFullscreenRenderer`（§5）。
 
+**`classroom.prep` / `classroom.outline`** 是第三方 Mode Pack 的备课面与课中大纲槽位，按 `prepContributionId` / `outlineContributionId` 过滤贡献。宿主找不到匹配贡献时不会留白：备课面回退 `LessonEditorView`，大纲回退白板页面列表。
+
 **`timetable.import.source`** —— 课表「AI 识别导入」子页，识别按钮下方的外部导入区。`{ lang, onImportEntries }`。插件解析完 Excel/CSV/第三方教务 API 后调 `onImportEntries(entries)`，宿主把结果灌进识别结果表格交给教师审核——**插件不要自己写库**，统一走审核后导入。
 
 ```ts
@@ -1490,20 +1506,68 @@ ctx.ui.registerExtensionPoint('classroom.sessions.action', {
 });
 ```
 
+### 12.9 学案活动类型扩展（`xuean.activity.*`）
+
+第三方插件可以给学案编辑器增加新的活动形式，三个槽位分工如下：
+
+| 槽位                     | 消费端                                           | 作用                                                                              |
+| ------------------------ | ------------------------------------------------ | --------------------------------------------------------------------------------- |
+| `xuean.activity.type`    | 服务端 `server/services/xuean-activity-types.ts` | 声明活动类型（`id` / `label`），进入教师端「活动类型」下拉并与白名单合并          |
+| `xuean.activity.editor`  | `XueanActivitiesPanel.tsx`（活动编辑弹窗）       | 该类型活动的教师端配置面板，props `{ activityType, activity, lessonId, onSaved }` |
+| `xuean.activity.student` | `StudentXueanView.tsx`（学生活动卡片）           | 该类型活动的学生端渲染器，props `{ activity, activityType, lessonId }`            |
+
+**命名空间约束**：`xuean.activity.type.id` 必须写成 `<manifest.id>:<suffix>`（例如 `@acme/virtual-lab:experiment`），否则服务端直接丢弃并打告警。这样可以避免与内置类型（`reading` / `submission` / `quiz` / `survey` / `discussion` / `form` 等）或其它插件冲突。
+
+内置类型由宿主提供编辑器与学生端模块（阅读、作品提交、测验、调查、填表、讨论），插件不能覆盖；自定义类型走上面的三个槽位，活动行仍由宿主接口保存。
+
+```json
+{
+  "contributes": {
+    "xuean.activity.type": [{ "id": "@acme/virtual-lab:experiment", "label": "虚拟实验", "icon": "flask" }],
+    "xuean.activity.editor": [
+      { "id": "editor", "activityType": "@acme/virtual-lab:experiment", "label": "虚拟实验配置" }
+    ],
+    "xuean.activity.student": [{ "id": "student", "activityType": "@acme/virtual-lab:experiment", "label": "虚拟实验" }]
+  }
+}
+```
+
+运行时注册方式相同，渲染器按 `activityType` 精确匹配，一个类型只会渲染一个编辑器 / 学生端组件：
+
+```tsx
+ctx.ui.registerExtensionPoint('xuean.activity.editor', {
+  id: 'ext-virtual-lab/editor',
+  label: '虚拟实验配置',
+  component: () => import('./ExperimentEditor'),
+  // 组件收到: { activityType, activity, lessonId, onSaved }
+});
+
+ctx.ui.registerExtensionPoint('xuean.activity.student', {
+  id: 'ext-virtual-lab/student',
+  label: '虚拟实验',
+  component: () => import('./ExperimentRunner'),
+  // 组件收到: { activity, activityType, lessonId }
+});
+```
+
+**保存仍走宿主接口**：活动行本身（标题 / 必做 / 可见 / 截止时间 / `config_json`）由 `POST /api/lessons/:lessonId/activities` 与 `PUT /api/lesson-activities/:id` 落库。插件编辑器应通过宿主注入的 `onSaved()` 通知刷新，并用 `ctx.services.actionRegistry` / 自定义 REST 端点保存自己的业务数据（`activity.id` 作为外键），不要把大块业务数据塞进 `lesson_activities.config_json`。
+
+**缺省回退**：服务端目录接口 `GET /api/xuean/activity-types` 返回内置 + 已激活插件的类型；插件停用后其类型不再出现在下拉中（历史活动仍保留在库里，学生端渲染区域会提示插件未加载）。
+
 ---
 
 ## 13. 统计口径
 
 | 指标                                                           | 数值                                              |
 | -------------------------------------------------------------- | ------------------------------------------------- |
-| `ExtensionSlot` 联合类型成员                                   | **133**                                           |
-| 生产调用点（`src/**/*.tsx`，排除 `__tests__`）上的固定名槽位值 | **129**（`99` / `98` / `116` / `121` 为历史记录） |
-| 其中属于 `ExtensionSlot` 联合类型                              | **129**                                           |
+| `ExtensionSlot` 联合类型成员                                   | **140**                                           |
+| 生产调用点（`src/**/*.tsx`，排除 `__tests__`）上的固定名槽位值 | **133**（`99` / `98` / `116` / `121` 为历史记录） |
+| 其中属于 `ExtensionSlot` 联合类型                              | **133**                                           |
 | 不在联合类型内但有渲染器的字符串槽位                           | **0**                                             |
 | 已挂载的 `anchor:*` 锚点槽位                                   | **8**                                             |
-| 无渲染器的 `ExtensionSlot` 成员（数据型 / 服务端消费）         | **4**（见 §12.7、§11.6）                          |
+| 无渲染器的 `ExtensionSlot` 成员（数据型 / 服务端消费）         | **7**（见 §12.7、§11.6、§12.9）                   |
 | `ExtensionPointRenderer` 唯一槽位值总数（固定名 + 锚点）       | 随版本增长（含 8 个 `anchor:*` 锚点）             |
-| 在本页有使用说明的槽位（含 props 表 / 专项小节 / 代码示例）    | **141 / 141**                                     |
+| 在本页有使用说明的槽位（含 props 表 / 专项小节 / 代码示例）    | **148 / 148**                                     |
 
 > 复核命令：`python3 audit-tools/extract_slots.py --repo .`（槽位清单真值）与 `python3 audit-tools/slots_coverage.py --repo .`（文档覆盖分级）。两者均已接入 `bash audit-tools/run.sh`：**L0（文档中完全不存在）计为 drift 并阻断门禁**，L1/L2 仅作提示输出。
 >
@@ -1513,3 +1577,5 @@ ctx.ui.registerExtensionPoint('classroom.sessions.action', {
 > 2026-10-26 复核（v0.7.4）：`assignment.file.preview` 于 v0.7.4 加入 `ExtensionSlot`，成员数由 119 增至 **120**。该槽位见 §10.1。
 > 2026-11-14 更新：白板域新增 `whiteboard.selection.toolbar`、`whiteboard.context_menu`、`whiteboard.pagebar.action`、`whiteboard.page_drawer.action`、`whiteboard.properties.addon` 5 个扩展槽位，`ExtensionSlot` 成员数由 120 增至 **125**（总槽位数含 8 个锚点共 **133** 个），详见 §10。
 > 2026-11-15 更新：互动课堂顶栏与高级弹窗新增 `classroom.toolbar.quick_action`、`classroom.monitor.header_action`、`classroom.submissions.toolbar`、`classroom.top_performers.action`、`classroom.showcase_diff.action`、`classroom.macro_runner.action`、`classroom.hardware_bridge.addon`、`classroom.sessions.action` 8 个增量扩展槽位，`ExtensionSlot` 成员数由 125 增至 **133**（总槽位数含 8 个锚点共 **141** 个），详见 §12.8。
+> 2026-11-22 更新：学案编辑器新增 `xuean.activity.type`（服务端数据型）、`xuean.activity.editor`、`xuean.activity.student` 3 个扩展槽位，`ExtensionSlot` 成员数由 137 增至 **140**（总槽位数含 8 个锚点共 **148** 个），详见 §12.9。
+> 2026-11-23 更新：作业提交卡片新增 `assignment.submission.actions`（操作型：重新提交 / 分享 / 导出 / 第三方评分），`ExtensionSlot` 成员数由 140 增至 **141**（总槽位数含 8 个锚点共 **149** 个）。

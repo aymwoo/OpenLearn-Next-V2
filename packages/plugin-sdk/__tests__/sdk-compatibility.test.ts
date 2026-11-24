@@ -11,11 +11,7 @@ import {
 // 它们在 kernel/index.ts:224-226 被注册进 ServiceRegistry，但**零生产 resolve** ——
 // 对外承诺一个零消费者的 API 比不承诺更糟。内核侧仍从di/interfaces 正常引用。
 // 这里从**规范源**导入，证明「移除导出」没有破坏内核可用性。
-import {
-  IPluginRuntimeCompositionToken,
-  IUnifiedExtensionRegistryToken,
-  IPluginCapabilityGatewayToken,
-} from '../../core/di/interfaces.js';
+import { IPluginRuntimeCompositionToken, IPluginCapabilityGatewayToken } from '../../core/di/interfaces.js';
 // The unified foundation facade *classes* are exposed as TYPE-ONLY exports
 // from the SDK (see `export type` in index.ts). Verify the SDK type surface
 // is intact via `import type`, and assert the concrete runtime implementations
@@ -26,7 +22,6 @@ import type {
   PluginContextAdapter as SdkPluginContextAdapter,
   PluginLifecycleManager as SdkPluginLifecycleManager,
   PluginCapabilityGateway as SdkPluginCapabilityGateway,
-  UnifiedExtensionRegistry as SdkUnifiedExtensionRegistry,
   PluginDistributionManager as SdkPluginDistributionManager,
   IPluginDistributionManager,
 } from '../index.js';
@@ -35,7 +30,6 @@ import { PluginRuntimeComposition } from '../../core/plugin-host/plugin-runtime-
 import { PluginContextAdapter } from '../../core/plugin-host/plugin-context-adapter.js';
 import { PluginLifecycleManager } from '../../core/plugin-host/plugin-lifecycle-manager.js';
 import { PluginCapabilityGateway } from '../../core/plugin-host/plugin-capability-gateway.js';
-import { UnifiedExtensionRegistry } from '../../core/plugin-host/unified-extension-registry.js';
 import { PluginDistributionManager } from '../../core/plugin-host/plugin-distribution-manager.js';
 // 运行时导出面探测：用于 F-3 的「已移出导出」契约反转断言。
 // 注意 esbuild tree-shaking 只会删掉**未被引用**的导出，这里显式取整个 namespace。
@@ -49,7 +43,6 @@ type _SdkFacadeTypeSurface =
   | SdkPluginContextAdapter
   | SdkPluginLifecycleManager
   | SdkPluginCapabilityGateway
-  | SdkUnifiedExtensionRegistry
   | SdkPluginDistributionManager;
 
 describe('Plugin SDK Compatibility Layer (P7-B6 EU-01)', () => {
@@ -67,7 +60,6 @@ describe('Plugin SDK Compatibility Layer (P7-B6 EU-01)', () => {
       PluginContextAdapter,
       PluginLifecycleManager,
       PluginCapabilityGateway,
-      UnifiedExtensionRegistry,
       PluginDistributionManager,
     ];
     for (const cls of classes) {
@@ -93,7 +85,6 @@ describe('Plugin SDK Compatibility Layer (P7-B6 EU-01)', () => {
     const sdk = sdkIndex as Record<string, unknown>;
     for (const name of [
       'IPluginRuntimeCompositionToken',
-      'IUnifiedExtensionRegistryToken',
       'IPluginCapabilityGatewayToken',
       'ICapabilityGovernanceServiceToken',
     ]) {
@@ -101,11 +92,7 @@ describe('Plugin SDK Compatibility Layer (P7-B6 EU-01)', () => {
     }
 
     // 内核侧仍然拿得到，且仍是合法 Token
-    for (const token of [
-      IPluginRuntimeCompositionToken,
-      IUnifiedExtensionRegistryToken,
-      IPluginCapabilityGatewayToken,
-    ]) {
+    for (const token of [IPluginRuntimeCompositionToken, IPluginCapabilityGatewayToken]) {
       expect(typeof token.name).toBe('string');
       expect(token.name).toMatch(/^@openlearn\/(core|plugins):/);
     }

@@ -66,13 +66,13 @@ describe('AssignmentBindingField（教师端绑定控件）', () => {
       const target = String(url);
       const method = init?.method || 'GET';
       seen.push(`${method} ${target}`);
-      if (target.startsWith('/api/assignments?lessonId=')) {
+      if (target.startsWith('/api/learning-surface-assignments?lessonId=')) {
         return jsonResponse({ success: true, assignments: [ASSIGNMENT] });
       }
-      if (method === 'POST' && target === '/api/assignments') {
+      if (method === 'POST' && target === '/api/learning-surface-assignments') {
         return jsonResponse({ success: true, assignmentId: 'asg-new', created: true });
       }
-      if (target === '/api/assignments/asg-1') {
+      if (target === '/api/learning-surface-assignments/asg-1') {
         return jsonResponse({ success: true, assignment: ASSIGNMENT });
       }
       return jsonResponse({ success: false, error: `unexpected ${method} ${target}` }, { ok: false, status: 404 });
@@ -112,7 +112,7 @@ describe('AssignmentBindingField（教师端绑定控件）', () => {
   it('新建失败时把错误显示在面板里（不再静默丢弃）', async () => {
     const fetchMock = vi.fn(async (url: any, init?: any) => {
       const target = String(url);
-      if (target.startsWith('/api/assignments?lessonId=')) {
+      if (target.startsWith('/api/learning-surface-assignments?lessonId=')) {
         return jsonResponse({ success: true, assignments: [] });
       }
       if (init?.method === 'POST') {
@@ -175,14 +175,14 @@ describe('AssignmentSubmitDialog（学生端提交弹窗）', () => {
     const submitBodies: any[] = [];
     const fetchMock = vi.fn(async (url: any, init?: any) => {
       const target = String(url);
-      if (target === '/api/assignments/asg-1/files') {
+      if (target === '/api/learning-surface-assignments/asg-1/files') {
         return jsonResponse({ success: true, files: FILES });
       }
-      if (target === '/api/assignments/asg-1/submit') {
+      if (target === '/api/learning-surface-assignments/asg-1/submit') {
         submitBodies.push(JSON.parse(String(init?.body)));
         return jsonResponse({ success: true, submissionId: 'sub-1', version: 2, versionId: 'sv-2' });
       }
-      if (target === '/api/assignments/asg-1') {
+      if (target === '/api/learning-surface-assignments/asg-1') {
         return jsonResponse({
           success: true,
           assignment: ASSIGNMENT,
@@ -219,7 +219,7 @@ describe('AssignmentSubmitDialog（学生端提交弹窗）', () => {
     await waitFor(() => expect(FakeUploadXhr.instances.length).toBe(1));
     const xhr = FakeUploadXhr.instances[0];
     expect(xhr.method).toBe('POST');
-    expect(xhr.url).toBe('/api/assignments/asg-1/files');
+    expect(xhr.url).toBe('/api/learning-surface-assignments/asg-1/files');
     expect(xhr.headers['X-File-Name']).toBe(encodeURIComponent('report.pdf'));
 
     // 上传成功后提交，body 只带归档后的 fileId
@@ -239,13 +239,13 @@ describe('AssignmentSubmitDialog（学生端提交弹窗）', () => {
   it('提交失败时显示服务端返回的错误且不清空选择', async () => {
     const fetchMock = vi.fn(async (url: any) => {
       const target = String(url);
-      if (target === '/api/assignments/asg-1/files') {
+      if (target === '/api/learning-surface-assignments/asg-1/files') {
         return jsonResponse({
           success: true,
           files: [{ id: 'f-pending', original_name: 'draft.pdf', size: 12, uploaded_at: Date.now(), version_id: null }],
         });
       }
-      if (target === '/api/assignments/asg-1/submit') {
+      if (target === '/api/learning-surface-assignments/asg-1/submit') {
         return jsonResponse({ success: false, error: 'Assignment is closed' }, { ok: false, status: 400 });
       }
       return jsonResponse({
@@ -297,7 +297,7 @@ describe('AssignmentPeerReviewPanel（学生端互评面板）', () => {
   it('双盲展示 + 量规打分：提交互评时带 taskId / submissionId / score / comment', async () => {
     const bodies: any[] = [];
     const fetchMock = vi.fn(async (url: any, init?: any) => {
-      if (String(url) === '/api/assignments/asg-1/peer-review') {
+      if (String(url) === '/api/learning-surface-assignments/asg-1/peer-review') {
         bodies.push(JSON.parse(String(init?.body)));
         return jsonResponse({ success: true, reviewId: 'rev-1' });
       }
@@ -392,7 +392,7 @@ describe('AssignmentPeerProgressPanel（教师端互评进度）', () => {
   it('展示进度与异常标记，随机分配时带上分配份数', async () => {
     const bodies: any[] = [];
     const fetchMock = vi.fn(async (url: any, init?: any) => {
-      if (String(url) === '/api/assignments/asg-1/assign-peer-reviews') {
+      if (String(url) === '/api/learning-surface-assignments/asg-1/assign-peer-reviews') {
         bodies.push(JSON.parse(String(init?.body)));
         return jsonResponse({ success: true, created: 3, submissions: 3 });
       }

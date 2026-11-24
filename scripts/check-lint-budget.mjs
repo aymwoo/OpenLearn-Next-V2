@@ -29,7 +29,18 @@ const ROOT = process.cwd();
 const BUDGET_FILE = path.join(ROOT, 'config', 'lint-budget.json');
 
 /** 与 package.json 的 lint:eslint 脚本保持一致 —— 同一份文件集合，数字才有可比性。 */
-const ESLINT_ARGS = ['.', '--ext', '.ts,.tsx', '--ignore-pattern', 'dist', '--ignore-pattern', 'node_modules'];
+const ESLINT_ARGS = [
+  '.',
+  '--ext',
+  '.ts,.tsx',
+  '--ignore-pattern',
+  'dist',
+  '--ignore-pattern',
+  'node_modules',
+  // 本地多分支工作树是完整仓库副本，不参与本仓库的告警预算
+  '--ignore-pattern',
+  '.worktrees',
+];
 
 function readBudget() {
   if (!existsSync(BUDGET_FILE)) {

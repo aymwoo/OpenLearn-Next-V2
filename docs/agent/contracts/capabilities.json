@@ -15,6 +15,7 @@
     "assignment:write",
     "class:read",
     "class:write",
+    "classroom:message:self",
     "grades:write",
     "lesson:delete",
     "lesson:read",
@@ -78,5 +79,9 @@
     "stage:navigate",
     "whiteboard:draw"
   ],
-  "blocked_wildcard": ["*", "*:*", "*:*:*"]
+  "blocked_wildcard": [
+    "*",
+    "*:*",
+    "*:*:*"
+  ]
 }

@@ -27,6 +27,7 @@ import {
   Upload,
   Blocks,
   Globe,
+  Layers,
   SlidersHorizontal,
 } from 'lucide-react';
 import { Html } from 'react-konva-utils';
@@ -69,7 +70,8 @@ import { RollCallWrapper } from './widgets/RollCallWrapper';
 import { CodeSandboxWrapper } from './widgets/CodeSandboxWrapper';
 import { MathGraphWrapper } from './widgets/MathGraphWrapper';
 import { HelloWorldWrapper } from './widgets/HelloWorldWrapper';
-import { HtmlAppletFrame } from './components/HtmlAppletFrame';
+import { LearningSurfaceHost } from '../learning-surface/LearningSurfaceHost';
+import { isTypingTarget } from '../learning-surface/keyboard';
 import { WhiteboardToolbar } from './components/WhiteboardToolbar';
 import { WhiteboardPageBar } from './components/WhiteboardPageBar';
 import { WhiteboardDialog } from './components/WhiteboardDialog';
@@ -79,8 +81,6 @@ import { WhiteboardEmptyState } from './components/WhiteboardEmptyState';
 import { WhiteboardFullscreenOverlay } from './components/WhiteboardFullscreenOverlay';
 import { WhiteboardTilingOverlay } from './components/WhiteboardTilingOverlay';
 import { useAutoTilingState, getDefaultElementSize } from './hooks/useAutoTilingState';
-import { CoursewareEntrySelectorModal } from './components/CoursewareEntrySelectorModal';
-import { CoursewarePropertiesModal } from './components/CoursewarePropertiesModal';
 import { useQuizIngest } from './hooks/useQuizIngest';
 import { useWhiteboardPages } from './hooks/useWhiteboardPages';
 import { useWhiteboardDrop } from './hooks/useWhiteboardDrop';
@@ -151,18 +151,6 @@ const ReadOnlyLockCover: React.FC<{ title?: string }> = ({ title = '教师已开
   />
 );
 
-interface GlobalCoursewareCache {
-  data: any[];
-  ts: number;
-  inflight: Promise<any[]> | null;
-}
-
-let globalCoursewareCache: GlobalCoursewareCache = {
-  data: [],
-  ts: 0,
-  inflight: null,
-};
-
 interface WhiteboardElement {
   id: string;
   type: string;
@@ -224,6 +212,8 @@ export interface InteractiveWhiteboardProps {
   onFullscreenSync?: (elementId: string | null) => void;
   /** 是否隐藏画布内的白板分页大纲栏（例如已在外层备课边栏中独立渲染大纲） */
   hidePageBar?: boolean;
+  /** 宿主注入到工具栏右侧的附加内容（如课堂倒计时）。 */
+  toolbarExtras?: React.ReactNode;
   /** 页面列表与当前页状态回调，供外层边栏渲染大纲 */
   onPagesStateChange?: (state: { pages: WhiteboardPageItem[]; currentPage: number }) => void;
   /** 组件拖拽状态变化通知（支持外部大纲与环节等区域感知与高亮） */
@@ -311,6 +301,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
       followRemoteFullscreen = false,
       onFullscreenSync,
       hidePageBar = false,
+      toolbarExtras,
       onPagesStateChange,
       onElementDragChange,
       onElementDropCheck,
@@ -815,75 +806,19 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
     const [assignmentDialogId, setAssignmentDialogId] = useState<string | null>(null);
     const [editingProperties, setEditingProperties] = useState<any>(null);
     const [activePropertiesElementId, setActivePropertiesElementId] = useState<string | null>(null);
-    const [activeCoursewareModalElementId, setActiveCoursewareModalElementId] = useState<string | null>(null);
     const [propertyUndoStack, setPropertyUndoStack] = useState<{ [elementId: string]: string[] }>({});
     const [propertyRedoStack, setPropertyRedoStack] = useState<{ [elementId: string]: string[] }>({});
-
-    const [coursewares, setCoursewares] = useState<any[]>([]);
-    const [zipCandidates, setZipCandidates] = useState<string[]>([]);
-    const [zipUploadInfo, setZipUploadInfo] = useState<{ uuid: string; name: string } | null>(null);
-    const [showEntrySelector, setShowEntrySelector] = useState<boolean>(false);
-
-    // 跟踪上一次选中的 html-applet id，避免 elements 数组引用更新导致反复拉取
-    const lastSelectedCoursewareElementRef = useRef<string | null>(null);
-
-    const fetchCoursewares = async (opts?: { force?: boolean }) => {
-      const now = Date.now();
-      const STALE_MS = 30_000; // 30s 客户端缓存，避免高频请求
-      if (!opts?.force && globalCoursewareCache.data.length > 0 && now - globalCoursewareCache.ts < STALE_MS) {
-        setCoursewares(globalCoursewareCache.data);
-        return;
-      }
-      if (globalCoursewareCache.inflight && !opts?.force) {
-        const data = await globalCoursewareCache.inflight;
-        setCoursewares(data);
-        return;
-      }
-      const fetchPromise = (async () => {
-        try {
-          const res = await fetch('/api/courseware');
-          if (res.ok) {
-            const data = await res.json();
-            globalCoursewareCache = {
-              data: Array.isArray(data) ? data : [],
-              ts: Date.now(),
-              inflight: null,
-            };
-            setCoursewares(globalCoursewareCache.data);
-            return globalCoursewareCache.data;
-          }
-        } catch (e) {
-          console.error('Error fetching coursewares:', e);
-        } finally {
-          globalCoursewareCache.inflight = null;
-        }
-        return globalCoursewareCache.data;
-      })();
-      globalCoursewareCache.inflight = fetchPromise;
-      await fetchPromise;
-    };
 
     useEffect(() => {
       if (selectedShapeId) {
         const selectedEl = safeElements.find((e) => e.id === selectedShapeId);
         if (selectedEl) {
-          if (selectedEl.type === 'html-applet') {
-            // 仅当选中的图元发生切换时才触发拉取，避免 elements 轮询持续重触发
-            if (lastSelectedCoursewareElementRef.current !== selectedShapeId) {
-              lastSelectedCoursewareElementRef.current = selectedShapeId;
-              fetchCoursewares();
-            }
-          } else {
-            lastSelectedCoursewareElementRef.current = null;
-          }
           setEditingProperties(parseElementData(selectedEl, {}));
         } else {
-          lastSelectedCoursewareElementRef.current = null;
           setEditingProperties(null);
           setActivePropertiesElementId(null);
         }
       } else {
-        lastSelectedCoursewareElementRef.current = null;
         setEditingProperties(null);
         setActivePropertiesElementId(null);
       }
@@ -942,56 +877,6 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
         }
       }
       return 'noop';
-    };
-
-    /** 课堂授课临时生效（仅本次授课在内存与本地画布生效，不向后端持久化） */
-    const handleApplyTemporaryCourseware = (elementId: string, updatedData: any) => {
-      const target = safeElements.find((e) => e.id === elementId);
-      if (!target) return;
-      const mergedDataStr = JSON.stringify(updatedData);
-      setTemporaryElementOverrides((prev) => ({
-        ...prev,
-        [elementId]: {
-          ...target,
-          data: mergedDataStr,
-        },
-      }));
-      frontendEventBus.publish({
-        id: uuidv7(),
-        type: 'whiteboard.element_updated',
-        source: 'whiteboard',
-        payload: { lessonId, elementId, temporary: true },
-        timestamp: Date.now(),
-        correlationId: lessonId,
-      });
-    };
-
-    /** 课堂授课永久生效（向后端写入，更新课程原始配置模板） */
-    const handleSavePermanentCourseware = async (elementId: string, updatedData: any) => {
-      setTemporaryElementOverrides((prev) => {
-        const next = { ...prev };
-        delete next[elementId];
-        return next;
-      });
-      if (onElementUpdate) {
-        setIsSyncing(true);
-        try {
-          await onElementUpdate(elementId, updatedData);
-          frontendEventBus.publish({
-            id: uuidv7(),
-            type: 'whiteboard.element_updated',
-            source: 'whiteboard',
-            payload: { lessonId, elementId },
-            timestamp: Date.now(),
-            correlationId: lessonId,
-          });
-          if (onRefresh) onRefresh();
-        } catch (e) {
-          console.error('保存课件属性失败:', e);
-        } finally {
-          setIsSyncing(false);
-        }
-      }
     };
 
     const handleUndoProp = async () => {
@@ -1723,7 +1608,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
         // i3 Autotiling 风格快捷键：
         // 1. Alt + Shift + 方向键 / HJKL: 物理方向对调平铺组件（Swap Window）
         // 2. Alt + 方向键 / HJKL: 物理方向转移聚焦组件（Focus Window）
-        if (autoTileEnabled && selectedShapeId && !isEditingText && e.altKey) {
+        if (autoTileEnabled && selectedShapeId && !isEditingText && e.altKey && !isTypingTarget(e.target)) {
           let direction: TilingDirection | null = null;
           if (e.key === 'ArrowLeft' || e.key === 'h' || e.key === 'H') direction = 'left';
           else if (e.key === 'ArrowRight' || e.key === 'l' || e.key === 'L') direction = 'right';
@@ -2283,20 +2168,15 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
           readOnly,
           isMinimized: !!data.isMinimized,
           isMaximized: effectiveFullscreenElementId === el.id,
-          isPropertiesOpen: activePropertiesElementId === el.id || activeCoursewareModalElementId === el.id,
+          isPropertiesOpen: activePropertiesElementId === el.id,
           themeColor,
           extraActions,
           onPointerDown: (e: React.PointerEvent) => !readOnly && handleElementDragStart(e, el.id, data),
           onPointerMove: !readOnly ? handleElementDragMove : undefined,
           onPointerUp: !readOnly ? handleElementDragEnd : undefined,
           onOpenProperties: () => {
-            if (!isEditMode && el.type === 'html-applet') {
-              fetchCoursewares();
-              setActiveCoursewareModalElementId(el.id);
-            } else {
-              setSelectedShapeId(el.id);
-              setActivePropertiesElementId((prev) => (prev === el.id ? null : el.id));
-            }
+            setSelectedShapeId(el.id);
+            setActivePropertiesElementId((prev) => (prev === el.id ? null : el.id));
           },
           onMinimize: async () => {
             if (onElementUpdate) {
@@ -2703,7 +2583,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                           void (async () => {
                             try {
                               const res = await fetch(
-                                `/api/assignments?lessonId=${encodeURIComponent(lessonId || '')}`,
+                                `/api/learning-surface-assignments?lessonId=${encodeURIComponent(lessonId || '')}`,
                               );
                               const payload = await res.json().catch(() => null);
                               const list: any[] = Array.isArray(payload?.assignments) ? payload.assignments : [];
@@ -2733,75 +2613,6 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                       </button>
                     </div>
                   )}
-                  {readOnly && <ReadOnlyLockCover />}
-                  {!data.isMinimized && renderResizeHandles()}
-                </div>
-              </Html>
-            </Group>
-          );
-        }
-        if (el.type === 'html-applet') {
-          return (
-            <Group key={el.id}>
-              <Html
-                divProps={{
-                  style: {
-                    position: 'absolute',
-                    top: `${displayY}px`,
-                    left: `${displayX}px`,
-                    pointerEvents: 'none',
-                    zIndex: isThisSelected ? 20 : 10,
-                  },
-                }}
-              >
-                <div
-                  onPointerDown={(e) => {
-                    if (readOnly) return;
-                    setSelectedShapeId(el.id);
-                    e.stopPropagation();
-                  }}
-                  onContextMenu={(e) => {
-                    if (readOnly) {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      return;
-                    }
-                    const point = toCanvasPointFromEvent(e.clientX, e.clientY);
-                    if (point) {
-                      setContextMenu({
-                        x: point.x,
-                        y: point.y,
-                        elementId: el.id,
-                      });
-                    }
-                  }}
-                  className={`bg-white border border-gray-300 rounded-lg shadow-xl overflow-hidden flex flex-col font-sans text-sm relative ${hoverCardClass}`}
-                  style={{
-                    pointerEvents: readOnly ? 'none' : 'auto',
-                    userSelect: readOnly ? 'none' : 'auto',
-                    width: `${displayWidth}px`,
-                    height: `${displayHeight}px`,
-                  }}
-                >
-                  {/*
-                    与 plugin 分支一致：内容交给宿主的 WidgetFrame 包裹，
-                    课件只需提供内容本身，窗口能力（最小化/全屏/删除）由宿主统一保证。
-                  */}
-                  <WidgetFrame
-                    {...getWidgetTitleBarProps(
-                      data.title || 'Interactive Courseware',
-                      <Globe size={13} className="text-primary-theme" />,
-                      'default',
-                    )}
-                    contentClassName="flex-1 bg-white overflow-hidden relative min-h-0"
-                  >
-                    <HtmlAppletFrame
-                      data={data}
-                      lessonId={lessonId}
-                      elementId={el.id}
-                      className="w-full h-full border-none"
-                    />
-                  </WidgetFrame>
                   {readOnly && <ReadOnlyLockCover />}
                   {!data.isMinimized && renderResizeHandles()}
                 </div>
@@ -3873,6 +3684,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
               onRefresh={onRefresh}
               classroomTools={classroomTools}
               onExecuteTool={onExecuteTool}
+              toolbarExtras={toolbarExtras}
             />
           )}
 
@@ -4255,26 +4067,6 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
               lang="zh"
             />
           )}
-
-          <CoursewareEntrySelectorModal
-            showEntrySelector={showEntrySelector}
-            setShowEntrySelector={setShowEntrySelector}
-            zipUploadInfo={zipUploadInfo}
-            zipCandidates={zipCandidates}
-            handlePropsUpdate={handlePropsUpdate}
-            fetchCoursewares={fetchCoursewares}
-          />
-
-          {/* 交互课件临时/永久属性调整弹窗（在 live_class 授课模式下以浮层 Modal 显示，支持不覆盖课程设置） */}
-          <CoursewarePropertiesModal
-            isOpen={!!activeCoursewareModalElementId}
-            onClose={() => setActiveCoursewareModalElementId(null)}
-            element={safeElements.find((e) => e.id === activeCoursewareModalElementId) || null}
-            coursewares={coursewares}
-            fetchCoursewares={fetchCoursewares}
-            onApplyTemporary={handleApplyTemporaryCourseware}
-            onSavePermanent={handleSavePermanentCourseware}
-          />
         </div>
 
         {/* Whiteboard event stream debug panel — only visible to teachers (and dev). */}
@@ -4303,11 +4095,6 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
           lessonId={lessonId}
           classId={classId}
           fullscreenBroadcastClassId={fullscreenBroadcastClassId}
-          coursewares={coursewares}
-          fetchCoursewares={fetchCoursewares}
-          setZipCandidates={setZipCandidates}
-          setZipUploadInfo={setZipUploadInfo}
-          setShowEntrySelector={setShowEntrySelector}
           handleAddOption={handleAddOption}
           handleRemoveOption={handleRemoveOption}
           handleOptionChangeLocal={handleOptionChangeLocal}

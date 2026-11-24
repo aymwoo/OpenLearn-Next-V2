@@ -41,6 +41,7 @@ Manifest 贡献键：`contributes['mode.pack']`（见 `@openlearn/plugin-sdk` �
 
 - 未写入或 `whiteboard`：按白板。全局开关关闭时仍走既有白板中栏；开关打开时才进入白板 Mode Pack。
 - `xuean`：建课走学案向导（预习 / 研读 / 练习），上课注册并使用 `@openlearn/mode-xuean`。不需要再打开全局 Mode Pack 开关。
+- 绑定第三方模式包（`lessons.mode_pack_id` 非内置包）：自动启用 Mode Packs，不依赖全局开关；备课面 / 大纲 / 工作区按插件贡献渲染，缺失时回退白板路径。
 
 启用 Mode Pack 路径后，宿主必须先调用 `normalizeSegmentType()`（空 type → `whiteboard`），再按 `segment.type` 匹配 Mode Pack / `classroom.active_segment.*`。学案课的环节类型使用 `xuean` 前缀。
 
@@ -53,7 +54,7 @@ Manifest 贡献键：`contributes['mode.pack']`（见 `@openlearn/plugin-sdk` �
 - timeline 注册 `xuean` 与 `xuean:preview|study|drill`；扩展点 `targetType` 经 `extensionCoversSegmentType` 做前缀匹配（与 Mode Pack 契约一致）。
 - 教师 `active_segment.main` → `ProgressPanel`；学生 `student_main` primary → `StudentXueanView`；隐藏学生平行「学案」tab。
 - 服务端注册共享通道 `xuean:task` 与 SubmissionAdapter `xuean-adapter`（只读投影 `activity_progress` 进统一成绩面板；`modeId=xuean`）。
-- 作答真值仍写 `POST /api/activities/:id/progress`；工作区在写库成功后 `flow.sendMessage({ channel: 'xuean:task' })` 通知。
+- 作答真值仍写 `POST /api/lesson-activities/:id/progress`（旧 `/api/activities/:id/progress` 为 307 兼容别名）；工作区在写库成功后 `flow.sendMessage({ channel: 'xuean:task' })` 通知。
 - **不变式**：环节门禁仍由 lesson-engine 裁决；学案自报进度**不会**自动放行 timeline。
 
 flag 关闭时行为与既有平行 tab / 无适配器路径一致。
@@ -62,10 +63,10 @@ flag 关闭时行为与既有平行 tab / 无适配器路径一致。
 
 flag 开启时：
 
-- Mode Pack 声明 `prepContributionId`（白板 `prep-whiteboard` / 学案 `prep-xuean`）。
+- Mode Pack 声明 `prepContributionId`（白板 `prep-whiteboard` / 学案 `prep-xuean`）。第三方包声明自定义 id 时，宿主渲染 `classroom.prep` 槽位；没有匹配贡献则回退白板备课面并记录告警。
 - `TeacherView` 不再以 `lesson_editor` / `xuean_editor` 双硬编码为主路径；两者均进入 `ModePackPrepShell`，按当前 `activeSegment.type` 决议备课面。
 - 侧栏「学案编辑器」入口并入「备课」（`lesson_editor`）；关闭 flag 时仍为平行双入口。
-- Timeline 新建环节默认 `whiteboard`；环节类型选择列出已注册类型（含 `whiteboard` 与 `xuean*`）。
+- Timeline 新建环节默认取当前绑定包的第一个 `segmentTypes`；旧课再回落 `whiteboard` / `lecture`。环节类型选择列出已注册类型（含插件 `mode.pack.segmentTypes` 自动注册项）。
 - **活动与 timeline 不并表**：`lesson_activities` 仍独立存储；用 `segment.type` + `activity.config_json.segmentId`（或白板 `page_meta.segmentId`）关联。跨包拖放经 `routePrepDrop()`：白板环节 → page_meta/元素；学案环节 → 学案存储（拦截白板元素误写入）。
 
 flag 关闭 = 旧双编辑器路径，零行为变化。
@@ -73,7 +74,8 @@ flag 关闭 = 旧双编辑器路径，零行为变化。
 ### 1.1.2 削壳与大纲贡献（P4）
 
 - 教师中栏 → 学生 tab 广播映射统一为 `mapTeacherMiddleTabToStudentTab()`（删除重复内联映射）。
-- Mode Pack 声明 `outlineContributionId`；课中侧栏按环节类型渲染白板页大纲或学案活动大纲。
+- Mode Pack 声明 `outlineContributionId`；课中侧栏按环节类型渲染白板页大纲或学案活动大纲。第三方包渲染 `classroom.outline` 槽位；没有匹配贡献时回退白板页面大纲。
+- `/api/mode-packs` 对插件包声明的 `adapterIds` / `channels` 做能力诊断：当前未注册时条目带 `warnings`，课中提交面板只聚合当前包的适配器。
 - flag 开时学生平行「学案」tab 默认隐藏；同一设置页可打开「显示学生平行学案页」。
 - `LiveClassroomView` 编排壳目标 ≤ ~1.5k LOC（逻辑外移到 hooks / 子组件）；第三方接入见 [mode-pack-third-party.md](../tutorials/mode-pack-third-party.md)。
 
@@ -99,15 +101,22 @@ flag 关闭 = 旧双编辑器路径，零行为变化。
 
 白板课（含没有 `delivery_mode` 的旧课）的教师端和学生端默认只留课题和画布。学案课的教师顶栏保持原来的一排按钮。
 
-教师端默认能看到：课节标题、班级、计时、全班专注 / 答题锁定、当前阶段。进行中的投票和抢答也留在这条上，方便当场结束。
+进入互动课堂时统一先显示起始门户（课程选择、班级与教学模式）。如果所选课程已有进行中的会话，门户顶部显示「课堂进行中」提示条，点击「回到课堂」即可恢复现场；独立的进行中会话列表不再作为进入课堂的第一屏。
 
-收进面板、点开才出现：
+教师端默认能看到：课节标题、班级、全班专注 / 答题锁定，以及「课堂工具」「课堂面板」两个入口。课堂倒计时位于白板工具栏右侧；原来单独占一行的「课中授课」阶段条和「课堂面板 / LIVE BROADCASTER CONNECTED」行已移除。
 
-| 入口             | 里面有什么                                                                                                                 |
-| ---------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| 顶栏「更多」     | 返回门户、会话档案、课中设置、切换课节、编辑、学生预览，以及告警、学情、协作、投屏、互评、家校通知、宏、硬件和插件快捷动作 |
-| 「课堂工具」     | 阶段切换、极速投票、抢答、通票、大屏展台、随机抽问、积分榜、节奏晴雨表                                                     |
-| 中栏「课堂面板」 | 演示白板、学生提交、作业成绩、随堂测验榜、环节工作区、完成授课                                                             |
+进入白板授课视图时会先弹出「开课前功能设置」，默认沿用上一次保存的开关选择；教师确认后关闭并开始上课。学案课不弹出该面板。白板课每次重新进入课堂都会再次出现，方便课前调整。
+
+点开「课堂工具」后，原先分散在「课堂工具」与「更多」里的按钮在同一个面板中显示：
+
+| 分组     | 内容                                                                                        |
+| -------- | ------------------------------------------------------------------------------------------- |
+| 阶段流程 | 课前就绪、课中授课、结课通票、学情简报                                                      |
+| 课堂互动 | 极速投票、抢答、60s 通票、大屏展台、随机抽问、积分榜、节奏晴雨表                            |
+| 快捷工具 | 课堂异常告警、AI 学情预测、小组协作、多屏对比、作业互评、家校通知、宏动作、硬件桥、课中设置 |
+| 课堂管理 | 返回门户、会话档案、课节切换与编辑、学生视角预览                                            |
+
+中栏「课堂面板」下拉提供演示白板、学生提交、作业成绩、随堂测验榜、环节工作区、控制与完成授课。其中「控制」页按上述分组列出开关：关闭后对应按钮不再渲染，设置保存在浏览器 `localStorage`，并可一键「全部恢复显示」。
 
 学生白板页默认只有画布、课题和一个「工具」按钮。大纲、课件、作业、签到、笔记都在这个菜单里，选中后打开侧栏，关掉侧栏画布还在。全屏同步仍走原来的 `ClassroomSyncChannel`，学生不能改全班环节或阶段。
 
@@ -176,6 +185,8 @@ await ctx.invokeCommand('classroom.sendMessage', {
 ```
 
 `commandType` 固定为 `classroom.sendMessage`，要求 `lesson:write`，`exposeToAgent: false`。经命令进入时 actor 为 `plugin:<id>`，宿主强制 `senderPluginId`，插件只能往自己拥有的 channel（或 `shared` 通道）发。用户经 HTTP 进入时不带 `senderPluginId`，改由 `rolesAllowed` 约束。`targetUserIds` 非空时 socket 只进入这些用户的房间和教师房间。
+
+**学生 self 身份（P0，`ctx.services.classroomSelfMessage`）**：第三方插件若只是要替当前学生发一条课堂消息，不必（也不应）申请 `lesson:write`。声明 `classroom:message:self` 后调用 `sendAsSelf(input)`，宿主会把 sender 派生为 `user:<studentId>:student`，并校验：channel 已注册且 `rolesAllowed` 包含 `student`、学生属于 `classId`、定向 `targetUserIds` 与发送者同班；`messageId` 幂等语义与 `IClassroomMessageService.send` 一致。教师会话、无会话调用与非本班目标都会被拒绝。
 
 ### 2.4 接收与断线补投
 

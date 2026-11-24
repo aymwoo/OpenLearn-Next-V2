@@ -40,6 +40,7 @@ const ModePackPrepShell = lazy(() =>
 import { useOptionalAppData } from '../../context/AppDataContext';
 import { useThemeStore } from '../../store/themeStore';
 import { isModePacksEnabled } from '../classroom/mode-pack/flags';
+import { ModePackSegmentTypeBridge } from '../classroom/mode-pack/ModePackSegmentTypeBridge';
 
 /**
  * TeacherView is the single routing wrapper for the entire `teacher` branch of App.tsx.
@@ -114,6 +115,8 @@ export function TeacherView(_props: TeacherViewProps = {}) {
           <PluginTabPanel activeNavPlugin={teacherTab.includes('/') ? teacherTab.split('/')[0] : null} />
         )}
 
+        <ModePackSegmentTypeBridge />
+
         <Suspense
           fallback={
             <div className="flex-1 flex flex-col items-center justify-center min-h-[400px] text-slate-400 gap-3">
@@ -140,7 +143,7 @@ export function TeacherView(_props: TeacherViewProps = {}) {
             <Dashboard />
           ) : teacherTab === 'lesson_editor' || teacherTab === 'xuean_editor' ? (
             isModePacksEnabled() ? (
-              <ModePackPrepShell />
+              <ModePackPrepShell requestedTab={teacherTab} />
             ) : teacherTab === 'lesson_editor' ? (
               <LessonEditorView />
             ) : (

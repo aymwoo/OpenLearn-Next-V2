@@ -41,6 +41,8 @@ import { registerPluginsRoutes } from '../routes/plugins.js';
 import { registerAssessmentRoutes } from '../routes/assessments.js';
 import { registerClassroomExtrasRoutes } from '../routes/classroom-extras.js';
 import { registerClassroomPeerReviewRoutes } from '../routes/classroom-peer-review.js';
+import { registerRuntimePolicyRoutes } from '../routes/runtime-policies.js';
+import { registerStudentUiPolicyRoutes } from '../routes/student-ui-policy.js';
 import { registerClassroomRoutes } from '../routes/classroom.js';
 import { ActivityRegistry } from '../../packages/activity-ecosystem/index.js';
 import type { ServerContext } from '../context.js';
@@ -95,6 +97,8 @@ describe('路由数据范围声明门禁（Issue #229）', () => {
       registerAssessmentRoutes(ctx);
       registerClassroomExtrasRoutes(ctx.app);
       registerClassroomPeerReviewRoutes(ctx.app);
+      registerRuntimePolicyRoutes(ctx);
+      registerStudentUiPolicyRoutes(ctx);
       // 课堂路由需要运行时服务；这里只借用其**注册**行为（审计只看路由栈），
       // 用最小 stub 即可 —— 不会真的跑课堂逻辑。
       registerClassroomRoutes(ctx, {} as unknown as ClassroomRuntimeService, {} as unknown as ClassroomFeedService);

@@ -377,15 +377,17 @@ export class GradingService {
     }>;
 
     // 5. 批量拉取平时作业得分
+    //    学年过滤：只认父作业 `assignments.academic_year`。`assignment_submissions.academic_year`
+    //    是冗余列，存量行可能为 NULL 或与父作业不一致，不能再用它做二次过滤，否则历史成绩会被丢掉。
     const assignmentSubmissions = this.db
       .prepare(
         `
-      SELECT student_id, score FROM assignment_submissions
-      WHERE assignment_id IN (SELECT id FROM assignments WHERE class_id = ?${academicYear ? ' AND academic_year = ?' : ''}) AND status = 'graded' AND score IS NOT NULL
-        ${academicYear ? 'AND academic_year = ?' : ''}
+      SELECT s.student_id, s.score FROM assignment_submissions s
+      WHERE s.assignment_id IN (SELECT id FROM assignments WHERE class_id = ?${academicYear ? ' AND academic_year = ?' : ''})
+        AND s.status = 'graded' AND s.score IS NOT NULL
     `,
       )
-      .all(...(academicYear ? [classId, academicYear, academicYear] : [classId])) as Array<{
+      .all(...(academicYear ? [classId, academicYear] : [classId])) as Array<{
       student_id: string;
       score: number | null;
     }>;
@@ -448,13 +450,18 @@ export class GradingService {
     }
 
     // 分母必须与分子同口径（Issue #219）：分子按学年过滤，分母也必须按学年过滤。
-    // 否则「本学年没有考试」的班级会因为别的学年存在考试而被判成「缺考记 0 分」。
+    // 否则「本学年没有作业/考试」的班级会因为别的学年存在作业/考试而被判成「缺交记 0 分」。
     //
-    // 注意：作业分母 `totalPublishedAssignments` 仍**不**按学年过滤 ——
-    // 那是 #214 明确钉住的行为（见 server/__tests__/grade-academic-year-visibility.test.ts
-    // 「其他学年看不到这条成绩」断言为 0），改动它属于另一个口径决策，不在本 issue 范围内。
+    // 作业分母与分子使用同一学年口径：本学年没有任何已发布作业时按「无作业」处理（100 分），
+    // 而不是被其它学年的作业拖成 0 分。
     const totalPublishedAssignments =
-      (this.db.prepare('SELECT COUNT(*) as count FROM assignments WHERE class_id = ?').get(classId) as any)?.count || 0;
+      (
+        this.db
+          .prepare(
+            `SELECT COUNT(*) as count FROM assignments WHERE class_id = ?${academicYear ? ' AND academic_year = ?' : ''}`,
+          )
+          .get(...(academicYear ? [classId, academicYear] : [classId])) as any
+      )?.count || 0;
 
     const totalPublishedExams =
       (
@@ -505,11 +512,14 @@ export class GradingService {
           ? Math.round(verifiedPercents.reduce((acc, val) => acc + val, 0) / verifiedPercents.length)
           : null;
 
-      // 计算作业分：若班级已发布作业但学生未交则得 0 分，否则为已交作业平均分
+      // 计算作业分：本学年已发布作业为分母，未交/未出分按 0 分计入；
+      // 本学年没有任何已发布作业时按 100 分处理，避免无课程产出被误扣分。
       const scores = assignmentMap.get(student.id) || [];
-      let assignmentScore = totalPublishedAssignments > 0 ? 0 : 100;
-      if (scores.length > 0) {
-        assignmentScore = Math.round(scores.reduce((acc, val) => acc + val, 0) / scores.length);
+      let assignmentScore = 100;
+      if (totalPublishedAssignments > 0) {
+        const sum = scores.reduce((acc, val) => acc + val, 0);
+        // 数据异常（同一作业出现多行）时按上限 100 截断，避免分数溢出。
+        assignmentScore = Math.min(100, Math.round(sum / totalPublishedAssignments));
       }
 
       // 计算考试分：若已发布考试缺考记 0 分，多场考试归一化为百分制后求均值

@@ -4,13 +4,11 @@ import { getUploadsDir } from '../utils/paths.js';
 import { getCookieToken, getValidSession, getActorId, requireAuth } from '../middleware/auth.js';
 import { requireScopedAuth } from '../middleware/data-scope.js';
 import { sendSafeError } from '../utils/error-handler.js';
-import { randomId } from '../utils/id.js';
-import { isSafeHref } from '../../packages/core/security/url-safety.js';
+import { rejectLegacyAssignmentWrite } from '../utils/legacy-assignment-write.js';
 import { classRoom, pseudoRoomStudentId } from '../presence.js';
 import { parsePagination } from '../utils/pagination.js';
 import type { ServerContext } from '../context.js';
 import { diagnosticService, VALID_ICEBREAKER_MOODS } from '../services/diagnostic-service.js';
-import { authorizePeerReviewSubmission } from '../services/peer-review-access.js';
 import { whiteboardService } from '../services/whiteboard-service.js';
 import { LessonService } from '../services/lesson-service.js';
 import { segmentGateService } from '../services/segment-gate-service.js';
@@ -258,112 +256,13 @@ export function registerLessonsRoutes(ctx: ServerContext) {
   });
 
   // ── v0.6.1 数据真实性：学生端「作业提交 / 互评」专用写入端点 ────────────
-  // 此前学生端走 /api/commands（教师专用端点）→ 必 403，每次点击报错。
-  // 学生只能以**本人身份**提交/互评（session.studentId 强制对齐）。
-  app.post('/api/lessons/:lessonId/eval-submissions', requireScopedAuth('self'), (req, res) => {
-    try {
-      const session = (req as any).session;
-      const { studentId, filePath, textContent } = req.body || {};
-      // Issue #226：管理员判定统一走会话角色唯一真源（与 requireAuth / getActorId 同口径）。
-      const isPrivileged = isAdministrator(session);
-      const targetStudentId = isPrivileged ? String(studentId || '') : String(session?.studentId || '');
-      if (!targetStudentId) {
-        return res.status(400).json({ success: false, error: 'Missing studentId' });
-      }
-      if (filePath && typeof filePath !== 'string') {
-        return res.status(400).json({ success: false, error: 'filePath must be a string' });
-      }
-      // Issue #228：写入侧也过协议白名单 —— filePath / linkUrl 会被渲染进 href，
-      // `javascript:` / `data:` 之类不该进库（读取侧还会再过一次）。
-      if (filePath && !isSafeHref(filePath)) {
-        return res.status(400).json({ success: false, error: 'filePath contains an unsupported URL scheme' });
-      }
-      const now = Date.now();
-      const existing = kernelContainer.db
-        .prepare('SELECT id, version FROM plugin_submissions WHERE lesson_id = ? AND student_id = ?')
-        .get(req.params.lessonId, targetStudentId) as { id: string; version: number } | undefined;
-
-      if (existing) {
-        // 重复提交 = 新版本（面板 toast 展示版本号）
-        const newVersion = (existing.version ?? 1) + 1;
-        kernelContainer.db
-          .prepare('UPDATE plugin_submissions SET file_path = ?, version = ?, updated_at = ? WHERE id = ?')
-          .run(filePath || '', newVersion, now, existing.id);
-        return res.json({ success: true, submissionId: existing.id, version: newVersion });
-      }
-
-      const id = randomId('evalsub_');
-      kernelContainer.db
-        .prepare(
-          `INSERT INTO plugin_submissions (id, assignment_id, lesson_id, student_id, file_path, version, created_at, updated_at)
-           VALUES (?, NULL, ?, ?, ?, 1, ?, ?)`,
-        )
-        .run(id, req.params.lessonId, targetStudentId, filePath || '', now, now);
-      if (textContent) {
-        console.log(`[Eval] Student ${targetStudentId} submitted text content for lesson ${req.params.lessonId}`);
-      }
-      res.json({ success: true, submissionId: id, version: 1 });
-    } catch (err: any) {
-      sendSafeError(res, err);
-    }
+  // 阶段 2 收尾：写入口已迁到 /api/learning-surface-lessons/*，旧端点统一 410。
+  app.post('/api/lessons/:lessonId/eval-submissions', requireScopedAuth('self'), (_req, res) => {
+    rejectLegacyAssignmentWrite(res, '/api/learning-surface-lessons/:lessonId/eval-submissions');
   });
 
-  app.post('/api/lessons/:lessonId/eval-submissions/:submissionId/reviews', requireScopedAuth('self'), (req, res) => {
-    try {
-      const session = (req as any).session;
-      const { score, comment } = req.body || {};
-      // Issue #226：管理员判定统一走会话角色唯一真源（与 requireAuth / getActorId 同口径）。
-      const isPrivileged = isAdministrator(session);
-      const reviewerId = isPrivileged
-        ? String((req.body || {}).reviewerId || session?.studentId || '')
-        : String(session?.studentId || '');
-      if (!reviewerId) {
-        return res.status(400).json({ success: false, error: 'Missing reviewerId' });
-      }
-      const numericScore = Number(score);
-      if (!Number.isFinite(numericScore) || numericScore < 0 || numericScore > 100) {
-        return res.status(400).json({ success: false, error: 'Score must be 0-100' });
-      }
-      // 对象级授权：与插件命令路径（assignment.eval.submitReview）同源 —— Issue #217
-      // 补齐「禁止自评」「必须持有互评任务」「截止时间」三项判定。
-      const decision = authorizePeerReviewSubmission(kernelContainer.db, {
-        submissionId: req.params.submissionId,
-        lessonId: req.params.lessonId,
-        reviewerId,
-        privileged: isPrivileged,
-      });
-      if (!decision.ok) {
-        return res.status(decision.status).json({ success: false, error: decision.error });
-      }
-      const id = randomId('evalrev_');
-      const now = Date.now();
-      kernelContainer.db
-        .prepare(
-          `INSERT INTO plugin_peer_reviews (id, submission_id, reviewer_id, score, comment, assignment_id, task_id, anonymous, status, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, 0, 'submitted', ?, ?)
-           ON CONFLICT(submission_id, reviewer_id) DO UPDATE SET
-             score = excluded.score,
-             comment = excluded.comment,
-             assignment_id = excluded.assignment_id,
-             task_id = excluded.task_id,
-             status = 'submitted',
-             updated_at = excluded.updated_at`,
-        )
-        .run(
-          id,
-          req.params.submissionId,
-          reviewerId,
-          numericScore,
-          comment || '',
-          decision.assignmentId,
-          decision.taskId,
-          now,
-          now,
-        );
-      res.json({ success: true, reviewId: id });
-    } catch (err: any) {
-      sendSafeError(res, err);
-    }
+  app.post('/api/lessons/:lessonId/eval-submissions/:submissionId/reviews', requireScopedAuth('self'), (_req, res) => {
+    rejectLegacyAssignmentWrite(res, '/api/learning-surface-lessons/:lessonId/eval-submissions/:submissionId/reviews');
   });
 
   // ── 课程发布向导：AI 教学大纲生成 ────────────────────────────────────────
@@ -400,11 +299,11 @@ export function registerLessonsRoutes(ctx: ServerContext) {
 
   app.post('/api/lessons', requireAuth('teacher', 'administrator'), async (req, res) => {
     try {
-      const { title, content, deliveryMode } = req.body;
+      const { title, content, deliveryMode, modePackId } = req.body;
       const session = (req as any).session;
       const creatorId = session?.userId || session?.username || 'usr_teacher';
       const actorId = getActorId(req) || 'teacher';
-      const result = await lessonService.createLesson({ title, content, creatorId, deliveryMode }, actorId);
+      const result = await lessonService.createLesson({ title, content, creatorId, deliveryMode, modePackId }, actorId);
       res.json({ success: true, result });
     } catch (e: any) {
       sendSafeError(res, e);

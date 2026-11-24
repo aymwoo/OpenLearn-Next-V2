@@ -34,13 +34,18 @@ architecture/observability
 architecture/dependency-injection
 architecture/presence-collaboration
 architecture/security-permissions
+architecture/student-ui-policy
 architecture/database-and-migrations
 architecture/adr-001-tenant-and-db-abstraction
 architecture/theming-system
 architecture/service-registry
 architecture/whiteboard-subsystems
 architecture/classroom-runtime
+architecture/activity-contract
+architecture/xuean-activities
+architecture/extension-points
 architecture/resource-runtime
+architecture/learning-surface
 architecture/assignment
 architecture/assessment-model
 architecture/plugin-worker-isolation-l1-proposal
@@ -332,7 +337,7 @@ audit/audit-index
 - **[AI Runtime & Tools](ai/ai-runtime.md)**: OpenAI 兼容大模型接入网关、多 Provider 动态切换与 Function Calling 工具调用。
 - **[CLI & Operations](getting-started/installation-guide.md)**: `npx openlearn-next` 命令行自检 (`doctor`)、在线冷备 (`backup`)、数据还原 (`restore`)、沙盒演示 (`--demo`) 与缓存治理 (`clean`)。
 
-> 最后更新：2026-10-30 (v0.7.8)
+> 最后更新：2026-11-23 (v0.7.17)
 
 ---
 
@@ -344,8 +349,8 @@ audit/audit-index
 docs/ai-reference/INDEX.md
 ```
 
-它按「结论 → 源码坐标（路径 → 符号 → 行号）→ 约束」组织，覆盖全平台分层、29 个内核子系统、
-313 个 HTTP 端点、84 条命令（84 条描述符）、19 条实时路由、120 个扩展槽位与环境变量全表，
+它按「结论 → 源码坐标（路径 → 符号 → 行号）→ 约束」组织，覆盖全平台分层、内核子系统、
+HTTP 端点、命令描述符、实时路由、扩展槽位与环境变量全表，
 并对每条结论标注 `已验证 / 推断 / 待确认`。
 
 该目录**不加入本 Sphinx 构建**（`conf.py` 的 `exclude_patterns` 已排除），

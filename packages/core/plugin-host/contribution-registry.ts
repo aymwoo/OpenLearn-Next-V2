@@ -14,6 +14,7 @@
  */
 
 import { warnDeprecation } from '../extension-points/index.js';
+import { assertSlotExists } from '../extension-registry/extension-points.js';
 
 // ── Contribution Config Types ────────────────────────────────────────────
 
@@ -356,6 +357,29 @@ export interface CoursewareViewerOverlayConfig {
   id: string;
   title: string;
   icon?: string;
+}
+
+/**
+ * A contribution to the `courseware.host` slot。
+ *
+ * 插件可声明一个「课件宿主」，用于接管内置 `CoursewareHost` 的渲染。
+ * 只有当 `replaces: 'builtin'` 时才参与接管；多个候选按 `priority` 取最高，
+ * 同优先级按插件 id 稳定排序，冲突由服务端记录并回落内置宿主。
+ */
+export interface CoursewareHostConfig {
+  id: string;
+  label: string;
+  description?: string;
+  /** 声明接管内置宿主 */
+  replaces?: 'builtin';
+  /** 优先级，数值越大越优先（默认 0） */
+  priority?: number;
+  /** 沙箱入口（插件静态目录下的 HTML） */
+  view?: string;
+  /** 远程模块入口（与 view 二选一） */
+  entry?: string;
+  /** 宿主能力声明，供课程容器做兼容性判断 */
+  capabilities?: string[];
 }
 
 /** A contribution to the classroom.portal.telemetry slot. */
@@ -972,6 +996,7 @@ export type ContributionConfig =
   | PostClassWidgetConfig
   | CoursewareViewerToolbarConfig
   | CoursewareViewerOverlayConfig
+  | CoursewareHostConfig
   | PortalTelemetryConfig
   | PortalCourseBadgeConfig
   | PortalTeachingModeConfig
@@ -1102,6 +1127,7 @@ export class ContributionRegistry {
       if (slot === 'locales') continue;
       if (!Array.isArray(configs) || configs.length === 0) continue;
 
+      assertSlotExists(slot);
       warnDeprecation('slot', slot, pluginId);
 
       if (!this.contributions.has(slot)) {

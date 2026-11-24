@@ -175,6 +175,7 @@ export type ExtensionSlot =
   // ── 课件播放器扩展槽位（P1） ──
   | 'courseware.viewer.toolbar' // 课件播放器工具栏扩展（草稿本/批注/字幕/随堂笔记等）
   | 'courseware.viewer.overlay' // 课件浮层 HUD 扩展（弹幕/防作弊水印/抢答悬浮球等）
+  | 'courseware.host' // 课件宿主接管（替换内置 CoursewareHost，需 replaces: 'builtin'）
   // ── 课表中心扩展槽位 ──
   | 'timetable.tab' // 课表中心扩展 Tab（如：智能排课排班 / 考勤日历同步 / 考务监考编排）
   // ── 管理后台扩展槽位 ──
@@ -185,6 +186,7 @@ export type ExtensionSlot =
   | 'student.classroom.overlay' // 学生端课堂全屏交互浮层扩展（弹幕、防作弊水印、抢答悬浮球等）
   // ── 作业评估与多模态预览扩展槽位 ──
   | 'assignment.submission.preview' // 作业提交多模态预览扩展（沙盒运行/富媒体播放/3D模型等）
+  | 'assignment.submission.actions' // 作业提交卡片操作扩展（重新提交 / 分享 / 导出 / 第三方评分等）
   | 'assignment.file.preview' // 作业**附件**预览扩展（按扩展名/MIME 声明能处理的文件类型，如 docx/pptx/3D 模型）
   // ── 全局壳层扩展槽位（底座解耦）──
   | 'header.action' // 全局顶栏右侧快捷操作（全局 AI 助手入口 / 屏幕录制 / 校园门户直通等）
@@ -249,6 +251,8 @@ export type ExtensionSlot =
   // ── 课堂教学环节主工作区接管槽位 ──
   | 'classroom.active_segment.main' // 当前活跃教学环节主工作区自定义接管面板（探究仿真实验、代码竞技等）
   | 'classroom.active_segment.student_main' // 学生端对称的活跃环节主工作区接管（与教师端按 segment.type 路由，学案/Moodle 学生视图）
+  | 'classroom.prep' // 第三方 Mode Pack 的备课面（按 prepContributionId / segment.type 分发）
+  | 'classroom.outline' // 第三方 Mode Pack 的课中侧栏大纲（按 outlineContributionId / segment.type 分发）
   // ── 学生端学业对比扩展槽位 ──
   | 'student.academic_year.metric_card' // 学生端多学年综合学业对比自定义指标卡扩展
   // ── 环节节点与学生端徽标微扩展槽位 ──
@@ -264,7 +268,11 @@ export type ExtensionSlot =
   | 'classroom.showcase_diff.action' // 「多屏对比投屏批注」模态窗顶栏动作扩展
   | 'classroom.macro_runner.action' // 「课堂宏动作编排中枢」动作区扩展
   | 'classroom.hardware_bridge.addon' // 「硬件教具生态网关」设置与监控面板扩展
-  | 'classroom.sessions.action'; // 「课堂会话与档案管理」顶栏动作扩展
+  | 'classroom.sessions.action' // 「课堂会话与档案管理」顶栏动作扩展
+  // ── 学案编辑器扩展槽位：第三方插件新增活动形式 ──
+  | 'xuean.activity.type' // 声明新的学案活动类型（并进入教师端活动类型下拉）
+  | 'xuean.activity.editor' // 该类型活动的教师端编辑器（按 activityType 分发）
+  | 'xuean.activity.student'; // 该类型活动的学生端渲染器（按 activityType 分发）
 
 /**
  * Anchor slot — 锚点扩展槽（v0.2.6）。
@@ -636,6 +644,20 @@ export interface AssignmentSubmissionPreviewSlotProps {
   lessonId?: string;
   isSelf?: boolean;
   lang?: 'zh' | 'en';
+  dispatcher?: IHostActionDispatcher;
+}
+
+/** Props passed to assignment.submission.actions extensions（作业提交卡片操作） */
+export interface AssignmentSubmissionActionsSlotProps {
+  /** 提交所属作业（仅 id / lessonId，避免把完整作业正文透传给插件）。 */
+  assignment: { id?: string | null; lessonId?: string | null } | null;
+  submission: any;
+  studentId?: string;
+  lessonId?: string;
+  isSelf?: boolean;
+  lang?: 'zh' | 'en';
+  /** 宿主提供的数据刷新入口（重新提交 / 评分后调用）。 */
+  refresh?: () => void | Promise<void>;
   dispatcher?: IHostActionDispatcher;
 }
 

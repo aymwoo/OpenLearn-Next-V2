@@ -165,10 +165,13 @@ export function QuizGeneratorModal(props: QuizGeneratorModalProps) {
                   setIsGeneratingSuggestions(true);
                   try {
                     if (quizGenMode === 'scan_lesson') {
-                      const res = await fetch(`/api/classes/${quizGeneratorClassId}/assignments/suggest`, {
+                      const res = await fetch('/api/learning-surface-assignments/suggest', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ lessonId: quizGenSelectedLessonId }),
+                        body: JSON.stringify({
+                          classId: quizGeneratorClassId,
+                          lessonId: quizGenSelectedLessonId,
+                        }),
                       });
                       if (res.ok) {
                         const data = await res.json();
@@ -178,10 +181,10 @@ export function QuizGeneratorModal(props: QuizGeneratorModalProps) {
                         alert('Error generating suggestions. Please make sure the selected lesson has content.');
                       }
                     } else {
-                      const res = await fetch(`/api/classes/${quizGeneratorClassId}/assignments/generate`, {
+                      const res = await fetch('/api/learning-surface-assignments/generate', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ topic: quizGenTopic }),
+                        body: JSON.stringify({ classId: quizGeneratorClassId, topic: quizGenTopic }),
                       });
                       if (res.ok) {
                         await fetchClassDashboard(quizGeneratorClassId!);
@@ -346,10 +349,11 @@ export function QuizGeneratorModal(props: QuizGeneratorModalProps) {
                   try {
                     const activeLesson = lessons.find((l) => l.id === quizGenSelectedLessonId);
                     const lessonTitle = activeLesson ? activeLesson.title : quizGenTopic || 'Custom Objective';
-                    const res = await fetch(`/api/classes/${quizGeneratorClassId}/assignments/create-suggested-quiz`, {
+                    const res = await fetch('/api/learning-surface-assignments/create-suggested-quiz', {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify({
+                        classId: quizGeneratorClassId,
                         title: `MCQ Evaluation: ${lessonTitle}`,
                         description: `Automatic evaluation based on core learning objectives.`,
                         questions: suggestedQuestions.filter((q) => q.selected).map(({ selected, ...rest }) => rest),

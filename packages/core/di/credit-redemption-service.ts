@@ -18,7 +18,7 @@ import type { Database } from 'better-sqlite3';
 import { v7 as uuidv7 } from 'uuid';
 import { PointsLedgerService } from './points-ledger-service.js';
 import { RewardCatalogService, type ResolveFailureCode } from './reward-catalog-service.js';
-import type { CreditEventPublisher, SideEffectEnqueuer } from './credit-award-service.js';
+import { enqueueCompensation, type CreditEventPublisher, type SideEffectEnqueuer } from './credit-award-service.js';
 
 /** 兑换扣减使用的默认学分维度；可被构造参数覆盖。 */
 export const DEFAULT_REDEEM_DIMENSION = 'reward_credit';
@@ -45,7 +45,8 @@ export interface RedeemCreditInput {
   dimensionId?: string;
 }
 
-export type RedeemFailureCode = 'INVALID_INPUT' | 'INSUFFICIENT_CREDITS' | ResolveFailureCode;
+export type RedeemFailureCode =
+  'INVALID_INPUT' | 'INSUFFICIENT_CREDITS' | 'IDEMPOTENCY_KEY_CONFLICT' | ResolveFailureCode;
 
 export interface RedeemResult {
   ok: boolean;
@@ -65,6 +66,8 @@ export interface RedeemResult {
 
 interface RedemptionRow {
   id: string;
+  class_id: string;
+  reward_id: string;
   balance_before: number;
   balance_after: number;
   cost_points: number;
@@ -116,11 +119,20 @@ export class CreditRedemptionService {
       // 1. 幂等：同键已兑换则直接返回既有记录
       const existing = this.db
         .prepare(
-          `SELECT id, balance_before, balance_after, cost_points, point_log_id
+          `SELECT id, class_id, reward_id, balance_before, balance_after, cost_points, point_log_id
              FROM reward_redemptions WHERE student_id = ? AND idempotency_key = ?`,
         )
         .get(input.studentId, input.idempotencyKey) as RedemptionRow | undefined;
       if (existing) {
+        // 同键复用但换了奖励/班级：说明客户端把幂等键用串了。否则会出现
+        // 「兑换 B 却拿到 A 的成功回执」，前端误以为 B 已到账。
+        if (existing.class_id !== input.classId || existing.reward_id !== input.rewardId) {
+          return {
+            ok: false,
+            code: 'IDEMPOTENCY_KEY_CONFLICT',
+            message: '幂等键已用于不同的兑换请求，拒绝复用',
+          };
+        }
         return {
           ok: true,
           idempotentHit: true,
@@ -237,16 +249,19 @@ export class CreditRedemptionService {
       },
       timestamp: now,
     };
-    void this.eventPublisher.publish(event).catch(() => {
-      if (this.enqueuer) {
-        void this.enqueuer.enqueue({
+    void this.eventPublisher.publish(event).catch((publishError) => {
+      console.warn('[credit-redemption] reward.redeemed 发布失败，转入补偿队列', publishError);
+      enqueueCompensation(
+        this.enqueuer,
+        {
           source: 'reward.redeemed',
           op: 'emitEvent',
           bizKey: `reward.redeemed:${result.redemptionId}`,
           payload: event,
           correlationId: result.redemptionId!,
-        });
-      }
+        },
+        'credit-redemption',
+      );
     });
     return result;
   }

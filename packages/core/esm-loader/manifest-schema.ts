@@ -293,6 +293,23 @@ const coursewareViewerOverlaySchema = z.object({
   icon: z.string().optional(),
 });
 
+// courseware.host：插件接管课件宿主。安装期即校验「要么 view、要么 entry」，
+// 避免坏配置拖到运行时才发现渲染不出任何东西。
+const coursewareHostSchema = z
+  .object({
+    id: z.string().min(1),
+    label: z.string().min(1),
+    description: z.string().optional(),
+    replaces: z.literal('builtin').optional(),
+    priority: z.number().int().optional(),
+    view: z.string().min(1).optional(),
+    entry: z.string().min(1).optional(),
+    capabilities: z.array(z.string()).optional(),
+  })
+  .refine((value) => !!value.view || !!value.entry, {
+    message: 'courseware.host 需要 view 或 entry',
+  });
+
 const portalTelemetrySchema = z.object({
   id: z.string().min(1),
   label: z.string().min(1),
@@ -555,6 +572,7 @@ const modePackSchema = z.object({
   studentWorkspaceId: z.string().optional(),
   adapterIds: z.array(z.string().min(1)).optional(),
   channels: z.array(z.string().min(1)).optional(),
+  outlineContributionId: z.string().optional(),
 });
 
 /**
@@ -575,12 +593,44 @@ const frontendSlotEntrySchema = z
   })
   .passthrough();
 
+/**
+ * 学案活动类型扩展（`xuean.activity.type`）。
+ *
+ * 插件可声明新的活动形式；服务端会校验 id 是否带 `<manifest.id>:` 命名空间前缀。
+ */
+const xueanActivityTypeSchema = z
+  .object({
+    id: z.string().min(1).max(128),
+    label: z.string().min(1).max(120),
+    labelEn: z.string().max(120).optional(),
+    description: z.string().max(500).optional(),
+    icon: z.string().max(128).optional(),
+  })
+  .passthrough();
+
+/**
+ * 学案活动编辑器 / 学生端渲染器扩展（`xuean.activity.editor` / `xuean.activity.student`）。
+ *
+ * 按 `activityType` 与活动行匹配；`view` 沿用插件沙箱视图约定。
+ */
+const xueanActivityRendererSchema = z
+  .object({
+    id: z.string().min(1).max(128),
+    activityType: z.string().min(1).max(128),
+    label: z.string().max(120).optional(),
+    view: z.string().min(1).max(256).optional(),
+  })
+  .passthrough();
+
 const frontendSlotsShape = {
   'header.action': z.array(frontendSlotEntrySchema).optional(),
   'statusbar.item': z.array(frontendSlotEntrySchema).optional(),
   'stage.display.overlay': z.array(frontendSlotEntrySchema).optional(),
   'stage.display.action': z.array(frontendSlotEntrySchema).optional(),
   'assignment.submission.preview': z.array(frontendSlotEntrySchema).optional(),
+  // 作业提交卡片操作（重新提交 / 分享 / 导出 / 第三方评分）。与 preview 同一数据域，
+  // 但语义是「动作按钮」而非「内容预览」。
+  'assignment.submission.actions': z.array(frontendSlotEntrySchema).optional(),
   // 作业**附件**预览：插件声明自己能处理的文件类型（extensions / mimeTypes），
   // 宿主在预览对话框里按类型匹配后给出入口。数据型贡献（远程插件可用）。
   'assignment.file.preview': z.array(frontendSlotEntrySchema).optional(),
@@ -623,6 +673,10 @@ const frontendSlotsShape = {
   'assessment.list.card': z.array(frontendSlotEntrySchema).optional(),
   'assessment.attempt.toolbar': z.array(frontendSlotEntrySchema).optional(),
   'assessment.stats.card': z.array(frontendSlotEntrySchema).optional(),
+  // ── 学案编辑器扩展槽：插件可新增活动类型并提供编辑 / 学生端渲染 ──
+  'xuean.activity.type': z.array(xueanActivityTypeSchema).optional(),
+  'xuean.activity.editor': z.array(xueanActivityRendererSchema).optional(),
+  'xuean.activity.student': z.array(xueanActivityRendererSchema).optional(),
 } as const;
 
 export const pluginLocalesSchema = z
@@ -632,9 +686,51 @@ export const pluginLocalesSchema = z
   )
   .optional();
 
+/**
+ * LearningSurface 插件渲染器（设计见 docs/architecture/learning-surface.md §6.1）。
+ *
+ * 第三方渲染器一律 sandbox：即使声明 inline 也由宿主降级，这里只校验结构。
+ * `view` 必须是插件静态目录下的相对路径，安装期就拒绝穿越与协议注入。
+ */
+const learningSurfaceRendererSchema = z
+  .object({
+    id: z.string().min(1).max(128),
+    label: z.string().min(1).max(120),
+    execution: z.enum(['inline', 'sandbox']).optional(),
+    view: z
+      .string()
+      .min(1)
+      .max(256)
+      .refine((value) => {
+        const trimmed = value.trim();
+        return (
+          !trimmed.includes('..') &&
+          !trimmed.includes('://') &&
+          !trimmed.startsWith('/') &&
+          !trimmed.startsWith('\\') &&
+          /^[a-zA-Z0-9_\-./]+$/.test(trimmed)
+        );
+      }, 'view 必须是插件目录下的相对路径')
+      .optional(),
+    entry: z.string().min(1).max(256).optional(),
+    capabilities: z.array(z.string().min(1).max(40)).max(20).optional(),
+    sourceKinds: z.array(z.enum(['courseware', 'resource', 'assignment', 'activity', 'inline'])).min(1),
+    defaultSize: z
+      .object({ width: z.number().positive().max(10000), height: z.number().positive().max(10000) })
+      .optional(),
+    minSize: z.object({ width: z.number().positive().max(10000), height: z.number().positive().max(10000) }).optional(),
+    aspectRatio: z
+      .string()
+      .regex(/^\d{1,5}:\d{1,5}$/)
+      .optional(),
+  })
+  .strict()
+  .refine((value) => !!value.view || !!value.entry, 'view 与 entry 至少声明一个');
+
 const contributesSchema = z
   .object({
     locales: pluginLocalesSchema,
+    'learning.surface': z.array(learningSurfaceRendererSchema).optional(),
     'classroom.tool': z.array(classroomToolSchema).optional(),
     'teacher.tab': z
       .array(
@@ -714,6 +810,7 @@ const contributesSchema = z
     'classroom.post_class.widget': z.array(postClassWidgetSchema).optional(),
     'courseware.viewer.toolbar': z.array(coursewareViewerToolbarSchema).optional(),
     'courseware.viewer.overlay': z.array(coursewareViewerOverlaySchema).optional(),
+    'courseware.host': z.array(coursewareHostSchema).optional(),
     'classroom.portal.telemetry': z.array(portalTelemetrySchema).optional(),
     'classroom.portal.course_badge': z.array(portalCourseBadgeSchema).optional(),
     'classroom.portal.teaching_mode': z.array(portalTeachingModeSchema).optional(),
@@ -761,6 +858,14 @@ const contributesSchema = z
   })
   .passthrough()
   .optional();
+
+/**
+ * manifest `contributes` 支持的 slot 键集合。
+ *
+ * 供 `extension-parity` 测试与宿主声明账本对账；`contributesSchema` 被 `.optional()`
+ * 包裹，故先 `unwrap()` 再取 shape。
+ */
+export const CONTRIBUTES_SLOT_KEYS: ReadonlyArray<string> = Object.keys(contributesSchema.unwrap().shape);
 
 const deploySchema = z
   .object({

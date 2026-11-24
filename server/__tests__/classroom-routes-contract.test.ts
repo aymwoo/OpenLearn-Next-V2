@@ -4,6 +4,7 @@ import { createServer, type Server } from 'http';
 import type { AddressInfo } from 'net';
 import { registerClassroomRoutes } from '../routes/classroom.js';
 import { ClassroomRuntimeService } from '../services/classroom-runtime-service.js';
+import { ActivityCompletedTracker } from '../services/activity-completed-tracker.js';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
 import { ensureTestSchema } from './helpers/test-schema.js';
 
@@ -22,6 +23,7 @@ describe('互动课堂路由请求契约（投票 / 节奏信号 / 结课通票�
   let server: Server;
   let baseUrl: string;
   let classroomService: ClassroomRuntimeService;
+  let activityTracker: ActivityCompletedTracker;
 
   const lessonId = 'les-room-contract-0001';
   const classId = 'cls-room-contract-0001';
@@ -72,7 +74,8 @@ describe('互动课堂路由请求契约（投票 / 节奏信号 / 结课通票�
     const app = express();
     app.use(express.json());
     classroomService = new ClassroomRuntimeService(db);
-    registerClassroomRoutes({ app, io: undefined } as any, classroomService);
+    activityTracker = new ActivityCompletedTracker(kernelContainer.eventBus);
+    registerClassroomRoutes({ app, io: undefined, activityCompletedTracker: activityTracker } as any, classroomService);
 
     await new Promise<void>((resolve) => {
       server = createServer(app).listen(0, () => resolve());
@@ -125,6 +128,7 @@ describe('互动课堂路由请求契约（投票 / 节奏信号 / 结课通票�
   });
 
   afterAll(async () => {
+    activityTracker?.dispose();
     await new Promise<void>((resolve) => server?.close(() => resolve()));
     db.prepare(
       'DELETE FROM classroom_poll_votes WHERE poll_id IN (SELECT id FROM classroom_quick_polls WHERE lesson_id = ?)',
@@ -363,6 +367,13 @@ describe('互动课堂路由请求契约（投票 / 节奏信号 / 结课通票�
       expect(student.exitRating).toBe(4);
       expect(student.puzzledConcept).toBe('熵增');
       expect(student.attendance).toBe(true);
+
+      // 追加字段：本课节 activity.completed 的只读聚合（来自结课通票完成事件）
+      expect(json.activityCompletions).not.toBeNull();
+      expect(json.activityCompletions.lessonId).toBe(lessonId);
+      expect(json.activityCompletions.total).toBeGreaterThanOrEqual(1);
+      expect(json.activityCompletions.byKind['classroom-legacy']).toBeGreaterThanOrEqual(1);
+      expect(json.activityCompletions.recent.length).toBeGreaterThanOrEqual(1);
     });
 
     it('班级花名册联查与多学生全景学情聚合不会发生 500，且能精准映射每位学生的作答状态', async () => {

@@ -5,7 +5,7 @@ import { WhiteboardToolbar } from '../components/WhiteboardToolbar';
 import { WhiteboardDialog } from '../components/WhiteboardDialog';
 import { RollCallWrapper } from '../widgets/RollCallWrapper';
 import { wrapSrcDocWithBridge } from '../utils/bridgeUtils';
-import { HtmlAppletFrame } from '../components/HtmlAppletFrame';
+import { CoursewareHost } from '../../courseware/CoursewareHost';
 import { WidgetTitleBar } from '../widgets/WidgetTitleBar';
 
 afterEach(() => {
@@ -199,10 +199,10 @@ describe('Whiteboard Extracted Components & Utilities', () => {
     });
   });
 
-  describe('HtmlAppletFrame', () => {
+  describe('CoursewareHost', () => {
     it('should render iframe with credentialless="true" attribute', () => {
       const { container } = render(
-        <HtmlAppletFrame data={{ title: 'Test Applet', code: '<div>Test</div>' }} lessonId="lesson-1" />,
+        <CoursewareHost source={{ title: 'Test Applet', code: '<div>Test</div>' }} lessonId="lesson-1" lazy={false} />,
       );
       const iframe = container.querySelector('iframe');
       expect(iframe).not.toBeNull();

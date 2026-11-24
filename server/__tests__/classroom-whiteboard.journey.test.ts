@@ -10,7 +10,7 @@
  *  阶段 4: 随堂即时测验与结课出门条 (Quick Poll & Exit Ticket)
  *  阶段 5: 课堂会话终态锁定与归档 (Session Archival & Immutability)
  */
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import express from 'express';
 import { createServer, type Server } from 'http';
 import type { AddressInfo } from 'net';
@@ -532,8 +532,21 @@ describe('业务黄金旅程场景测试：学生上课与互动白板全功能 
     });
 
     it('教师关闭随堂投票，后续投票被拒绝拦截', async () => {
+      const publishSpy = vi.spyOn(kernelContainer.eventBus, 'publish');
       const closeRes = await post(`/api/classroom/sessions/${lessonId}/quick-poll/${pollId}/close`, teacherToken);
       expect(closeRes.status).toBe(200);
+
+      const completed = publishSpy.mock.calls
+        .map(([event]) => event as any)
+        .filter((event) => event.type === 'activity.completed');
+      expect(
+        completed.some(
+          (event) =>
+            event.payload.source === 'classroom-interaction' &&
+            event.payload.activityId === 'classroom-legacy:quick-poll',
+        ),
+      ).toBe(true);
+      publishSpy.mockRestore();
 
       // 关闭后再次投票被阻断
       const lateRes = await post(`/api/classroom/sessions/${lessonId}/quick-poll/${pollId}/vote`, studentAliceToken, {
@@ -543,6 +556,7 @@ describe('业务黄金旅程场景测试：学生上课与互动白板全功能 
     });
 
     it('学生提交结课出门条 (Exit Ticket) 并汇总学情', async () => {
+      const publishSpy = vi.spyOn(kernelContainer.eventBus, 'publish');
       // Alice 提交出门条反馈
       const et1 = await post(`/api/classroom/sessions/${lessonId}/exit-ticket`, studentAliceToken, {
         rating: 5,
@@ -550,6 +564,19 @@ describe('业务黄金旅程场景测试：学生上课与互动白板全功能 
         feedback: '深刻理解了二分查找左右边界指针的更新细节',
       });
       expect(et1.status).toBe(200);
+
+      const completed = publishSpy.mock.calls
+        .map(([event]) => event as any)
+        .filter((event) => event.type === 'activity.completed');
+      expect(
+        completed.some(
+          (event) =>
+            event.payload.source === 'classroom-interaction' &&
+            event.payload.activityId === 'classroom-legacy:exit-ticket' &&
+            event.payload.studentId === studentAliceId,
+        ),
+      ).toBe(true);
+      publishSpy.mockRestore();
 
       // Bob 提交出门条反馈
       const et2 = await post(`/api/classroom/sessions/${lessonId}/exit-ticket`, studentBobToken, {

@@ -1,6 +1,7 @@
 export {
   isModePacksEnabled,
   isModePackShowXueanTab,
+  getActiveModePackId,
   useModePacksEnabled,
   useModePackShowXueanTab,
   setModePacksEnabledForTests,

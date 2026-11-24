@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import React from 'react';
 import { render, screen, waitFor, cleanup, fireEvent } from '@testing-library/react';
-import { HtmlAppletFrame, computeAttemptRanks } from '../components/HtmlAppletFrame';
+import { CoursewareScoresOverlay, computeAttemptRanks } from '../../courseware/CoursewareScoresOverlay';
 import { setSocketInstance } from '../../../services/socket-service';
 import { appStore } from '../../../store/appStore';
 
@@ -40,7 +40,7 @@ const emitSocket = (event: string, ...args: any[]) => {
   for (const h of socketHandlers[event] ?? []) h(...args);
 };
 
-// SEC-AUTH: HtmlAppletFrame 挂载时会额外铸造 /runtime 访问 token，按 URL 过滤后
+// CoursewareScoresOverlay 只请求 attempts 端点。
 // 只统计 attempts 拉取，避免 token 请求干扰精确计数断言
 const attemptsCalls = () => fetchMock.mock.calls.filter(([u]) => String(u).includes('/attempts?'));
 
@@ -48,10 +48,10 @@ function mintOk() {
   return Promise.resolve({ ok: true, json: async () => ({ token: 'test.sig' }) });
 }
 
-describe('HtmlAppletFrame score overlay', () => {
+describe('CoursewareScoresOverlay', () => {
   it('does not render score toggle when there are no attempts', async () => {
     fetchMock.mockResolvedValue({ ok: true, json: async () => ({ data: [], total: 0, page: 1, pageSize: 50 }) });
-    render(<HtmlAppletFrame data={{ title: '课件', coursewareUuid: 'abc-123' }} lessonId="lesson-1" />);
+    render(<CoursewareScoresOverlay coursewareUuid="abc-123" />);
     // No toggle button when attempts array is empty (showOverlay guard)
     await waitFor(() => {
       expect(screen.queryByTestId('courseware-scores-toggle')).toBeNull();
@@ -59,7 +59,7 @@ describe('HtmlAppletFrame score overlay', () => {
   });
 
   it('does not render score toggle when coursewareUuid is missing', async () => {
-    render(<HtmlAppletFrame data={{ title: '普通 HTML', code: '<p>x</p>' }} lessonId="lesson-1" />);
+    render(<CoursewareScoresOverlay coursewareUuid="" />);
     expect(screen.queryByTestId('courseware-scores-toggle')).toBeNull();
   });
 
@@ -98,7 +98,7 @@ describe('HtmlAppletFrame score overlay', () => {
       });
     });
 
-    render(<HtmlAppletFrame data={{ title: '课件', coursewareUuid: 'abc-123' }} lessonId="lesson-1" />);
+    render(<CoursewareScoresOverlay coursewareUuid="abc-123" />);
 
     // 拉取了一次
     await waitFor(() => {
@@ -155,7 +155,7 @@ describe('HtmlAppletFrame score overlay', () => {
         }),
       });
     });
-    render(<HtmlAppletFrame data={{ title: '课件', coursewareUuid: 'abc-456' }} lessonId="lesson-1" />);
+    render(<CoursewareScoresOverlay coursewareUuid="abc-456" />);
 
     await waitFor(() => {
       expect(attemptsCalls()).toHaveLength(1);
@@ -171,9 +171,7 @@ describe('HtmlAppletFrame score overlay', () => {
 
   it('unsubscribes on unmount to avoid memory leak', async () => {
     fetchMock.mockResolvedValue({ ok: true, json: async () => ({ data: [], total: 0, page: 1, pageSize: 50 }) });
-    const { unmount } = render(
-      <HtmlAppletFrame data={{ title: '课件', coursewareUuid: 'abc-789' }} lessonId="lesson-1" />,
-    );
+    const { unmount } = render(<CoursewareScoresOverlay coursewareUuid="abc-789" />);
     await waitFor(() => {
       expect(mockSocket.on).toHaveBeenCalled();
     });
@@ -182,7 +180,7 @@ describe('HtmlAppletFrame score overlay', () => {
   });
 });
 
-describe('HtmlAppletFrame 全班成绩榜（学生可见）', () => {
+describe('CoursewareScoresOverlay 全班成绩榜（学生可见）', () => {
   const attempt = (
     overrides: Partial<{
       attemptId: string;
@@ -220,7 +218,7 @@ describe('HtmlAppletFrame 全班成绩榜（学生可见）', () => {
       session: { role: 'student', userId: 'u-2', studentId: 's-2', name: '小红' } as any,
     });
     fetchMock.mockResolvedValue({ ok: true, json: async () => twoRows() });
-    render(<HtmlAppletFrame data={{ title: '课件', coursewareUuid: 'abc-123' }} lessonId="lesson-1" />);
+    render(<CoursewareScoresOverlay coursewareUuid="abc-123" myStudentId="s-2" />);
 
     fireEvent.click(await screen.findByTestId('courseware-scores-toggle'));
     const panel = await screen.findByTestId('courseware-scores-panel');
@@ -241,7 +239,7 @@ describe('HtmlAppletFrame 全班成绩榜（学生可见）', () => {
       session: { role: 'student', userId: 'u-9', studentId: 's-9', name: '小刚' } as any,
     });
     fetchMock.mockResolvedValue({ ok: true, json: async () => twoRows() });
-    render(<HtmlAppletFrame data={{ title: '课件', coursewareUuid: 'abc-123' }} lessonId="lesson-1" />);
+    render(<CoursewareScoresOverlay coursewareUuid="abc-123" myStudentId="s-9" />);
 
     fireEvent.click(await screen.findByTestId('courseware-scores-toggle'));
     expect((await screen.findByTestId('courseware-my-score')).textContent).toBe('我还没有提交');
@@ -250,7 +248,7 @@ describe('HtmlAppletFrame 全班成绩榜（学生可见）', () => {
   it('教师视角不显示「我的成绩」，也不高亮任何行', async () => {
     appStore.setState({ session: { role: 'teacher', userId: 'u-t', name: '王老师' } as any });
     fetchMock.mockResolvedValue({ ok: true, json: async () => twoRows() });
-    render(<HtmlAppletFrame data={{ title: '课件', coursewareUuid: 'abc-123' }} lessonId="lesson-1" />);
+    render(<CoursewareScoresOverlay coursewareUuid="abc-123" />);
 
     fireEvent.click(await screen.findByTestId('courseware-scores-toggle'));
     await screen.findByTestId('courseware-scores-panel');
@@ -267,7 +265,7 @@ describe('HtmlAppletFrame 全班成绩榜（学生可见）', () => {
         attempt({ attemptId: 'a-preview', studentId: 'teacher_preview', studentName: 'Teacher', score: 99 }),
       ],
     });
-    render(<HtmlAppletFrame data={{ title: '课件', coursewareUuid: 'abc-123' }} lessonId="lesson-1" />);
+    render(<CoursewareScoresOverlay coursewareUuid="abc-123" />);
 
     const toggle = await screen.findByTestId('courseware-scores-toggle');
     expect(toggle.textContent).toBe('查看成绩 (2)');

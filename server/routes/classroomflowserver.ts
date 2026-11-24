@@ -3,7 +3,8 @@
  *
  * 把内核里的统一学分发放 / 奖励目录 / 兑换服务暴露为 /api/classroomflowserver/*。
  * 路由层保持薄：身份一律服务端派生（禁止客户端自报 studentId 刷分/代兑），
- * 业务规则在三个 service 里，路由只做鉴权、参数整理、结果映射。
+ * 业务规则在三个 service 里；路由只做鉴权、参数整理、默认值收敛
+ * （货币维度、发放来源、消息类型与收件人范围）和结果映射。
  */
 import type { Express, Request, Response } from 'express';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
@@ -17,6 +18,7 @@ import {
   type IClassroomMessageService,
 } from '../../packages/core/di/interfaces.js';
 import type { RewardCatalogService, RewardEligibility } from '../../packages/core/di/reward-catalog-service.js';
+import { BUILTIN_AWARD_SOURCES } from '../../packages/core/di/credit-award-service.js';
 import { ISubmissionAggregatorToken } from '../../packages/core/submission-adapter/index.js';
 import { getActorId } from '../middleware/auth.js';
 import { requireScopedAuth } from '../middleware/data-scope.js';
@@ -31,6 +33,7 @@ import {
   type AccessSession,
 } from '../services/class-access.js';
 import { sendSafeError } from '../utils/error-handler.js';
+import { loadLessonClassId } from '../services/classroom-class-lock.js';
 import { DEFAULT_REDEEM_DIMENSION } from '../../packages/core/di/credit-redemption-service.js';
 
 function getSession(req: Request): AccessSession | undefined {
@@ -60,6 +63,22 @@ function sessionRole(session: AccessSession | undefined): string {
   return 'student';
 }
 
+/**
+ * 学生消息的收件人范围：必须是本班学生或班主任。
+ *
+ * 班级无法判定时 fail closed —— 学生不能靠省略 classId、只给 lessonId
+ * 就给任意 userId 定向投递（课节消息会直接进对方 user-* 私房间）。
+ */
+function studentTargetsBelongToClass(classId: string | null, targets: string[]): boolean {
+  if (!classId) return false;
+  const db = kernelContainer.db;
+  const owner = db.prepare('SELECT owner_user_id FROM classes WHERE id = ?').get(classId) as
+    { owner_user_id?: string | null } | undefined;
+  const ownerId = owner?.owner_user_id ?? null;
+  const enrolled = db.prepare('SELECT 1 AS ok FROM class_students WHERE class_id = ? AND student_id = ? LIMIT 1');
+  return targets.every((id) => id === ownerId || Boolean(enrolled.get(classId, id)));
+}
+
 export function registerClassroomFlowServerRoutes(app: Express): void {
   // ── 统一学分发放（教师/管理员）────────────────────────────────────────
   app.post(
@@ -73,12 +92,20 @@ export function registerClassroomFlowServerRoutes(app: Express): void {
         const classKey = String(classId ?? '');
         const classAuth = authorizeClass(kernelContainer.db, getSession(req), classKey, 'staff');
         if (!classAuth.ok) return deny(res, classAuth.status, classAuth.error);
+        // 来源参与审计：教师手工发放一律记 manual；管理员可补录内置来源，
+        // 但 HTTP 通道没有插件身份，不接受 plugin:* 以免伪造来源。
+        const role = sessionRole(getSession(req));
+        const requestedSource = String(source ?? 'manual') || 'manual';
+        const awardSource = role === 'administrator' ? requestedSource : 'manual';
+        if (!(BUILTIN_AWARD_SOURCES as readonly string[]).includes(awardSource)) {
+          return res.status(400).json({ success: false, error: 'source 必须为内置来源' });
+        }
         const result = svc.award({
           studentId: String(studentId ?? ''),
           classId: classKey,
           dimensionId: String(dimensionId || DEFAULT_REDEEM_DIMENSION),
           deltaPoints: Number(deltaPoints),
-          source: String(source ?? ''),
+          source: awardSource,
           idempotencyKey: String(idempotencyKey ?? ''),
           reason: String(reason ?? ''),
           actorId: getActorId(req),
@@ -95,10 +122,21 @@ export function registerClassroomFlowServerRoutes(app: Express): void {
   );
 
   // ── 奖励目录：浏览（任意登录用户）─────────────────────────────────────
-  app.get('/api/classroomflowserver/rewards', requireScopedAuth('authenticated'), async (_req, res) => {
+  app.get('/api/classroomflowserver/rewards', requireScopedAuth('authenticated'), async (req: Request, res) => {
     try {
       const svc = await getCatalog();
-      return res.json({ success: true, rewards: svc.listAvailable() });
+      const session = getSession(req);
+      let rewards = svc.listAvailable();
+      // 学生侧不展示已无库存或角色不符的条目，避免点进去才被兑换接口拒绝。
+      if (!isTeacher(session) && !isAdministrator(session)) {
+        const role = sessionRole(session);
+        rewards = rewards.filter((reward) => {
+          if (reward.stock !== null && reward.stock <= 0) return false;
+          const roles = reward.eligibility?.roles;
+          return !roles || roles.length === 0 || roles.includes(role);
+        });
+      }
+      return res.json({ success: true, rewards });
     } catch (e) {
       return sendSafeError(res, e, 500);
     }
@@ -112,6 +150,16 @@ export function registerClassroomFlowServerRoutes(app: Express): void {
         const svc = await getCatalog();
         const item = svc.getById(req.params.id);
         if (!item) return res.status(404).json({ success: false, error: 'Reward not found' });
+        // 下架/未开始/已结束的奖励对学生按不存在处理；教师/管理员可预览配置。
+        const session = getSession(req);
+        if (!isTeacher(session) && !isAdministrator(session)) {
+          const now = Date.now();
+          const visible =
+            item.status === 'active' &&
+            (item.availableFrom == null || item.availableFrom <= now) &&
+            (item.availableUntil == null || item.availableUntil >= now);
+          if (!visible) return res.status(404).json({ success: false, error: 'Reward not found' });
+        }
         return res.json({ success: true, reward: item });
       } catch (e) {
         return sendSafeError(res, e, 500);
@@ -172,7 +220,7 @@ export function registerClassroomFlowServerRoutes(app: Express): void {
       const studentId = studentActorId(session);
       if (!studentId) return res.status(401).json({ success: false, error: 'Not a student session' });
 
-      const { rewardId, idempotencyKey, reason, classId, dimensionId } = (req.body ?? {}) as Record<string, unknown>;
+      const { rewardId, idempotencyKey, reason, classId } = (req.body ?? {}) as Record<string, unknown>;
       const classKey = String(classId ?? '');
       const classAuth = authorizeClass(kernelContainer.db, session, classKey, 'member');
       if (!classAuth.ok) return deny(res, classAuth.status, classAuth.error);
@@ -184,10 +232,11 @@ export function registerClassroomFlowServerRoutes(app: Express): void {
         reason: reason as string | null | undefined,
         actorId: getActorId(req),
         role: sessionRole(session),
-        dimensionId: typeof dimensionId === 'string' && dimensionId ? dimensionId : DEFAULT_REDEEM_DIMENSION,
+        // 兑换货币由服务端固定（默认维度），不接受客户端切换维度，
+        // 否则可用另一种维度余额按目录价格兑换奖励。
       });
       if (!result.ok) {
-        const status = result.code === 'INSUFFICIENT_CREDITS' ? 409 : 400;
+        const status = result.code === 'INSUFFICIENT_CREDITS' || result.code === 'IDEMPOTENCY_KEY_CONFLICT' ? 409 : 400;
         return res.status(status).json({ success: false, code: result.code, error: result.message });
       }
       return res.json({ success: true, ...result });
@@ -247,13 +296,21 @@ export function registerClassroomFlowServerRoutes(app: Express): void {
         const member = authorizeClass(kernelContainer.db, session, classId, 'member');
         if (!member.ok) return deny(res, member.status, member.error);
       }
-      const messages = svc.replay({
+      const messages = svc.replayPage({
         lessonId,
         classId,
         sinceSeq: Number.isFinite(sinceSeq) ? sinceSeq : 0,
         viewerId,
+        // 教师/管理员在本课节/班级内可补投定向消息（与实时投递收件人+班主任一致）。
+        staffView: isTeacher(session) || isAdministrator(session),
       });
-      return res.json({ success: true, messages, cursor: messages.at(-1)?.seq ?? sinceSeq });
+      // lessonId 与 classId 同时传入时取交集：只有以这一组合发布的消息会被补投。
+      return res.json({
+        success: true,
+        messages: messages.messages,
+        cursor: messages.cursor,
+        hasMore: messages.hasMore,
+      });
     } catch (e) {
       return sendSafeError(res, e, 500);
     }
@@ -283,9 +340,22 @@ export function registerClassroomFlowServerRoutes(app: Express): void {
         const member = authorizeClass(kernelContainer.db, session, classId, 'member');
         if (!member.ok) return deny(res, member.status, member.error);
       }
+      const role = sessionRole(session);
+      const staff = role === 'teacher' || role === 'administrator';
+      // 学生只能作答（response）：request 是教师侧指令，允许学生发会变成冒充教师催交/下发任务。
+      if (!staff && body.msgType !== 'response') {
+        return deny(res, 403, 'students may only send response messages');
+      }
       const targets = Array.isArray(body.targetUserIds)
         ? body.targetUserIds.filter((id): id is string => typeof id === 'string' && id.length > 0)
         : null;
+      // 定向消息会直接进对方 user-* 私房间，不能只凭 classId 鉴权就信任任意收件人。
+      if (!staff && targets?.length) {
+        const msgClassId = classId ?? (lessonId ? loadLessonClassId(kernelContainer.db, lessonId) : null);
+        if (!studentTargetsBelongToClass(msgClassId, targets)) {
+          return deny(res, 403, 'targetUserIds must be members of this class');
+        }
+      }
       const result = svc.send({
         channel: String(body.channel ?? ''),
         msgType: body.msgType,
@@ -297,7 +367,7 @@ export function registerClassroomFlowServerRoutes(app: Express): void {
         ttlMs: typeof body.ttlMs === 'number' ? body.ttlMs : null,
         messageId: typeof body.messageId === 'string' ? body.messageId : undefined,
         senderActorId: getActorId(req),
-        senderRole: sessionRole(session) === 'administrator' ? 'administrator' : sessionRole(session),
+        senderRole: role,
         senderPluginId: null,
       });
       if (!result.ok) {
@@ -336,6 +406,13 @@ export function registerClassroomFlowServerRoutes(app: Express): void {
       const lessonId = typeof req.query.lessonId === 'string' ? req.query.lessonId : undefined;
       const classId = typeof req.query.classId === 'string' ? req.query.classId : undefined;
       const modeId = typeof req.query.modeId === 'string' ? req.query.modeId : undefined;
+      const adapterIds =
+        typeof req.query.adapterIds === 'string'
+          ? req.query.adapterIds
+              .split(',')
+              .map((id) => id.trim())
+              .filter(Boolean)
+          : undefined;
       if (!lessonId && !classId) {
         return res.status(400).json({ success: false, error: 'lessonId or classId required' });
       }
@@ -350,7 +427,12 @@ export function registerClassroomFlowServerRoutes(app: Express): void {
       }
       const staff = isTeacher(session) || isAdministrator(session);
       const result = await agg.list(
-        { lessonId, classId, studentId: staff ? undefined : viewerIdOf(session) || undefined },
+        {
+          lessonId,
+          classId,
+          studentId: staff ? undefined : viewerIdOf(session) || undefined,
+          adapterIds,
+        },
         modeId,
       );
       return res.json({ success: true, ...result });

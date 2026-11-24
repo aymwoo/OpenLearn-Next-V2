@@ -15,7 +15,15 @@ import type { IProcessService } from '../di/interfaces.js';
 import type { IStorageService } from '../di/interfaces.js';
 import type { IAIService } from '../di/interfaces.js';
 import type { IPointsDimensionRegistry } from '../di/interfaces.js';
-import type { IClassRosterService, ILessonOutlineService, IPointsLedgerService } from '../di/interfaces.js';
+import type {
+  IClassRosterService,
+  ILessonOutlineService,
+  IPointsLedgerService,
+  IAssignmentSubmissionService,
+  IXueanActivityProgressService,
+  ILessonReportService,
+  IClassroomSelfMessageService,
+} from '../di/interfaces.js';
 import type { Manifest } from '../esm-loader/manifest-schema.js';
 import type { Token } from '../di/token.js';
 import type { ContributionSummary } from './contribution-registry.js';
@@ -256,6 +264,26 @@ export interface PluginContext {
      * 直查 `lessons` 会被 sql-guard 拒绝。可见性跟当前登录用户，与 GET /api/lessons/:id 相同。
      */
     lessonOutline: ILessonOutlineService | null;
+    /**
+     * 作业提交只读（`assignment:read`）。学生仅本人；教师仅自己班级。
+     * 仅 inline 模式注入；worker / process 隔离模式下该键为 `undefined`。
+     */
+    assignmentSubmission: IAssignmentSubmissionService | null | undefined;
+    /**
+     * 学案活动进度只读（`lesson:read`）。学生仅自己的进度与提交。
+     * 仅 inline 模式注入；worker / process 隔离模式下该键为 `undefined`。
+     */
+    xueanActivityProgress: IXueanActivityProgressService | null | undefined;
+    /**
+     * 课节课后报告聚合摘要（`lesson:read`；仅教师 / 管理员）。
+     * 仅 inline 模式注入；worker / process 隔离模式下该键为 `undefined`。
+     */
+    lessonReport: ILessonReportService | null | undefined;
+    /**
+     * 学生 self 身份课堂消息（`classroom:message:self`）。sender 由宿主派生。
+     * 仅 inline 模式注入；worker / process 隔离模式下该键为 `undefined`。
+     */
+    classroomSelfMessage: IClassroomSelfMessageService | null | undefined;
   };
   /**
    * 插件唯一标识符。

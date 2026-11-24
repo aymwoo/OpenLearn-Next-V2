@@ -82,17 +82,21 @@ import {
   FileText,
   AlertCircle,
 } from 'lucide-react';
+import { shouldHandleSurfaceShortcut } from '../../learning-surface/keyboard';
 
 export function RevealPresentationWrapper({
   elementId,
   data,
   userRole = 'teacher',
   onElementUpdate,
+  onSlideChange,
 }: {
   elementId: string;
   data: any;
   userRole?: 'teacher' | 'student';
   onElementUpdate?: (id: string, data: any) => Promise<void>;
+  /** LearningSurface 宿主用：只上报页码，不依赖元素持久化。 */
+  onSlideChange?: (index: number, total: number) => void;
 }) {
   const [mode, setMode] = useState<'ppt' | 'doc' | 'edit'>('ppt');
   const [markdown, setMarkdown] = useState(data.markdown || '# Title Slide\n---\n## Slide 2');
@@ -149,6 +153,12 @@ export function RevealPresentationWrapper({
     .filter((s: string) => s.length > 0);
 
   const totalSlides = fileType === 'md' ? Math.max(1, slides.length) : data.slideCount || 1;
+
+  // 宿主回调放 ref：翻页回调不应因父组件重渲染而重建（会触发 viewer 重新注册）。
+  const onSlideChangeRef = useRef(onSlideChange);
+  onSlideChangeRef.current = onSlideChange;
+  const totalSlidesRef = useRef(totalSlides);
+  totalSlidesRef.current = totalSlides;
 
   // Auto reset mode to 'ppt' if an external file is loaded
   useEffect(() => {
@@ -278,6 +288,7 @@ export function RevealPresentationWrapper({
       // viewer 内部真正换页（缩略图 / 键盘）：采纳并同步给其他人。
       slideIndexRef.current = newIndex;
       setSlideIndex(newIndex);
+      onSlideChangeRef.current?.(newIndex, totalSlidesRef.current);
       const update = onElementUpdateRef.current;
       if (isTeacher && update) {
         update(elementId, {
@@ -379,22 +390,48 @@ export function RevealPresentationWrapper({
 
   // Keyboard navigation effect
   useEffect(() => {
+    const isSurface = data?.isSurface === true;
     const handleKeyDown = (e: KeyboardEvent) => {
       if (isStudent && isFullscreenSynced && isFullscreenForced) return;
-      if (e.key === 'ArrowRight' || e.key === ' ') {
-        e.preventDefault();
-        handleSlideChange(slideIndex + 1);
-      } else if (e.key === 'ArrowLeft') {
-        e.preventDefault();
-        handleSlideChange(slideIndex - 1);
-      } else if (e.key === 'Escape' && isContainerFullscreen) {
+
+      // 全屏退出是全局的：原生全屏下 Esc 由浏览器接管，降级模式仍需这里兜底。
+      if (e.key === 'Escape' && isContainerFullscreen) {
         e.preventDefault();
         handleToggleFullscreen(false);
+        return;
+      }
+
+      const activeElement = typeof document !== 'undefined' ? document.activeElement : null;
+      if (!shouldHandleSurfaceShortcut({ key: e.key, isSurface, scopeId: elementId, activeElement })) {
+        return;
+      }
+
+      if (e.key === 'ArrowRight' || e.key === 'PageDown' || e.key === ' ') {
+        e.preventDefault();
+        handleSlideChange(slideIndex + 1);
+      } else if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
+        e.preventDefault();
+        handleSlideChange(slideIndex - 1);
+      } else if (e.key === 'Home') {
+        e.preventDefault();
+        handleSlideChange(0);
+      } else if (e.key === 'End') {
+        e.preventDefault();
+        handleSlideChange(totalSlides - 1);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [slideIndex, isContainerFullscreen, isStudent, isFullscreenSynced, isFullscreenForced, totalSlides]);
+  }, [
+    slideIndex,
+    isContainerFullscreen,
+    isStudent,
+    isFullscreenSynced,
+    isFullscreenForced,
+    totalSlides,
+    elementId,
+    data?.isSurface,
+  ]);
 
   const handleSlideChange = (index: number) => {
     if (isStudent && isFullscreenSynced && isFullscreenForced) return;
@@ -405,6 +442,7 @@ export function RevealPresentationWrapper({
       pendingPptxTargetRef.current = validIndex;
     }
     setSlideIndex(validIndex);
+    onSlideChangeRef.current?.(validIndex, totalSlides);
     if (isTeacher && onElementUpdate) {
       onElementUpdate(elementId, { ...data, slideX: validIndex });
     }

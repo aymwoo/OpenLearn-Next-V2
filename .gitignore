@@ -93,3 +93,6 @@ server/__tests__/canary/.tmp-plugins-*
 
 # PDF 手册制品：不进版本控制，改走 GitHub Release 附件（scripts/export-handbooks-pdf.mjs 生成）
 docs/**/*.pdf
+
+# Phase 2.0：未知扩展点 slot 的启动期汇总日志（运行时产物）
+_extension-points-unknown.log

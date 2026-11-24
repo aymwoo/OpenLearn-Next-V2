@@ -26,6 +26,9 @@ describe('Plugin View Bridge', () => {
     expect(PLUGIN_VIEW_BRIDGE_JS).toContain('resize:');
     expect(PLUGIN_VIEW_BRIDGE_JS).toContain('api:');
     expect(PLUGIN_VIEW_BRIDGE_JS).toContain('storage:');
+    expect(PLUGIN_VIEW_BRIDGE_JS).toContain('surface:');
+    expect(PLUGIN_VIEW_BRIDGE_JS).toContain('onStatePatch:');
+    expect(PLUGIN_VIEW_BRIDGE_JS).toContain("type: 'surface-event'");
     expect(PLUGIN_VIEW_BRIDGE_JS).toContain("post({ type: 'ready' })");
   });
 

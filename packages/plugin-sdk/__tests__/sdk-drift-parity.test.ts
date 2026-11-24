@@ -62,7 +62,6 @@ const WITHDRAWN_FROM_SDK = [
   'ICapabilityGovernanceServiceToken',
   'IPluginCapabilityGatewayToken',
   'IPluginRuntimeCompositionToken',
-  'IUnifiedExtensionRegistryToken',
 ];
 
 const currentGhost = report.ghost.map((g) => g.name).sort();

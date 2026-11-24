@@ -22,7 +22,7 @@ export async function createLessonActivity(lessonId: string, payload: Record<str
 }
 
 export async function updateLessonActivity(id: string, payload: Record<string, unknown>) {
-  const res = await fetch(`/api/activities/${id}`, {
+  const res = await fetch(`/api/lesson-activities/${id}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -32,7 +32,7 @@ export async function updateLessonActivity(id: string, payload: Record<string, u
 }
 
 export async function deleteLessonActivity(id: string) {
-  const res = await fetch(`/api/activities/${id}`, { method: 'DELETE' });
+  const res = await fetch(`/api/lesson-activities/${id}`, { method: 'DELETE' });
   if (!res.ok) return { ok: false, error: await res.json().catch(() => ({})) };
   return { ok: true, data: await res.json() };
 }
@@ -42,6 +42,33 @@ export async function reorderLessonActivities(lessonId: string, ids: string[]) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ ids }),
+  });
+  if (!res.ok) return { ok: false, error: await res.json().catch(() => ({})) };
+  return { ok: true, data: await res.json() };
+}
+
+// ── 试题活动（引用现有试卷）──────────────────────────────────────────────
+export async function getLessonLinkedClasses(lessonId: string) {
+  const res = await fetch(`/api/lessons/${lessonId}/linked-classes`);
+  if (!res.ok) return { ok: false, error: await res.json().catch(() => ({})) };
+  return { ok: true, data: (await res.json()) as Array<{ id: string; name: string }> };
+}
+
+export async function bindAssessmentActivity(
+  lessonId: string,
+  payload: {
+    assessmentId: string;
+    classId: string;
+    activityId?: string;
+    title?: string;
+    required?: boolean;
+    visible?: boolean;
+  },
+) {
+  const res = await fetch(`/api/lessons/${lessonId}/activities/assessment`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
   });
   if (!res.ok) return { ok: false, error: await res.json().catch(() => ({})) };
   return { ok: true, data: await res.json() };
@@ -80,6 +107,16 @@ export async function deleteLessonBlock(id: string) {
   return { ok: true, data: await res.json() };
 }
 
+export async function reorderLessonBlocks(lessonId: string, ids: string[]) {
+  const res = await fetch(`/api/lessons/${lessonId}/blocks/reorder`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ids }),
+  });
+  if (!res.ok) return { ok: false, error: await res.json().catch(() => ({})) };
+  return { ok: true, data: await res.json() };
+}
+
 // ── 学案聚合（学生端）────────────────────────────────────────────────────
 export async function getXuean(lessonId: string, studentId?: string) {
   const qs = studentId ? `?studentId=${encodeURIComponent(studentId)}` : '';
@@ -101,7 +138,7 @@ export async function postActivityProgress(
     selfEval?: { score: number; comment: string };
   },
 ) {
-  const res = await fetch(`/api/activities/${activityId}/progress`, {
+  const res = await fetch(`/api/lesson-activities/${activityId}/progress`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -115,7 +152,7 @@ export async function verifyActivityProgress(
   activityId: string,
   payload: { studentId: string; status?: string; score?: number },
 ) {
-  const res = await fetch(`/api/activities/${activityId}/progress/verify`, {
+  const res = await fetch(`/api/lesson-activities/${activityId}/progress/verify`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -126,7 +163,7 @@ export async function verifyActivityProgress(
 
 // ── 一键催办（教师端）─────────────────────────────────────────────
 export async function nudgeActivity(activityId: string, studentId: string) {
-  const res = await fetch(`/api/activities/${activityId}/nudge`, {
+  const res = await fetch(`/api/lesson-activities/${activityId}/nudge`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ studentId }),
@@ -140,6 +177,35 @@ export async function getActivityProgressPanel(lessonId: string) {
   const res = await fetch(`/api/lessons/${lessonId}/activity-progress`);
   if (!res.ok) return { ok: false, error: await res.json().catch(() => ({})) };
   return { ok: true, data: await res.json() };
+}
+
+// ── 学案成绩同步到成绩册（教师端）───────────────────────────────────────
+export interface ActivityGradeSyncOptions {
+  classId?: string | null;
+  studentIds?: string[];
+}
+
+export async function syncActivityGrades(lessonId: string, activityId: string, opts: ActivityGradeSyncOptions = {}) {
+  const res = await fetch(
+    `/api/lessons/${encodeURIComponent(lessonId)}/activities/${encodeURIComponent(activityId)}/sync-grade`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ classId: opts.classId ?? undefined, studentIds: opts.studentIds }),
+    },
+  );
+  if (!res.ok) return { ok: false as const, error: await res.json().catch(() => ({})) };
+  return { ok: true as const, data: await res.json() };
+}
+
+export async function syncLessonActivityGrades(lessonId: string, opts: ActivityGradeSyncOptions = {}) {
+  const res = await fetch(`/api/lessons/${encodeURIComponent(lessonId)}/activity-grades/sync`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ classId: opts.classId ?? undefined, studentIds: opts.studentIds }),
+  });
+  if (!res.ok) return { ok: false as const, error: await res.json().catch(() => ({})) };
+  return { ok: true as const, data: await res.json() };
 }
 
 // ── 学案包导入导出 ──────────────────────────────────────────────

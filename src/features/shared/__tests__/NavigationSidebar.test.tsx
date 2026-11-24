@@ -90,12 +90,11 @@ describe('NavigationSidebar (紧凑化与分类折叠)', () => {
     expect(setTeacherTab).toHaveBeenCalledWith('live_class');
   });
 
-  it('navigates to the Xuean editor from the builtin teaching navigation', () => {
-    const setTeacherTab = vi.fn();
-    render(<NavigationSidebar {...defaultProps} setTeacherTab={setTeacherTab} />);
+  it('does not render the prep / xuean editor entry in builtin navigation', () => {
+    render(<NavigationSidebar {...defaultProps} />);
 
-    fireEvent.click(screen.getByRole('button', { name: '学案编辑器' }));
-    expect(setTeacherTab).toHaveBeenCalledWith('xuean_editor');
+    expect(screen.queryByRole('button', { name: '学案编辑器' })).toBeNull();
+    expect(screen.queryByRole('button', { name: '备课' })).toBeNull();
   });
 
   it('handles mini icon mode (mainNavCollapsed: true)', () => {

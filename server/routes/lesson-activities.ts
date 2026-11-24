@@ -9,11 +9,15 @@
  *     DELETE /api/activities/:id                          删除活动
  *     POST   /api/lessons/:lessonId/activities/reorder   批量重排（传 id 有序数组）
  *
+ *   学案活动类型目录
+ *     GET    /api/xuean/activity-types                    内置 + 已激活插件扩展的活动类型
+ *
  *   学案首页块（lesson_activity_blocks）
  *     GET    /api/lessons/:lessonId/blocks                列出首页块（按 order_index）
  *     POST   /api/lessons/:lessonId/blocks                新增首页块
  *     PUT    /api/blocks/:id                              更新首页块
  *     DELETE /api/blocks/:id                              删除首页块
+ *     POST   /api/lessons/:lessonId/blocks/reorder         批量重排（传 id 有序数组）
  *
  *   学生端
  *     GET    /api/lessons/:lessonId/xuean                 学案聚合：blocks + activities + 我的 progress
@@ -28,34 +32,43 @@
  *   - 教师：lesson owner 或管理员可 CRUD 活动/blocks + 看进度面板 + 批阅
  *   - 活动完成不自动推进课堂门禁（issue 明确要求，与 timeline 并列）
  */
-import type { Request } from 'express';
+import type { Request, Response, NextFunction } from 'express';
+import type Database from 'better-sqlite3';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
+import {
+  ISubmissionAggregatorToken,
+  ISubmissionRegistryToken,
+  XUEAN_SUBMISSION_ADAPTER_ID,
+  type SubmissionAggregator,
+} from '../../packages/core/submission-adapter/index.js';
+import { publishActivityCompleted } from '../../packages/core/events/activity-events.js';
 import { requireScopedAuth } from '../middleware/data-scope.js';
 import { sendSafeError } from '../utils/error-handler.js';
 import { randomId } from '../utils/id.js';
 import {
   type AccessSession,
+  actorUserId,
+  authorizeClass,
   authorizeLessonStaff,
   canSeeLesson,
   isAdministrator,
   isTeacher,
+  lessonLinkedClassIds,
   rejectUnless,
   studentActorId,
 } from '../services/class-access.js';
+import { assessmentService } from '../services/assessment-service.js';
 import type { ServerContext } from '../context.js';
+import { isXueanActivityTypeAllowed, listXueanActivityTypes } from '../services/xuean-activity-types.js';
+import { legacyActivityRouteKey, recordLegacyActivityRouteHit } from '../services/legacy-activity-route-usage.js';
+import {
+  type LearningContentRef,
+  softDeleteLearningSurface,
+  upsertLearningSurface,
+  validateLearningContentRef,
+} from '../services/learning-surface-service.js';
 
 // ── 内部常量 ─────────────────────────────────────────────────────────────
-const VALID_ACTIVITY_TYPES = new Set([
-  'reading',
-  'submission',
-  'quiz',
-  'discussion',
-  'courseware',
-  'scratch',
-  'form',
-  'other',
-]);
-
 const VALID_BLOCK_TYPES = new Set([
   'learning_goals',
   'key_points',
@@ -64,6 +77,8 @@ const VALID_BLOCK_TYPES = new Set([
   'works_showcase',
   'reflection',
   'free_html',
+  'interactive_courseware',
+  'xuean_home',
 ]);
 
 const VALID_PROGRESS_STATUS = new Set(['not_started', 'in_progress', 'submitted', 'graded']);
@@ -75,6 +90,7 @@ interface ActivityRow extends Record<string, unknown> {
   order_index: number;
   peer_review: number;
   title: string;
+  surface_id?: string | null;
 }
 
 interface BlockRow extends Record<string, unknown> {
@@ -123,7 +139,7 @@ function parseActivity(body: unknown): ParseResult<ActivityValue> {
   const { type, title, config, required, visible, peerReview, groupMode, submissionType, rubric, releaseAt, dueAt } =
     (body || {}) as Record<string, unknown>;
 
-  if (typeof type !== 'string' || !VALID_ACTIVITY_TYPES.has(type)) {
+  if (typeof type !== 'string' || !isXueanActivityTypeAllowed(type)) {
     return { ok: false, error: 'Invalid activity type', status: 400 };
   }
   if (typeof title !== 'string' || !title.trim()) {
@@ -163,6 +179,94 @@ function parseActivity(body: unknown): ParseResult<ActivityValue> {
   };
 }
 
+type SurfaceInput =
+  { ok: true; value: LearningContentRef | null | undefined } | { ok: false; status: number; error: string };
+
+/** 活动保存请求里的 `surface`：undefined = 不改；null = 解绑；对象 = 绑定 / 更新内容引用。 */
+function parseSurfaceInput(body: unknown): SurfaceInput {
+  const raw = (body as Record<string, unknown> | null)?.surface;
+  if (raw === undefined) return { ok: true, value: undefined };
+  if (raw === null) return { ok: true, value: null };
+  const parsed = validateLearningContentRef(raw);
+  if (!parsed.ok) return { ok: false, status: 400, error: parsed.error };
+  return { ok: true, value: parsed.value };
+}
+
+/** 按活动当前的 `surface` 输入创建 / 更新 / 软删 Surface，并把 surface_id 写回活动行。 */
+function applyActivitySurface(
+  db: Database.Database,
+  input: { lessonId: string; activityId: string; contentRef: LearningContentRef | null },
+): void {
+  if (input.contentRef === null) {
+    const row = db.prepare('SELECT surface_id FROM lesson_activities WHERE id = ?').get(input.activityId) as
+      { surface_id: string | null } | undefined;
+    if (row?.surface_id) softDeleteLearningSurface(db, row.surface_id);
+    db.prepare('UPDATE lesson_activities SET surface_id = NULL WHERE id = ?').run(input.activityId);
+    return;
+  }
+
+  const result = upsertLearningSurface(db, {
+    lessonId: input.lessonId,
+    kind: 'lesson_activity',
+    ownerId: input.activityId,
+    contentRef: input.contentRef,
+  });
+  if (!result.ok) throw new Error(result.error);
+  db.prepare('UPDATE lesson_activities SET surface_id = ? WHERE id = ?').run(result.surface.id, input.activityId);
+}
+
+/** 解析学案互动课件块的内容引用；非法或缺少来源时返回 null。 */
+function buildBlockContentRef(contentJson: unknown): LearningContentRef | null {
+  try {
+    const parsed = JSON.parse(String(contentJson ?? '{}')) as Record<string, unknown>;
+    const coursewareUuid = typeof parsed.coursewareUuid === 'string' ? parsed.coursewareUuid : null;
+    const resourceId = typeof parsed.resourceId === 'string' ? parsed.resourceId : null;
+    const sourceId = coursewareUuid ?? resourceId;
+    if (!sourceId) return null;
+    const validated = validateLearningContentRef({
+      rendererId: 'html_courseware',
+      source: { kind: coursewareUuid ? 'courseware' : 'resource', id: sourceId },
+      ...(typeof parsed.title === 'string' && parsed.title ? { config: { title: parsed.title } } : {}),
+    });
+    return validated.ok ? validated.value : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 学案首页块 ↔ Surface 同步（阶段 5）。
+ *
+ * 只有 `interactive_courseware` 需要 Surface；改成其它块类型时软删并清空 surface_id。
+ */
+function syncBlockSurface(
+  db: Database.Database,
+  input: { lessonId: string; blockId: string; blockType: string; contentJson: unknown },
+): void {
+  const row = db.prepare('SELECT surface_id FROM lesson_activity_blocks WHERE id = ?').get(input.blockId) as
+    { surface_id: string | null } | undefined;
+
+  if (input.blockType !== 'interactive_courseware') {
+    if (row?.surface_id) {
+      softDeleteLearningSurface(db, row.surface_id);
+      db.prepare('UPDATE lesson_activity_blocks SET surface_id = NULL WHERE id = ?').run(input.blockId);
+    }
+    return;
+  }
+
+  const contentRef = buildBlockContentRef(input.contentJson);
+  if (!contentRef) return;
+  const result = upsertLearningSurface(db, {
+    lessonId: input.lessonId,
+    kind: 'lesson_block',
+    ownerId: input.blockId,
+    contentRef,
+  });
+  if (result.ok) {
+    db.prepare('UPDATE lesson_activity_blocks SET surface_id = ? WHERE id = ?').run(result.surface.id, input.blockId);
+  }
+}
+
 function parseBlock(body: unknown): ParseResult<BlockValue> {
   const { blockType, content } = (body || {}) as Record<string, unknown>;
   if (typeof blockType !== 'string' || !VALID_BLOCK_TYPES.has(blockType)) {
@@ -172,6 +276,63 @@ function parseBlock(body: unknown): ParseResult<BlockValue> {
     return { ok: false, error: 'content is required', status: 400 };
   }
   let contentJson: string;
+  if (blockType === 'interactive_courseware') {
+    // 学案互动课件块只存「内容源描述」，不落 HTML 正文：内容仍由课件运行时
+    // 渲染在沙箱 iframe 中，避免学案表里出现可执行脚本。
+    const raw =
+      typeof content === 'string'
+        ? (() => {
+            try {
+              return JSON.parse(content) as unknown;
+            } catch {
+              return null;
+            }
+          })()
+        : content;
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+      return { ok: false, error: 'interactive_courseware content must be a JSON object', status: 400 };
+    }
+    const record = raw as Record<string, unknown>;
+    const coursewareUuid =
+      typeof record.coursewareUuid === 'string' && record.coursewareUuid.trim()
+        ? record.coursewareUuid.trim().slice(0, 128)
+        : null;
+    const resourceId =
+      typeof record.resourceId === 'string' && record.resourceId.trim() ? record.resourceId.trim().slice(0, 128) : null;
+    if (!coursewareUuid && !resourceId) {
+      return { ok: false, error: 'interactive_courseware requires coursewareUuid or resourceId', status: 400 };
+    }
+    contentJson = JSON.stringify({
+      coursewareUuid,
+      resourceId,
+      title: typeof record.title === 'string' ? record.title.trim().slice(0, 120) : null,
+    });
+    return { ok: true, value: { blockType, contentJson } };
+  }
+  if (blockType === 'xuean_home') {
+    // 学案首页只保留「简介 + 背景图」两个字段，不再支持多块编排。
+    const raw =
+      typeof content === 'string'
+        ? (() => {
+            try {
+              return JSON.parse(content) as unknown;
+            } catch {
+              return null;
+            }
+          })()
+        : content;
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+      return { ok: false, error: 'xuean_home content must be a JSON object', status: 400 };
+    }
+    const record = raw as Record<string, unknown>;
+    const intro = typeof record.intro === 'string' ? record.intro.trim().slice(0, 2000) : '';
+    const rawBackground = typeof record.backgroundImage === 'string' ? record.backgroundImage.trim() : '';
+    if (rawBackground && !/^(\/api\/files\/|\/uploads\/)/.test(rawBackground)) {
+      return { ok: false, error: 'backgroundImage must be an uploaded file URL', status: 400 };
+    }
+    contentJson = JSON.stringify({ intro, backgroundImage: rawBackground.slice(0, 500) });
+    return { ok: true, value: { blockType, contentJson } };
+  }
   try {
     contentJson = typeof content === 'string' ? content : (JSON.stringify(content) as string);
   } catch {
@@ -185,6 +346,29 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
   const { app } = ctx;
   const db = kernelContainer.db;
   const readDb = kernelContainer.getReadDb();
+
+  // 旧 `/api/activities/:id/*` 兼容层：标注弃用，并把嵌套路由的 :activityId 映射为 :id。
+  const markLegacyActivityRoute = (req: Request, res: Response, next: NextFunction) => {
+    res.setHeader('Deprecation', 'true');
+    res.setHeader('Link', '</api/lesson-activities/{id}>; rel="successor-version"');
+    // 摘除别名前统计真实调用；内存计数，不影响响应
+    recordLegacyActivityRouteHit(legacyActivityRouteKey(req));
+    next();
+  };
+  const redirectLegacy307 = (req: Request, res: Response, target: string) => {
+    const query = req.originalUrl.includes('?') ? req.originalUrl.slice(req.originalUrl.indexOf('?')) : '';
+    return res.redirect(307, `${target}${query}`);
+  };
+  const requireActivityInLesson = (req: Request, res: Response, next: NextFunction) => {
+    const { lessonId, activityId } = req.params;
+    const row = readDb.prepare('SELECT lesson_id FROM lesson_activities WHERE id = ?').get(activityId) as
+      { lesson_id: string } | undefined;
+    if (!row || row.lesson_id !== lessonId) {
+      return res.status(404).json({ success: false, error: 'Activity not found' });
+    }
+    (req.params as Record<string, string>).id = activityId;
+    next();
+  };
 
   // ══════════════════════════════════════════════════════════════════════
   // 活动（lesson_activities）
@@ -209,6 +393,178 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
     }
   });
 
+  // 学案活动类型目录（内置 + 已激活插件的 `xuean.activity.type` 扩展）
+  app.get('/api/xuean/activity-types', requireScopedAuth('authenticated'), (_req, res) => {
+    try {
+      res.json(listXueanActivityTypes());
+    } catch (err: unknown) {
+      sendSafeError(res, err);
+    }
+  });
+
+  // 课时关联班级（供试题活动的班级选择器使用）
+  app.get('/api/lessons/:lessonId/linked-classes', requireScopedAuth('class-staff'), (req, res) => {
+    try {
+      const lessonId = req.params.lessonId;
+      const session = requestSession(req);
+      if (rejectUnless(res, authorizeLessonStaff(readDb, session, lessonId))) return;
+
+      const classIds = lessonLinkedClassIds(readDb, lessonId);
+      if (classIds.length === 0) return res.json([]);
+
+      const placeholders = classIds.map(() => '?').join(',');
+      const rows = readDb
+        .prepare(`SELECT id, name FROM classes WHERE id IN (${placeholders}) ORDER BY name ASC`)
+        .all(...classIds);
+      res.json(rows);
+    } catch (err: unknown) {
+      sendSafeError(res, err);
+    }
+  });
+
+  // 试题活动：引用现有试卷，原子地发布/复用 assignment 并写入活动
+  app.post('/api/lessons/:lessonId/activities/assessment', requireScopedAuth('class-staff'), (req, res) => {
+    try {
+      const lessonId = req.params.lessonId;
+      const session = requestSession(req);
+      if (rejectUnless(res, authorizeLessonStaff(readDb, session, lessonId))) return;
+
+      const body = (req.body || {}) as Record<string, unknown>;
+      const assessmentId = typeof body.assessmentId === 'string' ? body.assessmentId.trim() : '';
+      const classId = typeof body.classId === 'string' ? body.classId.trim() : '';
+      const activityId = typeof body.activityId === 'string' ? body.activityId.trim() : null;
+      if (!assessmentId) return res.status(400).json({ success: false, error: 'assessmentId is required' });
+      if (!classId) return res.status(400).json({ success: false, error: 'classId is required' });
+
+      // 班级必须是该课时关联班级，且当前教师对班级有 staff 权限。
+      if (!lessonLinkedClassIds(readDb, lessonId).includes(classId)) {
+        return res.status(400).json({ success: false, error: 'classId is not linked to this lesson' });
+      }
+      if (rejectUnless(res, authorizeClass(readDb, session, classId, 'staff'))) return;
+
+      const actor = actorUserId(session) || 'unknown-actor';
+      // getAssessment 内部做 owner 校验；不存在/不属于当前教师会抛错。
+      const assessment = assessmentService.getAssessment(assessmentId, actor);
+      if (!assessment) return res.status(404).json({ success: false, error: 'Assessment not found' });
+
+      let existingActivity: (ActivityRow & { config_json?: string | null; title?: string }) | undefined;
+      if (activityId) {
+        existingActivity = readDb.prepare('SELECT * FROM lesson_activities WHERE id = ?').get(activityId) as
+          (ActivityRow & { config_json?: string | null; title?: string }) | undefined;
+        if (!existingActivity || existingActivity.lesson_id !== lessonId) {
+          return res.status(404).json({ success: false, error: 'Activity not found' });
+        }
+        if (rejectUnless(res, authorizeLessonStaff(readDb, session, existingActivity.lesson_id))) return;
+      }
+
+      // 同一 assessment + class + lesson 复用 open assignment，避免重复发布。
+      const openAssignment = readDb
+        .prepare(
+          `SELECT * FROM assessment_assignments
+            WHERE assessment_id = ? AND class_id = ? AND lesson_id = ? AND status = 'open'
+            ORDER BY created_at DESC LIMIT 1`,
+        )
+        .get(assessmentId, classId, lessonId) as Record<string, unknown> | undefined;
+
+      const assignment =
+        openAssignment ??
+        (assessmentService.publish(assessmentId, actor, {
+          classId,
+          lessonId,
+          createdBy: actor,
+        }) as unknown as Record<string, unknown>);
+      const reused = Boolean(openAssignment);
+
+      const outputTitle =
+        typeof body.title === 'string' && body.title.trim()
+          ? body.title.trim().slice(0, 120)
+          : String((assessment as { title?: unknown }).title ?? '试题').slice(0, 120);
+
+      const previousConfig = (() => {
+        if (!existingActivity?.config_json) return {} as Record<string, unknown>;
+        try {
+          const parsed = JSON.parse(existingActivity.config_json) as unknown;
+          return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+            ? (parsed as Record<string, unknown>)
+            : {};
+        } catch {
+          return {};
+        }
+      })();
+      const configJson = JSON.stringify({
+        ...previousConfig,
+        assessmentId,
+        classId,
+        assignmentId: String(assignment.id ?? ''),
+        title: outputTitle,
+      });
+
+      const nowTs = now();
+      const tx = db.transaction(() => {
+        if (existingActivity) {
+          db.prepare(
+            `UPDATE lesson_activities
+                SET type = 'quiz', title = ?, config_json = ?, required = ?, visible = ?, updated_at = ?
+              WHERE id = ?`,
+          ).run(
+            outputTitle,
+            configJson,
+            typeof body.required === 'boolean' ? (body.required ? 1 : 0) : Number(existingActivity.required ?? 1),
+            typeof body.visible === 'boolean' ? (body.visible ? 1 : 0) : Number(existingActivity.visible ?? 1),
+            nowTs,
+            existingActivity.id,
+          );
+          return existingActivity.id;
+        }
+
+        const id = randomId();
+        const maxOrder = (
+          readDb
+            .prepare('SELECT COALESCE(MAX(order_index), -1) AS m FROM lesson_activities WHERE lesson_id = ?')
+            .get(lessonId) as { m: number }
+        ).m;
+        db.prepare(
+          `INSERT INTO lesson_activities
+             (id, lesson_id, order_index, type, title, config_json, required, visible,
+              peer_review, group_mode, submission_type, rubric_json, release_at, due_at,
+              created_at, updated_at)
+           VALUES (?, ?, ?, 'quiz', ?, ?, ?, ?, 0, 'none', NULL, NULL, NULL, NULL, ?, ?)`,
+        ).run(
+          id,
+          lessonId,
+          maxOrder + 1,
+          outputTitle,
+          configJson,
+          body.required === false ? 0 : 1,
+          body.visible === false ? 0 : 1,
+          nowTs,
+          nowTs,
+        );
+        return id;
+      });
+      const finalActivityId = tx();
+
+      // 重新绑定到另一份 assignment 时，关闭旧 assignment，避免学生端出现重复试卷。
+      const previousAssignmentId = typeof previousConfig.assignmentId === 'string' ? previousConfig.assignmentId : null;
+      if (previousAssignmentId && previousAssignmentId !== String(assignment.id ?? '')) {
+        try {
+          assessmentService.closeAssignment(previousAssignmentId, actor);
+        } catch {
+          // 旧 assignment 关闭失败不影响本次绑定。
+        }
+      }
+
+      res.status(existingActivity ? 200 : 201).json({
+        success: true,
+        activity: db.prepare('SELECT * FROM lesson_activities WHERE id = ?').get(finalActivityId),
+        assignment,
+        reused,
+      });
+    } catch (err: unknown) {
+      sendSafeError(res, err);
+    }
+  });
+
   // 新增活动（教师/管理员）
   app.post('/api/lessons/:lessonId/activities', requireScopedAuth('class-staff'), (req, res) => {
     try {
@@ -218,6 +574,8 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
 
       const parsed = parseActivity(req.body);
       if (!parsed.ok) return res.status(parsed.status).json({ success: false, error: parsed.error });
+      const surfaceInput = parseSurfaceInput(req.body);
+      if (!surfaceInput.ok) return res.status(surfaceInput.status).json({ success: false, error: surfaceInput.error });
 
       // 取当前最大 order_index，新活动追加到末尾
       const maxOrder = (
@@ -228,30 +586,36 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
 
       const id = randomId();
       const nowTs = now();
-      db.prepare(
-        `INSERT INTO lesson_activities
-          (id, lesson_id, order_index, type, title, config_json, required, visible,
-           peer_review, group_mode, submission_type, rubric_json, release_at, due_at,
-           created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      ).run(
-        id,
-        lessonId,
-        maxOrder + 1,
-        parsed.value.type,
-        parsed.value.title,
-        parsed.value.configJson,
-        parsed.value.required,
-        parsed.value.visible,
-        parsed.value.peerReview,
-        parsed.value.groupMode,
-        parsed.value.submissionType,
-        parsed.value.rubricJson,
-        parsed.value.releaseAt,
-        parsed.value.dueAt,
-        nowTs,
-        nowTs,
-      );
+      const tx = db.transaction(() => {
+        db.prepare(
+          `INSERT INTO lesson_activities
+            (id, lesson_id, order_index, type, title, config_json, required, visible,
+             peer_review, group_mode, submission_type, rubric_json, release_at, due_at,
+             created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ).run(
+          id,
+          lessonId,
+          maxOrder + 1,
+          parsed.value.type,
+          parsed.value.title,
+          parsed.value.configJson,
+          parsed.value.required,
+          parsed.value.visible,
+          parsed.value.peerReview,
+          parsed.value.groupMode,
+          parsed.value.submissionType,
+          parsed.value.rubricJson,
+          parsed.value.releaseAt,
+          parsed.value.dueAt,
+          nowTs,
+          nowTs,
+        );
+        if (surfaceInput.value !== undefined) {
+          applyActivitySurface(db, { lessonId, activityId: id, contentRef: surfaceInput.value });
+        }
+      });
+      tx();
 
       res.status(201).json(db.prepare('SELECT * FROM lesson_activities WHERE id = ?').get(id));
     } catch (err: unknown) {
@@ -260,7 +624,7 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
   });
 
   // 更新活动（教师/管理员）
-  app.put('/api/activities/:id', requireScopedAuth('class-staff'), (req, res) => {
+  const updateActivityHandler = (req: Request, res: Response) => {
     try {
       const id = req.params.id;
       const session = requestSession(req);
@@ -271,43 +635,61 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
 
       const parsed = parseActivity({ ...existing, ...req.body });
       if (!parsed.ok) return res.status(parsed.status).json({ success: false, error: parsed.error });
+      const surfaceInput = parseSurfaceInput(req.body);
+      if (!surfaceInput.ok) return res.status(surfaceInput.status).json({ success: false, error: surfaceInput.error });
 
       const orderIndex =
         (req.body?.order_index ?? req.body?.orderIndex ?? Number.isFinite(req.body?.order_index))
           ? Number(req.body.order_index)
           : existing.order_index;
 
-      db.prepare(
-        `UPDATE lesson_activities
-         SET type = ?, title = ?, config_json = ?, required = ?, visible = ?,
-             peer_review = ?, group_mode = ?, submission_type = ?, rubric_json = ?,
-             release_at = ?, due_at = ?, order_index = ?, updated_at = ?
-         WHERE id = ?`,
-      ).run(
-        parsed.value.type,
-        parsed.value.title,
-        parsed.value.configJson,
-        parsed.value.required,
-        parsed.value.visible,
-        parsed.value.peerReview,
-        parsed.value.groupMode,
-        parsed.value.submissionType,
-        parsed.value.rubricJson,
-        parsed.value.releaseAt,
-        parsed.value.dueAt,
-        orderIndex,
-        now(),
-        id,
-      );
+      const tx = db.transaction(() => {
+        db.prepare(
+          `UPDATE lesson_activities
+           SET type = ?, title = ?, config_json = ?, required = ?, visible = ?,
+               peer_review = ?, group_mode = ?, submission_type = ?, rubric_json = ?,
+               release_at = ?, due_at = ?, order_index = ?, updated_at = ?
+           WHERE id = ?`,
+        ).run(
+          parsed.value.type,
+          parsed.value.title,
+          parsed.value.configJson,
+          parsed.value.required,
+          parsed.value.visible,
+          parsed.value.peerReview,
+          parsed.value.groupMode,
+          parsed.value.submissionType,
+          parsed.value.rubricJson,
+          parsed.value.releaseAt,
+          parsed.value.dueAt,
+          orderIndex,
+          now(),
+          id,
+        );
+        if (surfaceInput.value !== undefined) {
+          applyActivitySurface(db, { lessonId: existing.lesson_id, activityId: id, contentRef: surfaceInput.value });
+        }
+      });
+      tx();
 
       res.json(db.prepare('SELECT * FROM lesson_activities WHERE id = ?').get(id));
     } catch (err: unknown) {
       sendSafeError(res, err);
     }
-  });
+  };
+  app.put('/api/activities/:id', requireScopedAuth('class-staff'), markLegacyActivityRoute, (req, res) =>
+    redirectLegacy307(req, res, `/api/lesson-activities/${encodeURIComponent(req.params.id)}`),
+  );
+  app.put('/api/lesson-activities/:id', requireScopedAuth('class-staff'), updateActivityHandler);
+  app.put(
+    '/api/lessons/:lessonId/activities/:activityId',
+    requireScopedAuth('class-staff'),
+    requireActivityInLesson,
+    updateActivityHandler,
+  );
 
   // 删除活动（教师/管理员）
-  app.delete('/api/activities/:id', requireScopedAuth('class-staff'), (req, res) => {
+  const deleteActivityHandler = (req: Request, res: Response) => {
     try {
       const id = req.params.id;
       const session = requestSession(req);
@@ -316,15 +698,30 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
       if (!existing) return res.status(404).json({ success: false, error: 'Activity not found' });
       if (rejectUnless(res, authorizeLessonStaff(readDb, session, existing.lesson_id))) return;
 
-      // 级联删除 progress 行（activity 被删，progress 失去意义）
-      db.prepare('DELETE FROM activity_progress WHERE activity_id = ?').run(id);
-      db.prepare('DELETE FROM lesson_activities WHERE id = ?').run(id);
+      // 级联删除 progress 行（activity 被删，progress 失去意义）；
+      // Surface 只软删，attempt 仍可追溯（设计文档 §7.5）。
+      const tx = db.transaction(() => {
+        if (existing.surface_id) softDeleteLearningSurface(db, existing.surface_id);
+        db.prepare('DELETE FROM activity_progress WHERE activity_id = ?').run(id);
+        db.prepare('DELETE FROM lesson_activities WHERE id = ?').run(id);
+      });
+      tx();
 
       res.json({ success: true });
     } catch (err: unknown) {
       sendSafeError(res, err);
     }
-  });
+  };
+  app.delete('/api/activities/:id', requireScopedAuth('class-staff'), markLegacyActivityRoute, (req, res) =>
+    redirectLegacy307(req, res, `/api/lesson-activities/${encodeURIComponent(req.params.id)}`),
+  );
+  app.delete('/api/lesson-activities/:id', requireScopedAuth('class-staff'), deleteActivityHandler);
+  app.delete(
+    '/api/lessons/:lessonId/activities/:activityId',
+    requireScopedAuth('class-staff'),
+    requireActivityInLesson,
+    deleteActivityHandler,
+  );
 
   // 批量重排（传有序 id 数组；仅限同一 lesson 内）
   app.post('/api/lessons/:lessonId/activities/reorder', requireScopedAuth('class-staff'), (req, res) => {
@@ -399,11 +796,20 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
 
       const id = randomId();
       const nowTs = now();
-      db.prepare(
-        `INSERT INTO lesson_activity_blocks
-          (id, lesson_id, block_type, order_index, content_json, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      ).run(id, lessonId, parsed.value.blockType, maxOrder + 1, parsed.value.contentJson, nowTs, nowTs);
+      const tx = db.transaction(() => {
+        db.prepare(
+          `INSERT INTO lesson_activity_blocks
+            (id, lesson_id, block_type, order_index, content_json, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        ).run(id, lessonId, parsed.value.blockType, maxOrder + 1, parsed.value.contentJson, nowTs, nowTs);
+        syncBlockSurface(db, {
+          lessonId,
+          blockId: id,
+          blockType: parsed.value.blockType,
+          contentJson: parsed.value.contentJson,
+        });
+      });
+      tx();
 
       res.status(201).json(db.prepare('SELECT * FROM lesson_activity_blocks WHERE id = ?').get(id));
     } catch (err: unknown) {
@@ -428,11 +834,20 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
           ? Number(req.body.order_index)
           : existing.order_index;
 
-      db.prepare(
-        `UPDATE lesson_activity_blocks
-         SET block_type = ?, content_json = ?, order_index = ?, updated_at = ?
-         WHERE id = ?`,
-      ).run(parsed.value.blockType, parsed.value.contentJson, orderIndex, now(), id);
+      const tx = db.transaction(() => {
+        db.prepare(
+          `UPDATE lesson_activity_blocks
+           SET block_type = ?, content_json = ?, order_index = ?, updated_at = ?
+           WHERE id = ?`,
+        ).run(parsed.value.blockType, parsed.value.contentJson, orderIndex, now(), id);
+        syncBlockSurface(db, {
+          lessonId: existing.lesson_id,
+          blockId: id,
+          blockType: parsed.value.blockType,
+          contentJson: parsed.value.contentJson,
+        });
+      });
+      tx();
 
       res.json(db.prepare('SELECT * FROM lesson_activity_blocks WHERE id = ?').get(id));
     } catch (err: unknown) {
@@ -456,6 +871,42 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
     }
   });
 
+  // 首页块批量重排（与活动重排同语义：传有序 id 数组，仅限同一 lesson）
+  app.post('/api/lessons/:lessonId/blocks/reorder', requireScopedAuth('class-staff'), (req, res) => {
+    try {
+      const lessonId = req.params.lessonId;
+      const session = requestSession(req);
+      if (rejectUnless(res, authorizeLessonStaff(readDb, session, lessonId))) return;
+
+      const { ids } = req.body || {};
+      if (!Array.isArray(ids) || ids.length === 0) {
+        return res.status(400).json({ success: false, error: 'ids array required' });
+      }
+      for (const id of ids) {
+        if (
+          typeof id !== 'string' ||
+          !readDb.prepare('SELECT 1 FROM lesson_activity_blocks WHERE id = ? AND lesson_id = ?').get(id, lessonId)
+        ) {
+          return res.status(400).json({ success: false, error: `Unknown block id: ${id}` });
+        }
+      }
+
+      const tx = db.transaction((ordered: string[]) => {
+        const updateStmt = db.prepare('UPDATE lesson_activity_blocks SET order_index = ?, updated_at = ? WHERE id = ?');
+        const ts = now();
+        ordered.forEach((id, i) => updateStmt.run(i, ts, id));
+      });
+      tx(ids);
+
+      const rows = readDb
+        .prepare('SELECT id, order_index FROM lesson_activity_blocks WHERE lesson_id = ? ORDER BY order_index ASC')
+        .all(lessonId);
+      res.json(rows);
+    } catch (err: unknown) {
+      sendSafeError(res, err);
+    }
+  });
+
   // ── 学案包导入导出（manifest + activities + blocks）──────────────────────
   // 导出：返回当前 lesson 的全部活动 + 首页块（不含进度）
   app.get('/api/lessons/:lessonId/xuean/export', requireScopedAuth('class-staff'), (req, res) => {
@@ -466,7 +917,13 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
 
       const activities = readDb
         .prepare(
-          'SELECT type, title, config_json, required, visible, peer_review, group_mode, submission_type, rubric_json, release_at, due_at, order_index FROM lesson_activities WHERE lesson_id = ? ORDER BY order_index ASC',
+          `SELECT la.type, la.title, la.config_json, la.required, la.visible, la.peer_review, la.group_mode,
+                  la.submission_type, la.rubric_json, la.release_at, la.due_at, la.order_index,
+                  ls.content_ref_json AS surface_content_ref_json
+             FROM lesson_activities la
+             LEFT JOIN learning_surfaces ls ON ls.id = la.surface_id
+            WHERE la.lesson_id = ?
+            ORDER BY la.order_index ASC`,
         )
         .all(lessonId);
       const blocks = readDb
@@ -504,7 +961,12 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
       }
 
       const tx = db.transaction(() => {
-        // 清空现有活动 + 首页块（级联清理 activity_progress）
+        // 清空现有活动 + 首页块（级联清理 activity_progress）；Surface 只软删。
+        const ts = now();
+        db.prepare(
+          `UPDATE learning_surfaces SET deleted_at = ?, updated_at = ?
+            WHERE kind IN ('lesson_activity', 'lesson_block') AND lesson_id = ? AND deleted_at IS NULL`,
+        ).run(ts, ts, lessonId);
         db.prepare(
           'DELETE FROM activity_progress WHERE activity_id IN (SELECT id FROM lesson_activities WHERE lesson_id = ?)',
         ).run(lessonId);
@@ -513,11 +975,12 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
 
         // 重建活动
         for (const a of activities) {
+          const activityId = randomId();
           db.prepare(
             `INSERT INTO lesson_activities (id, lesson_id, order_index, type, title, config_json, required, visible, peer_review, group_mode, submission_type, rubric_json, release_at, due_at, created_at, updated_at)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           ).run(
-            randomId(),
+            activityId,
             lessonId,
             a.order_index ?? 0,
             a.type ?? 'other',
@@ -534,14 +997,35 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
             now(),
             now(),
           );
+
+          if (typeof a.surface_content_ref_json === 'string' && a.surface_content_ref_json) {
+            try {
+              const contentRef = JSON.parse(a.surface_content_ref_json) as unknown;
+              const parsedRef = validateLearningContentRef(contentRef);
+              if (parsedRef.ok) {
+                applyActivitySurface(db, { lessonId, activityId, contentRef: parsedRef.value });
+              }
+            } catch {
+              // 导入包里的内容引用损坏时跳过该活动的 Surface，不影响其余活动
+            }
+          }
         }
 
         // 重建首页块
         for (const b of blocks) {
+          const blockId = randomId();
           db.prepare(
             `INSERT INTO lesson_activity_blocks (id, lesson_id, block_type, content_json, order_index, created_at, updated_at)
              VALUES (?, ?, ?, ?, ?, ?, ?)`,
-          ).run(randomId(), lessonId, b.block_type ?? 'free', b.content_json ?? '{}', b.order_index ?? 0, now(), now());
+          ).run(blockId, lessonId, b.block_type ?? 'free', b.content_json ?? '{}', b.order_index ?? 0, now(), now());
+
+          // 阶段 5：互动课件块直接建 kind='lesson_block' 的 Surface，避免新导入产生存量。
+          syncBlockSurface(db, {
+            lessonId,
+            blockId,
+            blockType: b.block_type ?? 'free',
+            contentJson: b.content_json ?? '{}',
+          });
         }
       });
 
@@ -620,7 +1104,7 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
   });
 
   // 活动进度上报（学生自报，verified 保持 0）
-  app.post('/api/activities/:id/progress', requireScopedAuth('authenticated'), (req, res) => {
+  const submitProgressHandler = (req: Request, res: Response) => {
     try {
       const activityId = req.params.id;
       const session = requestSession(req);
@@ -738,14 +1222,24 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
     } catch (err: unknown) {
       sendSafeError(res, err);
     }
-  });
+  };
+  app.post('/api/activities/:id/progress', requireScopedAuth('authenticated'), markLegacyActivityRoute, (req, res) =>
+    redirectLegacy307(req, res, `/api/lesson-activities/${encodeURIComponent(req.params.id)}/progress`),
+  );
+  app.post('/api/lesson-activities/:id/progress', requireScopedAuth('authenticated'), submitProgressHandler);
+  app.post(
+    '/api/lessons/:lessonId/activities/:activityId/progress',
+    requireScopedAuth('authenticated'),
+    requireActivityInLesson,
+    submitProgressHandler,
+  );
 
   // ══════════════════════════════════════════════════════════════════════
   // 教师端：批阅 + 进度面板
   // ══════════════════════════════════════════════════════════════════════
 
   // 教师批阅/验证：写 verified + 可选 score + 状态置 graded/submitted
-  app.post('/api/activities/:id/progress/verify', requireScopedAuth('class-staff'), (req, res) => {
+  const verifyProgressHandler = (req: Request, res: Response) => {
     try {
       const activityId = req.params.id;
       const session = requestSession(req);
@@ -802,14 +1296,252 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
       const row = readDb
         .prepare('SELECT * FROM activity_progress WHERE activity_id = ? AND student_id = ?')
         .get(activityId, studentId);
+      publishActivityCompleted(kernelContainer.eventBus, {
+        source: 'lesson-activity',
+        activityId: `xuean:${activityId}`,
+        lessonId: activity.lesson_id,
+        studentId,
+        completedAt: ts,
+        raw: { status: newStatus ?? null, score: scoreVal ?? null },
+      });
       res.json(row);
     } catch (err: unknown) {
       sendSafeError(res, err);
     }
-  });
+  };
+  app.post(
+    '/api/activities/:id/progress/verify',
+    requireScopedAuth('class-staff'),
+    markLegacyActivityRoute,
+    (req, res) =>
+      redirectLegacy307(req, res, `/api/lesson-activities/${encodeURIComponent(req.params.id)}/progress/verify`),
+  );
+  app.post('/api/lesson-activities/:id/progress/verify', requireScopedAuth('class-staff'), verifyProgressHandler);
+  app.post(
+    '/api/lessons/:lessonId/activities/:activityId/progress/verify',
+    requireScopedAuth('class-staff'),
+    requireActivityInLesson,
+    verifyProgressHandler,
+  );
+
+  // ══════════════════════════════════════════════════════════════════════
+  // 学案成绩同步到平台成绩册（P0-3）
+  //
+  // verify 只写 activity_progress；本接口把已批阅（verified=1 且有分）的活动
+  // 显式投影为 `xuean-activity:<id>` 成绩项，经 SubmissionAggregator 统一写入
+  // assignment_submissions（复用 grade-writer 的审计与手动分保护）。
+  // 幂等：重复同步只刷新同一成绩项，不产生重复行。
+  // ══════════════════════════════════════════════════════════════════════
+
+  interface ActivitySyncRow {
+    student_id: string;
+    score: number | null;
+    verified: number;
+  }
+
+  interface ActivitySyncSummary {
+    activityId: string;
+    synced: number;
+    skipped: number;
+    failed: number;
+    results: Array<{ studentId: string; ok: boolean; reason?: string }>;
+  }
+
+  /** 课节 → 唯一班级；多班或零班时必须由调用方显式传 classId。 */
+  const resolveSyncClassId = (lessonId: string, requested: unknown): string | null => {
+    const linked = lessonLinkedClassIds(readDb, lessonId);
+    const wanted = typeof requested === 'string' && requested.trim() ? requested.trim() : null;
+    if (wanted) return linked.includes(wanted) ? wanted : null;
+    return linked.length === 1 ? linked[0] : null;
+  };
+
+  /** 校验 studentIds 均属于该班级；返回 null 表示未指定（同步全班）。 */
+  const resolveSyncStudentIds = (classId: string, raw: unknown): string[] | null | { error: string } => {
+    if (raw == null) return null;
+    if (!Array.isArray(raw) || raw.some((v) => typeof v !== 'string' || !v.trim())) {
+      return { error: 'studentIds must be an array of non-empty strings' };
+    }
+    const ids = Array.from(new Set(raw.map((v) => (v as string).trim())));
+    if (ids.length === 0) return null;
+    const placeholders = ids.map(() => '?').join(',');
+    const rows = readDb
+      .prepare(`SELECT student_id FROM class_students WHERE class_id = ? AND student_id IN (${placeholders})`)
+      .all(classId, ...ids) as Array<{ student_id: string }>;
+    const allowed = new Set(rows.map((r) => r.student_id));
+    const invalid = ids.filter((id) => !allowed.has(id));
+    return invalid.length > 0 ? { error: `studentIds not in class: ${invalid.join(', ')}` } : ids;
+  };
+
+  /** 解析当前会话的审计 actor（`user:<id>:<role>`），供 grade-writer 记录 graded_by/history。 */
+  const gradeActorFor = (session: AccessSession): { actorId: string | null; actorRole: string } => {
+    const id = actorUserId(session);
+    const role = isAdministrator(session) ? 'administrator' : 'teacher';
+    return { actorId: id ? `user:${id}:${role}` : null, actorRole: role };
+  };
+
+  /** 取得聚合器；xuean 适配器未注册时返回 null，由调用方给出明确错误。 */
+  const resolveGradeAggregator = async (): Promise<SubmissionAggregator | null> => {
+    const registry = await kernelContainer.serviceRegistry.resolve(ISubmissionRegistryToken);
+    if (!registry.list().some((a) => a.descriptor.id === XUEAN_SUBMISSION_ADAPTER_ID)) return null;
+    return kernelContainer.serviceRegistry.resolve(ISubmissionAggregatorToken);
+  };
+
+  const syncOneActivity = async (
+    activity: ActivityRow,
+    classId: string,
+    studentIds: string[] | null,
+    session: AccessSession,
+    aggregator: SubmissionAggregator,
+  ): Promise<ActivitySyncSummary> => {
+    const clauses = ['ap.activity_id = ?'];
+    const params: unknown[] = [activity.id];
+    if (studentIds && studentIds.length > 0) {
+      clauses.push(`ap.student_id IN (${studentIds.map(() => '?').join(',')})`);
+      params.push(...studentIds);
+    }
+    const rows = readDb
+      .prepare(
+        `SELECT ap.student_id, ap.score, ap.verified
+           FROM activity_progress ap
+           JOIN class_students cs ON cs.class_id = ? AND cs.student_id = ap.student_id
+          WHERE ${clauses.join(' AND ')}`,
+      )
+      .all(classId, ...params) as ActivitySyncRow[];
+
+    const { actorId, actorRole } = gradeActorFor(session);
+    const summary: ActivitySyncSummary = { activityId: activity.id, synced: 0, skipped: 0, failed: 0, results: [] };
+
+    for (const row of rows) {
+      // 只同步已批阅且有分的行；自报进度（verified=0）不进入成绩册。
+      if (row.verified !== 1 || row.score == null) {
+        summary.skipped++;
+        continue;
+      }
+      const score = Number(row.score);
+      if (!Number.isFinite(score) || score < 0 || score > 100) {
+        summary.failed++;
+        summary.results.push({ studentId: row.student_id, ok: false, reason: 'invalid-score' });
+        continue;
+      }
+      const result = await aggregator.writeGrade(
+        XUEAN_SUBMISSION_ADAPTER_ID,
+        `${XUEAN_SUBMISSION_ADAPTER_ID}:${activity.id}:${row.student_id}`,
+        {
+          classId,
+          lessonId: activity.lesson_id,
+          studentId: row.student_id,
+          adapterIds: [XUEAN_SUBMISSION_ADAPTER_ID],
+        },
+        { score, reason: 'xuean-sync-grade', actorId, actorRole },
+      );
+      if (result.ok) {
+        summary.synced++;
+      } else {
+        summary.failed++;
+        summary.results.push({ studentId: row.student_id, ok: false, reason: result.reason });
+      }
+    }
+    return summary;
+  };
+
+  const syncActivityGradesHandler = async (req: Request, res: Response) => {
+    try {
+      const activityId = req.params.id;
+      const session = requestSession(req);
+      const activity = readDb.prepare('SELECT * FROM lesson_activities WHERE id = ?').get(activityId) as
+        ActivityRow | undefined;
+      if (!activity) return res.status(404).json({ success: false, error: 'Activity not found' });
+      if (rejectUnless(res, authorizeLessonStaff(readDb, session, activity.lesson_id))) return;
+
+      const body = (req.body || {}) as Record<string, unknown>;
+      const classId = resolveSyncClassId(activity.lesson_id, body.classId);
+      if (!classId) {
+        return res.status(400).json({
+          success: false,
+          error: 'classId required: lesson is linked to zero or multiple classes',
+        });
+      }
+      if (rejectUnless(res, authorizeClass(readDb, session, classId, 'staff'))) return;
+
+      const studentIds = resolveSyncStudentIds(classId, body.studentIds);
+      if (studentIds && !Array.isArray(studentIds)) {
+        return res.status(400).json({ success: false, error: studentIds.error });
+      }
+      const aggregator = await resolveGradeAggregator();
+      if (!aggregator) {
+        return res.status(409).json({ success: false, error: 'xuean submission adapter is not registered' });
+      }
+
+      const summary = await syncOneActivity(activity, classId, studentIds, session, aggregator);
+      res.json({ success: true, classId, ...summary });
+    } catch (err: unknown) {
+      sendSafeError(res, err);
+    }
+  };
+
+  const syncLessonActivityGradesHandler = async (req: Request, res: Response) => {
+    try {
+      const lessonId = req.params.lessonId;
+      const session = requestSession(req);
+      if (rejectUnless(res, authorizeLessonStaff(readDb, session, lessonId))) return;
+
+      const body = (req.body || {}) as Record<string, unknown>;
+      const classId = resolveSyncClassId(lessonId, body.classId);
+      if (!classId) {
+        return res.status(400).json({
+          success: false,
+          error: 'classId required: lesson is linked to zero or multiple classes',
+        });
+      }
+      if (rejectUnless(res, authorizeClass(readDb, session, classId, 'staff'))) return;
+
+      const studentIds = resolveSyncStudentIds(classId, body.studentIds);
+      if (studentIds && !Array.isArray(studentIds)) {
+        return res.status(400).json({ success: false, error: studentIds.error });
+      }
+      const aggregator = await resolveGradeAggregator();
+      if (!aggregator) {
+        return res.status(409).json({ success: false, error: 'xuean submission adapter is not registered' });
+      }
+
+      const activityId = typeof body.activityId === 'string' && body.activityId.trim() ? body.activityId.trim() : null;
+      const activities = (
+        activityId
+          ? readDb.prepare('SELECT * FROM lesson_activities WHERE lesson_id = ? AND id = ?').all(lessonId, activityId)
+          : readDb.prepare('SELECT * FROM lesson_activities WHERE lesson_id = ?').all(lessonId)
+      ) as ActivityRow[];
+
+      const totals = { synced: 0, skipped: 0, failed: 0 };
+      const activitySummaries: ActivitySyncSummary[] = [];
+      for (const activity of activities) {
+        const summary = await syncOneActivity(activity, classId, studentIds, session, aggregator);
+        totals.synced += summary.synced;
+        totals.skipped += summary.skipped;
+        totals.failed += summary.failed;
+        activitySummaries.push(summary);
+      }
+
+      res.json({ success: true, lessonId, classId, ...totals, activities: activitySummaries });
+    } catch (err: unknown) {
+      sendSafeError(res, err);
+    }
+  };
+
+  app.post('/api/lesson-activities/:id/sync-grade', requireScopedAuth('class-staff'), syncActivityGradesHandler);
+  app.post(
+    '/api/lessons/:lessonId/activities/:activityId/sync-grade',
+    requireScopedAuth('class-staff'),
+    requireActivityInLesson,
+    syncActivityGradesHandler,
+  );
+  app.post(
+    '/api/lessons/:lessonId/activity-grades/sync',
+    requireScopedAuth('class-staff'),
+    syncLessonActivityGradesHandler,
+  );
 
   // 一键催办：教师给未完成学生发催办，更新 nudged_at + nudge_count
-  app.post('/api/activities/:id/nudge', requireScopedAuth('class-staff'), (req, res) => {
+  const nudgeActivityHandler = (req: Request, res: Response) => {
     try {
       const activityId = req.params.id;
       const session = requestSession(req);
@@ -846,10 +1578,20 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
     } catch (err: unknown) {
       sendSafeError(res, err);
     }
-  });
+  };
+  app.post('/api/activities/:id/nudge', requireScopedAuth('class-staff'), markLegacyActivityRoute, (req, res) =>
+    redirectLegacy307(req, res, `/api/lesson-activities/${encodeURIComponent(req.params.id)}/nudge`),
+  );
+  app.post('/api/lesson-activities/:id/nudge', requireScopedAuth('class-staff'), nudgeActivityHandler);
+  app.post(
+    '/api/lessons/:lessonId/activities/:activityId/nudge',
+    requireScopedAuth('class-staff'),
+    requireActivityInLesson,
+    nudgeActivityHandler,
+  );
 
   // 互评：学生给同学的活动提交打分（仅 peer_review=1 的活动）
-  app.post('/api/activities/:id/peer-review', requireScopedAuth('class-member'), (req, res) => {
+  const peerReviewHandler = (req: Request, res: Response) => {
     try {
       const activityId = req.params.id;
       const session = requestSession(req);
@@ -883,10 +1625,20 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
     } catch (err: unknown) {
       sendSafeError(res, err);
     }
-  });
+  };
+  app.post('/api/activities/:id/peer-review', requireScopedAuth('class-member'), markLegacyActivityRoute, (req, res) =>
+    redirectLegacy307(req, res, `/api/lesson-activities/${encodeURIComponent(req.params.id)}/peer-review`),
+  );
+  app.post('/api/lesson-activities/:id/peer-review', requireScopedAuth('class-member'), peerReviewHandler);
+  app.post(
+    '/api/lessons/:lessonId/activities/:activityId/peer-review',
+    requireScopedAuth('class-member'),
+    requireActivityInLesson,
+    peerReviewHandler,
+  );
 
   // 查看某学生在某活动收到的互评列表
-  app.get('/api/activities/:id/peer-reviews', requireScopedAuth('class-member'), (req, res) => {
+  const listPeerReviewsHandler = (req: Request, res: Response) => {
     try {
       const activityId = req.params.id;
       const revieweeId = req.query.revieweeId as string;
@@ -900,24 +1652,52 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
     } catch (err: unknown) {
       sendSafeError(res, err);
     }
-  });
+  };
+  app.get('/api/activities/:id/peer-reviews', requireScopedAuth('class-member'), markLegacyActivityRoute, (req, res) =>
+    redirectLegacy307(req, res, `/api/lesson-activities/${encodeURIComponent(req.params.id)}/peer-reviews`),
+  );
+  app.get('/api/lesson-activities/:id/peer-reviews', requireScopedAuth('class-member'), listPeerReviewsHandler);
+  app.get(
+    '/api/lessons/:lessonId/activities/:activityId/peer-reviews',
+    requireScopedAuth('class-member'),
+    requireActivityInLesson,
+    listPeerReviewsHandler,
+  );
 
   // ── 活动讨论区（IKVO15 P2）──────────────────────────────────────────────
   // 获取讨论列表（含回复嵌套）
-  app.get('/api/activities/:id/discussions', requireScopedAuth('class-member'), (req, res) => {
+  const listDiscussionsHandler = (req: Request, res: Response) => {
     try {
       const activityId = req.params.id;
+      // 作者名优先取学生档案，教师/管理员发帖时回退 users.name。
       const rows = readDb
-        .prepare('SELECT * FROM lesson_discussions WHERE activity_id = ? ORDER BY created_at ASC')
+        .prepare(
+          `SELECT d.*, COALESCE(s.name, u.name) AS author_name
+             FROM lesson_discussions d
+             LEFT JOIN students s ON s.id = d.author_id
+             LEFT JOIN users u ON u.id = d.author_id
+            WHERE d.activity_id = ?
+            ORDER BY d.created_at ASC`,
+        )
         .all(activityId);
       res.json(rows);
     } catch (err: unknown) {
       sendSafeError(res, err);
     }
-  });
+  };
+  app.get('/api/activities/:id/discussions', requireScopedAuth('class-member'), markLegacyActivityRoute, (req, res) =>
+    redirectLegacy307(req, res, `/api/lesson-activities/${encodeURIComponent(req.params.id)}/discussions`),
+  );
+  app.get('/api/lesson-activities/:id/discussions', requireScopedAuth('class-member'), listDiscussionsHandler);
+  app.get(
+    '/api/lessons/:lessonId/activities/:activityId/discussions',
+    requireScopedAuth('class-member'),
+    requireActivityInLesson,
+    listDiscussionsHandler,
+  );
 
   // 发帖 / 回复
-  app.post('/api/activities/:id/discussions', requireScopedAuth('class-member'), (req, res) => {
+  const createDiscussionHandler = (req: Request, res: Response) => {
     try {
       const activityId = req.params.id;
       const session = requestSession(req);
@@ -925,17 +1705,50 @@ export function registerLessonActivitiesRoutes(ctx: ServerContext) {
       if (!content || !content.trim()) {
         return res.status(400).json({ success: false, error: 'content required' });
       }
+      const text = String(content).trim().slice(0, 2000);
+      if (parentId) {
+        const parent = readDb.prepare('SELECT activity_id FROM lesson_discussions WHERE id = ?').get(parentId) as
+          { activity_id: string } | undefined;
+        if (!parent || parent.activity_id !== activityId) {
+          return res.status(400).json({ success: false, error: 'Invalid parentId' });
+        }
+      }
       const id = `disc_${randomId()}`;
       const ts = now();
       db.prepare(
         `INSERT INTO lesson_discussions (id, activity_id, author_id, content, parent_id, created_at)
          VALUES (?, ?, ?, ?, ?, ?)`,
-      ).run(id, activityId, session.userId, content.trim(), parentId ?? null, ts);
+      ).run(id, activityId, session.userId, text, parentId ?? null, ts);
       const row = readDb.prepare('SELECT * FROM lesson_discussions WHERE id = ?').get(id);
       res.json(row);
     } catch (err: unknown) {
       sendSafeError(res, err);
     }
+  };
+  app.post('/api/activities/:id/discussions', requireScopedAuth('class-member'), markLegacyActivityRoute, (req, res) =>
+    redirectLegacy307(req, res, `/api/lesson-activities/${encodeURIComponent(req.params.id)}/discussions`),
+  );
+  app.post('/api/lesson-activities/:id/discussions', requireScopedAuth('class-member'), createDiscussionHandler);
+  app.post(
+    '/api/lessons/:lessonId/activities/:activityId/discussions',
+    requireScopedAuth('class-member'),
+    requireActivityInLesson,
+    createDiscussionHandler,
+  );
+
+  // alias 层歧义判别，移除 alias 时删除
+  app.all('/api/activities/:id', (req, res) => {
+    recordLegacyActivityRouteHit(legacyActivityRouteKey(req));
+    const provider = ctx.activityRegistry.getProvider(req.params.id);
+    const lessonRow = readDb.prepare('SELECT 1 FROM lesson_activities WHERE id = ?').get(req.params.id);
+    if (!provider && !lessonRow) {
+      return res.status(404).json({
+        error: 'Not found as provider or lesson-activity; use explicit path',
+      });
+    }
+    return res.status(409).json({
+      error: 'Ambiguous legacy path; use /api/activity-providers/:id/runs or /api/lesson-activities/:id',
+    });
   });
 
   // 删除帖子（仅作者本人）

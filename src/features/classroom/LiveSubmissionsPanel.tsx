@@ -2,6 +2,7 @@ import React, { useId, useState } from 'react';
 import { Search, RefreshCw, Trophy, Zap, Database, FileText, Eye, Check } from 'lucide-react';
 import { AccessibleTableRegion } from '../../components/AccessibleTableRegion';
 import { ExtensionPointRenderer } from '../../plugin-host/extension-point-renderer';
+import { SurfaceLiveSummaryPanel } from './SurfaceLiveSummaryPanel';
 
 export const FINISHED_STATUSES = ['completed', 'submitted', 'finished'];
 export const IN_PROGRESS_STATUSES = ['active', 'inprogress', 'started'];
@@ -10,6 +11,8 @@ export interface LiveSubmissionsPanelProps {
   lang: 'zh' | 'en';
   selectedLesson: string | null;
   liveClassSelectedClassId: string | null;
+  /** 当前教学环节；用于 Surface 概览的「本环节」筛选。 */
+  activeSegmentId?: string | null;
   attempts: any[];
   displayAttempts: any[];
   loadingAttempts: boolean;
@@ -51,6 +54,7 @@ export function LiveSubmissionsPanel({
   lang,
   selectedLesson,
   liveClassSelectedClassId,
+  activeSegmentId,
   attempts,
   displayAttempts,
   loadingAttempts,
@@ -75,6 +79,12 @@ export function LiveSubmissionsPanel({
 }: LiveSubmissionsPanelProps) {
   return (
     <div className="flex-grow flex-1 min-h-0 w-full relative rounded-xl overflow-hidden border border-theme shadow-md bg-surface flex flex-col p-4">
+      <SurfaceLiveSummaryPanel
+        lessonId={selectedLesson}
+        classId={liveClassSelectedClassId}
+        activeSegmentId={activeSegmentId ?? null}
+        lang={lang}
+      />
       {/* 第三方教学模式提交（经提交适配器聚合）——与课件提交并列展示 */}
       {pluginSubmissions.length > 0 && (
         <div

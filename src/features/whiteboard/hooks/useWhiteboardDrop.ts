@@ -90,14 +90,6 @@ export function useWhiteboardDrop({
             question: content.question ?? 'New Quiz',
             options: Array.isArray(content.options) ? content.options : ['A', 'B', 'C', 'D'],
           };
-        case 'html-applet':
-          return {
-            ...base,
-            title: content.title ?? '',
-            code: content.code ?? '',
-            coursewareUuid: content.coursewareUuid ?? undefined,
-            resourceId: content.resourceId ?? undefined,
-          };
         case 'assignment':
           return { ...base, title: content.title ?? 'New Assignment', description: content.description ?? '' };
         case 'hello-world':

@@ -320,6 +320,9 @@ export function AppModals(props: AppModalsProps = {}) {
   const handleDeployWizardCourse = cw?.handleDeployWizardCourse ?? props.handleDeployWizardCourse ?? (() => {});
   const wizardDeliveryMode = cw?.wizardDeliveryMode ?? 'whiteboard';
   const setWizardDeliveryMode = cw?.setWizardDeliveryMode ?? (() => {});
+  const wizardModePackId = cw?.wizardModePackId;
+  const modePackChoices = cw?.modePackChoices;
+  const selectWizardModePack = cw?.selectWizardModePack;
 
   // Quiz Generator Resolution
   const qg = props.quizGenerator ?? a;
@@ -397,6 +400,9 @@ export function AppModals(props: AppModalsProps = {}) {
         handleDeployWizardCourse={handleDeployWizardCourse}
         wizardDeliveryMode={wizardDeliveryMode}
         setWizardDeliveryMode={setWizardDeliveryMode}
+        wizardModePackId={wizardModePackId}
+        modePackChoices={modePackChoices}
+        selectWizardModePack={selectWizardModePack}
       />
 
       <ImportLessonsModal

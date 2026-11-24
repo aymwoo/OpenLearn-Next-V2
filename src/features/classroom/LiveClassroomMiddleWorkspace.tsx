@@ -1,4 +1,4 @@
-import React, { useState, type ComponentProps, type RefObject } from 'react';
+import React, { useEffect, type ComponentProps, type RefObject } from 'react';
 import { Presentation, ChevronRight, Activity, AlertTriangle, Trophy, Sparkles } from 'lucide-react';
 import { LazyWhiteboard } from '../../components/LazyWhiteboard';
 import type { WhiteboardHandle } from '../whiteboard/InteractiveWhiteboard';
@@ -13,6 +13,7 @@ import {
   type WhiteboardHostBridgeValue,
 } from './mode-pack';
 import { LiveSubmissionsPanel, type LiveSubmissionsPanelProps } from './LiveSubmissionsPanel';
+import { ClassroomToolbarControlPage } from './ClassroomToolbarControlPage';
 import { errorStore } from '../../store/errorStore';
 import type { TeacherMiddleTab } from './map-teacher-middle-tab';
 import type { ClassroomFlowController } from '../../plugin-host/types';
@@ -52,6 +53,8 @@ export type LiveClassroomMiddleWorkspaceProps = LiveSubmissionsPanelProps & {
   fetchElements: (lessonId: string) => void;
   /** 白板课：中栏默认只有画布，「课堂面板」里再打开提交、成绩和榜单。 */
   compact?: boolean;
+  /** 注入白板工具栏右侧的附加内容（课堂倒计时）。 */
+  toolbarExtras?: React.ReactNode;
 };
 
 export function LiveClassroomMiddleWorkspace(props: LiveClassroomMiddleWorkspaceProps) {
@@ -89,121 +92,34 @@ export function LiveClassroomMiddleWorkspace(props: LiveClassroomMiddleWorkspace
     students,
     addToast,
     compact = false,
+    toolbarExtras,
     ...submissionsProps
   } = props;
-  const [panelsOpen, setPanelsOpen] = useState(false);
+
+  // 当前环节没有匹配的主工作区扩展时，不能停留在空的「环节工作区」页，
+  // 否则中栏只剩一块空白，白板与大纲页面都不再出现（白板未挂载 ⇒ 页面列表也为空）。
+  const effectiveMiddleTab = middleTab === 'segment_main' && !hasSegmentMainExtension ? 'whiteboard' : middleTab;
+  useEffect(() => {
+    if (middleTab === 'segment_main' && !hasSegmentMainExtension) setMiddleTab('whiteboard');
+  }, [middleTab, hasSegmentMainExtension, setMiddleTab]);
 
   return (
     <div className="flex-1 flex flex-col min-w-0 bg-surface-secondary/40 p-3 gap-3 relative">
       {selectedLesson ? (
         <div className="w-full h-full relative flex flex-col min-h-0">
-          <div className="flex justify-between items-center px-1.5 py-1 select-none text-muted text-xs uppercase font-extrabold tracking-wide shrink-0 mb-1">
-            <div className="flex items-center gap-3">
-              {isLeftSidebarCollapsed && (
-                <button
-                  onClick={() => setIsLeftSidebarCollapsed(false)}
-                  className="p-1 rounded-lg bg-surface hover:bg-surface-secondary border border-theme text-primary-ink hover:text-primary-ink-hover transition-colors cursor-pointer mr-1.5 flex items-center gap-1 shadow-sm"
-                  title={lang === 'zh' ? '展开环节大纲' : 'Expand Sidebar'}
-                >
-                  <ChevronRight size={10} />
-                  <span className="text-xs font-bold tracking-wider">{lang === 'zh' ? '展开' : 'Expand'}</span>
-                </button>
-              )}
-              {compact ? (
-                <div className="relative">
+          {!compact && (
+            <div className="flex justify-between items-center px-1.5 py-1 select-none text-muted text-xs uppercase font-extrabold tracking-wide shrink-0 mb-1">
+              <div className="flex items-center gap-3">
+                {isLeftSidebarCollapsed && (
                   <button
-                    type="button"
-                    data-testid="teacher-whiteboard-panels"
-                    aria-expanded={panelsOpen}
-                    aria-controls="teacher-whiteboard-panel-menu"
-                    onClick={() => setPanelsOpen((open) => !open)}
-                    className="px-3 py-1 rounded-full text-xs font-medium cursor-pointer bg-surface border border-theme text-main"
+                    onClick={() => setIsLeftSidebarCollapsed(false)}
+                    className="p-1 rounded-lg bg-surface hover:bg-surface-secondary border border-theme text-primary-ink hover:text-primary-ink-hover transition-colors cursor-pointer mr-1.5 flex items-center gap-1 shadow-sm"
+                    title={lang === 'zh' ? '展开环节大纲' : 'Expand Sidebar'}
                   >
-                    {lang === 'zh' ? '课堂面板' : 'Class panels'}
+                    <ChevronRight size={10} />
+                    <span className="text-xs font-bold tracking-wider">{lang === 'zh' ? '展开' : 'Expand'}</span>
                   </button>
-                  <div
-                    id="teacher-whiteboard-panel-menu"
-                    data-testid="teacher-whiteboard-panel-menu"
-                    data-open={panelsOpen ? 'true' : 'false'}
-                    hidden={!panelsOpen}
-                    className="absolute z-20 mt-1 flex min-w-40 flex-col gap-1 rounded-xl border border-theme bg-surface p-2 shadow-md"
-                  >
-                    {panelsOpen ? (
-                      <>
-                        <button
-                          type="button"
-                          className="text-left text-xs font-medium px-2 py-1 rounded-md hover:bg-surface-secondary cursor-pointer"
-                          onClick={() => {
-                            setMiddleTab('whiteboard');
-                            setPanelsOpen(false);
-                          }}
-                        >
-                          {lang === 'zh' ? '演示白板' : 'Whiteboard'}
-                        </button>
-                        <button
-                          type="button"
-                          className="text-left text-xs font-medium px-2 py-1 rounded-md hover:bg-surface-secondary cursor-pointer"
-                          onClick={() => {
-                            setMiddleTab('submissions');
-                            setPanelsOpen(false);
-                          }}
-                        >
-                          {lang === 'zh' ? '学生提交数据' : 'Student Submissions'}
-                        </button>
-                        <button
-                          type="button"
-                          id="teacher_assignment_eval_tab_btn"
-                          className="text-left text-xs font-medium px-2 py-1 rounded-md hover:bg-surface-secondary cursor-pointer"
-                          onClick={() => {
-                            setMiddleTab('assignment');
-                            setPanelsOpen(false);
-                          }}
-                        >
-                          {lang === 'zh' ? '作业成绩评定' : 'Assignment Grades'}
-                        </button>
-                        <button
-                          type="button"
-                          id="teacher_top_performers_tab_btn"
-                          data-testid="teacher-top-performers-tab-btn"
-                          className="text-left text-xs font-medium px-2 py-1 rounded-md hover:bg-surface-secondary cursor-pointer"
-                          onClick={() => {
-                            setMiddleTab('top_performers');
-                            setPanelsOpen(false);
-                          }}
-                        >
-                          {lang === 'zh' ? '随堂测验榜' : 'Top Performers'}
-                        </button>
-                        {hasSegmentMainExtension && currentActiveSegment ? (
-                          <button
-                            type="button"
-                            id="teacher_active_segment_main_tab_btn"
-                            data-testid="teacher-active-segment-main-tab-btn"
-                            className="text-left text-xs font-medium px-2 py-1 rounded-md hover:bg-surface-secondary cursor-pointer"
-                            onClick={() => {
-                              setMiddleTab('segment_main');
-                              setPanelsOpen(false);
-                            }}
-                          >
-                            {lang === 'zh'
-                              ? currentActiveSegment.title || '环节工作区'
-                              : currentActiveSegment.title || 'Segment Workspace'}
-                          </button>
-                        ) : null}
-                        <button
-                          type="button"
-                          className="text-left text-xs font-medium px-2 py-1 rounded-md hover:bg-surface-secondary cursor-pointer"
-                          onClick={() => {
-                            setPanelsOpen(false);
-                            onFinishTeaching();
-                          }}
-                        >
-                          {lang === 'zh' ? '完成授课，进入课后' : 'Finish Teaching → Post-Class'}
-                        </button>
-                      </>
-                    ) : null}
-                  </div>
-                </div>
-              ) : (
+                )}
                 <div className="bg-surface-secondary p-0.5 rounded-lg flex items-center gap-1 border border-theme">
                   <button
                     onClick={() => setMiddleTab('whiteboard')}
@@ -269,45 +185,43 @@ export function LiveClassroomMiddleWorkspace(props: LiveClassroomMiddleWorkspace
                     </button>
                   )}
                 </div>
-              )}
-            </div>
-            <div className="flex items-center gap-2">
-              {studentErrors.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    errorStore.getState().setActiveTab('student');
-                    errorStore.getState().setIsErrorCenterOpen(true);
-                  }}
-                  className="flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs font-bold bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-400 border border-rose-200 dark:border-rose-800 hover:bg-rose-100 transition-colors cursor-pointer mr-1"
-                  title={lang === 'zh' ? '点击查看学生端异常诊断日志' : 'View Student Client Errors'}
+              </div>
+              <div className="flex items-center gap-2">
+                {studentErrors.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      errorStore.getState().setActiveTab('student');
+                      errorStore.getState().setIsErrorCenterOpen(true);
+                    }}
+                    className="flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs font-bold bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-400 border border-rose-200 dark:border-rose-800 hover:bg-rose-100 transition-colors cursor-pointer mr-1"
+                    title={lang === 'zh' ? '点击查看学生端异常诊断日志' : 'View Student Client Errors'}
+                  >
+                    <AlertTriangle size={12} className="text-rose-700 dark:text-rose-400 animate-pulse" />
+                    <span>
+                      {lang === 'zh'
+                        ? `学生端异常 (${studentErrors.length})`
+                        : `Student Errors (${studentErrors.length})`}
+                    </span>
+                  </button>
+                )}
+                <span
+                  data-testid="live-broadcaster-status"
+                  className={`font-mono tracking-widest flex items-center gap-1 ${
+                    isSocketConnected ? 'text-primary-ink animate-pulse' : 'text-amber-600 dark:text-amber-400'
+                  }`}
+                  title={
+                    isSocketConnected
+                      ? lang === 'zh'
+                        ? '实时广播信令通道已连接'
+                        : 'Socket.IO real-time broadcaster connected'
+                      : lang === 'zh'
+                        ? '实时信令连接断开/重连中，将自动恢复'
+                        : 'Socket.IO disconnected / reconnecting'
+                  }
                 >
-                  <AlertTriangle size={12} className="text-rose-700 dark:text-rose-400 animate-pulse" />
-                  <span>
-                    {lang === 'zh'
-                      ? `学生端异常 (${studentErrors.length})`
-                      : `Student Errors (${studentErrors.length})`}
-                  </span>
-                </button>
-              )}
-              <span
-                data-testid="live-broadcaster-status"
-                className={`font-mono tracking-widest flex items-center gap-1 ${
-                  isSocketConnected ? 'text-primary-ink animate-pulse' : 'text-amber-600 dark:text-amber-400'
-                }`}
-                title={
-                  isSocketConnected
-                    ? lang === 'zh'
-                      ? '实时广播信令通道已连接'
-                      : 'Socket.IO real-time broadcaster connected'
-                    : lang === 'zh'
-                      ? '实时信令连接断开/重连中，将自动恢复'
-                      : 'Socket.IO disconnected / reconnecting'
-                }
-              >
-                <Activity size={10} /> {isSocketConnected ? 'Live Broadcaster Connected' : 'Broadcaster Reconnecting'}
-              </span>
-              {compact ? null : (
+                  <Activity size={10} /> {isSocketConnected ? 'Live Broadcaster Connected' : 'Broadcaster Reconnecting'}
+                </span>
                 <button
                   type="button"
                   onClick={() => onFinishTeaching()}
@@ -316,11 +230,11 @@ export function LiveClassroomMiddleWorkspace(props: LiveClassroomMiddleWorkspace
                   <span>{lang === 'zh' ? '完成授课，进入课后' : 'Finish Teaching → Post-Class'}</span>
                   <ChevronRight size={12} />
                 </button>
-              )}
+              </div>
             </div>
-          </div>
+          )}
 
-          {middleTab === 'whiteboard' ? (
+          {effectiveMiddleTab === 'whiteboard' ? (
             <>
               {!compact && hasSegmentMainExtension && currentActiveSegment && (
                 <div
@@ -362,6 +276,7 @@ export function LiveClassroomMiddleWorkspace(props: LiveClassroomMiddleWorkspace
                       lang={lang}
                       flow={segmentMainFlowController}
                       onRefresh={onWhiteboardRefresh}
+                      toolbarExtras={toolbarExtras}
                     />
                   </WhiteboardHostBridgeProvider>
                 ) : (
@@ -386,19 +301,21 @@ export function LiveClassroomMiddleWorkspace(props: LiveClassroomMiddleWorkspace
                     onElementUpdate={onElementUpdate}
                     onElementDelete={onElementDelete}
                     onRefresh={onWhiteboardRefresh}
+                    toolbarExtras={toolbarExtras}
                   />
                 )}
               </div>
             </>
-          ) : middleTab === 'submissions' ? (
+          ) : effectiveMiddleTab === 'submissions' ? (
             <LiveSubmissionsPanel
               {...submissionsProps}
               lang={lang as LiveSubmissionsPanelProps['lang']}
               selectedLesson={selectedLesson}
               liveClassSelectedClassId={liveClassSelectedClassId}
+              activeSegmentId={activeSegmentId}
               setMiddleTab={setMiddleTab}
             />
-          ) : middleTab === 'top_performers' ? (
+          ) : effectiveMiddleTab === 'top_performers' ? (
             <div className="flex-grow flex-1 min-h-0 w-full relative rounded-xl overflow-y-auto border border-theme shadow-md bg-surface flex flex-col p-4">
               <TopPerformersWidget
                 lang={lang as any}
@@ -410,7 +327,7 @@ export function LiveClassroomMiddleWorkspace(props: LiveClassroomMiddleWorkspace
                 addToast={addToast}
               />
             </div>
-          ) : middleTab === 'segment_main' ? (
+          ) : effectiveMiddleTab === 'segment_main' ? (
             <div
               data-testid="classroom-active-segment-main-container"
               className="flex-grow flex-1 min-h-0 w-full relative rounded-xl overflow-hidden border border-theme shadow-md bg-surface flex flex-col p-4"
@@ -447,6 +364,8 @@ export function LiveClassroomMiddleWorkspace(props: LiveClassroomMiddleWorkspace
                 </div>
               )}
             </div>
+          ) : effectiveMiddleTab === 'control' ? (
+            <ClassroomToolbarControlPage lang={lang === 'zh' ? 'zh' : 'en'} />
           ) : (
             <TeacherAssignmentGradePanel
               lessonId={selectedLesson || ''}

@@ -129,7 +129,7 @@ test('公测关键旅程：作业、越权、插件与观测', async () => {
     expect((studentLogin.body.session as { mustChangePassword?: boolean }).mustChangePassword).toBeFalsy();
     expect((studentLogin.body.session as { usedDefaultPassword?: boolean }).usedDefaultPassword).toBeFalsy();
 
-    const submit = await student.post(`/api/assignments/${assignmentId}/submit`, {
+    const submit = await student.post(`/api/learning-surface-assignments/${assignmentId}/submit`, {
       data: { textContent: '公测学生的作答' },
     });
     expect(submit.ok(), await submit.text()).toBeTruthy();
@@ -154,7 +154,9 @@ test('公测关键旅程：作业、越权、插件与观测', async () => {
     const result = (gradeBody.result || gradeBody) as { calculatedFinalScore?: number };
     expect(result.calculatedFinalScore).toBe(88);
 
-    const viewed = await teacher.get(`/api/assignments/${assignmentId}?studentId=${encodeURIComponent(enrolled.id)}`);
+    const viewed = await teacher.get(
+      `/api/learning-surface-assignments/${assignmentId}?studentId=${encodeURIComponent(enrolled.id)}`,
+    );
     expect(viewed.ok(), await viewed.text()).toBeTruthy();
     const viewedBody = await bodyOf(viewed);
     const gradeRow = viewedBody.grade as { calculated_final_score?: number } | null;
@@ -166,10 +168,16 @@ test('公测关键旅程：作业、越权、插件与观测', async () => {
       password: OTHER_PASSWORD,
     });
     expect(outsiderLogin.res.status(), JSON.stringify(outsiderLogin.body)).toBe(200);
-    const crossRead = await outsider.get(`/api/assignments/${assignmentId}`);
+    const crossRead = await outsider.get(`/api/learning-surface-assignments/${assignmentId}`);
     expect(crossRead.status()).toBe(403);
-    const crossList = await outsider.get(`/api/classes/${classId}/assignments`);
+    // 旧读端点已下线：鉴权通过后只返回 410，不再经过对象级授权
+    const legacyCrossRead = await outsider.get(`/api/assignments/${assignmentId}`);
+    expect(legacyCrossRead.status()).toBe(410);
+    const crossList = await outsider.get(`/api/classes/${classId}/learning-surface-assignments`);
     expect(crossList.status()).toBe(403);
+    // 旧班级读端点已下线
+    const legacyCrossList = await outsider.get(`/api/classes/${classId}/assignments`);
+    expect(legacyCrossList.status()).toBe(410);
     const crossGrade = await outsider.post('/api/commands', {
       data: {
         commandType: 'assignment.grade',

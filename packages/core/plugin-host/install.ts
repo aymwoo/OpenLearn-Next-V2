@@ -868,6 +868,12 @@ export abstract class PluginHostInstall extends PluginHostReload {
           // R-4：bundle 已落盘（bundledPath），把落盘内容作为新源码交给 reload。
           // 用 esmLoader 会 file:// 加载该路径，与安装路径的一致。
           await this.reloadPlugin(pluginId, fs.readFileSync(bundledPath, 'utf-8'));
+          // 兜底：worker/process 模式的重载会重建子进程。若重建后宿主侧没有回到
+          // ACTIVE（实例未重新登记或被回收），更新完成后所有插件 API 都会返回
+          // 503 "currently inactive"。此处再做一次完整激活，保证「更新成功即可继续服务」。
+          if (this.getPluginState(pluginId) !== PluginState.ACTIVE) {
+            await this.activatePlugin(pluginId);
+          }
         }
       } else {
         // Keep disabled — ensure state is not ACTIVE

@@ -27,7 +27,11 @@ import { createServer as createHttpServer } from 'http';
 import { Server } from 'socket.io';
 import { kernelContainer } from './packages/core/kernel/index.js';
 import { PLATFORM_VERSION } from './packages/core/version.js';
-import { IClassroomLifecycleServiceToken, IInteractionRuntimeServiceToken } from './packages/core/di/interfaces.js';
+import {
+  IClassroomLifecycleServiceToken,
+  IClassroomActivityCatalogToken,
+  IInteractionRuntimeServiceToken,
+} from './packages/core/di/interfaces.js';
 import { IClassroomMessageServiceToken, type IClassroomMessageService } from './packages/core/di/interfaces.js';
 import { startSideEffectWorker } from './packages/core/di/side-effect-worker.js';
 import { ClassroomRuntimeService } from './server/services/classroom-runtime-service.js';
@@ -98,15 +102,25 @@ import {
   IActivityRegistryToken,
 } from './packages/activity-ecosystem/index.js';
 import type { ServerContext } from './server/context.js';
+import { makeActivityId, type ActivityDescriptorBase } from './packages/core/activity-contract/index.js';
 import { registerOsRoutes } from './server/routes/os.js';
+import { registerActivityProviderRoutes } from './server/routes/activity-providers.js';
+import { registerExtensionPointRoutes } from './server/routes/extension-points.js';
+import { ActivityRunService } from './server/services/activity-run-service.js';
+import { ActivityCompletedTracker } from './server/services/activity-completed-tracker.js';
 import { registerFilesRoutes, serveFileAsset } from './server/routes/files.js';
 import { getFileStorageService } from './server/services/file-storage/index.js';
 import { registerResourcesRoutes } from './server/routes/resources.js';
 import { registerCoursewareRoutes } from './server/routes/courseware.js';
 import { registerBridgeRoutes } from './server/routes/bridge.js';
 import { registerRuntimePolicyRoutes } from './server/routes/runtime-policies.js';
+import { registerStudentUiPolicyRoutes } from './server/routes/student-ui-policy.js';
 import { registerLessonsRoutes } from './server/routes/lessons.js';
 import { registerLessonActivitiesRoutes } from './server/routes/lesson-activities.js';
+import { registerModePackRoutes } from './server/routes/mode-packs.js';
+import { registerLearningSurfaceRoutes } from './server/routes/learning-surfaces.js';
+import { registerLearningSurfaceAssignmentRoutes } from './server/routes/learning-surface-assignments.js';
+import { registerLearningSurfaceLessonEvalRoutes } from './server/routes/learning-surface-lesson-evals.js';
 import { registerCoursePackageRoutes } from './server/routes/course-packages.js';
 import { registerWorkspaceRoutes } from './server/routes/workspace.js';
 import { registerProcessesRoutes } from './server/routes/processes.js';
@@ -180,6 +194,32 @@ async function startServer() {
   registerOfficialActivities(activityRegistry, kernelContainer.actionRegistry);
   await kernelContainer.serviceRegistry.register(IActivityRegistryToken, activityRegistry);
   console.log(`[ActivityEcosystem] Registered ${activityRegistry.listProviders().length} official activity providers.`);
+
+  // Phase 2/3：活动运行态服务（定义与运行分离）。DB 表不存在时自动退化为内存态。
+  const activityRunService = new ActivityRunService(
+    activityRegistry,
+    kernelContainer.db as unknown as import('better-sqlite3').Database,
+    kernelContainer.eventBus,
+  );
+  // Phase 3 后续：activity.completed 聚合消费者（事件已由 kernel 的 '*' 写入 events 表）。
+  const activityCompletedTracker = new ActivityCompletedTracker(kernelContainer.eventBus);
+
+  // Phase 1：把动态 provider 源接入只读 ExtensionCatalog。
+  kernelContainer.extensionCatalog.attachActivitySource(() =>
+    activityRegistry.listDescriptors().map((descriptor): ActivityDescriptorBase => ({
+      kind: 'provider',
+      activityId: makeActivityId('provider', descriptor.id),
+      title: descriptor.name,
+      category: descriptor.category,
+      icon: descriptor.icon,
+      description: descriptor.description,
+      roles: descriptor.supportedRoles?.filter(
+        (role): role is 'teacher' | 'student' | 'assistant' =>
+          role === 'teacher' || role === 'student' || role === 'assistant',
+      ),
+      capabilities: descriptor.permissions,
+    })),
+  );
 
   const app = express();
   kernelContainer.pluginHost.setExpressApp(app);
@@ -379,6 +419,7 @@ async function startServer() {
     runGeminiAgentChat,
     runOpenAIAgentChat,
     activityRegistry,
+    activityCompletedTracker,
   } as unknown as ServerContext;
 
   // SEC-NET-01: HTTP server + Socket.IO setup (CORS 对齐统一配置)
@@ -396,7 +437,9 @@ async function startServer() {
   io.use(socketAuthMiddleware);
   kernelContainer.pluginHost.setSocketIO(io);
   ctx.io = io;
-  registerOsRoutes(ctx);
+  registerOsRoutes(ctx, activityRunService);
+  registerActivityProviderRoutes(ctx, activityRunService);
+  registerExtensionPointRoutes(ctx, activityCompletedTracker);
   registerFilesRoutes(ctx);
 
   // System Resources APIs
@@ -405,8 +448,13 @@ async function startServer() {
   registerCoursewareRoutes(ctx);
   registerBridgeRoutes(ctx);
   registerRuntimePolicyRoutes(ctx);
+  registerStudentUiPolicyRoutes(ctx);
   registerLessonsRoutes(ctx);
   registerLessonActivitiesRoutes(ctx);
+  registerModePackRoutes(ctx);
+  registerLearningSurfaceRoutes(ctx);
+  registerLearningSurfaceAssignmentRoutes(ctx);
+  registerLearningSurfaceLessonEvalRoutes(ctx);
   registerCoursePackageRoutes(ctx);
   registerWorkspaceRoutes(ctx);
 
@@ -430,6 +478,7 @@ async function startServer() {
   // timeline.gates 由 SegmentGateService 在学生进入环节、教师广播环节时判定。
   const classroomRuntimeService = new ClassroomRuntimeService(kernelContainer.db, io);
   await kernelContainer.serviceRegistry.register(IClassroomLifecycleServiceToken, classroomRuntimeService);
+  await kernelContainer.serviceRegistry.register(IClassroomActivityCatalogToken, classroomRuntimeService);
   await kernelContainer.serviceRegistry.register(IInteractionRuntimeServiceToken, classroomRuntimeService);
 
   // Classroom Feed：课堂动态流持久化（会话保存与恢复）——订阅内核事件总线

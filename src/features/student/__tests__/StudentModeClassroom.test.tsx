@@ -124,17 +124,13 @@ describe('学生课堂按课程模式分流', () => {
     expect(screen.getByTestId('lazy-whiteboard')).toBeTruthy();
   });
 
-  it('学案页的环节侧栏可以关掉，学案正文还在', async () => {
+  it('学案页不再渲染左侧工具导航，学案正文直接占满', async () => {
     renderLesson('xuean');
     const topic = screen.getByTestId('student-learning-topic');
     const study = await screen.findByTestId('mode-xuean-workspace');
 
-    fireEvent.click(screen.getByTestId('student-tool-segments'));
-    expect(screen.getByTestId('student-lesson-content-panel')).toBeTruthy();
-    expect(topic.isConnected).toBe(true);
-    expect(study.isConnected).toBe(true);
-
-    fireEvent.click(screen.getByTestId('student-tool-drawer-close'));
+    expect(screen.queryByTestId('student-tool-segments')).toBeNull();
+    expect(screen.queryByTestId('student-tool-drawer')).toBeNull();
     expect(screen.queryByTestId('student-lesson-content-panel')).toBeNull();
     expect(topic.isConnected).toBe(true);
     expect(study.isConnected).toBe(true);

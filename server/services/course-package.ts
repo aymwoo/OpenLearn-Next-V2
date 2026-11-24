@@ -27,7 +27,7 @@ import { buildSamplePdfBuffer, buildSamplePptxBuffer, PACKAGE_ASSET_TYPES } from
 export const COURSE_PACKAGE_FORMAT = 'openlearn.course-package';
 
 /** 当前课程包格式版本。 */
-export const COURSE_PACKAGE_VERSION = 1;
+export const COURSE_PACKAGE_VERSION = 2;
 
 /**
  * 课程包文件体积上限（字节）—— 前端导入框对教师的承诺是「最大不超过 20MB」。
@@ -225,6 +225,7 @@ export const KNOWN_ELEMENT_TYPES = new Set([
   'assignment',
   'hello-world',
   'html-applet',
+  'learning_surface',
   'code-sandbox',
   'math-graph',
   'presentation',

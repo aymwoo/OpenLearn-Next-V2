@@ -17,6 +17,7 @@ export const PLUGIN_VIEW_BRIDGE_JS = `(function () {
   const pending = new Map();
   const initCallbacks = [];
   const contextUpdateCallbacks = [];
+  const statePatchCallbacks = [];
   let currentContext = null;
 
   function post(msg) {
@@ -58,6 +59,17 @@ export const PLUGIN_VIEW_BRIDGE_JS = `(function () {
           contextUpdateCallbacks[i](currentContext);
         } catch (e) {
           console.error('[OpenLearnPluginBridge] contextUpdate callback error:', e);
+        }
+      }
+      return;
+    }
+
+    if (data.type === 'state.patch') {
+      for (let i = 0; i < statePatchCallbacks.length; i++) {
+        try {
+          statePatchCallbacks[i](data.payload || {});
+        } catch (e) {
+          console.error('[OpenLearnPluginBridge] statePatch callback error:', e);
         }
       }
       return;
@@ -113,6 +125,26 @@ export const PLUGIN_VIEW_BRIDGE_JS = `(function () {
     },
     invokeCommand: function (type, payload) {
       return call('command.invoke', [type, payload]);
+    },
+    /**
+     * LearningSurface 渲染器事件（阶段 4）。
+     *
+     * 只上报进度与提交意图，不接触 attempt id / HTTP；宿主校验来源、
+     * 渲染器归属与 payload 大小后写成统一 attempt。
+     */
+    surface: {
+      progress: function (data) {
+        post({ type: 'surface-event', event: 'progress', payload: data || {} });
+      },
+      submit: function (data) {
+        post({ type: 'surface-event', event: 'submit', payload: data || {} });
+      },
+      onStatePatch: function (callback) {
+        if (typeof callback === 'function') {
+          statePatchCallbacks.push(callback);
+        }
+        return bridge;
+      },
     },
     api: {
       get: function (path) {

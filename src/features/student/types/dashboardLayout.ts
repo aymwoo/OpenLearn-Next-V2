@@ -1,13 +1,6 @@
-export type DashboardWidgetId =
-  | 'quick-stats'
-  | 'progress-trends'
-  | 'assessments'
-  | 'upcoming-assignments'
-  | 'course-progress'
-  | 'schedules'
-  | 'academic-trajectory'
-  | 'academic-comparison'
-  | 'extension-views';
+import type { StudentDashboardWidgetId } from '../../../../packages/core/student-ui-policy/index';
+
+export type DashboardWidgetId = StudentDashboardWidgetId;
 
 export type WidgetSize = 'third' | 'half' | 'two-thirds' | 'full';
 

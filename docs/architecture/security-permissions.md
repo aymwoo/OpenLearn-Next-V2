@@ -169,5 +169,5 @@ recharts, react-markdown, jspdf, jspdf-autotable, exceljs（可选）, lucide-re
   >
   > 第三方课件 HTML 由独立路由直出并用**自有宽松 CSP** 覆盖（`server/routes/shared.ts` 的 `setCoursewareDocumentCsp`），不继承全局头。
 
-- **iframe sandbox attribute**: 课件 iframe 使用 `sandbox="allow-scripts allow-forms allow-downloads"`（**不含** `allow-same-origin`），以保证严格的跨源隔离。运行位置为 `src/features/courseware/InteractiveCoursewareViewer.tsx`（互动课件）与 `src/features/whiteboard/components/HtmlAppletFrame.tsx`（白板内课件组件）。
+- **iframe sandbox attribute**: 课件 iframe 使用 `sandbox="allow-scripts allow-forms allow-downloads"`（**不含** `allow-same-origin`），以保证严格的跨源隔离。运行位置为 `src/features/courseware/InteractiveCoursewareViewer.tsx`（互动课件）与 `src/features/courseware/CoursewareHost.tsx`（白板内课件组件）。
 - **Bridge SDK Proxy pattern**: 跨源 `postMessage` 归一化由 Bridge SDK 通过 `Object.defineProperty + Proxy` 模式遮蔽跨源 WindowProxy 上的 `window.parent` / `window.top` 来安全处理（`server/utils/bridge-sdk.ts` 的 `BRIDGE_SDK_CODE`）。

@@ -6,7 +6,7 @@
  */
 
 export async function getAssignmentSubmissions(assignmentId: string): Promise<{ ok: boolean; data?: any }> {
-  const res = await fetch(`/api/assignments/${assignmentId}/submissions`);
+  const res = await fetch(`/api/learning-surface-assignments/${assignmentId}/submissions`);
   if (!res.ok) return { ok: false };
   return { ok: true, data: await res.json() };
 }
@@ -15,7 +15,7 @@ export async function postAssignmentSubmission(
   assignmentId: string,
   payload: { studentId: string; content: string },
 ): Promise<{ ok: boolean }> {
-  const res = await fetch(`/api/assignments/${assignmentId}/submissions`, {
+  const res = await fetch(`/api/learning-surface-assignments/${assignmentId}/submissions`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -24,10 +24,10 @@ export async function postAssignmentSubmission(
 }
 
 export async function postGenerateAssignment(classId: string, topic: string): Promise<{ ok: boolean; data?: any }> {
-  const res = await fetch(`/api/classes/${classId}/assignments/generate`, {
+  const res = await fetch('/api/learning-surface-assignments/generate', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ topic }),
+    body: JSON.stringify({ classId, topic }),
   });
   if (!res.ok) return { ok: false };
   return { ok: true, data: await res.json().catch(() => ({})) };

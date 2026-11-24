@@ -43,6 +43,8 @@ export interface ClassroomBriefingViewProps {
   lang: 'zh' | 'en';
   onReturnToTeaching: () => void;
   onReturnToPreClass: () => void;
+  /** 归档成功后离开课堂、回到起始门户（由 LiveClassroomView 注入）。 */
+  onArchived?: () => void;
   addToast: (title: string, message: string, type?: 'info' | 'success' | 'warning' | 'error') => void;
 }
 
@@ -56,6 +58,7 @@ export function ClassroomBriefingView({
   lang,
   onReturnToTeaching,
   onReturnToPreClass,
+  onArchived,
   addToast,
 }: ClassroomBriefingViewProps) {
   const [loading, setLoading] = useState(false);
@@ -167,6 +170,11 @@ export function ClassroomBriefingView({
             : 'Session sealed and moved to the archived reports. The class is now closed.',
         target.archived ? 'info' : 'success',
       );
+      // 归档即结束课堂：回到起始门户，避免仍停留在学情简报页。
+      if (onArchived) {
+        onArchived();
+        return;
+      }
     } catch (err) {
       addToast(
         lang === 'zh' ? '归档失败' : 'Failed to archive',
@@ -175,7 +183,7 @@ export function ClassroomBriefingView({
       );
     } finally {
       setArchiving(false);
-      void loadArchiveTarget();
+      if (!onArchived) void loadArchiveTarget();
     }
   };
 

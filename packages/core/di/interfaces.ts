@@ -437,7 +437,7 @@ import type { PluginHost } from '../plugin-host/index.js';
 import type { PluginRuntimeComposition } from '../plugin-host/plugin-runtime-composition.js';
 import type { PluginDistributionManager } from '../plugin-host/plugin-distribution-manager.js';
 import type { PluginCapabilityGateway } from '../plugin-host/plugin-capability-gateway.js';
-import type { UnifiedExtensionRegistry } from '../plugin-host/unified-extension-registry.js';
+import type { ExtensionCatalog } from '../plugin-host/extension-catalog.js';
 import type { PluginLifecycleManager } from '../plugin-host/plugin-lifecycle-manager.js';
 import type { CapabilityRegistry } from '../ai-capability/registry/capability-registry.js';
 
@@ -472,12 +472,10 @@ export const IPluginRuntimeCompositionToken = new Token<PluginRuntimeComposition
 );
 
 /**
- * Token for Unified Extension Registry (P7-A2 Stage 3).
- * Identifier: @openlearn/core:IUnifiedExtensionRegistry
+ * Token for the read-only Extension Catalog.
+ * Identifier: @openlearn/core:IExtensionCatalog
  */
-export const IUnifiedExtensionRegistryToken = new Token<UnifiedExtensionRegistry>(
-  '@openlearn/core:IUnifiedExtensionRegistry',
-);
+export const IExtensionCatalogToken = new Token<ExtensionCatalog>('@openlearn/core:IExtensionCatalog');
 
 /**
  * Token for Plugin Capability Gateway (P7-A2 Stage 3).
@@ -795,6 +793,7 @@ export interface IClassroomMessageService {
     classId?: string | null;
     sinceSeq: number;
     viewerId: string;
+    staffView?: boolean;
     limit?: number;
   }): Array<{
     seq: number;
@@ -806,6 +805,28 @@ export interface IClassroomMessageService {
     status: string;
     createdAt: number;
   }>;
+  /** 补投分页：返回逐条消息、扫描游标与是否还有下一批 */
+  replayPage(query: {
+    lessonId?: string | null;
+    classId?: string | null;
+    sinceSeq: number;
+    viewerId: string;
+    staffView?: boolean;
+    limit?: number;
+  }): {
+    messages: Array<{
+      seq: number;
+      id: string;
+      channel: string;
+      msgType: string;
+      correlationId: string | null;
+      payload: unknown;
+      status: string;
+      createdAt: number;
+    }>;
+    cursor: number;
+    hasMore: boolean;
+  };
   /** 注册 channel（owner 由宿主按 pluginId 注入，插件不可自报） */
   registerChannel(desc: {
     name: string;
@@ -817,6 +838,162 @@ export interface IClassroomMessageService {
 }
 export const IClassroomMessageServiceToken = new Token<IClassroomMessageService>(
   '@openlearn/core:IClassroomMessageService',
+);
+
+// ── P0 第三方插件安全扩展（作业提交 / 学案进度 / 课后报告 / 学生自发消息）──
+
+/**
+ * 单条传统作业提交的只读视图。
+ *
+ * `assignment_submissions` 在 sql-guard 的禁读表里，插件不能直查；本服务是宿主侧
+ * 的替代通道。返回体只含提交本身的字段，不含学生姓名 / 联系方式等名册信息。
+ */
+export interface AssignmentSubmissionView {
+  assignmentId: string;
+  classId: string | null;
+  lessonId: string | null;
+  studentId: string;
+  content: string;
+  score: number | null;
+  feedback: string | null;
+  submittedAt: number;
+  gradedAt: number | null;
+  status: string;
+  /** 数据来源：legacy = assignments/assignment_submissions；assignment_hub = plugin_assignments/plugin_submissions。 */
+  source?: 'legacy' | 'assignment_hub';
+  /** 作业中心最新版本的文字作答。 */
+  textContent?: string | null;
+  /** 作业中心最新版本的链接作答。 */
+  linkUrl?: string | null;
+  /** 作业中心最新版本的附件元数据（已解析的 files_json）。 */
+  files?: unknown[];
+}
+
+/**
+ * 作业提交只读服务（P0）。
+ *
+ * 数据来源同时覆盖传统作业（`assignments` / `assignment_submissions`）与作业中心
+ * （`plugin_assignments` / `plugin_submissions` / `plugin_submission_versions`）。
+ * 身份由宿主从当前会话派生，插件不能自报 viewer / studentId：
+ * - `getMySubmission` 只返回调用者本人的提交；
+ * - `getSubmissionForViewer` 按角色裁剪（学生仅本人；教师仅自己班级；管理员不限）；
+ * - `canShareSubmission` 复用同一套可见性判定，仅当提交存在且内容非空时返回 true。
+ *
+ * 门禁：manifest 声明 `assignment:read`（学生与教师角色默认具备）。
+ */
+export interface IAssignmentSubmissionService {
+  getMySubmission(assignmentId: string): Promise<AssignmentSubmissionView | null>;
+  getSubmissionForViewer(assignmentId: string, studentId: string): Promise<AssignmentSubmissionView | null>;
+  canShareSubmission(assignmentId: string, studentId: string): Promise<boolean>;
+}
+
+export const IAssignmentSubmissionServiceToken = new Token<IAssignmentSubmissionService>(
+  '@openlearn/core:IAssignmentSubmissionService',
+);
+
+/** 学案活动进度只读视图。`submission` 为解析后的学生提交内容。 */
+export interface XueanActivityProgressView {
+  activityId: string;
+  lessonId: string;
+  activityTitle: string;
+  studentId: string;
+  status: string;
+  progressPercent: number;
+  verified: boolean;
+  score: number | null;
+  gradedAt: number | null;
+  lastActivityAt: number | null;
+  submission: unknown;
+}
+
+/**
+ * 学案活动进度只读服务（P0）。
+ *
+ * `activity_progress` 属于学案运行数据，第三方插件没有写入口；本服务只让当前登录
+ * 学生读取**自己**的进度与提交。课节可见性与 `canSeeLesson` 同口径。
+ * 门禁：manifest 声明 `lesson:read`。
+ */
+export interface IXueanActivityProgressService {
+  getMyActivityProgress(activityId: string): Promise<XueanActivityProgressView | null>;
+  listMyActivityProgress(lessonId: string): Promise<XueanActivityProgressView[]>;
+}
+
+export const IXueanActivityProgressServiceToken = new Token<IXueanActivityProgressService>(
+  '@openlearn/core:IXueanActivityProgressService',
+);
+
+/** 课堂会话报告摘要（不含原始消息 / 学生个人明细）。 */
+export interface ClassroomReportSessionSummary {
+  sessionId: string;
+  classId: string | null;
+  stage: string;
+  startedAt: number | null;
+  endedAt: number | null;
+  studentCount: number;
+}
+
+/** 课节课后报告摘要：会话、作业与学案活动的聚合计数。 */
+export interface LessonReportSummary {
+  lessonId: string;
+  lessonTitle: string;
+  sessions: ClassroomReportSessionSummary[];
+  assignments: { total: number; graded: number; averageScore: number | null };
+  activities: { total: number; submitted: number; completed: number };
+}
+
+/**
+ * 课后报告只读服务（P0）。
+ *
+ * 只返回聚合摘要，不返回 `classroom_sessions` / `assignment_submissions` /
+ * `activity_progress` 的原始行。仅教师与管理员可读，且仍受 `canSeeLesson` 约束。
+ * 门禁：manifest 声明 `lesson:read`。
+ */
+export interface ILessonReportService {
+  getLessonReport(lessonId: string): Promise<LessonReportSummary | null>;
+  getSessionReport(sessionId: string): Promise<ClassroomReportSessionSummary | null>;
+}
+
+export const ILessonReportServiceToken = new Token<ILessonReportService>('@openlearn/core:ILessonReportService');
+
+/** 学生以自己身份发送课堂消息的入参（不含 sender 字段，全部由宿主派生）。 */
+export interface ClassroomSelfMessageInput {
+  channel: string;
+  msgType: 'request' | 'response';
+  lessonId?: string | null;
+  classId?: string | null;
+  targetUserIds?: string[] | null;
+  correlationId?: string | null;
+  payload: unknown;
+  ttlMs?: number | null;
+  /** 显式 messageId；缺省生成 uuid。用于幂等重发 */
+  messageId?: string;
+}
+
+/**
+ * 学生 self 身份课堂消息服务（P0）。
+ *
+ * 与 `IClassroomMessageService.send` 的区别：sender 不是 `plugin:<id>`，而是宿主
+ * 从当前会话派生出的学生 actor。服务会校验 channel 的 `rolesAllowed`、班级成员关系、
+ * `targetUserIds` 同班，并复用底层 messageId 幂等语义。**不要求 `lesson:write`**。
+ * 门禁：manifest 声明 `classroom:message:self`。
+ */
+export interface IClassroomSelfMessageService {
+  sendAsSelf(
+    input: ClassroomSelfMessageInput,
+    /** 宿主注入的插件归属，用于 channel owner 校验；插件不可自报 */
+    senderPluginId?: string,
+  ): {
+    ok: boolean;
+    code?: string;
+    error?: string;
+    messageId?: string;
+    seq?: number;
+    duplicated?: boolean;
+  };
+}
+
+export const IClassroomSelfMessageServiceToken = new Token<IClassroomSelfMessageService>(
+  '@openlearn/core:IClassroomSelfMessageService',
 );
 
 /** 提交适配器注册表/聚合器 Token（声明在此以满足 SDK parity 的 DI 声明点扫描） */
@@ -1053,7 +1230,7 @@ export const IClassroomLifecycleServiceToken = new Token<IClassroomLifecycleServ
 );
 
 /**
- * 互动运行时服务接口 —— 支持极速投票、抢答、结课通票，并支持第三方插件注册自定义互动
+ * 课堂活动元数据描述 —— 目录层只存描述，不执行生命周期。
  */
 export interface QuickActivityDescriptor {
   id: string;
@@ -1064,13 +1241,29 @@ export interface QuickActivityDescriptor {
   supportedRoles?: ('teacher' | 'student')[];
 }
 
-export interface IInteractionRuntimeService {
+/**
+ * 课堂活动元数据目录 —— 只登记活动描述（QuickActivityDescriptor），不承载生命周期。
+ * 真正的活动执行入口是 activity-ecosystem 的 ActivityRegistry.startActivity。
+ */
+export interface IClassroomActivityCatalog {
   registerActivityProvider(owner: string, descriptor: QuickActivityDescriptor): void;
   unregisterActivityProvider(owner: string, id: string): void;
   listActivityProviders(): QuickActivityDescriptor[];
 }
 
-export const IInteractionRuntimeServiceToken = new Token<IInteractionRuntimeService>(
+/**
+ * @deprecated 使用 `IClassroomActivityCatalog`。旧名暗示“运行时”，实际只是元数据目录。
+ */
+export type IInteractionRuntimeService = IClassroomActivityCatalog;
+
+export const IClassroomActivityCatalogToken = new Token<IClassroomActivityCatalog>(
+  '@openlearn/core:IClassroomActivityCatalog',
+);
+
+/**
+ * @deprecated 使用 `IClassroomActivityCatalogToken`。
+ */
+export const IInteractionRuntimeServiceToken = new Token<IClassroomActivityCatalog>(
   '@openlearn/core:IInteractionRuntimeService',
 );
 
@@ -1227,6 +1420,7 @@ export const PLUGIN_RESOLVABLE_TOKENS = [
   ICoursewareRuntimeScriptRegistryToken,
   IStageGuardServiceToken,
   IClassroomLifecycleServiceToken,
+  IClassroomActivityCatalogToken,
   IInteractionRuntimeServiceToken,
   IClassroomCountdownServiceToken,
   IAssessmentGraderRegistryToken,
@@ -1234,6 +1428,10 @@ export const PLUGIN_RESOLVABLE_TOKENS = [
   IRewardCatalogServiceToken,
   ICreditRedemptionServiceToken,
   IClassroomMessageServiceToken,
+  IAssignmentSubmissionServiceToken,
+  IXueanActivityProgressServiceToken,
+  ILessonReportServiceToken,
+  IClassroomSelfMessageServiceToken,
   ISubmissionRegistryToken,
   ISubmissionAggregatorToken,
 ] as const;

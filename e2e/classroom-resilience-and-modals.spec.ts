@@ -167,7 +167,7 @@ test.describe('课堂意外刷新容灾与高级教学模态框 E2E 测试 (Phas
       // =========================================================================
       // 6. 测试高级模态框 1：AI 实时学情预测 (MasteryPredictionModal)
       // =========================================================================
-      await page.getByTestId('teacher-whiteboard-more').click();
+      await page.getByTestId('teacher-whiteboard-tools').click();
       const masteryBtn = page.locator('button[aria-label="AI 实时学情预测"]');
       await expect(masteryBtn).toBeVisible();
       await masteryBtn.click();

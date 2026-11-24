@@ -2,13 +2,19 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   applyClientFeatureFlags,
+  getActiveModePackId,
   isModePackShowXueanTab,
   isModePacksEnabled,
   refreshClientFeatureFlags,
   resetClientFeatureFlagsForTests,
+  setActiveCourseDeliveryMode,
   setModePackShowXueanTabForTests,
   setModePacksEnabledForTests,
 } from '../flags';
+import {
+  BUILTIN_WHITEBOARD_MODE_PACK_ID,
+  BUILTIN_XUEAN_MODE_PACK_ID,
+} from '../../../../../packages/core/plugin-host/mode-pack';
 
 afterEach(() => {
   resetClientFeatureFlagsForTests();
@@ -53,5 +59,26 @@ describe('Mode Pack 设置开关', () => {
     );
     await refreshClientFeatureFlags();
     expect(isModePacksEnabled()).toBe(true);
+  });
+
+  it('绑定非内置模式包时自动启用，内置白板仍受全局开关控制', () => {
+    // 全局开关关闭：内置白板包不启用
+    setActiveCourseDeliveryMode('whiteboard', BUILTIN_WHITEBOARD_MODE_PACK_ID);
+    expect(getActiveModePackId()).toBe(BUILTIN_WHITEBOARD_MODE_PACK_ID);
+    expect(isModePacksEnabled()).toBe(false);
+
+    // 内置学案包沿用既有行为
+    setActiveCourseDeliveryMode('xuean', BUILTIN_XUEAN_MODE_PACK_ID);
+    expect(isModePacksEnabled()).toBe(true);
+
+    // 第三方包：无旧页面可回落，绑定即启用
+    setActiveCourseDeliveryMode('whiteboard', 'ext-lab:mode-inquiry');
+    expect(getActiveModePackId()).toBe('ext-lab:mode-inquiry');
+    expect(isModePacksEnabled()).toBe(true);
+
+    // 清空当前课
+    setActiveCourseDeliveryMode(null);
+    expect(getActiveModePackId()).toBeNull();
+    expect(isModePacksEnabled()).toBe(false);
   });
 });

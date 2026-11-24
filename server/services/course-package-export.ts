@@ -114,6 +114,32 @@ interface PendingAsset {
 }
 
 /**
+ * 把 `learning_surface` 元素导出为可移植的内容引用。
+ *
+ * 包格式 v2 起原生承载 Surface：导出 `contentRef` 而不是本机 `surfaceId`，
+ * 导入端据此在新环境重建 Surface。旧版本包仍以 `html-applet` 导入。
+ */
+function exportSurfaceElement(
+  db: Database.Database,
+  elementData: Record<string, unknown>,
+): Record<string, unknown> | null {
+  const surfaceId = typeof elementData.surfaceId === 'string' ? elementData.surfaceId : '';
+  if (!surfaceId) return null;
+
+  const row = db.prepare('SELECT content_ref_json FROM learning_surfaces WHERE id = ?').get(surfaceId) as
+    { content_ref_json: string } | undefined;
+  if (!row) return null;
+
+  try {
+    const contentRef = JSON.parse(row.content_ref_json) as Record<string, unknown>;
+    const title = typeof elementData.title === 'string' && elementData.title ? elementData.title : undefined;
+    return { contentRef, ...(title ? { title } : {}) };
+  } catch {
+    return null;
+  }
+}
+
+/**
  * 导出指定课程为课程包。
  *
  * @param lessonId 课程 id
@@ -153,16 +179,34 @@ export async function exportLessonAsCoursePackage(
   const preferredFilenames = new Map<string, string>();
 
   for (const row of elementRows) {
-    if (!isSupportedElementType(row.type)) {
-      stats.skippedElements += 1;
-      continue;
-    }
     const data = safeJsonParse(row.data);
     if (!data || typeof data !== 'object' || Array.isArray(data)) {
       stats.skippedElements += 1;
       continue;
     }
     const elementData = data as Record<string, unknown>;
+
+    // v2：Surface 原生导出为 contentRef（surfaceId 是本机 id，不能带出）。
+    if (row.type === 'learning_surface') {
+      const exported = exportSurfaceElement(db, elementData);
+      if (!exported) {
+        stats.skippedElements += 1;
+        continue;
+      }
+      collectPreferredFilenames(exported, preferredFilenames);
+      elements.push({
+        type: 'learning_surface',
+        ...liftElementGeometry(elementData),
+        data: exported,
+      });
+      continue;
+    }
+
+    if (!isSupportedElementType(row.type)) {
+      stats.skippedElements += 1;
+      continue;
+    }
+
     collectPreferredFilenames(elementData, preferredFilenames);
     elements.push({
       type: row.type,

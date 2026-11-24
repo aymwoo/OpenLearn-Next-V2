@@ -10,6 +10,8 @@ export interface StudentLearningFocusProps {
   setSelectedAssignment: (ast: any) => void;
   setQuizStudentAnswers: (answers: any) => void;
   setSubAssignmentTab: (tab: string) => void;
+  /** Gitee Issue IKW5KV：教师收敛提示文案时不渲染引导说明。 */
+  hideGuidance?: boolean;
 }
 
 export interface NextLessonPick {
@@ -116,6 +118,7 @@ export function StudentLearningFocus(props: StudentLearningFocusProps) {
     setSelectedAssignment,
     setQuizStudentAnswers,
     setSubAssignmentTab,
+    hideGuidance = false,
   } = props;
   const zh = lang === 'zh';
 
@@ -151,11 +154,13 @@ export function StudentLearningFocus(props: StudentLearningFocusProps) {
           <span className="h-2 w-2 rounded-full bg-indigo-500" aria-hidden="true" />
           {zh ? '现在该做什么' : 'What to do now'}
         </h2>
-        <p className="text-2xs font-medium text-slate-500">
-          {zh
-            ? '按学习路径排序：先完成待办，再准备最近课节'
-            : 'Ordered by learning path: to-dos first, then upcoming class'}
-        </p>
+        {!hideGuidance && (
+          <p className="text-2xs font-medium text-slate-500">
+            {zh
+              ? '按学习路径排序：先完成待办，再准备最近课节'
+              : 'Ordered by learning path: to-dos first, then upcoming class'}
+          </p>
+        )}
       </div>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">

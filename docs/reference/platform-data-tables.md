@@ -149,55 +149,94 @@
 
 课节下的活动序列（与 `timeline` 环节并列，活动完成不自动推进课堂门禁）。
 
-| 列                          | 类型    | 说明                                                                                     |
-| --------------------------- | ------- | ---------------------------------------------------------------------------------------- |
-| `id`                        | TEXT PK | 活动 ID                                                                                  |
-| `lesson_id`                 | TEXT    | 所属课节                                                                                 |
-| `order_index`               | INTEGER | 顺序（0 起）                                                                             |
-| `type`                      | TEXT    | 活动类型：reading / submission / quiz / discussion / courseware / scratch / form / other |
-| `title`                     | TEXT    | 标题                                                                                     |
-| `config_json`               | TEXT    | 活动配置 JSON（课件 ID、测验 ID 等）                                                     |
-| `required`                  | INTEGER | 是否必做（0/1）                                                                          |
-| `visible`                   | INTEGER | 对学生可见（0/1）                                                                        |
-| `peer_review`               | INTEGER | 是否开启互评（0/1，P1 激活）                                                             |
-| `group_mode`                | TEXT    | 小组模式：individual / group                                                             |
-| `submission_type`           | TEXT    | 提交物类型（text / file / link 等）                                                      |
-| `rubric_json`               | TEXT    | 评价量规 JSON                                                                            |
-| `release_at`                | INTEGER | 发布时间（epoch ms，NULL = 立即可见）                                                    |
-| `due_at`                    | INTEGER | 截止时间（epoch ms，NULL = 无截止）                                                      |
-| `created_at` / `updated_at` | INTEGER | 时间戳                                                                                   |
+| 列                          | 类型    | 说明                                                                                              |
+| --------------------------- | ------- | ------------------------------------------------------------------------------------------------- |
+| `id`                        | TEXT PK | 活动 ID                                                                                           |
+| `lesson_id`                 | TEXT    | 所属课节                                                                                          |
+| `order_index`               | INTEGER | 顺序（0 起）                                                                                      |
+| `type`                      | TEXT    | 活动类型：reading / submission / quiz / survey / discussion / courseware / scratch / form / other |
+| `title`                     | TEXT    | 标题                                                                                              |
+| `config_json`               | TEXT    | 类型专属配置 JSON（阅读正文、调查题目、表单字段、试卷引用等，见 activity-contract §4.1）          |
+| `descriptor_version`        | INTEGER | 活动描述符版本（迁移 `070`，默认 1）                                                              |
+| `provider_id`               | TEXT    | 预留：学案活动绑定的 provider 活动 id（迁移 `070`，当前不写入）                                   |
+| `required`                  | INTEGER | 是否必做（0/1）                                                                                   |
+| `visible`                   | INTEGER | 对学生可见（0/1）                                                                                 |
+| `peer_review`               | INTEGER | 是否开启互评（0/1，P1 激活）                                                                      |
+| `group_mode`                | TEXT    | 小组模式：individual / group                                                                      |
+| `submission_type`           | TEXT    | 提交物类型（text / file / link 等）                                                               |
+| `rubric_json`               | TEXT    | 评价量规 JSON                                                                                     |
+| `release_at`                | INTEGER | 发布时间（epoch ms，NULL = 立即可见）                                                             |
+| `due_at`                    | INTEGER | 截止时间（epoch ms，NULL = 无截止）                                                               |
+| `surface_id`                | TEXT    | 绑定的 LearningSurface（迁移 `075`，部分唯一索引；NULL = 未绑定）                                 |
+| `created_at` / `updated_at` | INTEGER | 时间戳                                                                                            |
 
 ### `lesson_activity_blocks`（迁移 `062`，IKVO15 学案首页）
 
 学案首页的半结构化内容块。
 
-| 列                          | 类型    | 说明                                                                                       |
-| --------------------------- | ------- | ------------------------------------------------------------------------------------------ |
-| `id`                        | TEXT PK | 块 ID                                                                                      |
-| `lesson_id`                 | TEXT    | 所属课节                                                                                   |
-| `block_type`                | TEXT    | 块类型：learning_goals / key_points / resources / steps / appreciation / reflection / free |
-| `content_json`              | TEXT    | 块内容 JSON                                                                                |
-| `order_index`               | INTEGER | 顺序                                                                                       |
-| `created_at` / `updated_at` | INTEGER | 时间戳                                                                                     |
+| 列                          | 类型    | 说明                                                                                                                                             |
+| --------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `id`                        | TEXT PK | 块 ID                                                                                                                                            |
+| `lesson_id`                 | TEXT    | 所属课节                                                                                                                                         |
+| `block_type`                | TEXT    | 块类型：learning_goals / key_points / resources / operation_tips / works_showcase / reflection / free_html / interactive_courseware / xuean_home |
+| `content_json`              | TEXT    | 块内容 JSON                                                                                                                                      |
+| `order_index`               | INTEGER | 顺序                                                                                                                                             |
+| `surface_id`                | TEXT    | 互动课件块绑定的 LearningSurface（迁移 `077`；NULL = 未绑定）                                                                                    |
+| `created_at` / `updated_at` | INTEGER | 时间戳                                                                                                                                           |
 
 ### `activity_progress`（迁移 `062` + `063` + `064` + `065`，IKVO15 活动级进度）
 
 学生在单个活动上的进度。主键 `(activity_id, student_id)`。
 
-| 列                 | 类型    | 说明                                                            |
-| ------------------ | ------- | --------------------------------------------------------------- |
-| `activity_id`      | TEXT    | 活动 ID（复合主键之一）                                         |
-| `student_id`       | TEXT    | 学生 ID（复合主键之一）                                         |
-| `status`           | TEXT    | not_started / in_progress / submitted / graded                  |
-| `progress_percent` | INTEGER | 学生自报进度百分比（0-100）                                     |
-| `verified`         | INTEGER | 是否已验证（1 = 教师/系统已验证，防自刷完成）                   |
-| `score`            | REAL    | 教师批阅得分                                                    |
-| `graded_at`        | INTEGER | 批阅时间                                                        |
-| `last_activity_at` | INTEGER | 最后活跃时间                                                    |
-| `submission_json`  | TEXT    | 学生提交内容（string 或 {type, content, url} JSON，迁移 `063`） |
-| `nudged_at`        | INTEGER | 教师最后催办时间（迁移 `064`）                                  |
-| `nudge_count`      | INTEGER | 催办次数（迁移 `064`，默认 0）                                  |
-| `self_eval_json`   | TEXT    | 学生自评内容 {score, comment} JSON（迁移 `065`）                |
+| 列                 | 类型    | 说明                                                                                                                               |
+| ------------------ | ------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `activity_id`      | TEXT    | 活动 ID（复合主键之一）                                                                                                            |
+| `student_id`       | TEXT    | 学生 ID（复合主键之一）                                                                                                            |
+| `status`           | TEXT    | not_started / in_progress / submitted / graded                                                                                     |
+| `progress_percent` | INTEGER | 学生自报进度百分比（0-100）                                                                                                        |
+| `verified`         | INTEGER | 是否已验证（1 = 教师/系统已验证，防自刷完成）                                                                                      |
+| `score`            | REAL    | 教师批阅得分                                                                                                                       |
+| `graded_at`        | INTEGER | 批阅时间                                                                                                                           |
+| `last_activity_at` | INTEGER | 最后活跃时间                                                                                                                       |
+| `submission_json`  | TEXT    | 学生提交内容（string 或 {type, content, url} JSON，迁移 `063`）。`survey` / `form` 的 `content` 为 `{"answers":{...}}` JSON 字符串 |
+| `nudged_at`        | INTEGER | 教师最后催办时间（迁移 `064`）                                                                                                     |
+| `nudge_count`      | INTEGER | 催办次数（迁移 `064`，默认 0）                                                                                                     |
+| `self_eval_json`   | TEXT    | 学生自评内容 {score, comment} JSON（迁移 `065`）                                                                                   |
+
+### `lesson_discussions`（迁移 `067`，IKVO15 活动讨论区）
+
+讨论活动的帖子与回复。`parent_id` 为空表示主帖；非空时必须指向同一活动的帖子。读取接口会
+联表 `students` / `users` 返回 `author_name`，学生端据此显示作者姓名。
+
+| 列                          | 类型    | 说明                           |
+| --------------------------- | ------- | ------------------------------ |
+| `id`                        | TEXT PK | 帖子 ID（`disc_` 前缀）        |
+| `activity_id`               | TEXT    | 所属学案活动                   |
+| `author_id`                 | TEXT    | 发帖人用户 / 学生 ID           |
+| `content`                   | TEXT    | 正文（写入时截断到 2000 字符） |
+| `parent_id`                 | TEXT    | 父帖 ID；NULL = 主帖           |
+| `created_at` / `updated_at` | INTEGER | 时间戳                         |
+
+### `learning_surfaces`（迁移 `072`）
+
+内容容器的稳定身份。`kind` 取 `whiteboard_element` / `lesson_activity` / `lesson_block` /
+`assignment` / `lesson_eval`；`owner_id` 指白板元素、学案活动、首页块、作业定义或课时 id。
+`content_ref_json` 保存 `LearningContentRef`，`deleted_at` 只做软删，attempt 仍可追溯。
+`UNIQUE(kind, owner_id)` 保证一个容器最多一个 Surface。详见
+[LearningSurface](../architecture/learning-surface.md)。
+
+### `learning_surface_attempts`（迁移 `072`）
+
+学生 × Surface 的尝试记录。关键列：`surface_id` / `lesson_id` / `student_id` / `attempt_no` /
+`renderer_id` / `status`（`in_progress` / `submitted` / `graded`） / `auto_score` / `score` /
+`max_score` / `completion` / `state_json` / `is_preview` / `submitted_at` / `graded_at`。教师预览
+写入 `is_preview=1`，不计入学生统计。
+
+### `activity_runs`（迁移 `070`）
+
+provider 活动的运行态。`id` / `activity_id` / `provider_id` / `lesson_id` / `class_id` /
+`actor_id` / `state` / `payload_json` / `started_at` / `ended_at`。服务重启后未能恢复的运行标记为
+`interrupted` 终态。
 
 ### `courses` / `course_enrollments`（迁移 `062`，IKVO15 课程层，P2 激活）
 
@@ -592,13 +631,13 @@ MFE 远端登记。MFE 执行边界已移除，表保留作历史数据兼容。
 - `file_assets`: access_scope, author_id, blob_id, course_id, created_at, deleted_at, id, lesson_id, metadata_json, mime, original_name, purpose
 - `file_blobs`: backend_id, created_at, id, ref_count, sha256, size_bytes, storage_key
 - `icebreaker_checkins`: checkin_date, class_id, created_at, id, lesson_id, mood, scope_key, student_id, updated_at
-- `lesson_activities`: config_json, created_at, due_at, group_mode, id, lesson_id, order_index, peer_review, release_at, required, rubric_json, submission_type, title, type, updated_at, visible
-- `lesson_activity_blocks`: block_type, content_json, created_at, id, lesson_id, order_index, updated_at
+- `lesson_activities`: config_json, created_at, descriptor_version, due_at, group_mode, id, lesson_id, order_index, peer_review, provider_id, release_at, required, rubric_json, submission_type, surface_id, title, type, updated_at, visible
+- `lesson_activity_blocks`: block_type, content_json, created_at, id, lesson_id, order_index, surface_id, updated_at
 - `lesson_checkins`: checked_in_at, lesson_id, student_id
 - `lesson_discussions`: activity_id, author_id, content, created_at, id, parent_id, updated_at
 - `lesson_preset_polls`: correct_option, created_at, id, lesson_id, options_json, question_type, sort_order, title, updated_at
 - `lesson_quiz_submissions`: answer, element_id, id, is_correct, lesson_id, score, student_id, student_name, submitted_at, time_spent_ms
-- `lessons`: content, course_id, created_at, creator_id, delivery_mode, id, progress_conditions, progress_mode, source_package_hash, source_package_id, source_package_key, timeline, title, updated_at
+- `lessons`: content, course_id, created_at, creator_id, delivery_mode, id, mode_pack_id, progress_conditions, progress_mode, source_package_hash, source_package_id, source_package_key, timeline, title, updated_at
 - `mfe_remotes`: created_at, entry, meta, name, updated_at
 - `pending_commands`: actor_id, command_type, created_at, id, payload
 - `pending_side_effects`: attempts, biz_key, correlation_id, created_at, id, last_error, max_attempts, next_retry_at, op, origin_actor_id, payload, resolved_at, source, status, updated_at

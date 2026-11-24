@@ -48,11 +48,12 @@ import {
   ICapabilityRegistryToken,
   IPluginLifecycleManagerToken,
   IPluginCapabilityGatewayToken,
-  IUnifiedExtensionRegistryToken,
+  IExtensionCatalogToken,
   IPluginDistributionManagerToken,
   IPluginRuntimeCompositionToken,
   ICoursewareRuntimeScriptRegistryToken,
   IClassroomLifecycleServiceToken,
+  IClassroomActivityCatalogToken,
   IInteractionRuntimeServiceToken,
   IAuthSessionBridgeToken,
   IPluginHostToken,
@@ -184,11 +185,12 @@ function createServices(registry: ServiceRegistry, db: Database.Database): void 
   registry.register(ICapabilityRegistryToken, simpleMock('cap-reg') as any);
   registry.register(IPluginLifecycleManagerToken, simpleMock('lifecycle') as any);
   registry.register(IPluginCapabilityGatewayToken, simpleMock('cap-gw') as any);
-  registry.register(IUnifiedExtensionRegistryToken, simpleMock('ext-reg') as any);
+  registry.register(IExtensionCatalogToken, simpleMock('ext-reg') as any);
   registry.register(IPluginDistributionManagerToken, simpleMock('dist-mgr') as any);
   registry.register(IPluginRuntimeCompositionToken, simpleMock('runtime-comp') as any);
   registry.register(ICoursewareRuntimeScriptRegistryToken, simpleMock('courseware-script') as any);
   registry.register(IClassroomLifecycleServiceToken, simpleMock('classroom-lifecycle') as any);
+  registry.register(IClassroomActivityCatalogToken, simpleMock('interaction-rt') as any);
   registry.register(IInteractionRuntimeServiceToken, simpleMock('interaction-rt') as any);
   registry.register(IActivityRegistryToken, simpleMock('activity-reg') as any);
   registry.register(IAuthSessionBridgeToken, simpleMock('auth-bridge') as any);

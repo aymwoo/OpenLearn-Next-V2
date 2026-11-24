@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { getDefaultWizardTimeline, useCourseWizard } from '../useCourseWizard';
+import { appStore } from '../../store/appStore';
 
 describe('useCourseWizard —— AI 大纲生成', () => {
   let addToast: ReturnType<typeof vi.fn>;
@@ -28,6 +29,7 @@ describe('useCourseWizard —— AI 大纲生成', () => {
 
   afterEach(() => {
     globalThis.fetch = originalFetch;
+    appStore.getState().setCourseEditingLessonId(null);
     vi.restoreAllMocks();
   });
 
@@ -170,6 +172,38 @@ describe('useCourseWizard —— AI 大纲生成', () => {
       'Lesson Wrap-up',
     ]);
     expect(enTimeline.every((s) => s.id.startsWith('seg-preset-') && !/[\u4e00-\u9fa5]/.test(s.title))).toBe(true);
+  });
+
+  it('创建课程后留在课程管理并在页内打开新课程', async () => {
+    (globalThis.fetch as any).mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ success: true, result: { lessonId: 'lesson-123' } }),
+    });
+    const setSelectedLesson = vi.fn();
+    const setTeacherTab = vi.fn();
+
+    const { result } = renderHook(() =>
+      useCourseWizard({
+        lang: 'zh',
+        addToast: addToast as any,
+        fetchLessons: fetchLessons as any,
+        setSelectedLesson,
+        setTeacherTab,
+      }),
+    );
+    act(() => result.current.setWizardCourseTitle('线性代数'));
+
+    await act(async () => {
+      await result.current.handleDeployWizardCourse();
+    });
+
+    expect(fetchLessons).toHaveBeenCalled();
+    expect(setSelectedLesson).toHaveBeenCalledWith('lesson-123');
+    expect(setTeacherTab).toHaveBeenCalledWith('courses');
+    expect(setTeacherTab).not.toHaveBeenCalledWith('lesson_editor');
+    expect(setTeacherTab).not.toHaveBeenCalledWith('xuean_editor');
+    expect(appStore.getState().courseEditingLessonId).toBe('lesson-123');
   });
 
   it('创建课程成功后重置的时间轴仍保持中文阶段名称 (#493)', async () => {

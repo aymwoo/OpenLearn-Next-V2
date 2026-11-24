@@ -42,6 +42,8 @@ export interface SubmissionFilter {
   classId?: string;
   studentId?: string;
   kinds?: SubmissionKind[];
+  /** 只聚合这些适配器（模式包声明 `adapterIds` 时由宿主传入）。 */
+  adapterIds?: string[];
   since?: number;
   limit?: number;
 }
@@ -62,6 +64,11 @@ export interface SubmissionAdapter {
   getRaw?(submissionId: string): Promise<unknown> | unknown;
   /** 把统一视图中的一条映射为成绩写入输入；返回 null 表示不参与成绩 */
   toGradeInput?(sub: NormalizedSubmission): GradeWriteInputView | null;
+  /**
+   * 成绩成功写入平台成绩册后的回调，供插件把自己的真值存储同步到同一分数
+   * （例如学案把分数回写 activity_progress）。抛错不会改变成绩写入结果。
+   */
+  afterGrade?(sub: NormalizedSubmission, grade: { score: number | null; status: string }): void;
 }
 
 /** 成绩写入输入（与 grade-writer 的 GradeWriteInput 对齐的视图） */
@@ -74,6 +81,9 @@ export interface GradeWriteInputView {
   source: 'manual' | 'auto' | 'ai' | 'plugin' | 'system';
   reason?: string | null;
   overrideProtected?: boolean;
+  /** 宿主注入的操作者 actor，用于 graded_by 与审计历史。 */
+  actorId?: string | null;
+  actorRole?: string | null;
 }
 
 export interface RegisterAdapterResult {
