@@ -268,7 +268,7 @@ export const SWEEP_SCENARIOS: SweepScenario[] = [
         role: 'teacher',
         api: {
           method: 'POST',
-          path: '/api/assignments',
+          path: '/api/learning-surface-assignments',
           body: {
             title: '巡检剧本作业',
             description: '功能巡检（写流程剧本）自动创建，仅存在于一次性演示库。',
@@ -297,7 +297,7 @@ export const SWEEP_SCENARIOS: SweepScenario[] = [
         role: 'student',
         api: {
           method: 'POST',
-          path: '/api/assignments/{{assignmentId}}/submit',
+          path: '/api/learning-surface-assignments/{{assignmentId}}/submit',
           body: { textContent: '巡检剧本学生的作答内容' },
         },
         capture: { name: 'submissionId', path: 'submissionId' },
@@ -333,7 +333,7 @@ export const SWEEP_SCENARIOS: SweepScenario[] = [
         role: 'teacher',
         api: {
           method: 'GET',
-          path: '/api/assignments/{{assignmentId}}?studentId=DEMO-S01',
+          path: '/api/learning-surface-assignments/{{assignmentId}}?studentId=DEMO-S01',
         },
         expect: { path: 'success', equals: true },
       },
@@ -588,7 +588,7 @@ export const SWEEP_SCENARIOS: SweepScenario[] = [
       {
         label: '教师查询该作业的成绩行',
         role: 'teacher',
-        api: { method: 'GET', path: '/api/assignments/{{assignmentId}}/submissions' },
+        api: { method: 'GET', path: '/api/learning-surface-assignments/{{assignmentId}}/submissions' },
         expect: { path: '0.score', equals: 88 },
       },
     ],

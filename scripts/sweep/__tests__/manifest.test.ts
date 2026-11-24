@@ -72,6 +72,15 @@ describe('巡检剧本 · 结构约束（Issue #247）', () => {
     expect(s.steps.some((step) => step.api?.path === '/api/lessons')).toBe(true);
   });
 
+  it('作业读写走 learning-surface，不再调用已下线的 /api/assignments', () => {
+    const paths = SWEEP_SCENARIOS.flatMap((item) => item.steps.map((step) => step.api?.path ?? ''));
+    expect(paths.some((item) => item.startsWith('/api/assignments'))).toBe(false);
+    expect(paths.some((item) => item.startsWith('/api/learning-surface-assignments'))).toBe(true);
+    expect(paths.some((item) => item.includes('/learning-surface-assignments/') && item.endsWith('/submissions'))).toBe(
+      true,
+    );
+  });
+
   it('课件成绩剧本存在，并覆盖提交 → 自动录分 → 成绩查询', () => {
     const s = scenario('courseware-grade-loop');
     const paths = s.steps.map((step) => step.api?.path ?? '');

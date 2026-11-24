@@ -438,7 +438,7 @@ test.describe('无障碍门禁（WCAG 2.0/2.1 A+AA）', () => {
     await request.post(`/api/classes/${encodeURIComponent(classId)}/students`, { data: { studentId } });
 
     // 2. 布置一份作业（含题目），学生端「作业」Tab 才会出现作答入口
-    const asgRes = await request.post('/api/assignments', {
+    const asgRes = await request.post('/api/learning-surface-assignments', {
       data: {
         title: `${TEST_TAG} 作业 ${suffix}`,
         description: '无障碍门通用例',

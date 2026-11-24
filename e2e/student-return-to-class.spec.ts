@@ -88,7 +88,9 @@ test.describe('学生端「返回课堂」入口 (Issue #109)', () => {
       const banner = studentPage.getByTestId('student-active-class-banner');
       await expect(banner).toBeVisible({ timeout: 20_000 });
       await expect(banner.getByText(lessonTitle)).toBeVisible();
-      await expect(studentPage.getByTestId('student-header-return-to-class')).toBeVisible();
+      // 返回入口只留在横幅上，欢迎头部不再重复渲染 student-header-return-to-class。
+      await expect(banner.getByRole('button', { name: '返回课堂' })).toBeVisible();
+      await expect(studentPage.getByTestId('student-header-return-to-class')).toHaveCount(0);
 
       // 3. 返回课堂 → 进入课节视图
       await banner.getByRole('button', { name: '返回课堂' }).click();

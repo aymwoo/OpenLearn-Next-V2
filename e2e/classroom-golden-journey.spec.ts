@@ -8,7 +8,7 @@ import { expect, test, type APIRequestContext, type BrowserContext, type Page } 
 import path from 'node:path';
 import fs from 'node:fs';
 import Database from 'better-sqlite3';
-import { enterEntryPortal } from './fixtures/classroom-entry';
+import { dismissClassroomToolbarSetup, enterEntryPortal } from './fixtures/classroom-entry';
 
 function logEvidence(msg: string) {
   const logDir = path.resolve(process.cwd(), 'artifacts/logs');
@@ -285,6 +285,8 @@ test.describe('师生双端一镜到底课堂全生命周期黄金旅程 E2E 测
 
       await expect(teacherPage.locator('#pre-class-ready-view')).toBeVisible({ timeout: 20_000 });
       await expect(teacherPage.locator('#pre-class-ready-view').getByText(lessonTitle)).toBeVisible();
+      // 一进白板课就会盖上「开课前功能设置」，不关掉的话后面的按钮点不到。
+      await dismissClassroomToolbarSetup(teacherPage);
 
       // 验证环境一键飞检弹窗
       const healthcheckBtn = teacherPage.locator('button:has-text("环境一键飞检")');
@@ -327,8 +329,9 @@ test.describe('师生双端一镜到底课堂全生命周期黄金旅程 E2E 测
       // Stage 2: 课中授课与中控互动 (IN_CLASS_TEACHING)
       // =========================================================================
       logEvidence('Stage 2: 推进至课中授课白板');
-      await expect(teacherPage.getByTestId('teacher-current-stage')).toBeVisible({ timeout: 20_000 });
-      await expect(teacherPage.getByText('Live Broadcaster Connected')).toBeVisible({ timeout: 15_000 });
+      await expect(teacherPage.getByTestId('teacher-whiteboard-tools')).toBeVisible({ timeout: 20_000 });
+      await dismissClassroomToolbarSetup(teacherPage, 2_000);
+      await expect(teacherPage.getByTestId('teacher-learning-topic')).toHaveText(lessonTitle, { timeout: 15_000 });
 
       // 1. 发起限时倒计时测试
       logEvidence('Stage 2: 启动限时倒计时');
@@ -361,11 +364,16 @@ test.describe('师生双端一镜到底课堂全生命周期黄金旅程 E2E 测
       await pollOptionB.click();
       await expect(studentPage.getByText('已提交')).toBeVisible({ timeout: 10_000 });
 
-      // 教师端统计人数实时更新并关闭投票
+      // 白板精简模式不在工具条上显示「结束投票」。进行中的投票从会话接口关掉。
       logEvidence('Stage 2: 教师端结束投票');
-      const closePollBtn = teacherPage.locator('button:has-text("结束投票")');
-      await expect(closePollBtn).toBeVisible({ timeout: 15_000 });
-      await closePollBtn.click();
+      const sessionRes = await request.get(`/api/classroom/sessions/${encodeURIComponent(lessonId)}`);
+      expect(sessionRes.ok(), await sessionRes.text()).toBeTruthy();
+      const pollId = String(((await sessionRes.json()) as { activePoll?: { id?: string } }).activePoll?.id || '');
+      expect(pollId).not.toBe('');
+      const closePollRes = await request.post(
+        `/api/classroom/sessions/${encodeURIComponent(lessonId)}/quick-poll/${encodeURIComponent(pollId)}/close`,
+      );
+      expect(closePollRes.ok(), await closePollRes.text()).toBeTruthy();
 
       // 教师端解除专注锁定，放开学生节奏信号与互动
       logEvidence('Stage 2: 教师端解除专注锁定');
@@ -493,7 +501,8 @@ test.describe('师生双端一镜到底课堂全生命周期黄金旅程 E2E 测
       const backToTeachingBtn = teacherPage.locator('button:has-text("返回课中白板")');
       await expect(backToTeachingBtn).toBeVisible();
       await backToTeachingBtn.click();
-      await expect(teacherPage.getByTestId('teacher-current-stage')).toBeVisible({ timeout: 15_000 });
+      await dismissClassroomToolbarSetup(teacherPage, 3_000);
+      await expect(teacherPage.getByTestId('teacher-whiteboard-tools')).toBeVisible({ timeout: 15_000 });
 
       // 再次推进至简报完成闭环
       await teacherPage.getByTestId('teacher-whiteboard-panels').click();

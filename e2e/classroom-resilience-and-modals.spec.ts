@@ -8,7 +8,7 @@ import { test, expect } from '@playwright/test';
 import fs from 'fs';
 import path from 'path';
 import Database from 'better-sqlite3';
-import { enterTeachingView } from './fixtures/classroom-entry';
+import { dismissClassroomToolbarSetup, enterTeachingView, openClassroomTools } from './fixtures/classroom-entry';
 
 const DB_PATH = path.resolve(process.cwd(), 'packages/core/db/educational_os.db');
 
@@ -146,18 +146,19 @@ test.describe('课堂意外刷新容灾与高级教学模态框 E2E 测试 (Phas
       // Issue #91: 首屏是进行中会话列表，等列表拉回来再点「继续上课」
       await enterTeachingView(page);
 
-      // 验证授课界面就绪
-      await expect(page.locator('#classroom-interactive-cockpit')).toBeVisible({ timeout: 15_000 });
-      await expect(page.getByTestId('teacher-current-stage')).toBeVisible({ timeout: 15_000 });
+      // 白板课中控默认收起。顶栏工具按钮在，说明已经停在授课视图。
+      await expect(page.getByTestId('teacher-whiteboard-tools')).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByTestId('teacher-learning-topic')).toBeVisible({ timeout: 15_000 });
 
       // =========================================================================
       // 5. 测试课中意外刷新容灾恢复 (Session Resilience: page.reload())
       // =========================================================================
       await page.reload();
 
-      // 刷新后验证自动恢复到课中授课状态，未退回课前准备
-      await expect(page.locator('#classroom-interactive-cockpit')).toBeVisible({ timeout: 15_000 });
-      await expect(page.getByTestId('teacher-current-stage')).toBeVisible({ timeout: 15_000 });
+      // 刷新后仍停在课中，而不是退回课前准备。开课设置会再弹一次，先等顶栏再关掉。
+      await expect(page.getByTestId('teacher-whiteboard-tools')).toBeVisible({ timeout: 15_000 });
+      await dismissClassroomToolbarSetup(page);
+      await expect(page.getByTestId('teacher-learning-topic')).toBeVisible({ timeout: 15_000 });
 
       // 截图存盘：刷新恢复后现场
       const RESILIENCE_SHOT = path.join(screenshotDir, 'resilience_after_reload.png');
@@ -213,7 +214,7 @@ test.describe('课堂意外刷新容灾与高级教学模态框 E2E 测试 (Phas
       // =========================================================================
       // 9. 测试高级模态框 4：学生五维雷达成长档案 (StudentGrowthProfileModal)
       // =========================================================================
-      await page.getByTestId('teacher-whiteboard-tools').click();
+      await openClassroomTools(page);
       const rollcallBtn = page.locator('#classroom-interactive-cockpit button:has-text("随机抽问")');
       await expect(rollcallBtn).toBeVisible();
       await rollcallBtn.click();

@@ -105,7 +105,7 @@ test('公测关键旅程：作业、越权、插件与观测', async () => {
     const enrolled = (enrollBody.results as Array<{ id: string; student_number: string }>)[0];
     expect(enrolled.student_number).toBe(STUDENT_NUMBER);
 
-    const assignmentRes = await teacher.post('/api/assignments', {
+    const assignmentRes = await teacher.post('/api/learning-surface-assignments', {
       data: {
         title: '公测旅程作业',
         classId,
