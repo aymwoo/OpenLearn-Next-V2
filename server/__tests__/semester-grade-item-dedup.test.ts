@@ -8,7 +8,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { randomUUID } from 'crypto';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
 import { GradingService } from '../services/grading-service.js';
-import { resolveGradeItemKey } from '../services/grade-item-key.js';
+import { resolveGradeItemKey } from '../../packages/core/di/grade-item-key.js';
 
 function rid(prefix: string) {
   return `${prefix}_${randomUUID().replace(/-/g, '').slice(0, 12)}`;

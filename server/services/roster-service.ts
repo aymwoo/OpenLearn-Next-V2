@@ -15,6 +15,8 @@ import { recordSecurityAudit } from '../../packages/core/observability/audit-log
 import type { Pagination } from '../utils/pagination.js';
 import { openClassPasscode, sealClassPasscode } from '../../packages/core/db/class-passcode-crypto.js';
 import { sanitizePrivateNotes } from '../../packages/core/security/html-sanitize.js';
+import { resolveGradeItemKey } from '../../packages/core/di/grade-item-key.js';
+import { deriveAcademicYear } from '../utils/academic-year.js';
 
 /**
  * 归一化学生性别。
@@ -1332,8 +1334,7 @@ export class RosterService {
         COALESCE(term_rc.count, 0) as term_picked_count,
         COALESCE(term_rc.coins, 0) as total_reward_coins,
         term_rc.last_picked_time,
-        COALESCE(lesson_rc.count, 0) as lesson_picked_count,
-        COALESCE(sub.avg_score, 80) as avg_assignment_score
+        COALESCE(lesson_rc.count, 0) as lesson_picked_count
       FROM class_students cs
       JOIN students s ON cs.student_id = s.id
       LEFT JOIN (
@@ -1354,25 +1355,77 @@ export class RosterService {
         WHERE class_id = ? AND lesson_id = ?
         GROUP BY student_id
       ) lesson_rc ON s.id = lesson_rc.student_id
-      LEFT JOIN (
-        SELECT 
-          student_id, 
-          AVG(score) as avg_score
-        FROM assignment_submissions
-        WHERE score IS NOT NULL
-        GROUP BY student_id
-      ) sub ON s.id = sub.student_id
       WHERE cs.class_id = ?
       ORDER BY s.student_number ASC, s.name ASC
     `,
       )
       .all(classId, classId, lessonId || '', classId) as any[];
 
+    // 分层用的平均分与成绩册同口径：只统计本班、本学年，并按成绩项去重。
+    // 历史实现直接对全班学生的全部 assignment_submissions 取 AVG，
+    // 跨班/跨学年/重复作业壳都会影响分层结果。
+    const academicYear = deriveAcademicYear(Date.now());
+    const avgByStudent = new Map<string, number>();
+    try {
+      const gradeRows = this.reader
+        .prepare(
+          `SELECT asb.student_id, asb.assignment_id, asb.score,
+                  asb.graded_at, asb.submitted_at,
+                  a.class_id, a.lesson_id, a.content
+             FROM assignment_submissions asb
+             JOIN assignments a ON a.id = asb.assignment_id
+            WHERE a.class_id = ? AND asb.score IS NOT NULL
+              ${academicYear ? 'AND (a.academic_year = ? OR a.academic_year IS NULL)' : ''}`,
+        )
+        .all(...(academicYear ? [classId, academicYear] : [classId])) as Array<{
+        student_id: string;
+        assignment_id: string;
+        score: number | null;
+        graded_at: number | null;
+        submitted_at: number | null;
+        class_id: string;
+        lesson_id: string | null;
+        content: string | null;
+      }>;
+
+      // 同一成绩项只保留最新一条（时间相同取较高分），与学期总评的合并规则一致。
+      const byStudentItem = new Map<string, Map<string, { score: number; at: number }>>();
+      for (const row of gradeRows) {
+        const score = typeof row.score === 'number' ? row.score : Number(row.score);
+        if (!Number.isFinite(score)) continue;
+        const key = resolveGradeItemKey({
+          id: row.assignment_id,
+          classId: row.class_id,
+          lessonId: row.lesson_id,
+          content: row.content,
+        });
+        let byItem = byStudentItem.get(row.student_id);
+        if (!byItem) {
+          byItem = new Map();
+          byStudentItem.set(row.student_id, byItem);
+        }
+        const at = Number(row.graded_at ?? row.submitted_at ?? 0);
+        const prev = byItem.get(key);
+        if (!prev || at > prev.at || (at === prev.at && score > prev.score)) {
+          byItem.set(key, { score, at });
+        }
+      }
+      for (const [studentId, byItem] of byStudentItem) {
+        if (byItem.size === 0) continue;
+        let sum = 0;
+        for (const item of byItem.values()) sum += item.score;
+        avgByStudent.set(studentId, Math.round((sum / byItem.size) * 10) / 10);
+      }
+    } catch {
+      // 成绩表缺失时退回默认 80（与历史行为一致），不影响点名候选池可用性
+    }
+
     const mapped = students.map((s) => {
+      const avgScore = avgByStudent.get(s.id) ?? 80;
       let tier: 'basic' | 'intermediate' | 'advanced' = 'intermediate';
-      if (s.avg_assignment_score < 70 || s.term_picked_count === 0) {
+      if (avgScore < 70 || s.term_picked_count === 0) {
         tier = 'basic';
-      } else if (s.avg_assignment_score >= 88 && s.term_picked_count >= 1) {
+      } else if (avgScore >= 88 && s.term_picked_count >= 1) {
         tier = 'advanced';
       }
       return {

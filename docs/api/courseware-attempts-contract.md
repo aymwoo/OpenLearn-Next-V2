@@ -267,7 +267,7 @@ LIMIT ? OFFSET ?;   -- pageSize='all' 时 LIMIT 传 -1
 
 ### 用途
 
-教师在 LiveClassroom 看到成绩后，点击「保存为作业成绩」时调用。把这次 attempt 的最终成绩**自动建作业**、**UPSERT 作业提交**、**UPSERT 学生课程进度**三件事一次性做完。
+教师在 LiveClassroom 看到成绩后，点击「保存为作业成绩」时调用。把这次 attempt 的最终成绩**自动建作业**、**UPSERT 作业提交**写入学期成绩；课节进度只在「本课节关联的全部课件都已完成」时才推进到 100%。
 
 ### 请求
 
@@ -285,7 +285,8 @@ LIMIT ? OFFSET ?;   -- pageSize='all' 时 LIMIT 传 -1
 {
   "success": true,
   "assignmentId": "ast-cw-<hex>", // 新建或已存在的 assignment.id
-  "score": 88 // 归一化后的最终分数（注意：是 "score"，不是 "finalScore"）
+  "score": 88, // 归一化后的最终分数（注意：是 "score"，不是 "finalScore"）
+  "lessonCompleted": false // 本次录入后本课节关联的课件是否已全部完成
 }
 ```
 
@@ -306,14 +307,14 @@ LIMIT ? OFFSET ?;   -- pageSize='all' 时 LIMIT 传 -1
 
 ### 副作用
 
-1. **UPSERT assignments**（`findOrCreateCoursewareAssignment`）：按 class_id + lesson_id + title 查已存在则复用；新建时 `title = "互动课件: <courseware.name>"`、`description = "来自互动课件 [<name>] 的随堂学习提交数据记录"`、`content = {type: 'interactive_courseware', attemptId, coursewareUuid}`（缺考标记路径传 `'{}'`）
+1. **UPSERT assignments**：按 `assignments.content` 里的 `coursewareUuid`（JSON 语义匹配）查已存在则复用；命中无标识的旧壳时回填 `coursewareUuid`；新建时 `title = "互动课件: <courseware.name>"`、`description = "来自互动课件 [<name>] 的随堂学习提交数据记录"`、`content = {type: 'interactive_courseware', attemptId, coursewareUuid}`（缺考标记路径传 `'{}'`）
 2. **UPSERT assignment_submissions**（`ON CONFLICT(assignment_id, student_id) DO UPDATE`）：
    - `score = finalScore`
    - `content = attempt.extra_json`（原样搬运原始作答明细）
    - `feedback = "由<sourceLabel>。课件完成度: <X>%。课件原始反馈: <comment 或 —>"`
    - `status = 'graded'`，`source = 'manual'`，`submitted_at = graded_at = now`
-3. **UPSERT student_lesson_progress**：completed=1, progress_percent=100, completed_segments='[]'
-4. 发布 `student.progress_updated` → socket `student-progress-updated`，payload `{ studentId, lessonId, progressPercent: 100, completed: true, completedSegments: [] }`
+3. **UPSERT student_lesson_progress**：仅当该学生已完成本课节关联的**全部**课件时，才写 `completed=1, progress_percent=100, completed_segments='[]'`；课节未关联任何课件（老数据 / 纯作业课节）时沿用旧行为直接视为完成
+4. **发布 `student.progress_updated`** → socket `student-progress-updated`，仅在第 3 步真正推进进度时发布，payload `{ studentId, lessonId, progressPercent: 100, completed: true, completedSegments: [] }`；未完成全部课件时只落成绩、不广播进度
 
 以上三步在 `db.transaction(run)()` 内执行，要么全落要么全不落。
 

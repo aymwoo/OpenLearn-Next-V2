@@ -183,11 +183,17 @@ export function useLiveClassroomSubmissions(options: {
       });
       if (res.ok) {
         const data = await res.json();
+        // 课节完成度按「全部课件完成」判定：未完成时只落成绩，不提示进度已同步。
+        const lessonCompleted = data.lessonCompleted === true;
         addToast(
           lang === 'zh' ? '✓ 学习数据已保存' : '✓ Data Recorded',
           lang === 'zh'
-            ? `成功将该数据存入数据库！分数: ${data.score}，已同步更新至学生学习进度。`
-            : `Successfully recorded submission! Score: ${data.score}.`,
+            ? lessonCompleted
+              ? `成功将该数据存入数据库！分数: ${data.score}，已同步更新至学生学习进度。`
+              : `成功将该数据存入数据库！分数: ${data.score}。完成本课节全部课件后才会标记课节完成。`
+            : lessonCompleted
+              ? `Successfully recorded submission! Score: ${data.score}.`
+              : `Score ${data.score} saved. The lesson counts as complete only after all courseware are finished.`,
           'success',
         );
         fetchAttempts();

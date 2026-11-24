@@ -83,6 +83,7 @@
     "db:gen-golden": "tsx scripts/gen-schema-golden.ts",
     "ops:check-perms": "tsx scripts/check-file-permissions.ts",
     "db:clean-test-data": "node scripts/cleanup-test-data.mjs",
+    "db:report-duplicate-grades": "tsx scripts/report-duplicate-grades.ts",
     "db:seed": "npx tsx scripts/seed-demo-data.ts",
     "db:clean-demo": "npx tsx scripts/seed-demo-data.ts --clean",
     "db:reset": "rm -f packages/core/db/educational_os.db* && echo \"✓ Database deleted. Run npm run dev to regenerate.\"",

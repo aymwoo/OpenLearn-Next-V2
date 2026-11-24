@@ -11,6 +11,7 @@ import type { Database } from 'better-sqlite3';
 import type { ClassroomReportSessionSummary, ILessonReportService, LessonReportSummary } from './interfaces.js';
 import { canSeeLesson } from './lesson-visibility.js';
 import { currentLessonViewer, normalizeViewerRole, type LessonViewer } from './lesson-viewer.js';
+import { resolveGradeItemKey } from './grade-item-key.js';
 
 export class LessonReportAccessError extends Error {
   readonly status = 403;
@@ -46,12 +47,6 @@ interface SessionWithLessonRow extends SessionRow {
   lesson_id: string;
 }
 
-interface AssignmentAggregateRow {
-  total: number | null;
-  graded: number | null;
-  average_score: number | null;
-}
-
 interface ActivityAggregateRow {
   total: number | null;
   submitted: number | null;
@@ -84,16 +79,7 @@ export class LessonReportService implements ILessonReportService {
       .prepare(`SELECT ${SESSION_COLUMNS} FROM classroom_sessions s WHERE s.lesson_id = ? ORDER BY s.created_at DESC`)
       .all(id) as SessionRow[];
 
-    const assignments = this.db
-      .prepare(
-        `SELECT COUNT(*) AS total,
-                SUM(CASE WHEN asb.score IS NOT NULL THEN 1 ELSE 0 END) AS graded,
-                AVG(asb.score) AS average_score
-           FROM assignment_submissions asb
-           JOIN assignments a ON a.id = asb.assignment_id
-          WHERE a.lesson_id = ?`,
-      )
-      .get(id) as AssignmentAggregateRow | undefined;
+    const assignments = this.aggregateAssignments(id);
 
     const activities = this.db
       .prepare(
@@ -116,11 +102,7 @@ export class LessonReportService implements ILessonReportService {
       lessonId: lesson.id,
       lessonTitle: lesson.title,
       sessions: sessions.map(toSessionSummary),
-      assignments: {
-        total: Number(assignments?.total) || 0,
-        graded: Number(assignments?.graded) || 0,
-        averageScore: toNullableNumber(assignments?.average_score),
-      },
+      assignments,
       activities: {
         total: Number(activities?.total) || 0,
         submitted: Number(activities?.submitted) || 0,
@@ -141,6 +123,77 @@ export class LessonReportService implements ILessonReportService {
 
     this.assertVisible(viewer, row.lesson_id);
     return toSessionSummary(row);
+  }
+
+  /**
+   * 作业聚合：先按「学生 + 成绩项键」去重再计数。
+   *
+   * 历史实现直接对提交行做 COUNT / AVG，课件改名或学案重复补壳产生的重复作业行
+   * 会让作业总数、已批改数与均分被重复统计（第三方插件读到的正是这份摘要）。
+   */
+  private aggregateAssignments(lessonId: string): LessonReportSummary['assignments'] {
+    const rows = this.db
+      .prepare(
+        `SELECT asb.student_id, asb.assignment_id, asb.score,
+                asb.graded_at, asb.submitted_at,
+                a.class_id, a.lesson_id, a.content
+           FROM assignment_submissions asb
+           JOIN assignments a ON a.id = asb.assignment_id
+          WHERE a.lesson_id = ?`,
+      )
+      .all(lessonId) as Array<{
+      student_id: string;
+      assignment_id: string;
+      score: number | null;
+      graded_at: number | null;
+      submitted_at: number | null;
+      class_id: string | null;
+      lesson_id: string | null;
+      content: string | null;
+    }>;
+
+    type DedupedSubmission = { score: number | null; at: number };
+    const byStudentItem = new Map<string, Map<string, DedupedSubmission>>();
+    for (const row of rows) {
+      const key = resolveGradeItemKey({
+        id: row.assignment_id,
+        classId: row.class_id,
+        lessonId: row.lesson_id,
+        content: row.content,
+      });
+      let byItem = byStudentItem.get(row.student_id);
+      if (!byItem) {
+        byItem = new Map();
+        byStudentItem.set(row.student_id, byItem);
+      }
+      const at = Number(row.graded_at ?? row.submitted_at ?? 0);
+      const prev = byItem.get(key);
+      // 同一成绩项保留最新一条；时间相同优先已出分的较高分，避免旧壳覆盖新成绩。
+      const replace =
+        !prev ||
+        at > prev.at ||
+        (at === prev.at && row.score !== null && (prev.score === null || row.score > prev.score));
+      if (replace) byItem.set(key, { score: row.score, at });
+    }
+
+    let total = 0;
+    let graded = 0;
+    let scoreSum = 0;
+    for (const byItem of byStudentItem.values()) {
+      for (const item of byItem.values()) {
+        total += 1;
+        if (typeof item.score === 'number' && Number.isFinite(item.score)) {
+          graded += 1;
+          scoreSum += item.score;
+        }
+      }
+    }
+
+    return {
+      total,
+      graded,
+      averageScore: graded > 0 ? Math.round((scoreSum / graded) * 10) / 10 : null,
+    };
   }
 
   private requireStaff(): LessonViewer {

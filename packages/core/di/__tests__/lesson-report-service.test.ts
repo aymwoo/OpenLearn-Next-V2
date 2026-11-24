@@ -10,7 +10,7 @@ function createDb(): Database.Database {
     CREATE TABLE classes (id TEXT PRIMARY KEY, owner_user_id TEXT);
     CREATE TABLE class_students (class_id TEXT, student_id TEXT);
     CREATE TABLE schedules (id TEXT PRIMARY KEY, lesson_id TEXT, class_id TEXT);
-    CREATE TABLE assignments (id TEXT PRIMARY KEY, lesson_id TEXT, class_id TEXT);
+    CREATE TABLE assignments (id TEXT PRIMARY KEY, lesson_id TEXT, class_id TEXT, content TEXT);
     CREATE TABLE assignment_submissions (
       assignment_id TEXT NOT NULL,
       student_id TEXT NOT NULL,
@@ -124,6 +124,30 @@ describe('LessonReportService', () => {
       assignments: { total: 2, graded: 1, averageScore: 90 },
       activities: { total: 2, submitted: 2, completed: 1 },
     });
+  });
+
+  it('重复作业壳按成绩项去重后统计', async () => {
+    const insertAsg = db.prepare('INSERT INTO assignments (id, lesson_id, class_id, content) VALUES (?, ?, ?, ?)');
+    insertAsg.run('asg-dup-old', 'les-a', 'cls-a', JSON.stringify({ coursewareUuid: 'cw-x' }));
+    insertAsg.run('asg-dup-new', 'les-a', 'cls-a', JSON.stringify({ coursewareUuid: 'cw-x' }));
+    // 同一课件在别的班级是独立成绩项，不能被合并
+    insertAsg.run('asg-dup-other-class', 'les-a', 'cls-b', JSON.stringify({ coursewareUuid: 'cw-x' }));
+
+    const insertSub = db.prepare(
+      `INSERT INTO assignment_submissions
+         (assignment_id, student_id, content, score, submitted_at, status)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+    );
+    insertSub.run('asg-dup-old', 'stu-a', 'answer', 60, 100, 'graded');
+    insertSub.run('asg-dup-new', 'stu-a', 'answer', 80, 200, 'graded');
+    insertSub.run('asg-dup-other-class', 'stu-c', 'answer', 20, 200, 'graded');
+
+    const report = await runWithLessonViewer({ userId: 'teacher-a', role: 'teacher' }, () =>
+      service.getLessonReport('les-a'),
+    );
+
+    // 去重后：asg-a(90) + 同班同课件最新壳(80) + 外班同课件(20) + asg-b(未出分) = 4 项
+    expect(report?.assignments).toEqual({ total: 4, graded: 3, averageScore: 63.3 });
   });
 
   it('会话摘要复用课节可见性', async () => {

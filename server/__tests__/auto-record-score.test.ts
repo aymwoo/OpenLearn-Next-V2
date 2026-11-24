@@ -325,7 +325,9 @@ describe('promoteAttemptToGrade', () => {
 
   it('同时更新学生课节进度为 100%', () => {
     seedAttempt({ attemptId: 'att_1', studentId: 's1', score: 70 });
-    promoteAttemptToGrade(db as any, 'att_1', { lessonId: LESSON, classId: CLASS_ID });
+    const result = promoteAttemptToGrade(db as any, 'att_1', { lessonId: LESSON, classId: CLASS_ID });
+    // 课节没有关联课件时沿用旧行为：录入即视为完成
+    expect(result.lessonCompleted).toBe(true);
 
     const progress = db
       .prepare(
@@ -337,6 +339,43 @@ describe('promoteAttemptToGrade', () => {
     // 课件完成属于已验证进度，成绩计算才会采用
     expect(progress.verified).toBe(1);
     expect(progress.verified_progress_percent).toBe(100);
+  });
+
+  it('课节关联多个课件时，完成全部课件才把课节置为 100%', () => {
+    db.exec(`
+      CREATE TABLE lesson_activity_blocks (
+        id TEXT PRIMARY KEY, lesson_id TEXT NOT NULL, block_type TEXT NOT NULL,
+        content_json TEXT NOT NULL, order_index INTEGER NOT NULL DEFAULT 0
+      );
+    `);
+    const insertBlock = db.prepare(
+      `INSERT INTO lesson_activity_blocks (id, lesson_id, block_type, content_json)
+       VALUES (?, ?, 'interactive_courseware', ?)`,
+    );
+    insertBlock.run('blk_cw1', LESSON, JSON.stringify({ coursewareUuid: 'uuid-cw_1' }));
+    insertBlock.run('blk_cw2', LESSON, JSON.stringify({ coursewareUuid: 'uuid-cw_2' }));
+    seedCourseware('cw_2', '第二课件');
+
+    seedAttempt({ attemptId: 'att_cw1', studentId: 's1', score: 80, coursewareId: 'cw_1' });
+    const first = promoteAttemptToGrade(asSqlite(db), 'att_cw1', { lessonId: LESSON, classId: CLASS_ID });
+    expect(first.ok).toBe(true);
+    expect(first.lessonCompleted).toBe(false);
+
+    const before = db
+      .prepare('SELECT COUNT(*) AS n FROM student_lesson_progress WHERE student_id = ? AND lesson_id = ?')
+      .get('s1', LESSON) as { n: number };
+    expect(before.n).toBe(0);
+
+    seedAttempt({ attemptId: 'att_cw2', studentId: 's1', score: 90, coursewareId: 'cw_2' });
+    const second = promoteAttemptToGrade(asSqlite(db), 'att_cw2', { lessonId: LESSON, classId: CLASS_ID });
+    expect(second.ok).toBe(true);
+    expect(second.lessonCompleted).toBe(true);
+
+    const progress = db
+      .prepare('SELECT completed, progress_percent FROM student_lesson_progress WHERE student_id = ? AND lesson_id = ?')
+      .get('s1', LESSON) as { completed: number; progress_percent: number };
+    expect(progress.completed).toBe(1);
+    expect(progress.progress_percent).toBe(100);
   });
 
   it('作业、成绩行与课节进度写入同一学年（取自排课）', () => {

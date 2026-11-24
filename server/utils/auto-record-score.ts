@@ -47,6 +47,8 @@ export interface PromoteResult {
   assignmentId?: string;
   studentId?: string;
   coursewareName?: string;
+  /** 本次录入后是否已满足「课节全部课件完成」，从而推进了课节进度 */
+  lessonCompleted?: boolean;
 }
 
 /**
@@ -178,7 +180,7 @@ export function promoteAttemptToGrade(db: SqliteLike, attemptId: string, options
   const source = options.source ?? 'manual';
   const strategy = options.strategy ?? 'latest';
 
-  type RunOutcome = { assignmentId?: string; skipReason?: PromoteResult['reason'] };
+  type RunOutcome = { assignmentId?: string; skipReason?: PromoteResult['reason']; lessonCompleted?: boolean };
 
   const run = (): RunOutcome => {
     const existingAssignment = findCoursewareAssignment(db, classId, lessonId, coursewareName, attempt.courseware_uuid);
@@ -242,19 +244,24 @@ export function promoteAttemptToGrade(db: SqliteLike, attemptId: string, options
       return { skipReason: reason };
     }
 
-    db.prepare(
-      `INSERT INTO student_lesson_progress
-         (student_id, lesson_id, completed, progress_percent, completed_segments, assigned_at, verified, verified_progress_percent, academic_year)
-       VALUES (?, ?, 1, 100, '[]', ?, 1, 100, ?)
-       ON CONFLICT(student_id, lesson_id) DO UPDATE SET
-         completed = 1,
-         progress_percent = 100,
-         verified = 1,
-         verified_progress_percent = 100,
-         academic_year = COALESCE(excluded.academic_year, student_lesson_progress.academic_year)`,
-    ).run(attempt.student_id, lessonId, now, assignment.academicYear);
+    // 只有该课节的全部课件都已完成，才把课节进度推进到 100%；
+    // 多课件课节里录入单个课件不应提前判定课节完成。
+    const lessonCompleted = isLessonCoursewareComplete(db, lessonId, attempt.student_id);
+    if (lessonCompleted) {
+      db.prepare(
+        `INSERT INTO student_lesson_progress
+           (student_id, lesson_id, completed, progress_percent, completed_segments, assigned_at, verified, verified_progress_percent, academic_year)
+         VALUES (?, ?, 1, 100, '[]', ?, 1, 100, ?)
+         ON CONFLICT(student_id, lesson_id) DO UPDATE SET
+           completed = 1,
+           progress_percent = 100,
+           verified = 1,
+           verified_progress_percent = 100,
+           academic_year = COALESCE(excluded.academic_year, student_lesson_progress.academic_year)`,
+      ).run(attempt.student_id, lessonId, now, assignment.academicYear);
+    }
 
-    return { assignmentId: assignment.id };
+    return { assignmentId: assignment.id, lessonCompleted };
   };
 
   // better-sqlite3 风格的 transaction；非事务环境（Worker RPC 代理）直接执行。
@@ -278,6 +285,7 @@ export function promoteAttemptToGrade(db: SqliteLike, attemptId: string, options
     assignmentId: outcome.assignmentId,
     studentId: attempt.student_id,
     coursewareName,
+    lessonCompleted: outcome.lessonCompleted,
   };
 }
 
@@ -478,6 +486,41 @@ function collectLessonCoursewareUuids(db: SqliteLike, lessonId: string): string[
   } catch {}
 
   return Array.from(uuids);
+}
+
+/**
+ * 课节是否已「全部课件完成」。
+ *
+ * 产品口径：完成课节关联的所有课件才算完成课节。旧实现只要录入任意一条课件成绩
+ * 就把整课节置为 100%，多课件课节会被高估。
+ * 课节尚未关联任何课件（老数据 / 纯作业课节）时没有判定依据，沿用旧行为视为完成。
+ */
+function isLessonCoursewareComplete(db: SqliteLike, lessonId: string, studentId: string): boolean {
+  let requiredUuids: string[];
+  try {
+    requiredUuids = collectLessonCoursewareUuids(db, lessonId);
+  } catch {
+    return true;
+  }
+  if (requiredUuids.length === 0) return true;
+
+  const completed = new Set<string>();
+  try {
+    const rows = db
+      .prepare(
+        `SELECT DISTINCT cw.uuid AS uuid
+           FROM courseware_attempt a
+           JOIN courseware cw ON cw.id = a.courseware_id
+          WHERE a.student_id = ?
+            AND a.status IN ('completed', 'submitted', 'finished')`,
+      )
+      .all(studentId) as Array<{ uuid: string | null }>;
+    for (const row of rows) if (row.uuid) completed.add(row.uuid);
+  } catch {
+    return true;
+  }
+
+  return requiredUuids.every((uuid) => completed.has(uuid));
 }
 
 /** 学生是否属于该班级：成绩只能落在学生实际所在的班级。 */

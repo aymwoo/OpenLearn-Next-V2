@@ -88,11 +88,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - 服务重启后未完成的 `running/paused` 运行恢复为 `interrupted` 终态，不再伪装成可继续；管理弹层显示「已中断」并隐藏恢复/结束操作，避免稳定触发 409。
   - 新增 `GET /api/system/extension-points`（未知扩展槽与当前 strict/warn/lenient 模式）与 `GET /api/system/legacy-activity-routes`（旧别名按 `METHOD + 路由模式` 的调用计数），为后续摘除别名提供数据。
 
+- **历史重复成绩项只读体检脚本**：新增 `pnpm db:report-duplicate-grades`（`scripts/report-duplicate-grades.ts`），按「班级 + 成绩项键」列出重复作业壳、受影响学生、会被读取侧忽略的提交与分数差异；默认只读不写库，`--json` 输出结构化报告，支持用 `OPENLEARN_DB_PATH` 指向生产库副本。
+
 ### Fixes
 
 - **学期作业分分母与学年口径统一**：学期总评的作业分改为「本学年已发布作业数」为分母，未交 / 未出分按 0 计入；本学年没有任何已发布作业时按 100 分处理，不再被其他学年的作业拖成 0 分。作业成绩查询对 `assignment_submissions.academic_year` 兼容 `NULL`（以父作业学年为权威口径），避免旧数据因冗余列缺失被整段丢掉。学案同步补建的 `xuean-activity:*` 作业壳会按排课 / 课堂会话解析并写入 `academic_year`（旧壳为空时补写），保证同步后的学案成绩能在对应学年的学期总评里被统计。
-- **同一成绩被多条 assignment 重复计分**：新增成绩项键（`server/services/grade-item-key.ts`），按 `assignments.content` 中的互动课件 `coursewareUuid`（同一课节合并、跨课节独立）与学案 `activityId` 识别同一成绩项。学期总评与学年对比统计时按「学生 / 成绩项」去重，重复壳行只保留最新一条（同时间取较高分），分母也按去重后的项数计算；无稳定标识的普通作业仍按 `id` 各自独立。避免课件改名、学案重复补壳等历史数据让同一份成绩重复进入分子与分母。
+- **同一成绩被多条 assignment 重复计分**：新增成绩项键（`packages/core/di/grade-item-key.ts`），按 `assignments.content` 中的互动课件 `coursewareUuid`（同一课节合并、跨课节独立）与学案 `activityId` 识别同一成绩项。学期总评与学年对比统计时按「学生 / 成绩项」去重，重复壳行只保留最新一条（同时间取较高分），分母也按去重后的项数计算；无稳定标识的普通作业仍按 `id` 各自独立。避免课件改名、学案重复补壳等历史数据让同一份成绩重复进入分子与分母。
 - **自动录入 / 补录的作业壳去重加固**：课件作业壳改按 `json_extract(content, '$.coursewareUuid')` 语义匹配（兼容 JSON 字段间空格），命中无标识的旧壳时回填 `coursewareUuid`，后续不再依赖标题；批量补录只处理课节真实关联的课件（白板 `learning_surface` / 旧 `html-applet` / 学案互动课件块），课节尚未关联课件时才回退全班口径并在 `AutoRecordReport.scope` 标记；「已录入」徽标（`isPromoted`）支持按 `lessonId` 收口到本课节，并限制在学生所在班级。
+- **课堂选人分层的平均分口径对齐成绩册**：`getPickerCandidates` 不再对学生全部 `assignment_submissions` 直接取 `AVG`，改为只统计本班、本学年，并按成绩项键去重（同一课件的重复壳只取最新一条），避免跨班、跨学年与重复壳让 basic / intermediate / advanced 分层失真；无成绩时仍默认 80 分。
+- **课后报告的作业统计按成绩项去重**：`LessonReportService.getLessonReport` 不再直接对提交行做 `COUNT / AVG`，改为先按「学生 + 成绩项键」去重（同一课件的重复壳只保留最新一条，同时间优先较高分），再统计作业总数、已批改数与均分；成绩项键解析逻辑上移到 `packages/core/di/grade-item-key.ts`，供内核服务与 `server` 侧共用。
+- **课节完成度改为「全部课件完成」**：录入课件成绩不再无条件把 `student_lesson_progress` 置为 100%；只有该学生已完成本课节关联的全部课件（白板 / 学案引用）时才推进进度并广播 `student.progress_updated`，多课件课节中录入单个课件只落成绩。课节未关联任何课件（老数据 / 纯作业课节）沿用旧行为；录入成功的响应新增 `lessonCompleted`，课堂提示语据此区分「成绩已保存」与「进度已同步」。
 - **互动课堂入口不再先显示进行中会话列表**：进入互动课堂时始终先落到起始门户（课程选择 + 当前会话提示条），有进行中的课堂就在门户顶部通过「课堂进行中 → 回到课堂」进入，不再先跳到独立的进行中会话列表页；刷新恢复、班级锁定与一键开课信号的行为保持不变。
 - **归档并结束课堂后回到起始门户**：在学情简报页点击「归档并结束课堂」成功后，清理当前会话状态并返回起始门户，不再停留在原简报页；服务端归档仍保持幂等。
 

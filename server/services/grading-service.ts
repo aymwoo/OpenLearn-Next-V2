@@ -8,7 +8,7 @@ import type Database from 'better-sqlite3';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
 import { randomId } from '../utils/id.js';
 import { deriveAcademicYear, deriveAcademicYearFromSemesterName } from '../utils/academic-year.js';
-import { resolveGradeItemKey } from './grade-item-key.js';
+import { resolveGradeItemKey } from '../../packages/core/di/grade-item-key.js';
 import { resolveAccessibleAiProvider } from './ai-provider-resolver.js';
 import { fetchWithRetry } from '../../packages/core/ai/utils/fetch-with-retry.js';
 import { buildOpenAIChatUrl, validateAiProviderUrl } from '../../packages/core/ai/utils/redirect-guard.js';

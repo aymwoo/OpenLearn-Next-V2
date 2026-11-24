@@ -12,7 +12,7 @@ import {
   getDefaultComparisonAcademicYears,
   getCurrentAcademicYear,
 } from '../utils/academic-year.js';
-import { resolveGradeItemKey } from './grade-item-key.js';
+import { resolveGradeItemKey } from '../../packages/core/di/grade-item-key.js';
 
 export interface CourseScoreItem {
   courseId: string;

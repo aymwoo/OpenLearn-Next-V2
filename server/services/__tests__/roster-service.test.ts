@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import { kernelContainer } from '../../../packages/core/kernel/index.js';
 import { runStartupMigrations } from '../../bootstrap-db.js';
 import { RosterService } from '../roster-service.js';
+import { deriveAcademicYear } from '../../utils/academic-year.js';
 
 describe('RosterService 领域服务单元测试 (E3 深化)', () => {
   let service: RosterService;
@@ -516,6 +517,80 @@ describe('RosterService 领域服务单元测试 (E3 深化)', () => {
       service.deleteStudentCascade(absent.id);
 
       // 清理
+      service.deleteClassCascade(clsId);
+      service.deleteStudentCascade(stu.id);
+    });
+
+    it('getPickerCandidates 平均分按本班 + 本学年 + 成绩项去重', () => {
+      const stu = service.createStudent({ name: '分层口径学生' });
+      const clsId = service.createClass('分层口径班');
+      const otherClsId = service.createClass('分层口径对照班');
+      service.enrollStudent(clsId, stu.id);
+      // 至少点名一次，排除 term_picked_count=0 把 tier 固定为 basic 的干扰
+      service.evaluateRollcall({
+        studentId: stu.id,
+        studentName: '分层口径学生',
+        classId: clsId,
+        rating: '5',
+        score: 100,
+        rewardCoins: 1,
+      });
+
+      const year = deriveAcademicYear(Date.now());
+      const insertAsg = db.prepare(
+        `INSERT INTO assignments (id, class_id, lesson_id, title, description, content, created_at, academic_year)
+         VALUES (?, ?, ?, ?, '', ?, ?, ?)`,
+      );
+      const now = Date.now();
+      // 同一成绩项：同班同课节同课件的重复壳，较旧的低分不应参与平均
+      insertAsg.run(
+        'asg-tier-a',
+        clsId,
+        'lesson-tier',
+        '互动课件: 甲',
+        JSON.stringify({ coursewareUuid: 'cw-tier' }),
+        now - 1000,
+        year,
+      );
+      insertAsg.run(
+        'asg-tier-a-dup',
+        clsId,
+        'lesson-tier',
+        '互动课件: 甲（旧壳）',
+        JSON.stringify({ coursewareUuid: 'cw-tier' }),
+        now - 2000,
+        year,
+      );
+      // 同班同年的独立作业
+      insertAsg.run('asg-tier-b', clsId, 'lesson-tier', '普通作业', '{}', now, year);
+      // 应排除：别的班级 / 别的学年
+      insertAsg.run(
+        'asg-tier-other-class',
+        otherClsId,
+        'lesson-tier',
+        '外班作业',
+        JSON.stringify({ coursewareUuid: 'cw-tier' }),
+        now,
+        year,
+      );
+      insertAsg.run('asg-tier-prev-year', clsId, 'lesson-tier', '往年作业', '{}', now, '2000-2001');
+
+      const insertSub = db.prepare(
+        `INSERT INTO assignment_submissions (assignment_id, student_id, content, score, submitted_at, status, academic_year)
+         VALUES (?, ?, '{}', ?, ?, 'graded', ?)`,
+      );
+      insertSub.run('asg-tier-a', stu.id, 90, now, year);
+      insertSub.run('asg-tier-a-dup', stu.id, 10, now - 5000, year);
+      insertSub.run('asg-tier-b', stu.id, 96, now, year);
+      insertSub.run('asg-tier-other-class', stu.id, 0, now, year);
+      insertSub.run('asg-tier-prev-year', stu.id, 0, now, '2000-2001');
+
+      // 去重后：(90 + 96) / 2 = 93 → advanced。
+      // 若重复壳/外班/往年成绩被计入，平均分会明显下降，tier 不会是 advanced。
+      const candidate = service.getPickerCandidates(clsId).find((c) => c.id === stu.id);
+      expect(candidate?.tier).toBe('advanced');
+
+      service.deleteClassCascade(otherClsId);
       service.deleteClassCascade(clsId);
       service.deleteStudentCascade(stu.id);
     });

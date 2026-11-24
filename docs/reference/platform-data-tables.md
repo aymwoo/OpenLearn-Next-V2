@@ -359,6 +359,10 @@ provider 活动的运行态。`id` / `activity_id` / `provider_id` / `lesson_id`
 > 写入侧同样按 `coursewareUuid` 做 JSON 语义匹配（兼容字段间空格），命中无标识的旧课件壳时
 > 自动补写 `coursewareUuid`；批量补录只处理课节真实关联的课件（白板 / 学案引用），
 > 课节未关联课件时才回退全班口径并在补录报告里标记 `scope`。
+>
+> 历史数据是否还存在重复壳，可用只读体检脚本查看（不写库）：
+> `pnpm db:report-duplicate-grades`（加 `-- --json` 输出结构化报告，
+> `OPENLEARN_DB_PATH` 可指向生产库副本）。
 
 ### `assignment_submissions`
 

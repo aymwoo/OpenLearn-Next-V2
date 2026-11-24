@@ -710,20 +710,28 @@ export class CoursewareService {
       }),
     );
 
-    await publishClassroomEvent(
-      CLASSROOM_EVENTS.STUDENT_PROGRESS_UPDATED,
-      {
-        studentId: result.studentId,
-        lessonId,
-        progressPercent: 100,
-        completed: true,
-        completedSegments: [],
-        verified: true,
-      },
-      { correlationId: lessonId },
-    );
+    // 课节完成度只在「本课节全部课件已完成」时才会被推进；
+    // 未完成时只落成绩，不广播 100% 进度，避免前端误显示课节已完成。
+    if (result.lessonCompleted) {
+      await publishClassroomEvent(
+        CLASSROOM_EVENTS.STUDENT_PROGRESS_UPDATED,
+        {
+          studentId: result.studentId,
+          lessonId,
+          progressPercent: 100,
+          completed: true,
+          completedSegments: [],
+          verified: true,
+        },
+        { correlationId: lessonId },
+      );
+    }
 
-    return { assignmentId: result.assignmentId, score: result.score };
+    return {
+      assignmentId: result.assignmentId,
+      score: result.score,
+      lessonCompleted: result.lessonCompleted ?? false,
+    };
   }
 
   public autoRecordForLesson(lessonId: string, classId: string, limit?: number): AutoRecordReport {
