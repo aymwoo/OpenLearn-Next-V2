@@ -59,7 +59,7 @@ pnpm dev
 > git remote -v   # origin 即 Gitee
 > ```
 >
-> 日常 `git fetch origin` 即可。**不要**在其它平台开自动双向镜像（会覆盖分支 / 标签 / 提交）。
+> 日常 `git fetch origin` 即可。`main` 由 GitHub Actions 在两侧之间只快进对齐；不要启用 Gitee 的「镜像推送」。说明见 [`../ops/gitee-github-main-sync.md`](../ops/gitee-github-main-sync.md)。
 
 > 版本不一致时，`preinstall` 守卫会在安装阶段直接拦住，并告诉你该换 Node 还是该 `pnpm rebuild better-sqlite3` —— 不用等启动时才撞上 `ERR_DLOPEN_FAILED`。
 

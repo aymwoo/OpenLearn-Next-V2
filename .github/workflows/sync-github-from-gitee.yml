@@ -1,0 +1,67 @@
+name: Sync GitHub from Gitee
+
+# 目的：把 Gitee（gitee.com/aymwoo/openlearn-next）的 main 快进到
+# GitHub（github.com/aymwoo/OpenLearn-Next-V2）的 main。
+#
+# 与 .github/workflows/sync-gitee-mirror.yml 方向相反，约束相同：
+#   ① 只快进：仅当 GitHub main 是 Gitee main 的祖先时才推送；
+#   ② 两侧 SHA 相同则空操作，不推送，避免和 GitHub→Gitee 工作流互相触发；
+#   ③ GitHub 领先时也空操作，那是另一条工作流的方向；
+#   ④ 两侧分叉则失败并停止，绝不改写历史；
+#   ⑤ 提交号只来自刚刚 fetch 的 gitee/main，不采用调度事件附带的字段。
+#
+# 推送使用本工作流的默认 GITHUB_TOKEN（permissions: contents: write）。
+# 该令牌产生的 push 不会再触发 on: push 工作流，因此不会顺势跑起
+# sync-gitee-mirror.yml。不要改用个人访问令牌来推 main。
+#
+# 本工作流不设置 continue-on-error。运行失败就是没有完成快进。
+# 定时相对 sync-gitee-mirror.yml 的 17 */6 * * * 错开 30 分钟。
+#
+# 维护者配置（Secret、Actions 写权限、Gitee WebHook 中转）见
+# docs/ops/gitee-github-main-sync.md。
+# 读取 Gitee 复用已有 GITEE_USERNAME / GITEE_TOKEN；不新增 Actions Secret。
+
+on:
+  repository_dispatch:
+    types: [gitee_push]
+  workflow_dispatch:
+  schedule:
+    # 兜底。GitHub→Gitee 那条是每 6 小时的第 17 分；这里用第 47 分，避免两条同时起步。
+    - cron: '47 */6 * * *'
+
+concurrency:
+  group: gitee-to-github-ff
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    name: 快进 GitHub main
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
+      GITEE_USER: ${{ secrets.GITEE_USERNAME }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # 祖先判断需要完整历史。推送的是 gitee/main，不是这次检出的 HEAD。
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: 准备 Gitee 远端
+        id: prepare
+        run: bash .github/scripts/sync-github-from-gitee.sh prepare
+
+      - name: 快进 GitHub main
+        id: sync
+        run: bash .github/scripts/sync-github-from-gitee.sh sync
+
+      - name: 同步结果
+        if: always()
+        run: bash .github/scripts/sync-github-from-gitee.sh summary
+        env:
+          OUTCOME_PREPARE: ${{ steps.prepare.outcome }}
+          OUTCOME_SYNC: ${{ steps.sync.outcome }}

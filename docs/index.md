@@ -126,6 +126,7 @@ deployment/production-guide
 deployment/docker-nginx
 deployment/multi-school
 ops/sqlite-capacity
+ops/gitee-github-main-sync
 ops/gitee-mirror-sync-verification
 beta/README
 beta/announcement

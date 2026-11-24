@@ -12,6 +12,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Features
 
+- **Gitee `main` → GitHub `main` 只快进**：新增 `.github/workflows/sync-github-from-gitee.yml` 与 `.github/scripts/sync-github-from-gitee.sh`。仅当 GitHub `main` 是 Gitee `main` 的祖先时，用默认 `GITHUB_TOKEN` 快进 GitHub `main`；两侧 SHA 相同或 GitHub 领先则空操作、不推送，避免与既有 GitHub → Gitee 工作流打转；历史分叉则失败并停止。触发为 `repository_dispatch`（`gitee_push`）、相对 `17 */6 * * *` 错开的定时 `47 */6 * * *`，以及 `workflow_dispatch`。读取 Gitee 复用已有 `GITEE_USERNAME` / `GITEE_TOKEN`。既有 `.github/workflows/sync-gitee-mirror.yml` 保持不变。配置、权限与 Gitee WebHook 中转见 `docs/ops/gitee-github-main-sync.md`。
 - **学案成绩显式同步到成绩册**：新增 `POST /api/lesson-activities/:id/sync-grade`、`POST /api/lessons/:lessonId/activities/:activityId/sync-grade` 与 `POST /api/lessons/:lessonId/activity-grades/sync`。教师批阅（`progress/verify`）仍只写 `activity_progress`；同步动作把 `verified=1` 且有分的记录按 `xuean-activity:<activityId>` 写入 `assignments` / `assignment_submissions`，复用 SubmissionAggregator 与 grade-writer 的审计、手动分保护与幂等；`graded_by` / `assignment_grade_history` 记录教师 actor。学案教师进度面板新增「同步已批阅成绩」批量按钮与逐学生「同步」按钮，并在面板内提示「批阅后需同步到成绩册，学期总评才会计入」。
 - **第三方插件 P0 安全扩展服务**：新增 4 个宿主侧入口，避免插件为读核心数据而直查 sql-guard 禁读表或申请过宽权限：
   - `ctx.services.assignmentSubmission`（`assignment:read`）：`getMySubmission` / `getSubmissionForViewer` / `canShareSubmission`；学生仅本人、教师仅自己班级、管理员不限，返回体不含名册字段。

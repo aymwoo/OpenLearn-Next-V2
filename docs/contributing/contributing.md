@@ -129,7 +129,7 @@ PYTHONPATH=$HOME/.cache/pylibs bash scripts/build-docs.sh $HOME/.cache/docs-buil
 > - 命令行统一用 `gitee` CLI（`gitee issue create` / `gitee pr create` / `gitee pr merge`），不再使用 `gh`；Issue 编号为 `I...` 字符串、PR 编号为 `!N` 整数。
 > - **Issue / PR 模板**：`.gitee/ISSUE_TEMPLATE/`（缺陷报告 / 功能建议）与 `.gitee/PULL_REQUEST_TEMPLATE.zh-CN.md`（PR 正文骨架）；新开单、新提 PR 直接用模板。
 > - 本地克隆的 `origin` 即 Gitee：`git fetch origin` / `git push origin <branch>`；主干跟踪 `origin/main`。
-> - **不做跨平台自动同步**：不再把其它平台作为协作入口，Agent 一律不在其它平台提 Issue / PR、不向其推送分支或标签。（GitHub 仓库上残留的 `.github/workflows/sync-gitee-mirror.yml` 是「GitHub → Gitee」的历史单向快进，只会快进、不会回退 Gitee，对本流程无影响；是否保留由维护者决定。）
+> - **Issue / PR 仍只开在 Gitee**：Agent 不在 GitHub 开 Issue / PR，也不向 GitHub 推功能分支。`main` 由两条只快进的 Actions 对齐（SHA 相同则空操作，历史分叉则两边都停），说明见 [`../ops/gitee-github-main-sync.md`](../ops/gitee-github-main-sync.md)。不要启用 Gitee 仓库设置里的「镜像推送」。
 >
 > ⚠️ **CI 现状**：Gitee 侧合并**不会**触发 GitHub Actions —— 本仓库未接入 Gitee Go 流水线，Gitee 不执行 `.github/workflows` 下的工作流。因此**第 5.3 节的本地全套质量门禁是唯一的自动化防线**，缺一不可。
 

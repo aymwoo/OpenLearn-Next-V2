@@ -25,7 +25,7 @@
 > 工作副本的 `origin` 即 Gitee（`git fetch origin` / `git push origin <branch>`），主干跟踪 `origin/main`。
 >
 > **只在 Gitee 提 Issue 与 PR**：命令行用 `gitee issue create` / `gitee pr create` / `gitee pr merge`，不再用 `gh`。
-> **不做跨平台自动同步**：不要在其他平台开自动双向镜像（会覆盖分支 / 标签 / 提交）。
+> **`main` 对齐**：两条 GitHub Actions 只快进 `main`（见 [`../ops/gitee-github-main-sync.md`](../ops/gitee-github-main-sync.md)）。不要启用 Gitee 的「镜像推送」，它会覆盖分支、标签和提交。
 > ⚠️ Gitee 侧合并不触发 GitHub Actions（未接入 Gitee Go 流水线），**本地全套质量门禁是唯一自动化防线**。
 
 > **枚举表是机器生成的，不要凭记忆或凭训练语料写。**
