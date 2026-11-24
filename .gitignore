@@ -53,6 +53,8 @@ v2_plugins/*/.codegraph/
 v2_plugins/
 storage/
 uploads/
+# 仓库根误落的运行时素材目录（lesson-asset 等上传产物，不入库）
+/files/
 /.agents/skills
 /agent/skills
 graphify-out/
