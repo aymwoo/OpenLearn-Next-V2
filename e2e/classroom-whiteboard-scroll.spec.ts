@@ -141,7 +141,6 @@ test.describe('白板画布可达性 E2E（窗口不够大时的滚动）', () =
 
       await page.goto('/');
       await enterTeachingView(page);
-      await expect(page.locator('#classroom-interactive-cockpit')).toBeVisible({ timeout: 20_000 });
 
       const viewport = page.locator('[data-testid="whiteboard-canvas-viewport"]');
       await expect(viewport).toBeVisible({ timeout: 20_000 });
@@ -231,7 +230,6 @@ test.describe('白板画布可达性 E2E（窗口不够大时的滚动）', () =
 
       await page.goto('/');
       await enterTeachingView(page);
-      await expect(page.locator('#classroom-interactive-cockpit')).toBeVisible({ timeout: 20_000 });
 
       const viewport = page.locator('[data-testid="whiteboard-canvas-viewport"]');
       await expect(viewport).toBeVisible({ timeout: 20_000 });

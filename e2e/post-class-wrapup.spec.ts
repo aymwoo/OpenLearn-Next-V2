@@ -8,7 +8,7 @@ import { expect, test, type APIRequestContext, type Page } from '@playwright/tes
 import path from 'node:path';
 import fs from 'node:fs';
 import Database from 'better-sqlite3';
-import { clickIfVisible } from './fixtures/classroom-entry';
+import { clickIfVisible, dismissClassroomToolbarSetup } from './fixtures/classroom-entry';
 
 function purgePostClassWrapupE2EFromDb() {
   const dbPath = path.resolve(process.cwd(), 'packages/core/db/educational_os.db');
@@ -282,6 +282,8 @@ test.describe('课后学情复盘面板（PostClassWrapupView）与结课简报�
       // 4. 断言课后复盘主面板 #post-class-wrapup-view 成功挂载
       const wrapupView = page.locator('#post-class-wrapup-view');
       await expect(wrapupView).toBeVisible({ timeout: 15_000 });
+      // 进白板课会先弹出开课设置，盖住课后复盘里的页签。等面板挂上再关，避免对话框还没渲染就错过。
+      await dismissClassroomToolbarSetup(page);
       await expect(wrapupView.getByText('阶段 3 / 4 · 课后小结与作业批改')).toBeVisible();
 
       // 验证 4 大 Tab 完整存在

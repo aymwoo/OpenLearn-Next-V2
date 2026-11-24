@@ -8,7 +8,7 @@ import { test, expect } from '@playwright/test';
 import fs from 'fs';
 import path from 'path';
 import Database from 'better-sqlite3';
-import { enterTeachingView } from './fixtures/classroom-entry';
+import { enterTeachingView, openClassroomTools } from './fixtures/classroom-entry';
 
 const DB_PATH = path.resolve(process.cwd(), 'packages/core/db/educational_os.db');
 
@@ -155,9 +155,9 @@ test.describe('教师端中控与白板多环节操控 E2E 测试 (Phase 2)', ()
       // Issue #91: 首屏是进行中会话列表，等列表拉回来再点「继续上课」
       await enterTeachingView(page);
 
-      // 验证课中授课界面与中控导航挂载
-      await expect(page.locator('#classroom-interactive-cockpit')).toBeVisible({ timeout: 15_000 });
-      await expect(page.getByTestId('teacher-current-stage')).toBeVisible({ timeout: 15_000 });
+      // 白板课中控默认收起，顶栏「课堂工具」才是授课视图已经挂上的标志。
+      await expect(page.getByTestId('teacher-whiteboard-tools')).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByTestId('teacher-learning-topic')).toBeVisible({ timeout: 15_000 });
 
       // =========================================================================
       // 5. 测试教学步骤时间轴切换（环节 1 -> 环节 2）
@@ -211,7 +211,7 @@ test.describe('教师端中控与白板多环节操控 E2E 测试 (Phase 2)', ()
 
       // 恢复左侧边栏
       await expandLeftBtn.click();
-      await page.getByTestId('teacher-whiteboard-tools').click();
+      await openClassroomTools(page);
       await expect(page.getByTestId('classroom-stage-stepper')).toBeVisible();
 
       // 截图存盘：白板大纲与时间轴操控完成
@@ -226,13 +226,8 @@ test.describe('教师端中控与白板多环节操控 E2E 测试 (Phase 2)', ()
       const startBuzzerBtn = page.locator('#classroom-interactive-cockpit button:has-text("发起抢答")');
       await expect(startBuzzerBtn).toBeVisible();
       await startBuzzerBtn.click();
-
-      // 按钮状态翻转为“重置抢答”
-      const resetBuzzerBtn = page.locator('#classroom-interactive-cockpit button:has-text("重置抢答")');
-      await expect(resetBuzzerBtn).toBeVisible({ timeout: 5_000 });
-      await resetBuzzerBtn.click();
-      // 重置后抢答器就绪，按钮依然保持就绪重置状态
-      await expect(resetBuzzerBtn).toBeVisible({ timeout: 5_000 });
+      // 白板精简模式不把「重置抢答」留在工具条上，进行中的按钮会从面板里拿掉。
+      await expect(startBuzzerBtn).toBeHidden({ timeout: 5_000 });
 
       // 8.2 唤出随机抽问模态窗并关闭
       const rollcallBtn = page.locator('#classroom-interactive-cockpit button:has-text("随机抽问")');

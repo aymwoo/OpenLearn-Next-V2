@@ -11,6 +11,7 @@
 
 > 🔁 **仓库单平台（Gitee）**：[gitee.com/aymwoo/openlearn-next](https://gitee.com/aymwoo/openlearn-next) 是 **Issue / PR / 分支 / 合并 的唯一入口**，也是 Release 与 npm 发布的 tag 落点。
 > 自动化 CI 目前仍只在 GitHub 归档副本 [aymwoo/OpenLearn-Next-V2](https://github.com/aymwoo/OpenLearn-Next-V2) 上运行（Gitee 未接入 Gitee Go 流水线），因此**合并前的本地质量门禁是唯一防线**。
+> GitHub `main` 与 Gitee `main` 由 Actions 互相只快进对齐（SHA 相同则不动，历史分叉则停止）。不要启用 Gitee 的「镜像推送」。见 [docs/ops/gitee-github-main-sync.md](docs/ops/gitee-github-main-sync.md)。
 
 ---
 

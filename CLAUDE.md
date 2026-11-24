@@ -189,10 +189,9 @@ expect((ctx.services.commandBus as MockCommandBus).handlers.has('my.command')).t
 所有在此代码库工作的 AI Agent 必须遵守严格的协作生命周期：
 
 > 🔁 **仓库双平台**：主仓 [GitHub](https://github.com/aymwoo/OpenLearn-Next-V2)（Issue / PR / CI / Release 主入口）｜ 镜像 [Gitee](https://gitee.com/aymwoo/openlearn-next)（国内访问 GitHub 受限时用于克隆与提 Issue）。
-> 镜像由 GitHub **单向同步**（不跑 CI、不发 Release）；**一个变更只在一个平台开一份 Issue / PR**；**禁止在 Gitee 侧开启自动双向镜像**。
+> **一个变更只在一个平台开一份 Issue / PR**。`main` 由两条只快进的 Actions 对齐，SHA 相同则空操作，历史分叉则两边都停：GitHub → Gitee 是 `.github/workflows/sync-gitee-mirror.yml`，Gitee → GitHub 是 `.github/workflows/sync-github-from-gitee.yml`。不要启用 Gitee 仓库设置里的「镜像推送」。配置见 `docs/ops/gitee-github-main-sync.md`。
 >
-> **镜像快进已自动化**（`.github/workflows/sync-gitee-mirror.yml`：单向、只快进，分叉即停），普通贡献者 / Agent 只在 GitHub 提 Issue 与 PR 即可。
-> 手动兜底：
+> 自动同步不可用时，手动把 GitHub `main` 快进到 Gitee：
 >
 > ```bash
 > git remote add gitee https://gitee.com/aymwoo/openlearn-next.git   # 已有则跳过

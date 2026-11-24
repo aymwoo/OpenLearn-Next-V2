@@ -23,7 +23,7 @@ import AxeBuilder from '@axe-core/playwright';
 import fs from 'fs';
 import path from 'path';
 import Database from 'better-sqlite3';
-import { enterTeachingView } from './fixtures/classroom-entry';
+import { enterTeachingView, openClassroomTools } from './fixtures/classroom-entry';
 
 const DB_PATH = path.resolve(process.cwd(), 'packages/core/db/educational_os.db');
 
@@ -91,13 +91,11 @@ async function freezeAnimations(page: Page) {
   await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
 }
 
-/** 进入课中授课界面（已在新标签页时直接复用） */
+/** 进入课中授课界面，并展开默认收起的课堂工具面板。 */
 async function openTeacherClassroom(page: Page) {
-  const cockpit = page.locator(COCKPIT);
-  if (await cockpit.isVisible().catch(() => false)) return;
-  // Issue #91: 首屏是进行中会话列表，需要等列表拉回来再点「继续上课」
-  await enterTeachingView(page, COCKPIT);
-  await expect(cockpit).toBeVisible({ timeout: 20_000 });
+  await enterTeachingView(page);
+  await openClassroomTools(page);
+  await expect(page.locator(COCKPIT)).toBeVisible({ timeout: 20_000 });
 }
 
 /** 对指定子树跑一次 axe color-contrast，返回可读失败清单 */
@@ -183,11 +181,12 @@ test.describe('live_class 课中页面文字对比度（Issue #77）', () => {
     await page.goto('/');
     await openTeacherClassroom(page);
 
-    // 5. 投票进行中：每个主题一次全新加载，各跑一次 axe
+    // 5. 投票进行中：每个主题一次全新加载，各跑一次 axe。
+    // 白板精简模式不渲染「结束投票」，中控面板本身仍在，对比度查这块可见表面。
     for (const theme of THEMES) {
       await reloadWithTheme(page, theme);
       await openTeacherClassroom(page);
-      await expect(page.locator(`${COCKPIT} button:has-text("结束投票")`)).toBeVisible({ timeout: 20_000 });
+      await expect(page.getByTestId('teacher-whiteboard-tools-panel')).toBeVisible({ timeout: 20_000 });
       await freezeAnimations(page);
       await expectNoContrastViolations(page, COCKPIT, `中控（投票进行中 / ${theme}）`);
     }
@@ -201,7 +200,6 @@ test.describe('live_class 课中页面文字对比度（Issue #77）', () => {
     for (const theme of THEMES) {
       await reloadWithTheme(page, theme);
       await openTeacherClassroom(page);
-      await page.getByTestId('teacher-whiteboard-tools').click();
       await page.locator(`${COCKPIT} button:has-text("极速投票")`).first().click();
       await expect(page.locator(POLL_DIALOG)).toBeVisible({ timeout: 10_000 });
       await freezeAnimations(page);

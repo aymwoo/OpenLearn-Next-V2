@@ -39,22 +39,75 @@ export async function dismissIcebreakerIfPresent(page: Page, timeout = 5_000): P
 }
 
 /**
+ * 白板课进入授课视图时会先弹出「开课前功能设置」。
+ * 对话框盖住后面的按钮；确认后本课内不再出现，刷新后会再弹一次。
+ */
+export async function dismissClassroomToolbarSetup(page: Page, timeout = 8_000): Promise<boolean> {
+  const dialog = page.getByRole('dialog', { name: '开课前功能设置' });
+  const shown = await dialog
+    .waitFor({ state: 'visible', timeout })
+    .then(() => true)
+    .catch(() => false);
+  if (!shown) return false;
+  await dialog.getByRole('button', { name: '开始上课' }).click();
+  await dialog.waitFor({ state: 'hidden', timeout: 10_000 });
+  return true;
+}
+
+/**
+ * 白板课的互动按钮收在顶栏「课堂工具」里，面板默认隐藏。
+ * 已经展开时不再点，避免把面板又收起来。
+ */
+export async function openClassroomTools(page: Page): Promise<void> {
+  const toggle = page.getByTestId('teacher-whiteboard-tools');
+  await toggle.waitFor({ state: 'visible', timeout: 15_000 });
+  if ((await toggle.getAttribute('aria-expanded')) === 'true') return;
+  await toggle.click();
+  await page.getByTestId('teacher-whiteboard-tools-panel').waitFor({ state: 'visible', timeout: 10_000 });
+}
+
+/**
  * Issue #91：进入互动课堂后落到「授课视图」。
  *
  * 新首屏是进行中会话列表：有进行中会话 → 点「继续上课」；有活跃课堂锁定 → 点「回到课堂」；
  * 都没有 → 走起始门户，此处不再处理（调用方自行点「开始上课」）。
+ *
+ * 白板课的 `#classroom-interactive-cockpit` 默认带 `hidden`，不能再用它判断「已经在课中」。
+ * 顶栏「课堂工具」按钮在授课视图里一直可见。
  */
-export async function enterTeachingView(page: Page, cockpitSelector = '#classroom-interactive-cockpit'): Promise<void> {
-  const cockpit = page.locator(cockpitSelector);
-  if (await cockpit.isVisible().catch(() => false)) return;
+export async function enterTeachingView(page: Page): Promise<void> {
+  const tools = page.getByTestId('teacher-whiteboard-tools');
+  const setupDialog = page.getByRole('dialog', { name: '开课前功能设置' });
 
-  await page.locator('button:has-text("互动课堂")').first().click();
+  // 刷新后课堂常常已经恢复，并先盖上开课设置。这时再点导航会被对话框挡住。
+  await setupDialog.waitFor({ state: 'visible', timeout: 2_000 }).catch(() => undefined);
+  if (await setupDialog.isVisible().catch(() => false)) {
+    await dismissClassroomToolbarSetup(page, 1_000);
+  }
+  if (await tools.isVisible().catch(() => false)) {
+    await dismissClassroomToolbarSetup(page, 1_000);
+    return;
+  }
 
-  // 1) Issue #91 首屏：进行中会话列表（需要等列表拉回来，不能立刻判断可见性）
-  await clickIfVisible(page.getByRole('button', { name: /继续上课|Resume/ }).first(), 10_000);
+  const nav = page.locator('button:has-text("互动课堂")').first();
+  try {
+    await nav.click({ timeout: 5_000 });
+  } catch {
+    await dismissClassroomToolbarSetup(page, 2_000);
+    if (!(await tools.isVisible().catch(() => false))) {
+      await nav.click();
+    }
+  }
 
-  // 2) 旧路径：进行中会话被锁定时门户里的「回到课堂」
-  await clickIfVisible(page.getByRole('button', { name: '回到课堂' }).first(), 3_000);
+  if (!(await tools.isVisible().catch(() => false))) {
+    // 1) Issue #91 首屏：进行中会话列表（需要等列表拉回来，不能立刻判断可见性）
+    await clickIfVisible(page.getByRole('button', { name: /继续上课|Resume/ }).first(), 10_000);
+
+    // 2) 旧路径：进行中会话被锁定时门户里的「回到课堂」
+    await clickIfVisible(page.getByRole('button', { name: '回到课堂' }).first(), 3_000);
+    await tools.waitFor({ state: 'visible', timeout: 15_000 });
+  }
+  await dismissClassroomToolbarSetup(page);
 }
 
 /**
