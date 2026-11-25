@@ -10,6 +10,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+_（下一版本待补充）_
+
+## [0.8.0] - 2026-11-25
+
 ### Features
 
 - **版本号展示当前 commit 短哈希**：登录页、顶部导航与后台「系统版本」卡片在版本号旁追加当前构建 commit 的 7 位短哈希，启动横幅同步显示。前端由 Vite 构建期注入 `__APP_COMMIT__`；服务端新增 `PLATFORM_COMMIT`，依次读取 `OPENLEARN_COMMIT` / `GIT_COMMIT` 环境变量、仓库 `git rev-parse` 与 npm 发布写入的 `gitHead`，均取不到时自动省略，不影响原有版本展示。

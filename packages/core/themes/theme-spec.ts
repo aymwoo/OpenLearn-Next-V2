@@ -1,7 +1,7 @@
 import semver from 'semver';
 import { isBlockedExternalFontUrl } from '../security/font-sanitizer.js';
 
-export const DEFAULT_PLATFORM_VERSION = '0.7.17';
+export const DEFAULT_PLATFORM_VERSION = '0.8.0';
 
 export const BUILTIN_THEME_IDS = ['light', 'dark', 'eyecare', 'chalkboard'] as const;
 export type BuiltinThemeIdLiteral = (typeof BUILTIN_THEME_IDS)[number];

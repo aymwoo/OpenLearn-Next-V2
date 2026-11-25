@@ -12,7 +12,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 /** 兜底版本：仅在无法定位平台 package.json 时使用 */
-const FALLBACK_VERSION = '0.7.17';
+const FALLBACK_VERSION = '0.8.0';
 
 interface LocatedPlatformPackage {
   version: string;
