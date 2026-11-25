@@ -1,7 +1,14 @@
 import { StrictMode } from 'react';
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, fireEvent, cleanup } from '@testing-library/react';
-import AccessibleDialog from '../AccessibleDialog';
+import AccessibleDialog, {
+  DialogBody,
+  DialogButton,
+  DialogCloseButton,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '../AccessibleDialog';
 
 describe('AccessibleDialog', () => {
   afterEach(() => {
@@ -235,5 +242,49 @@ describe('AccessibleDialog', () => {
 
     fireEvent(dialog, new Event('cancel', { cancelable: true }));
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('AccessibleDialog design-system primitives', () => {
+  it('exposes stable theme hooks and data attributes for third-party themes', () => {
+    render(
+      <AccessibleDialog
+        open
+        onClose={vi.fn()}
+        ariaLabelledBy="theme-dialog-title"
+        variant="danger"
+        className="max-w-md"
+        data-testid="theme-dialog"
+      >
+        <DialogHeader>
+          <DialogTitle id="theme-dialog-title" icon={<span>!</span>} iconVariant="danger" description="Danger zone">
+            Delete item
+          </DialogTitle>
+          <DialogCloseButton label="Close" />
+        </DialogHeader>
+        <DialogBody>Body content</DialogBody>
+        <DialogFooter>
+          <DialogButton variant="primary">Confirm</DialogButton>
+        </DialogFooter>
+      </AccessibleDialog>,
+    );
+
+    const dialog = screen.getByRole('dialog');
+    expect(dialog.getAttribute('data-testid')).toBe('theme-dialog');
+    expect(dialog.getAttribute('data-dialog')).toBe('');
+    expect(dialog.getAttribute('data-dialog-variant')).toBe('danger');
+    expect(dialog.className).toContain('openlearn-dialog');
+    expect(dialog.className).toContain('max-w-md');
+
+    expect(dialog.querySelector('[data-dialog-part="header"]')?.className).toContain('ol-dialog-header');
+    expect(dialog.querySelector('[data-dialog-part="title"]')?.className).toContain('ol-dialog-title');
+    expect(dialog.querySelector('[data-dialog-part="description"]')?.textContent).toBe('Danger zone');
+    expect(dialog.querySelector('[data-dialog-part="close"]')?.className).toContain('ol-dialog-close');
+    expect(dialog.querySelector('[data-dialog-part="body"]')?.className).toContain('ol-dialog-body');
+    expect(dialog.querySelector('[data-dialog-part="footer"]')?.className).toContain('ol-dialog-footer');
+
+    const confirm = screen.getByRole('button', { name: 'Confirm' });
+    expect(confirm.className).toContain('ol-dialog-btn');
+    expect(confirm.getAttribute('data-variant')).toBe('primary');
   });
 });

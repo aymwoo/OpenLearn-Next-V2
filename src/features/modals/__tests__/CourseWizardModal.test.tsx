@@ -103,7 +103,7 @@ describe('CourseWizardModal 课堂框架模板时长', () => {
 
     const segments = setWizardCourseTimeline.mock.calls[0][0] as WizardSegment[];
     // 只校验描述里以 "N分钟" / "N分" 形式出现时长的模板（经典与翻转模式）
-    const stated = screen.getByText(titleRe).parentElement?.querySelector('.text-gray-400')?.textContent ?? '';
+    const stated = screen.getByText(titleRe).parentElement?.querySelector('.text-subtle')?.textContent ?? '';
     const statedMinutes = [...stated.matchAll(/(\d+)\s*分/g)].map((m) => Number(m[1]));
     if (statedMinutes.length === 0) return;
 

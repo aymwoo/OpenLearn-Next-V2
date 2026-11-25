@@ -17,12 +17,16 @@ const sampleBundle: ValidatedThemeBundle = {
       '--bg-surface': '#ffffff',
       '--text-main': '#1c1917',
       '--color-primary': '#0f766e',
+      '--ol-dialog-bg': '#fffdf7',
+      '--ol-dialog-header-bg': '#f3ead2',
     },
     dark: {
       '--bg-app': '#161917',
       '--bg-surface': '#1f2421',
       '--text-main': '#f5f5f4',
       '--color-primary': '#14b8a6',
+      '--ol-dialog-bg': '#101418',
+      '--ol-dialog-header-bg': '#1d2532',
     },
   },
   typography: {
@@ -141,6 +145,9 @@ describe('useThemeStore third-party lifecycle, isolation & failsafe recovery (Is
     const styleEl = document.getElementById('openlearn-thirdparty-theme');
     expect(styleEl?.textContent).toContain('--bg-app: #161917');
     expect(styleEl?.textContent).toContain('--ol-radius-card: 1.5rem');
+    // Third-party bundles may theme dialogs through the --ol-dialog-* contract.
+    expect(styleEl?.textContent).toContain('--ol-dialog-bg: #101418');
+    expect(styleEl?.textContent).toContain('--ol-dialog-header-bg: #1d2532');
 
     // Account A logs out -> in-memory identity & upgrade badge cleared, pre-login public visual kept cleanly
     await useThemeStore.getState().syncWithSession(null);

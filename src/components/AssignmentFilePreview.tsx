@@ -27,7 +27,14 @@
  *   预览组件的 inline URL 因此不会把可执行文档变成同源页面。
  */
 import React, { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, Download, FileText, Loader2, X } from 'lucide-react';
+import { AlertTriangle, Download, FileText, Loader2 } from 'lucide-react';
+import AccessibleDialog, {
+  DialogBody,
+  DialogCloseButton,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from './AccessibleDialog';
 import { ExtensionPointRenderer } from '../plugin-host/extension-point-renderer';
 import { usePluginHostStore } from '../plugin-host/plugin-host-store';
 import { readOptionalString, readSlotRecord, readStringList } from '../plugin-host/read-slot-props';
@@ -225,77 +232,68 @@ export const AssignmentFilePreview: React.FC<AssignmentFilePreviewProps> = ({
   };
 
   return (
-    <div
-      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4"
-      role="dialog"
-      aria-modal="true"
-      aria-label={fileName}
+    <AccessibleDialog
+      open
+      onClose={onClose}
+      ariaLabel={fileName}
+      closedBy="any"
+      className="max-w-4xl max-h-[88vh]"
       data-testid="assignment-file-preview"
-      onClick={(event) => {
-        if (event.target === event.currentTarget) onClose();
-      }}
     >
-      <div className="w-full max-w-4xl max-h-[88vh] flex flex-col rounded-xl bg-surface shadow-2xl overflow-hidden">
-        <div className="flex items-center gap-2 px-4 py-3 border-b border-theme shrink-0">
-          <FileText size={16} className="text-muted shrink-0" />
-          <span className="flex-1 truncate text-sm font-medium text-main">{fileName}</span>
-          {formatBytes(file.size) && <span className="text-xs text-muted shrink-0">{formatBytes(file.size)}</span>}
+      <DialogHeader>
+        <DialogTitle icon={<FileText size={16} />} description={formatBytes(file.size) || undefined}>
+          {fileName}
+        </DialogTitle>
+        <div className="flex shrink-0 items-center gap-2">
           <a
             href={downloadUrl}
-            className="flex items-center gap-1 rounded-lg border border-theme px-2 py-1 text-xs text-main hover:border-orange-300 shrink-0"
+            className="flex items-center gap-1 rounded-lg border border-theme px-2 py-1 text-xs text-main hover:border-orange-300"
             title={zh ? '下载' : 'Download'}
           >
             <Download size={13} />
             {zh ? '下载' : 'Download'}
           </a>
-          <button
-            onClick={onClose}
-            className="rounded-lg p-1 text-muted hover:text-main shrink-0"
-            title={zh ? '关闭' : 'Close'}
-            aria-label={zh ? '关闭' : 'Close'}
-          >
-            <X size={16} />
-          </button>
+          <DialogCloseButton label={zh ? '关闭' : 'Close'} onClick={onClose} />
         </div>
+      </DialogHeader>
 
-        <div className="flex-1 min-h-0 overflow-auto p-4">{renderBody()}</div>
+      <DialogBody className="p-4">{renderBody()}</DialogBody>
 
-        {/* 文件级预览扩展插槽：插件声明能处理该类型时给出入口。
-            数据型贡献（commandType）由本组件渲染按钮；父 realm 插件的自定义
-            组件由 ExtensionPointRenderer 渲染（渲染器内部按扩展名过滤）。 */}
-        {slotContributions.length > 0 && (
-          <div className="flex flex-wrap items-center gap-2 border-t border-theme px-4 py-2 shrink-0">
-            <span className="text-xs text-muted">{zh ? '插件预览器：' : 'Plugin previewers:'}</span>
-            {slotContributions.map((ext) => {
-              const cfg = readSlotRecord(ext.slotProps);
-              const commandType = readOptionalString(cfg, 'commandType');
-              if (!commandType) return null;
-              return (
-                <button
-                  key={`${ext.pluginId}/${ext.id}`}
-                  onClick={() => void runPluginCommand(ext.id)}
-                  className="rounded-lg border border-theme px-2 py-1 text-xs text-main hover:border-orange-300"
-                  data-testid="assignment-file-preview-plugin"
-                >
-                  {ext.label || readOptionalString(cfg, 'title') || ext.id}
-                </button>
-              );
-            })}
-            <ExtensionPointRenderer
-              slot="assignment.file.preview"
-              slotProps={{
-                file: { id: file.id, name: fileName, size: file.size ?? null, mime: file.mime ?? null },
-                fileExtension: strategy.extension,
-                assignmentId,
-                downloadUrl,
-                inlineUrl,
-                lang,
-              }}
-            />
-          </div>
-        )}
-      </div>
-    </div>
+      {/* 文件级预览扩展插槽：插件声明能处理该类型时给出入口。
+          数据型贡献（commandType）由本组件渲染按钮；父 realm 插件的自定义
+          组件由 ExtensionPointRenderer 渲染（渲染器内部按扩展名过滤）。 */}
+      {slotContributions.length > 0 && (
+        <DialogFooter className="justify-start">
+          <span className="text-xs text-muted">{zh ? '插件预览器：' : 'Plugin previewers:'}</span>
+          {slotContributions.map((ext) => {
+            const cfg = readSlotRecord(ext.slotProps);
+            const commandType = readOptionalString(cfg, 'commandType');
+            if (!commandType) return null;
+            return (
+              <button
+                key={`${ext.pluginId}/${ext.id}`}
+                onClick={() => void runPluginCommand(ext.id)}
+                className="rounded-lg border border-theme px-2 py-1 text-xs text-main hover:border-orange-300"
+                data-testid="assignment-file-preview-plugin"
+              >
+                {ext.label || readOptionalString(cfg, 'title') || ext.id}
+              </button>
+            );
+          })}
+          <ExtensionPointRenderer
+            slot="assignment.file.preview"
+            slotProps={{
+              file: { id: file.id, name: fileName, size: file.size ?? null, mime: file.mime ?? null },
+              fileExtension: strategy.extension,
+              assignmentId,
+              downloadUrl,
+              inlineUrl,
+              lang,
+            }}
+          />
+        </DialogFooter>
+      )}
+    </AccessibleDialog>
   );
 };
 

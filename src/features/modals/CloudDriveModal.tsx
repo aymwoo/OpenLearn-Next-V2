@@ -1,7 +1,12 @@
 import React from 'react';
 import { Folder, FileIcon, X, ChevronRight } from 'lucide-react';
 import { LazyCourseware } from '../../components/LazyCourseware';
-import AccessibleDialog from '../../components/AccessibleDialog';
+import AccessibleDialog, {
+  DialogBody,
+  DialogCloseButton,
+  DialogHeader,
+  DialogTitle,
+} from '../../components/AccessibleDialog';
 import Markdown from 'react-markdown';
 import type { VFSNode } from '../../store/appStore';
 
@@ -23,14 +28,14 @@ export function CloudDrivePanel({
   return (
     <div className="flex-1 flex overflow-hidden min-h-0">
       {/* Sidebar (Directories) */}
-      <div className="w-64 border-r border-gray-100 flex flex-col bg-gray-50 shrink-0">
-        <div className="p-3 border-b border-gray-200 flex items-center gap-2">
+      <div className="w-64 border-r border-theme flex flex-col bg-surface-secondary shrink-0">
+        <div className="p-3 border-b border-theme flex items-center gap-2">
           <button
             onClick={() => {
               setCurrentVfsParent(null);
               setCloudDrivePreviewNode(null);
             }}
-            className={`text-sm font-medium w-full text-left flex items-center gap-2 p-2 rounded cursor-pointer ${currentVfsParent === null ? 'bg-indigo-100 text-indigo-800 font-bold' : 'text-gray-600 hover:bg-gray-200'}`}
+            className={`text-sm font-medium w-full text-left flex items-center gap-2 p-2 rounded cursor-pointer ${currentVfsParent === null ? 'bg-primary-theme-light text-primary-ink font-bold' : 'text-muted hover:bg-surface'}`}
           >
             <Folder size={16} /> Data Root
           </button>
@@ -39,12 +44,12 @@ export function CloudDrivePanel({
           {currentVfsParent && (
             <button
               onClick={() => setCurrentVfsParent(null)}
-              className="flex items-center gap-2 p-2 text-xs text-indigo-600 w-full hover:bg-gray-200 rounded mb-2 font-medium cursor-pointer"
+              className="flex items-center gap-2 p-2 text-xs text-primary-ink w-full hover:bg-surface rounded mb-2 font-medium cursor-pointer"
             >
               <ChevronRight className="rotate-180" size={14} /> Back to Root
             </button>
           )}
-          <div className="text-xs uppercase font-semibold text-gray-400 px-2 py-1 mb-1">Current Path Nodes</div>
+          <div className="text-xs uppercase font-semibold text-subtle px-2 py-1 mb-1">Current Path Nodes</div>
           {vfsNodes
             .filter((n) => n.type === 'dir')
             .map((node) => (
@@ -54,9 +59,9 @@ export function CloudDrivePanel({
                   setCurrentVfsParent(node.id);
                   setCloudDrivePreviewNode(null);
                 }}
-                className="w-full text-left p-2 rounded text-sm text-gray-700 hover:bg-gray-200 flex items-center gap-2 group mb-1 cursor-pointer"
+                className="w-full text-left p-2 rounded text-sm text-main hover:bg-surface flex items-center gap-2 group mb-1 cursor-pointer"
               >
-                <Folder size={14} className="text-indigo-400 group-hover:text-indigo-600" />
+                <Folder size={14} className="text-primary-ink group-hover:text-primary-ink-hover" />
                 <span className="truncate">{node.name}</span>
               </button>
             ))}
@@ -64,26 +69,26 @@ export function CloudDrivePanel({
       </div>
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col bg-white overflow-hidden min-w-0">
+      <div className="flex-1 flex flex-col bg-surface overflow-hidden min-w-0">
         {cloudDrivePreviewNode ? (
           <div className="flex-1 flex flex-col h-full min-h-0">
-            <div className="p-3 border-b border-gray-100 bg-gray-50 flex items-center gap-2 shrink-0">
+            <div className="p-3 border-b border-theme bg-surface-secondary flex items-center gap-2 shrink-0">
               <button
                 onClick={() => setCloudDrivePreviewNode(null)}
-                className="text-gray-500 hover:text-gray-700 cursor-pointer"
+                className="text-muted hover:text-main cursor-pointer"
               >
                 <X size={16} />
               </button>
-              <span className="text-sm font-medium text-gray-700">Previewing: {cloudDrivePreviewNode.name}</span>
+              <span className="text-sm font-medium text-main">Previewing: {cloudDrivePreviewNode.name}</span>
             </div>
             {cloudDrivePreviewNode.name.endsWith('.html') ||
             cloudDrivePreviewNode.name.endsWith('.htm') ||
             cloudDrivePreviewNode.content?.includes('<html') ? (
-              <div className="flex-1 relative bg-gray-50">
+              <div className="flex-1 relative bg-surface-secondary">
                 <LazyCourseware coursewareId={cloudDrivePreviewNode.id} />
               </div>
             ) : (
-              <div className="flex-1 overflow-y-auto p-6 bg-white prose prose-sm max-w-none">
+              <div className="flex-1 overflow-y-auto p-6 bg-surface prose prose-sm max-w-none">
                 <Markdown>{cloudDrivePreviewNode.content}</Markdown>
               </div>
             )}
@@ -92,7 +97,7 @@ export function CloudDrivePanel({
           <div className="flex-1 p-6 overflow-y-auto">
             <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
               {vfsNodes.length === 0 && (
-                <div className="col-span-full h-32 flex items-center justify-center text-sm text-gray-400 italic">
+                <div className="col-span-full h-32 flex items-center justify-center text-sm text-subtle italic">
                   This directory is empty.
                 </div>
               )}
@@ -110,16 +115,16 @@ export function CloudDrivePanel({
                       });
                     }
                   }}
-                  className="border border-gray-200 hover:border-indigo-300 hover:shadow-md cursor-pointer rounded-xl p-4 flex flex-col gap-3 transition-all bg-white"
+                  className="border border-theme hover:border-primary-theme/30 hover:shadow-md cursor-pointer rounded-xl p-4 flex flex-col gap-3 transition-all bg-surface"
                 >
-                  <div className="p-3 rounded-xl w-12 h-12 flex items-center justify-center shrink-0 shadow-sm bg-gray-50 border border-gray-100">
+                  <div className="p-3 rounded-xl w-12 h-12 flex items-center justify-center shrink-0 shadow-sm bg-surface-secondary border border-theme">
                     {node.type === 'dir' ? (
-                      <Folder size={24} className="text-indigo-500" />
+                      <Folder size={24} className="text-primary-ink" />
                     ) : (
-                      <FileIcon size={24} className="text-gray-500" />
+                      <FileIcon size={24} className="text-muted" />
                     )}
                   </div>
-                  <div className="text-sm font-medium text-gray-800 break-words">{node.name}</div>
+                  <div className="text-sm font-medium text-main break-words">{node.name}</div>
                 </div>
               ))}
             </div>
@@ -148,25 +153,17 @@ export function CloudDriveModal(props: CloudDriveModalProps) {
       onClose={props.onClose}
       ariaLabelledBy="cloud-drive-dialog-title"
       closedBy="any"
-      className="bg-white border text-gray-900 border-gray-200 rounded-2xl shadow-2xl max-w-5xl h-[85vh] overflow-hidden"
+      className="max-w-5xl h-[85vh] overflow-hidden"
     >
-      <div className="p-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/80 shrink-0">
-        <div className="flex items-center gap-3">
-          <Folder size={20} className="text-indigo-600" />
-          <h2 id="cloud-drive-dialog-title" className="font-semibold text-gray-800 text-lg">
-            Cloud Course Resource Browser
-          </h2>
-        </div>
-        <button
-          type="button"
-          onClick={props.onClose}
-          aria-label="Close cloud resource browser"
-          className="text-gray-400 hover:text-gray-600 font-bold p-1 hover:bg-gray-200 rounded transition-colors cursor-pointer"
-        >
-          &times;
-        </button>
-      </div>
-      <CloudDrivePanel {...props} />
+      <DialogHeader>
+        <DialogTitle id="cloud-drive-dialog-title" icon={<Folder size={20} />}>
+          Cloud Course Resource Browser
+        </DialogTitle>
+        <DialogCloseButton label="Close cloud resource browser" onClick={props.onClose} />
+      </DialogHeader>
+      <DialogBody className="p-0 flex flex-col overflow-hidden">
+        <CloudDrivePanel {...props} />
+      </DialogBody>
     </AccessibleDialog>
   );
 }

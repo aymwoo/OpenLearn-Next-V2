@@ -280,36 +280,36 @@ export function HelpTour({ isOpen, onClose, onDismiss, lang, onSeedSuccess, onJu
         aria-labelledby={headingId}
         tabIndex={-1}
         style={popoverStyle}
-        className="bg-white rounded-2xl border border-slate-150/60 shadow-2xl p-5 md:p-6 text-gray-900 font-sans flex flex-col justify-between"
+        className="bg-surface rounded-2xl border border-theme shadow-2xl p-5 md:p-6 text-main font-sans flex flex-col justify-between"
       >
         <div>
           {/* Header */}
           <div className="flex justify-between items-start mb-3">
             <h3
               id={headingId}
-              className="font-extrabold text-sm md:text-base text-gray-900 flex items-center gap-1.5 leading-tight"
+              className="font-extrabold text-sm md:text-base text-main flex items-center gap-1.5 leading-tight"
             >
-              <Sparkles size={16} className="text-indigo-500 animate-pulse shrink-0" />
+              <Sparkles size={16} className="text-primary-ink animate-pulse shrink-0" />
               {currentStepData.title}
             </h3>
             <button
               type="button"
               onClick={() => handleDismiss('skipped')}
               aria-label={lang === 'zh' ? '跳过并关闭向导' : 'Skip and close tour'}
-              className="text-gray-400 hover:text-gray-600 rounded-lg p-0.5 transition-colors cursor-pointer"
+              className="text-subtle hover:text-main rounded-lg p-0.5 transition-colors cursor-pointer"
             >
               <X size={16} />
             </button>
           </div>
 
           {/* Description content */}
-          <p className="text-xs md:text-sm text-gray-600 leading-relaxed font-medium mb-5 whitespace-pre-wrap">
+          <p className="text-xs md:text-sm text-muted leading-relaxed font-medium mb-5 whitespace-pre-wrap">
             {currentStepData.content}
           </p>
 
           {/* Action box inside Step 1 (Seeding) */}
           {currentStepData.actionable && (
-            <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-3.5 mb-5 flex flex-col items-center justify-center gap-2">
+            <div className="bg-surface-secondary border border-theme rounded-xl p-3.5 mb-5 flex flex-col items-center justify-center gap-2">
               {seedResult ? (
                 <div className="flex items-center gap-2 text-emerald-600 text-xs font-bold animate-bounce">
                   <Play size={12} className="fill-emerald-600" />
@@ -320,7 +320,7 @@ export function HelpTour({ isOpen, onClose, onDismiss, lang, onSeedSuccess, onJu
                   type="button"
                   onClick={handleSeedData}
                   disabled={seeding}
-                  className="w-full flex items-center justify-center gap-1.5 py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs md:text-sm rounded-lg hover:shadow-md transition-all cursor-pointer disabled:bg-indigo-400"
+                  className="w-full flex items-center justify-center gap-1.5 py-2.5 px-4 bg-primary-solid hover:bg-primary-solid-hover text-white font-bold text-xs md:text-sm rounded-lg hover:shadow-md transition-all cursor-pointer disabled:opacity-60"
                 >
                   {seeding ? (
                     <span className="flex items-center gap-1.5">
@@ -356,13 +356,13 @@ export function HelpTour({ isOpen, onClose, onDismiss, lang, onSeedSuccess, onJu
         </div>
 
         {/* Footer controls */}
-        <div className="flex items-center justify-between border-t border-slate-100 pt-4 shrink-0">
+        <div className="flex items-center justify-between border-t border-theme pt-4 shrink-0">
           {/* Progress dots */}
           <div className="flex items-center gap-1.5">
             {steps.map((_, idx) => (
               <div
                 key={idx}
-                className={`h-1.5 rounded-full transition-all duration-300 ${idx === currentStep ? 'w-4 bg-indigo-600' : 'w-1.5 bg-slate-200'}`}
+                className={`h-1.5 rounded-full transition-all duration-300 ${idx === currentStep ? 'w-4 bg-primary-solid' : 'w-1.5 bg-border-theme'}`}
               />
             ))}
           </div>
@@ -372,7 +372,7 @@ export function HelpTour({ isOpen, onClose, onDismiss, lang, onSeedSuccess, onJu
             <button
               type="button"
               onClick={() => handleDismiss('skipped')}
-              className="px-3 py-1.5 border border-slate-200 rounded-lg text-xs font-semibold text-slate-500 hover:bg-slate-50 transition-colors cursor-pointer"
+              className="px-3 py-1.5 border border-theme rounded-lg text-xs font-semibold text-muted hover:bg-surface-secondary transition-colors cursor-pointer"
             >
               {lang === 'zh' ? '跳过向导' : 'Skip Tour'}
             </button>
@@ -381,7 +381,7 @@ export function HelpTour({ isOpen, onClose, onDismiss, lang, onSeedSuccess, onJu
               <button
                 type="button"
                 onClick={() => setCurrentStep((prev) => prev - 1)}
-                className="flex items-center gap-1 px-3 py-1.5 border border-slate-200 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-50 transition-colors cursor-pointer"
+                className="flex items-center gap-1 px-3 py-1.5 border border-theme rounded-lg text-xs font-semibold text-muted hover:bg-surface-secondary transition-colors cursor-pointer"
               >
                 <ChevronLeft size={12} />
                 {lang === 'zh' ? '上一步' : 'Back'}
@@ -392,7 +392,7 @@ export function HelpTour({ isOpen, onClose, onDismiss, lang, onSeedSuccess, onJu
               <button
                 type="button"
                 onClick={() => setCurrentStep((prev) => prev + 1)}
-                className="flex items-center gap-1 px-3 py-1.5 bg-slate-900 text-white rounded-lg text-xs font-semibold hover:bg-slate-800 transition-colors cursor-pointer"
+                className="flex items-center gap-1 px-3 py-1.5 bg-primary-solid text-white rounded-lg text-xs font-semibold hover:bg-primary-solid-hover transition-colors cursor-pointer"
               >
                 {lang === 'zh' ? '下一步' : 'Next'}
                 <ChevronRight size={12} />
@@ -401,7 +401,7 @@ export function HelpTour({ isOpen, onClose, onDismiss, lang, onSeedSuccess, onJu
               <button
                 type="button"
                 onClick={handleFinishAndStartClass}
-                className="flex items-center gap-1 px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold shadow-sm transition-colors cursor-pointer"
+                className="flex items-center gap-1 px-4 py-1.5 bg-primary-solid hover:bg-primary-solid-hover text-white rounded-lg text-xs font-bold shadow-sm transition-colors cursor-pointer"
               >
                 {lang === 'zh' ? '结束引导并开课' : 'Launch Classroom'}
                 <Sparkles size={12} />

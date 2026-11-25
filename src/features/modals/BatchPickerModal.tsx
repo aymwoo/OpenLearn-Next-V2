@@ -1,5 +1,12 @@
 import { Dispatch, SetStateAction } from 'react';
-import AccessibleDialog from '../../components/AccessibleDialog';
+import AccessibleDialog, {
+  DialogBody,
+  DialogButton,
+  DialogCloseButton,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '../../components/AccessibleDialog';
 
 type Lang = 'zh' | 'en';
 type BatchPickerMode = null | 'schedule' | 'lockedLesson' | 'transfer';
@@ -43,10 +50,10 @@ export function BatchPickerModal({
       onClose={() => setBatchPicker(null)}
       ariaLabelledBy="batch-picker-dialog-title"
       closedBy="any"
-      className="bg-white border text-gray-900 border-gray-200 rounded-2xl shadow-2xl max-w-md overflow-hidden"
+      className="max-w-md overflow-hidden"
     >
-      <div className="p-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/80">
-        <h2 id="batch-picker-dialog-title" className="font-bold text-gray-800 text-base">
+      <DialogHeader>
+        <DialogTitle id="batch-picker-dialog-title">
           {batchPicker === 'schedule'
             ? lang === 'zh'
               ? '批量排课'
@@ -58,26 +65,17 @@ export function BatchPickerModal({
               : lang === 'zh'
                 ? '批量转班'
                 : 'Batch Transfer'}
-        </h2>
-        <button
-          type="button"
-          onClick={() => setBatchPicker(null)}
-          aria-label={lang === 'zh' ? '关闭弹窗' : 'Close dialog'}
-          className="text-gray-400 hover:text-gray-600 text-lg font-bold p-1 hover:bg-gray-200 rounded cursor-pointer"
-        >
-          &times;
-        </button>
-      </div>
-      <div className="p-5 space-y-4">
+        </DialogTitle>
+        <DialogCloseButton label={lang === 'zh' ? '关闭弹窗' : 'Close dialog'} onClick={() => setBatchPicker(null)} />
+      </DialogHeader>
+      <DialogBody className="space-y-4">
         {(batchPicker === 'schedule' || batchPicker === 'lockedLesson') && (
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-gray-600">
-              {lang === 'zh' ? '选择课程' : 'Select Lesson'}
-            </label>
+            <label className="text-xs font-semibold text-muted">{lang === 'zh' ? '选择课程' : 'Select Lesson'}</label>
             <select
               value={batchPickerLesson}
               onChange={(e) => setBatchPickerLesson(e.target.value)}
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="w-full rounded-lg border border-theme bg-surface px-3 py-2 text-sm text-main focus:ring-2 focus:ring-primary-theme focus:outline-none"
             >
               <option value="">{lang === 'zh' ? '— 请选择 —' : '— Select —'}</option>
               {lessons.map((l: any) => (
@@ -90,26 +88,24 @@ export function BatchPickerModal({
         )}
         {batchPicker === 'schedule' && (
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-gray-600">
-              {lang === 'zh' ? '上课日期' : 'Schedule Date'}
-            </label>
+            <label className="text-xs font-semibold text-muted">{lang === 'zh' ? '上课日期' : 'Schedule Date'}</label>
             <input
               type="date"
               value={batchPickerDate}
               onChange={(e) => setBatchPickerDate(e.target.value)}
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="w-full rounded-lg border border-theme bg-surface px-3 py-2 text-sm text-main focus:ring-2 focus:ring-primary-theme focus:outline-none"
             />
           </div>
         )}
         {batchPicker === 'transfer' && (
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-gray-600">
+            <label className="text-xs font-semibold text-muted">
               {lang === 'zh' ? '选择目标班级' : 'Select Target Class'}
             </label>
             <select
               value={batchPickerTargetClass}
               onChange={(e) => setBatchPickerTargetClass(e.target.value)}
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="w-full rounded-lg border border-theme bg-surface px-3 py-2 text-sm text-main focus:ring-2 focus:ring-primary-theme focus:outline-none"
             >
               <option value="">{lang === 'zh' ? '— 请选择 —' : '— Select —'}</option>
               {classes
@@ -122,21 +118,15 @@ export function BatchPickerModal({
             </select>
           </div>
         )}
-      </div>
-      <div className="p-4 border-t border-gray-100 flex justify-end gap-2">
-        <button
-          onClick={() => setBatchPicker(null)}
-          className="px-4 py-2 text-sm rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-100 cursor-pointer"
-        >
+      </DialogBody>
+      <DialogFooter>
+        <DialogButton variant="secondary" onClick={() => setBatchPicker(null)}>
           {lang === 'zh' ? '取消' : 'Cancel'}
-        </button>
-        <button
-          onClick={confirmBatchPicker}
-          className="px-4 py-2 text-sm rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 cursor-pointer"
-        >
+        </DialogButton>
+        <DialogButton variant="primary" onClick={confirmBatchPicker}>
           {lang === 'zh' ? '确认' : 'Confirm'}
-        </button>
-      </div>
+        </DialogButton>
+      </DialogFooter>
     </AccessibleDialog>
   );
 }

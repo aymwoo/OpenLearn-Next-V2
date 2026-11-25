@@ -1,6 +1,13 @@
 import React from 'react';
 import { Bell, CheckCircle2, Clock, PenTool } from 'lucide-react';
-import AccessibleDialog from '../../components/AccessibleDialog';
+import AccessibleDialog, {
+  DialogBody,
+  DialogButton,
+  DialogCloseButton,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '../../components/AccessibleDialog';
 
 interface NotificationDetailModalProps {
   notification: any | null;
@@ -23,41 +30,33 @@ export function NotificationDetailModal({
       onClose={onClose}
       ariaLabelledBy="notification-detail-dialog-title"
       closedBy="any"
-      className="bg-white border text-gray-900 border-gray-200 rounded-2xl shadow-2xl max-w-xl overflow-hidden max-h-[85vh] font-sans"
+      className="max-w-xl overflow-hidden max-h-[85vh] font-sans"
     >
-      {/* Modal Header */}
-      <div className="p-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/80 shrink-0">
-        <div className="flex items-center gap-3">
-          <Bell className="text-indigo-600 font-sans shrink-0" size={20} />
-          <h2 id="notification-detail-dialog-title" className="font-bold text-gray-800 text-base font-sans truncate">
-            {notification.title}
-          </h2>
-        </div>
-        <button
-          type="button"
+      <DialogHeader>
+        <DialogTitle id="notification-detail-dialog-title" icon={<Bell size={18} />} className="font-sans">
+          {notification.title}
+        </DialogTitle>
+        <DialogCloseButton
+          label={lang === 'zh' ? '关闭弹窗' : 'Close dialog'}
           onClick={onClose}
-          aria-label={lang === 'zh' ? '关闭弹窗' : 'Close dialog'}
-          className="text-gray-400 hover:text-gray-600 font-bold p-1 hover:bg-gray-200 rounded transition-colors text-lg cursor-pointer"
-        >
-          &times;
-        </button>
-      </div>
+          className="font-bold"
+        />
+      </DialogHeader>
 
-      {/* Modal Content */}
-      <div className="flex-1 overflow-y-auto p-6 space-y-4">
-        <div className="p-4 bg-indigo-50/50 rounded-xl border border-indigo-100 text-sm text-gray-700 leading-relaxed font-sans">
+      <DialogBody className="space-y-4">
+        <div className="rounded-xl border border-primary-theme/30 bg-primary-theme-light p-4 text-sm text-main leading-relaxed font-sans">
           {notification.message}
         </div>
 
         {notification.assignment && (
           <div className="space-y-4 font-sans">
-            <div className="border border-gray-150 rounded-xl p-4 bg-gray-50/50 space-y-3">
+            <div className="space-y-3 rounded-xl border border-theme bg-surface-secondary p-4">
               <div className="flex justify-between items-center">
-                <span className="text-xs text-gray-400 uppercase tracking-wider font-semibold font-sans">
+                <span className="text-xs text-subtle uppercase tracking-wider font-semibold font-sans">
                   {lang === 'zh' ? '关联作业' : 'Associated Assignment'}
                 </span>
                 {notification.assignment.submission_status === 'graded' && (
-                  <span className="bg-green-100 border border-green-200 text-green-800 text-xs font-bold px-2.5 py-1 rounded-full shadow-sm font-mono">
+                  <span className="rounded-full border border-green-500/20 bg-green-500/10 px-2.5 py-1 text-xs font-bold text-green-700 shadow-sm font-mono dark:text-green-400">
                     {lang === 'zh'
                       ? `得分：${notification.assignment.score}%`
                       : `Score: ${notification.assignment.score}%`}
@@ -65,20 +64,20 @@ export function NotificationDetailModal({
                 )}
               </div>
               <div>
-                <h4 className="font-bold text-base text-indigo-900 font-sans">{notification.assignment.title}</h4>
-                <p className="text-xs text-gray-500 mt-1 font-sans">{notification.assignment.class_name}</p>
+                <h4 className="text-base font-bold text-primary-ink font-sans">{notification.assignment.title}</h4>
+                <p className="mt-1 text-xs text-muted font-sans">{notification.assignment.class_name}</p>
               </div>
 
               {notification.assignment.feedback && (
-                <div className="mt-3 bg-white p-3 rounded-lg border border-gray-150 space-y-1 font-sans">
-                  <div className="text-xs font-bold text-green-700 flex items-center justify-between gap-2 font-sans">
+                <div className="mt-3 space-y-1 rounded-lg border border-theme bg-surface p-3 font-sans">
+                  <div className="flex items-center justify-between gap-2 text-xs font-bold text-green-700 font-sans dark:text-green-400">
                     <div className="flex items-center gap-1">
                       <CheckCircle2 size={14} className="font-sans" />
                       <span>{lang === 'zh' ? '教师评审意见与反馈' : 'Teacher Feedback & Recommendations'}</span>
                     </div>
                     {notification.assignment.graded_at && (
-                      <div className="text-xs text-gray-400 font-mono flex items-center gap-1 font-normal select-none">
-                        <Clock size={11} className="text-neutral-400" />
+                      <div className="flex items-center gap-1 text-xs font-mono font-normal text-subtle select-none">
+                        <Clock size={11} className="text-subtle" />
                         <span>
                           {new Date(notification.assignment.graded_at).toLocaleString(
                             lang === 'zh' ? 'zh-CN' : 'en-US',
@@ -93,7 +92,7 @@ export function NotificationDetailModal({
                       </div>
                     )}
                   </div>
-                  <div className="text-xs text-gray-600 italic bg-green-50/30 p-2 rounded border border-green-50 mt-1 leading-relaxed whitespace-pre-wrap font-sans">
+                  <div className="mt-1 rounded border border-green-500/20 bg-green-500/10 p-2 text-xs text-muted italic leading-relaxed whitespace-pre-wrap font-sans">
                     {notification.assignment.feedback}
                   </div>
                 </div>
@@ -102,38 +101,33 @@ export function NotificationDetailModal({
 
             {notification.assignment.submission_content && (
               <div className="space-y-1.5 font-sans">
-                <div className="text-xs text-gray-400 font-bold uppercase tracking-wider font-sans">
+                <div className="text-xs font-bold text-subtle uppercase tracking-wider font-sans">
                   {lang === 'zh' ? '我提交的内容' : 'My Submission Content'}
                 </div>
-                <div className="bg-gray-900 text-gray-100 p-4 rounded-xl border border-gray-800 overflow-x-auto max-h-40 overflow-y-auto text-xs font-mono leading-relaxed whitespace-pre-wrap">
+                <div className="max-h-40 overflow-x-auto overflow-y-auto rounded-xl border border-gray-800 bg-gray-900 p-4 text-xs font-mono text-gray-100 leading-relaxed whitespace-pre-wrap">
                   {notification.assignment.submission_content}
                 </div>
               </div>
             )}
           </div>
         )}
-      </div>
+      </DialogBody>
 
-      {/* Modal Footer */}
-      <div className="p-4 border-t border-gray-100 bg-gray-50/85 flex justify-end gap-2.5 shrink-0 font-sans">
-        <button
-          type="button"
-          onClick={onClose}
-          className="px-4 py-2 text-xs font-semibold border border-gray-200 text-gray-700 bg-white rounded-lg hover:bg-gray-100 transition-colors cursor-pointer"
-        >
+      <DialogFooter>
+        <DialogButton variant="secondary" onClick={onClose} className="font-sans">
           {lang === 'zh' ? '关闭' : 'Close'}
-        </button>
+        </DialogButton>
         {notification.assignment && (
-          <button
-            type="button"
+          <DialogButton
+            variant="primary"
             onClick={() => onOpenWorkspace(notification.assignment)}
-            className="px-4 py-2 text-xs font-bold bg-indigo-600 text-white border border-indigo-700 rounded-lg hover:bg-indigo-700 hover:shadow shadow-sm transition-all cursor-pointer flex items-center gap-1.5 font-sans"
+            className="font-sans"
           >
             <PenTool size={14} className="font-sans" />
             {lang === 'zh' ? '打开画布 / 查看详情' : 'Open Workspace Canvas'}
-          </button>
+          </DialogButton>
         )}
-      </div>
+      </DialogFooter>
     </AccessibleDialog>
   );
 }

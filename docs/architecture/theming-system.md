@@ -187,3 +187,109 @@ window.LMS?.on?.('theme:changed', applyHostTheme);
 // 方式二：直接监听浏览器原生事件
 window.addEventListener('openlearn:themechange', (ev) => applyHostTheme(ev.detail));
 ```
+
+---
+
+## 7. Dialog 主题契约 (Dialog Theme Contract)
+
+平台内所有原生 `<dialog>` 弹窗统一由 `src/components/AccessibleDialog.tsx` 承载，视觉外壳由 `src/index.css` 中的 `--ol-dialog-*` 令牌驱动。第三方主题包（`theme.json` 与 `styles.css`）可以覆盖任意层级：
+
+1. **令牌层**：在 `tokens` 或 `modes.light/dark.tokens` 中声明 `--ol-dialog-*`；
+2. **结构层**：在 `styles.css` 中用 `[data-theme="<id>"]` 作用域选择 `.ol-dialog-*` 类或 `dialog.openlearn-dialog`；
+3. **变体层**：`dialog[data-dialog-variant="danger|warning|success"]` 可按语义变体定制强调色。
+
+### 7.1 可覆盖令牌
+
+| 令牌                             | 默认来源                 | 作用                         |
+| -------------------------------- | ------------------------ | ---------------------------- |
+| `--ol-dialog-bg`                 | `--bg-surface-elevated`  | 弹窗面板底色                 |
+| `--ol-dialog-border-color`       | `--border-theme`         | 面板描边颜色                 |
+| `--ol-dialog-border-width`       | `1px`                    | 面板描边宽度（`0` 可去边框） |
+| `--ol-dialog-radius`             | `--ol-radius-card`       | 面板圆角（跟随外观覆盖）     |
+| `--ol-dialog-shadow`             | 平台阴影                 | 面板投影                     |
+| `--ol-dialog-backdrop`           | `rgb(15 23 42 / 0.52)`   | `::backdrop` 遮罩色          |
+| `--ol-dialog-backdrop-blur`      | `6px`                    | 遮罩模糊半径                 |
+| `--ol-dialog-header-bg`          | `--bg-surface-secondary` | 标题栏底色                   |
+| `--ol-dialog-footer-bg`          | `--bg-surface-secondary` | 底部操作栏底色               |
+| `--ol-dialog-divider`            | `--border-theme-subtle`  | 标题/底栏分隔线              |
+| `--ol-dialog-title-fg`           | `--text-main`            | 标题文字色                   |
+| `--ol-dialog-body-fg`            | `--text-main`            | 正文文字色                   |
+| `--ol-dialog-padding-x/y`        | `1.25rem / 1rem`         | 标题栏内边距                 |
+| `--ol-dialog-body-padding-x/y`   | `1.25rem / 1.25rem`      | 正文内边距                   |
+| `--ol-dialog-footer-padding-x/y` | `1.25rem / 0.875rem`     | 底栏内边距                   |
+| `--ol-dialog-gap`                | `0.75rem`                | 标题栏元素间距               |
+| `--ol-dialog-control-radius`     | `--ol-radius-control`    | 按钮/分段容器圆角            |
+| `--ol-dialog-icon-bg/fg/border`  | 主色浅底                 | 标题图标容器                 |
+| `--ol-dialog-close-fg`           | `--text-subtle`          | 关闭按钮默认色               |
+| `--ol-dialog-close-fg-hover`     | `--text-main`            | 关闭按钮悬停色               |
+| `--ol-dialog-close-bg-hover`     | `--bg-surface-secondary` | 关闭按钮悬停底色             |
+| `--ol-dialog-accent`             | `--color-primary`        | 焦点环与强调色               |
+| `--ol-dialog-surface-image`      | `none`                   | 面板可选背景图/渐变          |
+
+### 7.2 稳定结构钩子
+
+| 类名 / 属性                                       | 说明                                                  |
+| ------------------------------------------------- | ----------------------------------------------------- |
+| `dialog.openlearn-dialog`                         | 原生 `<dialog>` 面板                                  |
+| `[data-dialog]`                                   | 所有统一弹窗的根标记                                  |
+| `[data-dialog-variant]`                           | `default / danger / warning / success`                |
+| `.ol-dialog-header` `[data-dialog-part="header"]` | 标题栏                                                |
+| `.ol-dialog-heading`                              | 图标 + 标题 + 描述 容器                               |
+| `.ol-dialog-title`                                | 标题文本                                              |
+| `.ol-dialog-description`                          | 标题下描述                                            |
+| `.ol-dialog-icon` `[data-variant]`                | 语义图标容器                                          |
+| `.ol-dialog-close`                                | 关闭按钮（`--floating` 变体悬浮）                     |
+| `.ol-dialog-body`                                 | 可滚动正文区                                          |
+| `.ol-dialog-footer`                               | 底部操作栏                                            |
+| `.ol-dialog-section`                              | 正文内嵌分区卡片                                      |
+| `.ol-dialog-btn` `[data-variant]`                 | `primary / secondary / danger / warning / ghost` 按钮 |
+
+### 7.3 主题包示例
+
+```json
+{
+  "tokens": { "--ol-dialog-radius": "0.25rem" },
+  "modes": {
+    "light": {
+      "tokens": {
+        "--ol-dialog-bg": "#fffdf7",
+        "--ol-dialog-header-bg": "#f3ead2",
+        "--ol-dialog-footer-bg": "#f8f3e6",
+        "--ol-dialog-border-color": "#d8c9a3",
+        "--ol-dialog-title-fg": "#2a2416"
+      }
+    },
+    "dark": {
+      "tokens": {
+        "--ol-dialog-bg": "#151a24",
+        "--ol-dialog-header-bg": "#1d2532",
+        "--ol-dialog-footer-bg": "#1a2230",
+        "--ol-dialog-border-color": "#2f3a4d",
+        "--ol-dialog-shadow": "0 32px 90px -20px rgb(0 0 0 / 0.8)"
+      }
+    }
+  }
+}
+```
+
+```css
+/* styles.css：需要更精细的结构定制时使用，全部限定在主题作用域内 */
+[data-theme='my-theme'] dialog.openlearn-dialog {
+  background-image: linear-gradient(180deg, rgb(201 162 39 / 0.06), transparent 40%);
+}
+
+[data-theme='my-theme'] .ol-dialog-header {
+  border-bottom-width: 2px;
+  border-bottom-color: var(--ol-dialog-accent);
+}
+
+[data-theme='my-theme'] .ol-dialog-title {
+  letter-spacing: 0.02em;
+}
+
+[data-theme='my-theme'] dialog[data-dialog-variant='danger'] .ol-dialog-header {
+  background-color: color-mix(in srgb, #e11d48 12%, var(--ol-dialog-bg));
+}
+```
+
+> 插件在宿主侧通过 `ihost-action-dispatcher` 的 `host:modal:confirm` / `host:modal:open` 弹出的确认框同样走上述令牌与结构，因此第三方主题无需逐个适配插件弹窗。

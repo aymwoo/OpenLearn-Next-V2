@@ -4,7 +4,6 @@ import { formatLocalYMD } from '../utils/date';
 import {
   Calendar,
   Check,
-  X,
   Clock,
   Edit2,
   Trash2,
@@ -34,6 +33,14 @@ import {
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react';
+import AccessibleDialog, {
+  DialogBody,
+  DialogButton,
+  DialogCloseButton,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from './AccessibleDialog';
 import type { ClassType, LessonType, ScheduleType, TimetableManagerProps } from './timetable/types';
 import { getMonday, getWeekRangeString, getWeekDates, getIsAfternoon } from './timetable/utils/timetableUtils';
 import { TimetableCalendarView } from './timetable/sub-views/TimetableCalendarView';
@@ -1642,119 +1649,109 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
 
       {/* Quick Start Lesson Dialog (Issue #90) */}
       {launchTarget && (
-        <div
-          className="fixed inset-0 z-55 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4"
-          role="dialog"
-          aria-modal="true"
-          aria-label={lang === 'zh' ? '快速开始上课' : 'Quick start class'}
+        <AccessibleDialog
+          open={Boolean(launchTarget)}
+          onClose={() => setLaunchTarget(null)}
+          ariaLabel={lang === 'zh' ? '快速开始上课' : 'Quick start class'}
+          closedBy="any"
+          className="max-w-md"
         >
-          <div className="bg-white border border-slate-200 shadow-2xl rounded-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-150">
-            <div className="p-4 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
-              <h3 className="font-bold text-gray-800 flex items-center gap-1.5 text-sm xl:text-base">
-                <Zap className="text-indigo-600" size={18} />
-                {lang === 'zh' ? '快速开始上这节课' : 'Quick Start This Class'}
-              </h3>
-              <button
-                type="button"
-                onClick={() => setLaunchTarget(null)}
-                aria-label={lang === 'zh' ? '关闭' : 'Close'}
-                className="text-slate-400 hover:text-slate-600 p-1 rounded-md hover:bg-slate-200/60 transition-colors cursor-pointer"
-              >
-                <X size={16} />
-              </button>
+          <DialogHeader>
+            <DialogTitle icon={<Zap size={18} />}>
+              {lang === 'zh' ? '快速开始上这节课' : 'Quick Start This Class'}
+            </DialogTitle>
+            <DialogCloseButton label={lang === 'zh' ? '关闭' : 'Close'} onClick={() => setLaunchTarget(null)} />
+          </DialogHeader>
+
+          <DialogBody className="flex flex-col gap-3">
+            {/* 排课信息 */}
+            <div className="rounded-xl border border-primary-theme/30 bg-primary-theme-light p-3 text-xs">
+              <div className="font-bold text-main">
+                {launchTarget.lesson_title || (lang === 'zh' ? '未命名课程' : 'Untitled Lesson')}
+              </div>
+              <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-primary-ink/80">
+                <span className="font-mono">{launchTarget.time_slot || (lang === 'zh' ? '全天' : 'All-day')}</span>
+                <span>{launchTarget.class_name}</span>
+                <span>{launchTarget.scheduled_date}</span>
+              </div>
             </div>
-            <div className="p-4 flex flex-col gap-3 max-h-[70vh] overflow-y-auto">
-              {/* 排课信息 */}
-              <div className="bg-indigo-50/60 border border-indigo-100 rounded-xl p-3 text-xs">
-                <div className="font-bold text-indigo-900">
-                  {launchTarget.lesson_title || (lang === 'zh' ? '未命名课程' : 'Untitled Lesson')}
+
+            {/* 教学模式（轻量确认框；不选即用默认模式） */}
+            {launchModes.length > 0 && (
+              <div>
+                <div className="mb-1.5 text-xs font-bold text-muted">
+                  {lang === 'zh' ? '教学模式（可选）' : 'Teaching Mode (optional)'}
                 </div>
-                <div className="text-indigo-700/80 mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
-                  <span className="font-mono">{launchTarget.time_slot || (lang === 'zh' ? '全天' : 'All-day')}</span>
-                  <span>{launchTarget.class_name}</span>
-                  <span>{launchTarget.scheduled_date}</span>
+                <div className="flex flex-wrap gap-1.5">
+                  {launchModes.map((m) => (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => setLaunchSelectedMode(launchSelectedMode === m.id ? null : m.id)}
+                      aria-pressed={launchSelectedMode === m.id}
+                      className={`cursor-pointer rounded-lg border px-2.5 py-1 text-xs font-semibold transition-all ${
+                        launchSelectedMode === m.id
+                          ? 'border-primary-solid bg-primary-solid text-white shadow-sm'
+                          : 'border-theme bg-surface text-muted hover:border-primary-theme hover:text-primary-ink'
+                      }`}
+                    >
+                      {lang === 'zh' ? m.name : m.nameEn || m.name}
+                    </button>
+                  ))}
                 </div>
               </div>
+            )}
 
-              {/* 教学模式（轻量确认框；不选即用默认模式） */}
-              {launchModes.length > 0 && (
-                <div>
-                  <div className="text-xs font-bold text-gray-500 mb-1.5">
-                    {lang === 'zh' ? '教学模式（可选）' : 'Teaching Mode (optional)'}
-                  </div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {launchModes.map((m) => (
-                      <button
-                        key={m.id}
-                        type="button"
-                        onClick={() => setLaunchSelectedMode(launchSelectedMode === m.id ? null : m.id)}
-                        aria-pressed={launchSelectedMode === m.id}
-                        className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
-                          launchSelectedMode === m.id
-                            ? 'bg-indigo-600 text-white border-indigo-500 shadow-sm'
-                            : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-400 hover:text-indigo-600'
-                        }`}
-                      >
-                        {lang === 'zh' ? m.name : m.nameEn || m.name}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {launchError && (
-                <div
-                  className="flex items-start gap-1.5 text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-2.5 py-2"
-                  role="alert"
-                >
-                  <AlertCircle size={13} className="shrink-0 mt-px" />
-                  <span>{launchError}</span>
-                </div>
-              )}
-
-              <button
-                type="button"
-                onClick={() => confirmQuickStart(launchSelectedMode)}
-                disabled={launchStarting || !launchTarget.lesson_id}
-                className="w-full py-2.5 rounded-xl text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+            {launchError && (
+              <div
+                className="flex items-start gap-1.5 rounded-lg border border-red-500/20 bg-red-500/10 px-2.5 py-2 text-xs text-red-600 dark:text-red-400"
+                role="alert"
               >
-                {launchStarting ? (
-                  <Loader2 size={15} className="animate-spin" />
-                ) : (
-                  <Play size={15} aria-hidden="true" />
-                )}
-                {lang === 'zh' ? '开始上课' : 'Start Class'}
-              </button>
-            </div>
-          </div>
-        </div>
+                <AlertCircle size={13} className="mt-px shrink-0" />
+                <span>{launchError}</span>
+              </div>
+            )}
+          </DialogBody>
+
+          <DialogFooter>
+            <DialogButton
+              variant="primary"
+              className="w-full"
+              onClick={() => confirmQuickStart(launchSelectedMode)}
+              disabled={launchStarting || !launchTarget.lesson_id}
+            >
+              {launchStarting ? <Loader2 size={15} className="animate-spin" /> : <Play size={15} aria-hidden="true" />}
+              {lang === 'zh' ? '开始上课' : 'Start Class'}
+            </DialogButton>
+          </DialogFooter>
+        </AccessibleDialog>
       )}
 
       {/* Add Schedule Dialog */}
       {isAddOpen && (
-        <div className="fixed inset-0 z-55 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white border border-slate-200 shadow-2xl rounded-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-150">
-            <div className="p-4 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
-              <h3 className="font-bold text-gray-800 flex items-center gap-1.5 text-sm xl:text-base">
-                <CalendarDays className="text-indigo-600" size={18} />
-                {lang === 'zh' ? '为班级排排定课次' : 'Arrange Timetable Scheduled'}
-              </h3>
-              <button
-                onClick={() => setIsAddOpen(false)}
-                className="text-gray-400 hover:text-gray-600 p-1 rounded-full hover:bg-gray-150 transition-colors"
-              >
-                <X size={16} />
-              </button>
-            </div>
+        <AccessibleDialog
+          open={isAddOpen}
+          onClose={() => setIsAddOpen(false)}
+          ariaLabel={lang === 'zh' ? '为班级排排定课次' : 'Arrange Timetable Scheduled'}
+          closedBy="closerequest"
+          className="max-w-md"
+        >
+          <DialogHeader>
+            <DialogTitle icon={<CalendarDays size={18} />}>
+              {lang === 'zh' ? '为班级排排定课次' : 'Arrange Timetable Scheduled'}
+            </DialogTitle>
+            <DialogCloseButton label={lang === 'zh' ? '关闭' : 'Close'} onClick={() => setIsAddOpen(false)} />
+          </DialogHeader>
 
-            <form onSubmit={handleCreateSchedule} className="p-4 space-y-4">
+          <form onSubmit={handleCreateSchedule} className="flex min-h-0 flex-1 flex-col">
+            <DialogBody className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">
+                <label className="mb-1 block text-xs font-semibold text-main">
                   {lang === 'zh' ? '选择对应上课班级 *' : 'Target Class *'}
                 </label>
                 <select
                   title="Form Class ID"
-                  className="w-full border border-gray-250 text-xs p-2 rounded-lg bg-white cursor-pointer focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500"
+                  className="w-full cursor-pointer rounded-lg border border-theme bg-surface p-2 text-xs focus:outline-hidden focus-visible:ring-2 focus-visible:ring-primary-theme"
                   value={formClassId}
                   onChange={(e) => setFormClassId(e.target.value)}
                   required
@@ -1769,14 +1766,14 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">
+                <label className="mb-1 block text-xs font-semibold text-main">
                   {lang === 'zh'
                     ? '对应授课课题 / 课时 (可空，上课时自选)'
                     : 'Syllabus Lesson (Optional, select during class)'}
                 </label>
                 <select
                   title="Form Lesson ID"
-                  className="w-full border border-gray-250 text-xs p-2 rounded-lg bg-white cursor-pointer focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500"
+                  className="w-full cursor-pointer rounded-lg border border-theme bg-surface p-2 text-xs focus:outline-hidden focus-visible:ring-2 focus-visible:ring-primary-theme"
                   value={formLessonId}
                   onChange={(e) => setFormLessonId(e.target.value)}
                 >
@@ -1793,24 +1790,24 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">
+                  <label className="mb-1 block text-xs font-semibold text-main">
                     {lang === 'zh' ? '公历排定日期 *' : 'Scheduled Date *'}
                   </label>
                   <input
                     type="date"
-                    className="w-full border border-gray-250 text-xs p-2 rounded-lg bg-white focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500"
+                    className="w-full rounded-lg border border-theme bg-surface p-2 text-xs focus:outline-hidden focus-visible:ring-2 focus-visible:ring-primary-theme"
                     value={formDate}
                     onChange={(e) => setFormDate(e.target.value)}
                     required
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">
+                  <label className="mb-1 block text-xs font-semibold text-main">
                     {lang === 'zh' ? '日常状态' : 'Daily Status'}
                   </label>
                   <select
                     title="Form Status"
-                    className="w-full border border-gray-250 text-xs p-2 rounded-lg bg-white cursor-pointer focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500"
+                    className="w-full cursor-pointer rounded-lg border border-theme bg-surface p-2 text-xs focus:outline-hidden focus-visible:ring-2 focus-visible:ring-primary-theme"
                     value={formStatus}
                     onChange={(e) => setFormStatus(e.target.value)}
                   >
@@ -1823,20 +1820,20 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">
+                <label className="mb-1 block text-xs font-semibold text-main">
                   {lang === 'zh' ? '具体上课时间段' : 'Class Period / Time Slot'}
                 </label>
-                <div className="flex gap-1.5 items-center">
+                <div className="flex items-center gap-1.5">
                   <input
                     type="text"
-                    className="flex-1 border border-gray-200 rounded-lg text-xs p-2 bg-white text-gray-750 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500"
+                    className="flex-1 rounded-lg border border-theme bg-surface p-2 text-xs text-main focus:outline-hidden focus-visible:ring-2 focus-visible:ring-primary-theme"
                     value={formTimeSlot}
                     onChange={(e) => setFormTimeSlot(e.target.value)}
                     placeholder="e.g. 09:00 - 10:30"
                   />
                   <select
                     title="Preset Time Slot"
-                    className="border border-gray-250 text-xs p-2 rounded-lg bg-white cursor-pointer focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500"
+                    className="cursor-pointer rounded-lg border border-theme bg-surface p-2 text-xs focus:outline-hidden focus-visible:ring-2 focus-visible:ring-primary-theme"
                     onChange={(e) => {
                       if (e.target.value) setFormTimeSlot(e.target.value);
                     }}
@@ -1852,7 +1849,7 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">
+                <label className="mb-1 block text-xs font-semibold text-main">
                   {lang === 'zh' ? '调课备注说明' : 'Schedule Notes'}
                 </label>
                 <input
@@ -1862,67 +1859,66 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
                       ? '例如：节假日补课、更替老师讲义，不填则无'
                       : 'e.g. Substitute instructor lesson outline'
                   }
-                  className="w-full border border-gray-250 text-xs p-2 rounded-lg bg-white focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500"
+                  className="w-full rounded-lg border border-theme bg-surface p-2 text-xs focus:outline-hidden focus-visible:ring-2 focus-visible:ring-primary-theme"
                   value={formNotes}
                   onChange={(e) => setFormNotes(e.target.value)}
                 />
               </div>
+            </DialogBody>
 
-              <div className="flex justify-end gap-2 border-t border-slate-100 pt-3 mt-4">
-                <button
-                  type="button"
-                  onClick={() => setIsAddOpen(false)}
-                  className="px-3 py-1.5 rounded-lg border text-xs font-medium text-muted hover:bg-gray-150 transition-colors"
-                >
-                  {lang === 'zh' ? '取消' : 'Cancel'}
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-sm transition-colors"
-                >
-                  {lang === 'zh' ? '排定并发布' : 'Publish & Save'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+            <DialogFooter>
+              <DialogButton variant="secondary" onClick={() => setIsAddOpen(false)}>
+                {lang === 'zh' ? '取消' : 'Cancel'}
+              </DialogButton>
+              <DialogButton variant="primary" type="submit">
+                {lang === 'zh' ? '排定并发布' : 'Publish & Save'}
+              </DialogButton>
+            </DialogFooter>
+          </form>
+        </AccessibleDialog>
       )}
 
       {/* Edit Schedule / Adjust Dialog */}
       {isEditOpen && selectedSchedule && (
-        <div className="fixed inset-0 z-55 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white border border-slate-200 shadow-2xl rounded-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-150">
-            <div className="p-4 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
-              <h3 className="font-bold text-gray-800 flex items-center gap-1.5 text-sm xl:text-base">
-                <Edit2 className="text-indigo-600" size={18} />
-                {lang === 'zh' ? '微调/临时变动排课记录' : 'Custom Adjust Schedule'}
-              </h3>
-              <button
-                onClick={() => {
-                  setIsEditOpen(false);
-                  setSelectedSchedule(null);
-                }}
-                className="text-gray-400 hover:text-gray-600 p-1 rounded-full hover:bg-gray-150 transition-colors"
-              >
-                <X size={16} />
-              </button>
-            </div>
+        <AccessibleDialog
+          open={isEditOpen && Boolean(selectedSchedule)}
+          onClose={() => {
+            setIsEditOpen(false);
+            setSelectedSchedule(null);
+          }}
+          ariaLabel={lang === 'zh' ? '微调/临时变动排课记录' : 'Custom Adjust Schedule'}
+          closedBy="closerequest"
+          className="max-w-md"
+        >
+          <DialogHeader>
+            <DialogTitle icon={<Edit2 size={18} />}>
+              {lang === 'zh' ? '微调/临时变动排课记录' : 'Custom Adjust Schedule'}
+            </DialogTitle>
+            <DialogCloseButton
+              label={lang === 'zh' ? '关闭' : 'Close'}
+              onClick={() => {
+                setIsEditOpen(false);
+                setSelectedSchedule(null);
+              }}
+            />
+          </DialogHeader>
 
-            <form onSubmit={handleUpdateSchedule} className="p-4 space-y-4">
-              <div className="p-2.5 bg-indigo-50 border border-indigo-100 rounded-lg text-xs leading-5">
-                <div className="font-semibold text-indigo-850">
+          <form onSubmit={handleUpdateSchedule} className="flex min-h-0 flex-1 flex-col">
+            <DialogBody className="space-y-4">
+              <div className="rounded-lg border border-primary-theme/30 bg-primary-theme-light p-2.5 text-xs leading-5">
+                <div className="font-semibold text-main">
                   {lang === 'zh'
                     ? '提示：课表的临时变动将实时更新至今日课程气泡及学生白板客户端。'
                     : 'Changes will load instantly on students whiteboards and dashboards.'}
                 </div>
-                <div className="text-gray-600 mt-1">
+                <div className="mt-1 text-muted">
                   {lang === 'zh' ? '目标班级：' : 'Target Class: '}{' '}
                   <span className="font-bold">{selectedSchedule.class_name}</span>
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">
+                <label className="mb-1 block text-xs font-semibold text-main">
                   {lang === 'zh'
                     ? '换课：关联授课主体 (可空，上课时自选)'
                     : 'Swap Topic / Lesson (Optional, select during class)'}
@@ -1930,7 +1926,7 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
                 <select
                   id="edit_lesson_select"
                   title="Edit Lesson"
-                  className="w-full border border-gray-250 text-xs p-2 rounded-lg bg-white cursor-pointer focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500"
+                  className="w-full cursor-pointer rounded-lg border border-theme bg-surface p-2 text-xs focus:outline-hidden focus-visible:ring-2 focus-visible:ring-primary-theme"
                   value={formLessonId}
                   onChange={(e) => setFormLessonId(e.target.value)}
                 >
@@ -1947,25 +1943,25 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">
+                  <label className="mb-1 block text-xs font-semibold text-main">
                     {lang === 'zh' ? '换时间：上课日期 *' : 'Scheduled Date *'}
                   </label>
                   <input
                     type="date"
-                    className="w-full border border-gray-250 text-xs p-2 rounded-lg bg-white focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500"
+                    className="w-full rounded-lg border border-theme bg-surface p-2 text-xs focus:outline-hidden focus-visible:ring-2 focus-visible:ring-primary-theme"
                     value={formDate}
                     onChange={(e) => setFormDate(e.target.value)}
                     required
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">
+                  <label className="mb-1 block text-xs font-semibold text-main">
                     {lang === 'zh' ? '临时教务状态' : 'Ad-hoc Status'}
                   </label>
                   <select
                     id="edit_status_select"
                     title="Edit Status"
-                    className="w-full border border-gray-250 text-xs p-2 rounded-lg bg-white cursor-pointer focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500"
+                    className="w-full cursor-pointer rounded-lg border border-theme bg-surface p-2 text-xs focus:outline-hidden focus-visible:ring-2 focus-visible:ring-primary-theme"
                     value={formStatus}
                     onChange={(e) => setFormStatus(e.target.value)}
                   >
@@ -1978,20 +1974,20 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">
+                <label className="mb-1 block text-xs font-semibold text-main">
                   {lang === 'zh' ? '具体上课时段' : 'Class Time Slot'}
                 </label>
-                <div className="flex gap-1.5 items-center">
+                <div className="flex items-center gap-1.5">
                   <input
                     type="text"
-                    className="flex-1 border border-gray-200 rounded-lg text-xs p-2 bg-white text-gray-750 focus:outline-hidden"
+                    className="flex-1 rounded-lg border border-theme bg-surface p-2 text-xs text-main focus:outline-hidden"
                     value={formTimeSlot}
                     onChange={(e) => setFormTimeSlot(e.target.value)}
                     placeholder="e.g. 09:00 - 10:30"
                   />
                   <select
                     title="Edit Preset Time"
-                    className="border border-gray-250 text-xs p-2 rounded-lg bg-white cursor-pointer focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500"
+                    className="cursor-pointer rounded-lg border border-theme bg-surface p-2 text-xs focus:outline-hidden focus-visible:ring-2 focus-visible:ring-primary-theme"
                     onChange={(e) => {
                       if (e.target.value) setFormTimeSlot(e.target.value);
                     }}
@@ -2007,63 +2003,66 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">
+                <label className="mb-1 block text-xs font-semibold text-main">
                   {lang === 'zh' ? '微调备注（说明换课/放假原因）' : 'Notes/Adjustments Reason'}
                 </label>
                 <input
                   type="text"
                   placeholder={lang === 'zh' ? '例：国庆假停课 / 本课更替为第二节' : 'Explain reasons of ad-hoc swaps'}
-                  className="w-full border border-gray-250 text-xs p-2 rounded-lg bg-white focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500"
+                  className="w-full rounded-lg border border-theme bg-surface p-2 text-xs focus:outline-hidden focus-visible:ring-2 focus-visible:ring-primary-theme"
                   value={formNotes}
                   onChange={(e) => setFormNotes(e.target.value)}
                 />
               </div>
+            </DialogBody>
 
-              <div className="flex justify-end gap-2 border-t border-slate-100 pt-3 mt-4">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsEditOpen(false);
-                    setSelectedSchedule(null);
-                  }}
-                  className="px-3 py-1.5 rounded-lg border text-xs font-medium text-muted hover:bg-gray-150 transition-colors"
-                >
-                  {lang === 'zh' ? '取消' : 'Cancel'}
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-sm transition-colors"
-                >
-                  {lang === 'zh' ? '保存调整' : 'Apply Adjustment'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+            <DialogFooter>
+              <DialogButton
+                variant="secondary"
+                onClick={() => {
+                  setIsEditOpen(false);
+                  setSelectedSchedule(null);
+                }}
+              >
+                {lang === 'zh' ? '取消' : 'Cancel'}
+              </DialogButton>
+              <DialogButton variant="primary" type="submit">
+                {lang === 'zh' ? '保存调整' : 'Apply Adjustment'}
+              </DialogButton>
+            </DialogFooter>
+          </form>
+        </AccessibleDialog>
       )}
 
       {/* 临时切换显示日期对话框 */}
       {overridingDateKey && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-sm w-full p-5 flex flex-col gap-4 animate-in fade-in zoom-in duration-150">
-            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-              <h3 className="font-bold text-sm text-slate-800 flex items-center gap-1.5">
-                <RotateCcw size={16} className="text-amber-500" />
-                {lang === 'zh' ? '临时切换显示课程日期' : 'Temporarily Override Date'}
-              </h3>
-              <button
-                onClick={() => {
-                  setOverridingDateKey(null);
-                  setOverrideTargetDate('');
-                  setOverrideTargetDow('');
-                }}
-                className="text-slate-400 hover:text-slate-600 hover:bg-slate-50 p-1 rounded-lg transition-colors cursor-pointer"
-              >
-                <X size={16} />
-              </button>
-            </div>
+        <AccessibleDialog
+          open={Boolean(overridingDateKey)}
+          onClose={() => {
+            setOverridingDateKey(null);
+            setOverrideTargetDate('');
+            setOverrideTargetDow('');
+          }}
+          ariaLabel={lang === 'zh' ? '临时切换显示课程日期' : 'Temporarily Override Date'}
+          closedBy="closerequest"
+          className="max-w-sm"
+        >
+          <DialogHeader>
+            <DialogTitle icon={<RotateCcw size={16} />}>
+              {lang === 'zh' ? '临时切换显示课程日期' : 'Temporarily Override Date'}
+            </DialogTitle>
+            <DialogCloseButton
+              label={lang === 'zh' ? '关闭' : 'Close'}
+              onClick={() => {
+                setOverridingDateKey(null);
+                setOverrideTargetDate('');
+                setOverrideTargetDow('');
+              }}
+            />
+          </DialogHeader>
 
-            <div className="text-xs text-slate-500 leading-relaxed">
+          <DialogBody className="flex flex-col gap-4">
+            <div className="text-xs leading-relaxed text-muted">
               <p>
                 {lang === 'zh'
                   ? `您正在设置 [${overridingDateKey}] 的课程显示。`
@@ -2077,12 +2076,12 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
             </div>
 
             {/* Tabs */}
-            <div className="flex bg-slate-100 p-1 rounded-xl">
+            <div className="flex rounded-xl bg-surface-secondary p-1">
               <button
                 type="button"
                 onClick={() => setOverrideMode('dow')}
-                className={`flex-1 text-center py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
-                  overrideMode === 'dow' ? 'bg-white text-indigo-700 shadow-3xs' : 'text-slate-500 hover:text-slate-700'
+                className={`flex-1 cursor-pointer rounded-lg py-1.5 text-center text-xs font-bold transition-all ${
+                  overrideMode === 'dow' ? 'bg-surface text-primary-ink shadow-3xs' : 'text-muted hover:text-main'
                 }`}
               >
                 {lang === 'zh' ? '常规星期几' : 'Day of Week'}
@@ -2090,10 +2089,8 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
               <button
                 type="button"
                 onClick={() => setOverrideMode('date')}
-                className={`flex-1 text-center py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
-                  overrideMode === 'date'
-                    ? 'bg-white text-indigo-700 shadow-3xs'
-                    : 'text-slate-500 hover:text-slate-700'
+                className={`flex-1 cursor-pointer rounded-lg py-1.5 text-center text-xs font-bold transition-all ${
+                  overrideMode === 'date' ? 'bg-surface text-primary-ink shadow-3xs' : 'text-muted hover:text-main'
                 }`}
               >
                 {lang === 'zh' ? '具体日期' : 'Specific Date'}
@@ -2102,13 +2099,13 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
 
             {overrideMode === 'dow' ? (
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                <label className="mb-1.5 block text-xs font-semibold text-main">
                   {lang === 'zh' ? '选择常规星期几 *' : 'Select Day of Week *'}
                 </label>
                 <select
                   value={overrideTargetDow}
                   onChange={(e) => setOverrideTargetDow(e.target.value)}
-                  className="w-full border border-gray-250 rounded-lg text-xs p-2.5 bg-white focus:outline-hidden focus:ring-1 focus:ring-indigo-500 transition-all font-sans text-gray-750 cursor-pointer"
+                  className="w-full cursor-pointer rounded-lg border border-theme bg-surface p-2.5 font-sans text-xs text-main transition-all focus:outline-hidden focus:ring-1 focus:ring-primary-theme"
                 >
                   <option value="">{lang === 'zh' ? '-- 请选择星期 --' : '-- Select Day --'}</option>
                   <option value="1">{lang === 'zh' ? '星期一' : 'Monday'}</option>
@@ -2122,60 +2119,60 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
               </div>
             ) : (
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                <label className="mb-1.5 block text-xs font-semibold text-main">
                   {lang === 'zh' ? '选择具体日期 *' : 'Select Target Date *'}
                 </label>
                 <input
                   type="date"
-                  className="w-full border border-gray-250 rounded-lg text-xs p-2.5 bg-white focus:outline-hidden focus:ring-1 focus:ring-indigo-500 transition-all font-sans text-gray-750 cursor-pointer"
+                  className="w-full cursor-pointer rounded-lg border border-theme bg-surface p-2.5 font-sans text-xs text-main transition-all focus:outline-hidden focus:ring-1 focus:ring-primary-theme"
                   value={overrideTargetDate}
                   onChange={(e) => setOverrideTargetDate(e.target.value)}
                 />
               </div>
             )}
+          </DialogBody>
 
-            <div className="flex gap-2 justify-end pt-2 border-t border-slate-100">
-              <button
-                onClick={() => {
-                  setOverridingDateKey(null);
-                  setOverrideTargetDate('');
-                  setOverrideTargetDow('');
-                }}
-                className="px-3.5 py-2 rounded-lg text-xs font-bold text-slate-500 bg-slate-100 hover:bg-slate-200/80 transition-all cursor-pointer"
-              >
-                {lang === 'zh' ? '取消' : 'Cancel'}
-              </button>
-              <button
-                onClick={() => {
-                  let val = '';
-                  if (overrideMode === 'dow') {
-                    if (!overrideTargetDow) {
-                      alert(lang === 'zh' ? '请选择星期几' : 'Please select a day of the week');
-                      return;
-                    }
-                    val = `dow-${overrideTargetDow}`;
-                  } else {
-                    if (!overrideTargetDate) {
-                      alert(lang === 'zh' ? '请选择一个日期' : 'Please select a date');
-                      return;
-                    }
-                    val = overrideTargetDate;
+          <DialogFooter>
+            <DialogButton
+              variant="secondary"
+              onClick={() => {
+                setOverridingDateKey(null);
+                setOverrideTargetDate('');
+                setOverrideTargetDow('');
+              }}
+            >
+              {lang === 'zh' ? '取消' : 'Cancel'}
+            </DialogButton>
+            <DialogButton
+              variant="primary"
+              onClick={() => {
+                let val = '';
+                if (overrideMode === 'dow') {
+                  if (!overrideTargetDow) {
+                    alert(lang === 'zh' ? '请选择星期几' : 'Please select a day of the week');
+                    return;
                   }
-                  setDateOverrides((prev) => ({
-                    ...prev,
-                    [overridingDateKey]: val,
-                  }));
-                  setOverridingDateKey(null);
-                  setOverrideTargetDate('');
-                  setOverrideTargetDow('');
-                }}
-                className="px-3.5 py-2 rounded-lg text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm transition-all cursor-pointer"
-              >
-                {lang === 'zh' ? '应用切换' : 'Apply Switch'}
-              </button>
-            </div>
-          </div>
-        </div>
+                  val = `dow-${overrideTargetDow}`;
+                } else {
+                  if (!overrideTargetDate) {
+                    alert(lang === 'zh' ? '请选择一个日期' : 'Please select a date');
+                    return;
+                  }
+                  val = overrideTargetDate;
+                }
+                setDateOverrides((prev) => ({
+                  ...prev,
+                  [overridingDateKey]: val,
+                }));
+                setOverridingDateKey(null);
+                setOverrideTargetDate('');
+                setOverrideTargetDow('');
+              }}
+            >
+              {lang === 'zh' ? '应用切换' : 'Apply Switch'}
+            </DialogButton>
+          </DialogFooter>
+        </AccessibleDialog>
       )}
     </div>
   );

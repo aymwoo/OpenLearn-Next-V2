@@ -1,6 +1,12 @@
 import { useState, useRef, useEffect, useCallback, type ChangeEvent, type FormEvent } from 'react';
-import { X, User as UserIcon, KeyRound, CheckCircle2, Blocks } from 'lucide-react';
-import AccessibleDialog from './AccessibleDialog';
+import { User as UserIcon, KeyRound, CheckCircle2, Blocks } from 'lucide-react';
+import AccessibleDialog, {
+  DialogBody,
+  DialogButton,
+  DialogCloseButton,
+  DialogHeader,
+  DialogTitle,
+} from './AccessibleDialog';
 import { PasswordInput } from './PasswordInput';
 import type { SessionType } from '../types/app';
 import type { Language } from '../i18n';
@@ -248,18 +254,16 @@ export function ProfileModal({ open, session, lang, onClose, onSaved, onAvatar }
       onClose={onClose}
       ariaLabel={t('个人资料与 AI 设置', 'Profile & AI Settings')}
       closedBy="any"
-      className={`bg-white rounded-2xl shadow-xl overflow-hidden ${
-        activeTab === 'ai_providers' ? 'max-w-4xl max-h-[88vh]' : 'max-w-md'
-      }`}
+      className={`overflow-hidden ${activeTab === 'ai_providers' ? 'max-w-4xl max-h-[88vh]' : 'max-w-md'}`}
     >
-      <div className="flex items-center justify-between px-5 py-3.5 border-b border-gray-100 bg-slate-50/50 shrink-0">
+      <DialogHeader>
         {session.role !== 'student' ? (
-          <div className="flex items-center gap-1.5 bg-gray-200/70 p-1 rounded-xl">
+          <div className="flex items-center gap-1.5 bg-surface-secondary p-1 rounded-xl">
             <button
               type="button"
               onClick={() => setActiveTab('profile')}
               className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${
-                activeTab === 'profile' ? 'bg-white text-indigo-700 shadow-3xs' : 'text-gray-600 hover:text-gray-900'
+                activeTab === 'profile' ? 'bg-surface text-primary-ink shadow-3xs' : 'text-muted hover:text-main'
               }`}
             >
               <UserIcon size={13} />
@@ -269,9 +273,7 @@ export function ProfileModal({ open, session, lang, onClose, onSaved, onAvatar }
               type="button"
               onClick={() => setActiveTab('ai_providers')}
               className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${
-                activeTab === 'ai_providers'
-                  ? 'bg-white text-indigo-700 shadow-3xs'
-                  : 'text-gray-600 hover:text-gray-900'
+                activeTab === 'ai_providers' ? 'bg-surface text-primary-ink shadow-3xs' : 'text-muted hover:text-main'
               }`}
             >
               <Blocks size={13} />
@@ -279,20 +281,13 @@ export function ProfileModal({ open, session, lang, onClose, onSaved, onAvatar }
             </button>
           </div>
         ) : (
-          <h3 className="font-semibold text-gray-800">{t('个人资料', 'Profile')}</h3>
+          <DialogTitle icon={<UserIcon size={18} />}>{t('个人资料', 'Profile')}</DialogTitle>
         )}
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label={t('关闭弹窗', 'Close dialog')}
-          className="text-gray-400 hover:text-gray-600 cursor-pointer p-1 rounded-full hover:bg-gray-100 transition-colors"
-        >
-          <X size={18} />
-        </button>
-      </div>
+        <DialogCloseButton label={t('关闭弹窗', 'Close dialog')} onClick={onClose} />
+      </DialogHeader>
 
       {activeTab === 'ai_providers' ? (
-        <div className="flex-1 overflow-y-auto">
+        <DialogBody className="p-0">
           <AiProvidersPanel
             lang={lang === 'zh' ? 'zh' : 'en'}
             aiProviders={aiProviders}
@@ -300,12 +295,12 @@ export function ProfileModal({ open, session, lang, onClose, onSaved, onAvatar }
             currentUserId={currentUserId}
             currentUserRole={currentUserRole}
           />
-        </div>
+        </DialogBody>
       ) : (
-        <div className="p-5 space-y-5 overflow-y-auto">
+        <DialogBody className="space-y-5">
           {/* 头像 + 角色 */}
           <div className="flex items-center gap-3">
-            <span className="w-14 h-14 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center shrink-0 overflow-hidden">
+            <span className="w-14 h-14 rounded-full bg-primary-theme-light text-primary-ink flex items-center justify-center shrink-0 overflow-hidden">
               {session.avatar ? (
                 <img src={session.avatar} alt={session.name} className="w-full h-full object-cover" />
               ) : (
@@ -313,14 +308,14 @@ export function ProfileModal({ open, session, lang, onClose, onSaved, onAvatar }
               )}
             </span>
             <div className="min-w-0">
-              <p className="text-base font-semibold text-gray-800 truncate">{session.name}</p>
-              <p className="text-xs text-gray-400">{roleLabel}</p>
+              <p className="text-base font-semibold text-main truncate">{session.name}</p>
+              <p className="text-xs text-subtle">{roleLabel}</p>
               <div className="mt-1.5 flex items-center gap-3">
                 <button
                   type="button"
                   onClick={() => fileRef.current?.click()}
                   disabled={avatarUploading}
-                  className="text-xs text-indigo-600 hover:text-indigo-800 disabled:opacity-50 cursor-pointer"
+                  className="text-xs text-primary-ink hover:text-primary-ink-hover disabled:opacity-50 cursor-pointer"
                 >
                   {avatarUploading
                     ? t('上传中…', 'Uploading…')
@@ -352,7 +347,7 @@ export function ProfileModal({ open, session, lang, onClose, onSaved, onAvatar }
 
           {/* 显示名称 */}
           <form noValidate onSubmit={(e) => void handleSave(e)}>
-            <label htmlFor="profile-display-name" className="block text-sm text-gray-500 mb-1">
+            <label htmlFor="profile-display-name" className="block text-sm text-muted mb-1">
               {t('显示名称', 'Display Name')}
             </label>
             <div className="flex gap-2">
@@ -371,15 +366,11 @@ export function ProfileModal({ open, session, lang, onClose, onSaved, onAvatar }
                 maxLength={50}
                 aria-invalid={error ? 'true' : 'false'}
                 aria-describedby={error ? 'profile-display-name-error' : undefined}
-                className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                className="flex-1 border border-theme bg-surface rounded-lg px-3 py-2 text-sm text-main focus:outline-none focus:ring-2 focus:ring-primary-theme/40"
               />
-              <button
-                type="submit"
-                disabled={saving}
-                className="px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium disabled:opacity-40 enabled:hover:bg-indigo-700 transition-colors cursor-pointer shrink-0"
-              >
+              <DialogButton variant="primary" type="submit" disabled={saving} className="shrink-0">
                 {saving ? t('保存中…', 'Saving…') : t('保存', 'Save')}
-              </button>
+              </DialogButton>
             </div>
             {error && (
               <p id="profile-display-name-error" role="alert" className="text-xs text-rose-500 mt-1">
@@ -388,10 +379,10 @@ export function ProfileModal({ open, session, lang, onClose, onSaved, onAvatar }
             )}
           </form>
 
-          <div className="border-t border-gray-100 pt-4">
+          <div className="border-t border-theme pt-4">
             <div className="flex items-center justify-between">
-              <span className="text-sm font-medium text-gray-700 flex items-center gap-2">
-                <KeyRound size={16} className="text-gray-400" aria-hidden="true" />
+              <span className="text-sm font-medium text-main flex items-center gap-2">
+                <KeyRound size={16} className="text-subtle" aria-hidden="true" />
                 {t('修改密码', 'Change Password')}
               </span>
               {!showPwd && !pwdSuccess && (
@@ -404,7 +395,7 @@ export function ProfileModal({ open, session, lang, onClose, onSaved, onAvatar }
                     setNewPwdError(null);
                     setConfirmPwdError(null);
                   }}
-                  className="text-sm text-indigo-600 hover:text-indigo-800 cursor-pointer"
+                  className="text-sm text-primary-ink hover:text-primary-ink-hover cursor-pointer"
                 >
                   {t('修改', 'Edit')}
                 </button>
@@ -436,8 +427,8 @@ export function ProfileModal({ open, session, lang, onClose, onSaved, onAvatar }
                   inputRef={oldPwdRef}
                   lang={lang}
                   placeholder={t('当前密码', 'Current password')}
-                  className="w-full border border-gray-300 rounded-lg pl-3 pr-10 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-200"
-                  labelClassName="block text-xs font-medium text-gray-600 mb-1"
+                  className="w-full border border-theme bg-surface rounded-lg pl-3 pr-10 py-2 text-sm text-main focus:outline-none focus:ring-2 focus:ring-primary-theme/40"
+                  labelClassName="block text-xs font-medium text-muted mb-1"
                 />
                 <PasswordInput
                   id="profile-new-password"
@@ -457,8 +448,8 @@ export function ProfileModal({ open, session, lang, onClose, onSaved, onAvatar }
                   inputRef={newPwdRef}
                   lang={lang}
                   placeholder={t('输入新密码', 'Enter new password')}
-                  className="w-full border border-gray-300 rounded-lg pl-3 pr-10 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-200"
-                  labelClassName="block text-xs font-medium text-gray-600 mb-0.5"
+                  className="w-full border border-theme bg-surface rounded-lg pl-3 pr-10 py-2 text-sm text-main focus:outline-none focus:ring-2 focus:ring-primary-theme/40"
+                  labelClassName="block text-xs font-medium text-muted mb-0.5"
                 />
                 <PasswordInput
                   id="profile-confirm-password"
@@ -477,8 +468,8 @@ export function ProfileModal({ open, session, lang, onClose, onSaved, onAvatar }
                   inputRef={confirmPwdRef}
                   lang={lang}
                   placeholder={t('再次输入新密码', 'Re-enter new password')}
-                  className="w-full border border-gray-300 rounded-lg pl-3 pr-10 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-200"
-                  labelClassName="block text-xs font-medium text-gray-600 mb-1"
+                  className="w-full border border-theme bg-surface rounded-lg pl-3 pr-10 py-2 text-sm text-main focus:outline-none focus:ring-2 focus:ring-primary-theme/40"
+                  labelClassName="block text-xs font-medium text-muted mb-1"
                 />
                 {pwdError && (
                   <p role="alert" className="text-xs text-rose-500">
@@ -486,8 +477,8 @@ export function ProfileModal({ open, session, lang, onClose, onSaved, onAvatar }
                   </p>
                 )}
                 <div className="flex gap-2 justify-end">
-                  <button
-                    type="button"
+                  <DialogButton
+                    variant="secondary"
                     onClick={() => {
                       setShowPwd(false);
                       setOldPwd('');
@@ -498,36 +489,31 @@ export function ProfileModal({ open, session, lang, onClose, onSaved, onAvatar }
                       setNewPwdError(null);
                       setConfirmPwdError(null);
                     }}
-                    className="px-4 py-2 rounded-lg border border-gray-300 text-sm text-gray-600 hover:bg-gray-50 cursor-pointer"
                   >
                     {t('取消', 'Cancel')}
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={pwdSaving}
-                    className="px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium disabled:opacity-40 enabled:hover:bg-indigo-700 transition-colors cursor-pointer"
-                  >
+                  </DialogButton>
+                  <DialogButton variant="primary" type="submit" disabled={pwdSaving}>
                     {pwdSaving ? t('提交中…', 'Submitting…') : t('提交', 'Submit')}
-                  </button>
+                  </DialogButton>
                 </div>
               </form>
             )}
           </div>
 
           {/* 只读信息 */}
-          <div className="border-t border-gray-100 pt-4 space-y-2">
+          <div className="border-t border-theme pt-4 space-y-2">
             <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-400">{t('用户名（登录账号）', 'Username (login)')}</span>
-              <span className="text-sm font-medium text-gray-700 truncate max-w-[60%]" title={session.username}>
+              <span className="text-sm text-subtle">{t('用户名（登录账号）', 'Username (login)')}</span>
+              <span className="text-sm font-medium text-main truncate max-w-[60%]" title={session.username}>
                 {session.username || '-'}
               </span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-400">{t('角色', 'Role')}</span>
-              <span className="text-sm font-medium text-gray-700">{roleLabel}</span>
+              <span className="text-sm text-subtle">{t('角色', 'Role')}</span>
+              <span className="text-sm font-medium text-main">{roleLabel}</span>
             </div>
           </div>
-        </div>
+        </DialogBody>
       )}
     </AccessibleDialog>
   );

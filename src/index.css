@@ -177,12 +177,15 @@
   dialog.openlearn-dialog {
     margin: auto;
     padding: 0;
-    border-width: 0;
-    background-color: transparent;
-    color: inherit;
     width: calc(100% - 2rem);
     max-width: calc(100vw - 2rem);
     max-height: calc(100dvh - 2rem);
+    background-color: var(--ol-dialog-bg);
+    background-image: var(--ol-dialog-surface-image, none);
+    color: var(--ol-dialog-body-fg);
+    border: var(--ol-dialog-border-width) solid var(--ol-dialog-border-color);
+    border-radius: var(--ol-dialog-radius);
+    box-shadow: var(--ol-dialog-shadow);
     opacity: 0;
     transition-property: opacity, transform, display, overlay;
     transition-duration: 0.2s;
@@ -212,18 +215,18 @@
     }
   }
   dialog.openlearn-dialog::backdrop {
-    background-color: rgba(15, 23, 42, 0);
-    backdrop-filter: blur(4px);
+    background-color: transparent;
+    backdrop-filter: blur(var(--ol-dialog-backdrop-blur));
     transition-property: background-color, display, overlay;
     transition-duration: 0.2s;
     transition-timing-function: ease-out;
     transition-behavior: allow-discrete;
   }
   dialog.openlearn-dialog[open]::backdrop {
-    background-color: rgba(15, 23, 42, 0.5);
+    background-color: var(--ol-dialog-backdrop);
 
     @starting-style {
-      background-color: rgba(15, 23, 42, 0);
+      background-color: transparent;
     }
   }
   @media (prefers-reduced-motion: reduce) {
@@ -336,6 +339,307 @@
     --primary-ink-hover: #81c784;
     --color-primary-light: rgba(76, 175, 80, 0.18);
     --color-primary-text: #ffffff;
+  }
+}
+
+/* ── Dialog 统一视觉系统（令牌层）──────────────────────────────────────
+   所有值都由基础主题令牌派生，因此四套内置主题自动跟随；第三方主题包
+   （theme.json tokens / modes.*.tokens / styles.css）可以直接覆盖任意
+   `--ol-dialog-*` 变量，再用 `[data-theme='<id>'] dialog.openlearn-dialog`
+   与 `.ol-dialog-*` 选择器做深度定制。契约见
+   docs/architecture/theming-system.md「Dialog 主题契约」一节。 */
+:root {
+  --ol-dialog-bg: var(--bg-surface-elevated);
+  --ol-dialog-surface-image: none;
+  --ol-dialog-border-color: var(--border-theme);
+  --ol-dialog-border-width: 1px;
+  --ol-dialog-radius: var(--ol-radius-card, 1rem);
+  --ol-dialog-control-radius: var(--ol-radius-control, 0.75rem);
+  --ol-dialog-shadow: 0 28px 70px -24px rgb(15 23 42 / 0.35), 0 10px 28px -16px rgb(15 23 42 / 0.22);
+  --ol-dialog-backdrop: rgb(15 23 42 / 0.52);
+  --ol-dialog-backdrop-blur: 6px;
+  --ol-dialog-header-bg: var(--bg-surface-secondary);
+  --ol-dialog-header-fg: var(--text-main);
+  --ol-dialog-footer-bg: var(--bg-surface-secondary);
+  --ol-dialog-divider: var(--border-theme-subtle);
+  --ol-dialog-body-fg: var(--text-main);
+  --ol-dialog-title-fg: var(--text-main);
+  --ol-dialog-title-size: 1rem;
+  --ol-dialog-title-weight: 700;
+  --ol-dialog-padding-x: 1.25rem;
+  --ol-dialog-padding-y: 1rem;
+  --ol-dialog-body-padding-x: 1.25rem;
+  --ol-dialog-body-padding-y: 1.25rem;
+  --ol-dialog-footer-padding-x: 1.25rem;
+  --ol-dialog-footer-padding-y: 0.875rem;
+  --ol-dialog-gap: 0.75rem;
+  --ol-dialog-accent: var(--color-primary);
+  --ol-dialog-icon-radius: var(--ol-radius-control, 0.75rem);
+  --ol-dialog-icon-bg: var(--color-primary-light);
+  --ol-dialog-icon-fg: var(--primary-ink);
+  --ol-dialog-icon-border: color-mix(in srgb, var(--color-primary) 24%, transparent);
+  --ol-dialog-close-fg: var(--text-subtle);
+  --ol-dialog-close-fg-hover: var(--text-main);
+  --ol-dialog-close-bg-hover: var(--bg-surface-secondary);
+}
+
+/* 深色类主题：阴影更沉、遮罩更暗，避免浅色投影在暗底「发灰」；
+   标题/底栏带一点主色晕染，在深色面上拉开层次。 */
+[data-theme='dark'],
+[data-theme='chalkboard'] {
+  --ol-dialog-shadow: 0 32px 90px -20px rgb(0 0 0 / 0.75), 0 12px 36px -18px rgb(0 0 0 / 0.6);
+  --ol-dialog-backdrop: rgb(2 6 23 / 0.68);
+  --ol-dialog-header-bg: color-mix(in srgb, var(--bg-surface-elevated) 78%, var(--color-primary) 22%);
+  --ol-dialog-footer-bg: color-mix(in srgb, var(--bg-surface-elevated) 86%, var(--color-primary) 14%);
+}
+
+/* ── Dialog 统一视觉系统（结构层）──────────────────────────────────────
+   `AccessibleDialog` 会在原生 <dialog> 上挂 `data-dialog` 与 `data-dialog-variant`
+   稳定钩子；子结构统一使用以下类名，第三方主题可据此做精确覆盖。 */
+@layer components {
+  .ol-dialog-heading {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    min-width: 0;
+  }
+
+  .ol-dialog-header {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--ol-dialog-gap);
+    padding: var(--ol-dialog-padding-y) var(--ol-dialog-padding-x);
+    color: var(--ol-dialog-header-fg);
+    background-color: var(--ol-dialog-header-bg);
+    border-bottom: 1px solid var(--ol-dialog-divider);
+    border-start-start-radius: var(--ol-dialog-radius);
+    border-start-end-radius: var(--ol-dialog-radius);
+  }
+
+  .ol-dialog-header[data-variant='plain'] {
+    background-color: transparent;
+    border-bottom-color: transparent;
+  }
+
+  .ol-dialog-title {
+    margin: 0;
+    min-width: 0;
+    color: var(--ol-dialog-title-fg);
+    font-size: var(--ol-dialog-title-size);
+    font-weight: var(--ol-dialog-title-weight);
+    line-height: 1.3;
+    letter-spacing: -0.01em;
+  }
+
+  .ol-dialog-title-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .ol-dialog-description {
+    margin: 0.125rem 0 0;
+    color: var(--text-muted);
+    font-size: 0.8125rem;
+    line-height: 1.5;
+  }
+
+  .ol-dialog-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: var(--ol-dialog-body-padding-y) var(--ol-dialog-body-padding-x);
+    color: var(--ol-dialog-body-fg);
+  }
+
+  .ol-dialog-footer {
+    display: flex;
+    flex-shrink: 0;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    padding: var(--ol-dialog-footer-padding-y) var(--ol-dialog-footer-padding-x);
+    background-color: var(--ol-dialog-footer-bg);
+    border-top: 1px solid var(--ol-dialog-divider);
+    border-end-start-radius: var(--ol-dialog-radius);
+    border-end-end-radius: var(--ol-dialog-radius);
+  }
+
+  .ol-dialog-icon {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    color: var(--ol-dialog-icon-fg);
+    background-color: var(--ol-dialog-icon-bg);
+    border: 1px solid var(--ol-dialog-icon-border);
+    border-radius: var(--ol-dialog-icon-radius);
+  }
+
+  .ol-dialog-icon[data-variant='danger'] {
+    color: #e11d48;
+    background-color: color-mix(in srgb, #e11d48 12%, transparent);
+    border-color: color-mix(in srgb, #e11d48 24%, transparent);
+  }
+
+  .ol-dialog-icon[data-variant='warning'] {
+    color: #b45309;
+    background-color: color-mix(in srgb, #f59e0b 14%, transparent);
+    border-color: color-mix(in srgb, #f59e0b 28%, transparent);
+  }
+
+  .ol-dialog-icon[data-variant='success'] {
+    color: #047857;
+    background-color: color-mix(in srgb, #10b981 14%, transparent);
+    border-color: color-mix(in srgb, #10b981 28%, transparent);
+  }
+
+  [data-theme='dark'] .ol-dialog-icon[data-variant='danger'],
+  [data-theme='chalkboard'] .ol-dialog-icon[data-variant='danger'] {
+    color: #fb7185;
+  }
+
+  [data-theme='dark'] .ol-dialog-icon[data-variant='warning'],
+  [data-theme='chalkboard'] .ol-dialog-icon[data-variant='warning'] {
+    color: #fbbf24;
+  }
+
+  [data-theme='dark'] .ol-dialog-icon[data-variant='success'],
+  [data-theme='chalkboard'] .ol-dialog-icon[data-variant='success'] {
+    color: #34d399;
+  }
+
+  .ol-dialog-close {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    padding: 0;
+    color: var(--ol-dialog-close-fg);
+    background-color: transparent;
+    border: 0;
+    border-radius: 9999px;
+    cursor: pointer;
+    transition:
+      background-color 150ms ease,
+      color 150ms ease;
+  }
+
+  .ol-dialog-close:hover {
+    color: var(--ol-dialog-close-fg-hover);
+    background-color: var(--ol-dialog-close-bg-hover);
+  }
+
+  .ol-dialog-close:focus-visible {
+    outline: 2px solid var(--ol-dialog-accent);
+    outline-offset: 2px;
+  }
+
+  .ol-dialog-close:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+
+  .ol-dialog-close--floating {
+    position: absolute;
+    top: 0.75rem;
+    right: 0.75rem;
+  }
+
+  .ol-dialog-section {
+    padding: 0.875rem;
+    background-color: var(--bg-surface-secondary);
+    border: 1px solid var(--border-theme);
+    border-radius: var(--ol-dialog-control-radius);
+  }
+
+  .ol-dialog-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.375rem;
+    padding: 0.5rem 0.875rem;
+    color: var(--text-main);
+    font-size: 0.8125rem;
+    font-weight: 700;
+    line-height: 1.2;
+    white-space: nowrap;
+    background-color: transparent;
+    border: 1px solid transparent;
+    border-radius: var(--ol-dialog-control-radius);
+    cursor: pointer;
+    transition:
+      background-color 150ms ease,
+      border-color 150ms ease,
+      color 150ms ease,
+      box-shadow 150ms ease;
+  }
+
+  .ol-dialog-btn:focus-visible {
+    outline: 2px solid var(--ol-dialog-accent);
+    outline-offset: 2px;
+  }
+
+  .ol-dialog-btn:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+  }
+
+  .ol-dialog-btn[data-variant='secondary'] {
+    color: var(--text-main);
+    background-color: var(--bg-surface);
+    border-color: var(--border-theme);
+  }
+
+  .ol-dialog-btn[data-variant='secondary']:hover:not(:disabled) {
+    background-color: var(--bg-surface-secondary);
+  }
+
+  .ol-dialog-btn[data-variant='ghost'] {
+    color: var(--text-muted);
+  }
+
+  .ol-dialog-btn[data-variant='ghost']:hover:not(:disabled) {
+    color: var(--text-main);
+    background-color: var(--bg-surface-secondary);
+  }
+
+  .ol-dialog-btn[data-variant='primary'] {
+    color: var(--color-primary-text);
+    background-color: var(--primary-solid);
+    box-shadow: 0 8px 20px -10px color-mix(in srgb, var(--primary-solid) 70%, transparent);
+  }
+
+  .ol-dialog-btn[data-variant='primary']:hover:not(:disabled) {
+    background-color: var(--primary-solid-hover);
+  }
+
+  .ol-dialog-btn[data-variant='danger'] {
+    color: #ffffff;
+    background-color: #dc2626;
+    box-shadow: 0 8px 20px -10px rgb(220 38 38 / 0.55);
+  }
+
+  .ol-dialog-btn[data-variant='danger']:hover:not(:disabled) {
+    background-color: #b91c1c;
+  }
+
+  .ol-dialog-btn[data-variant='warning'] {
+    color: #ffffff;
+    background-color: #b45309;
+    box-shadow: 0 8px 20px -10px rgb(180 83 9 / 0.5);
+  }
+
+  .ol-dialog-btn[data-variant='warning']:hover:not(:disabled) {
+    background-color: #92400e;
   }
 }
 
