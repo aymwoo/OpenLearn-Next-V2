@@ -1,4 +1,5 @@
 import tailwindcss from '@tailwindcss/vite';
+import { execSync } from 'node:child_process';
 import { readFileSync } from 'fs';
 import react from '@vitejs/plugin-react';
 import path from 'path';
@@ -6,6 +7,19 @@ import { defineConfig } from 'vite';
 
 const pkg = JSON.parse(readFileSync('./package.json', 'utf-8'));
 const targetPort = parseInt(process.env.PORT || '9000', 10);
+
+/** 构建期当前 commit 的 7 位短哈希；非 Git 环境（如从 npm 包安装的构建缓存）下为空串。 */
+function readGitShortCommit(): string {
+  try {
+    return execSync('git rev-parse --short=7 HEAD', {
+      cwd: __dirname,
+      encoding: 'utf-8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
+  } catch {
+    return '';
+  }
+}
 
 export default defineConfig({
   plugins: [
@@ -58,6 +72,7 @@ export default defineConfig({
   },
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),
+    __APP_COMMIT__: JSON.stringify(readGitShortCommit()),
   },
   server: {
     host: '0.0.0.0',

@@ -22,6 +22,9 @@ import { FontSizeSelector } from './FontSizeSelector';
 import { StudentLiveHeader } from './StudentLiveHeader';
 import { ExtensionPointRenderer } from '../plugin-host/extension-point-renderer';
 
+/** 构建期注入的 commit 短哈希；vitest 等未注入环境下降级为空串。 */
+const BUILD_COMMIT = typeof __APP_COMMIT__ === 'string' ? __APP_COMMIT__.trim().slice(0, 7) : '';
+
 export interface AppHeaderProps {
   activeRole?: 'teacher' | 'student';
   setActiveRole?: Dispatch<SetStateAction<'teacher' | 'student'>> | ((role: 'teacher' | 'student') => void);
@@ -172,7 +175,14 @@ export function AppHeader(props: AppHeaderProps) {
             <span className="text-base font-black text-slate-900 tracking-tight">
               {siteInfo.siteName || 'OpenLearn Next'}
             </span>
-            <span className="text-xs font-medium text-subtle tracking-tight">v{__APP_VERSION__}</span>
+            <span className="text-xs font-medium text-subtle tracking-tight">
+              v{__APP_VERSION__}
+              {BUILD_COMMIT && (
+                <span className="ml-1 font-mono text-[10px] text-subtle/70" data-testid="app-build-commit">
+                  {BUILD_COMMIT}
+                </span>
+              )}
+            </span>
             {siteInfo.slogan && (
               <span className="hidden md:inline text-xs text-subtle font-normal truncate max-w-[200px]">
                 {siteInfo.slogan}

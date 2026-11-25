@@ -56,6 +56,11 @@ function getBuildAppVersion(): string {
   return typeof __APP_VERSION__ === 'string' ? __APP_VERSION__.trim() : '';
 }
 
+/** 构建期注入的 commit 短哈希；vitest 等未注入环境下降级为空串。 */
+function getBuildCommit(): string {
+  return typeof __APP_COMMIT__ === 'string' ? __APP_COMMIT__.trim().slice(0, 7) : '';
+}
+
 function formatVersionBadge(rawVersion: string): string {
   const cleaned = rawVersion.trim().replace(/^v/i, '');
   return cleaned ? `v${cleaned}` : '';
@@ -321,6 +326,7 @@ export const LoginPage = React.memo(function LoginPage({ onLoginSuccess, lang }:
         : 'items-center';
 
   const versionBadge = formatVersionBadge(appVersion);
+  const buildCommit = getBuildCommit();
 
   const brandBlock = (
     <div key="brand" data-login-region="brand" className={isSplit ? 'text-left space-y-3' : 'text-center mb-6'}>
@@ -352,6 +358,11 @@ export const LoginPage = React.memo(function LoginPage({ onLoginSuccess, lang }:
             className="text-primary-ink font-medium text-xs bg-primary-theme/15 px-2 py-0.5 rounded-full border border-primary-theme/30 theme-accent-badge"
           >
             {versionBadge}
+          </span>
+        )}
+        {versionBadge && buildCommit && (
+          <span data-testid="login-build-commit" className="font-mono text-[10px] text-subtle">
+            {buildCommit}
           </span>
         )}
       </h1>

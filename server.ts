@@ -26,7 +26,7 @@ if (!process.env.NODE_ENV) {
 import { createServer as createHttpServer } from 'http';
 import { Server } from 'socket.io';
 import { kernelContainer } from './packages/core/kernel/index.js';
-import { PLATFORM_VERSION } from './packages/core/version.js';
+import { PLATFORM_COMMIT, PLATFORM_VERSION } from './packages/core/version.js';
 import {
   IClassroomLifecycleServiceToken,
   IClassroomActivityCatalogToken,
@@ -672,7 +672,11 @@ async function startServer() {
     const dim = '\x1b[2m';
     const link = formatTerminalHyperlink;
 
-    console.log(`\n  ${bold}${green}OpenLearn Next${reset} v${PLATFORM_VERSION} ready:\n`);
+    console.log(
+      `\n  ${bold}${green}OpenLearn Next${reset} v${PLATFORM_VERSION}${
+        PLATFORM_COMMIT ? ` ${dim}(${PLATFORM_COMMIT})${reset}` : ''
+      } ready:\n`,
+    );
     console.log(`  ${dim}➜${reset}  ${bold}Local:${reset}   ${bold}${cyan}${link(localUrl)}${reset}`);
 
     if (isAnyHost) {

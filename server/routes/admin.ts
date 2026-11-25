@@ -1,6 +1,6 @@
 import semver from 'semver';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
-import { PLATFORM_VERSION } from '../../packages/core/version.js';
+import { PLATFORM_COMMIT, PLATFORM_VERSION } from '../../packages/core/version.js';
 import { randomId } from '../utils/id.js';
 import { requireAuth } from '../middleware/auth.js';
 import type { ServerContext } from '../context.js';
@@ -64,6 +64,7 @@ export function registerAdminRoutes(ctx: ServerContext) {
       res.json({
         success: true,
         currentVersion,
+        currentCommit: PLATFORM_COMMIT,
         latestVersion,
         hasUpdate,
         publishTime,

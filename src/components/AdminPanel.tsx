@@ -157,6 +157,7 @@ export function AdminPanel({
   const [upgradeInfo, setUpgradeInfo] = useState<{
     success: boolean;
     currentVersion: string;
+    currentCommit?: string;
     latestVersion: string;
     hasUpdate: boolean;
     publishTime?: string | null;
@@ -644,6 +645,11 @@ export function AdminPanel({
                         </h3>
                         <span className="font-mono text-xs px-2 py-0.5 rounded-md bg-indigo-900/90 text-indigo-200 border border-indigo-700/60 font-semibold">
                           v{upgradeInfo?.currentVersion || '2.0.0'}
+                          {upgradeInfo?.currentCommit && (
+                            <span className="ml-1 text-[10px] text-indigo-300/80" data-testid="system-build-commit">
+                              {upgradeInfo.currentCommit}
+                            </span>
+                          )}
                         </span>
                         {upgradeInfo?.hasUpdate ? (
                           <span className="text-xs px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/40 font-semibold flex items-center gap-1.5 animate-pulse">
