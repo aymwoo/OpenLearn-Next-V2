@@ -104,6 +104,7 @@ import {
 import type { ServerContext } from './server/context.js';
 import { makeActivityId, type ActivityDescriptorBase } from './packages/core/activity-contract/index.js';
 import { registerOsRoutes } from './server/routes/os.js';
+import { registerSkillRoutes } from './server/routes/skills.js';
 import { registerActivityProviderRoutes } from './server/routes/activity-providers.js';
 import { registerExtensionPointRoutes } from './server/routes/extension-points.js';
 import { ActivityRunService } from './server/services/activity-run-service.js';
@@ -438,6 +439,7 @@ async function startServer() {
   kernelContainer.pluginHost.setSocketIO(io);
   ctx.io = io;
   registerOsRoutes(ctx, activityRunService);
+  registerSkillRoutes(ctx);
   registerActivityProviderRoutes(ctx, activityRunService);
   registerExtensionPointRoutes(ctx, activityCompletedTracker);
   registerFilesRoutes(ctx);

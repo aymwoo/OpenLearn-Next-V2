@@ -12,6 +12,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Features
 
+- **Skill 运行时 P0（备课场景）**：`ai.skill.provider` 从「工具声明」扩展为技能包，新增 `whenToUse` / `instructions` / `surfaces` / `roles` / `tools` / `outputKind` / `latencyClass` / `maxTurns` 等可选字段，旧条目保持兼容。新增 `server/skill-registry.ts` 与 `GET /api/skills`、`POST /api/skills/:id/run`；Agent 选定技能时只挂载该技能声明的工具，并真正消费 `requiresConfirm`（返回 `pendingConfirmations`，不再自主执行写操作）。备课编辑器新增「技能」入口，内置 `lesson.plan.generate` 生成教学环节，预览确认后经既有 `lesson.update_timeline` 命令落库。
+
 - **教师端实时作答看板**：已发布测评的每条班级记录新增「实时进度」入口，展示全班应交 / 作答中 / 已交卷 / 未开始人数、平均分，以及逐生的答题进度（已答/总题数）、最近活动时间、监考异常次数与得分，可按状态筛选。学生开考、自动保存、交卷或触发监考事件时，服务端向 `assessment-<assignmentId>` 房间推送 `assessment:progress_updated`（仅教师与管理员可加入，学生不可订阅），面板收到信号立即重拉快照；无 socket 时退化为「作答中 3 秒 / 其他 10 秒」自适应轮询，标签页回到前台自动补拉。进度快照同步补充 `answeredCount` / `itemCount` / `progressPercent` / `lastActivityAt` / `startedAt` / `deadlineAt` / `proctorCounts` 与顶层 `itemCount`。
 - **学案编排与学习过程新增 7 个扩展槽**：`xuean.editor.toolbar`、`xuean.activity.card.action`、`xuean.activity.card.badge`、`xuean.activity.editor.footer`、`xuean.activity.student.addon`、`xuean.progress.summary`、`xuean.home.block`。其中 `xuean.activity.editor.footer` / `xuean.activity.student.addon` 与既有活动槽位一样按 `activityType` 精确分发；`ExtensionSlot` 成员数增至 161。
 - **声明式题型 UI（`assessment.question_type`）**：远程 ZIP 插件可通过 manifest 声明 `editorView` / `answerView` / `reviewView`，由宿主包装成题型编辑器、作答组件与结果页复盘组件。新增 `window.OpenLearnPluginBridge.question`（`getState` / `onUpdate` / `setConfig` / `setAnswerKey` / `setValue`）与 `question.update` 下行消息；`answerView` 永不接收 `answerKey`，`reviewView` 只读，回写 payload 限制 64KB。内联插件仍可用 `ctx.ui.registerAssessmentQuestionType`，同 type 时 inline 优先，插件停用后回退 manifest 版本。

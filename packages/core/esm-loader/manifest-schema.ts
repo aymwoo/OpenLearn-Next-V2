@@ -217,12 +217,39 @@ const aiPromptTemplateSchema = z.object({
     .optional(),
 });
 
+const aiSkillSurfaceSchema = z.enum(['lesson_prep', 'admin_settings', 'classroom_live']);
+const aiSkillRoleSchema = z.enum(['administrator', 'teacher', 'student']);
+
+const aiSkillToolSchema = z.object({
+  commandType: z.string().min(1),
+  requiresConfirm: z.boolean().optional(),
+});
+
+/**
+ * `ai.skill.provider` 条目。
+ *
+ * 兼容说明：旧条目只需要 `id/name/description/commandType`，会被宿主归一为
+ * 「单工具技能」；新增字段全部可选，用于把技能从「工具声明」升级为
+ * 「技能包」（指令 + 适用场景 + 产物 + 确认策略）。
+ */
 const aiSkillProviderSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
   description: z.string().min(1),
   parametersSchema: z.record(z.string(), z.unknown()).optional(),
   commandType: z.string().optional(),
+  version: z.string().optional(),
+  whenToUse: z.string().optional(),
+  instructions: z.string().optional(),
+  resources: z.array(z.string().min(1)).optional(),
+  surfaces: z.array(aiSkillSurfaceSchema).optional(),
+  scopes: z.array(z.string().min(1)).optional(),
+  roles: z.array(aiSkillRoleSchema).optional(),
+  tools: z.array(aiSkillToolSchema).optional(),
+  outputKind: z.string().optional(),
+  latencyClass: z.enum(['interactive', 'background']).optional(),
+  maxTurns: z.number().int().min(1).max(20).optional(),
+  requiresConfirm: z.boolean().optional(),
 });
 
 const aiPersonaRoleSchema = z.enum(['administrator', 'teacher', 'student']);

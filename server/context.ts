@@ -24,6 +24,10 @@ export type AgentChatRequest = {
   actorId?: string;
   /** P2: ai.agent.persona —— 选定的角色模板 id（面板下拉；空 = 默认助教） */
   personaId?: string | null;
+  /** P0 Skill 运行时：调用场景（决定技能目录与可见性） */
+  surface?: 'lesson_prep' | 'admin_settings' | 'classroom_live';
+  /** P0 Skill 运行时：选定的技能 id（空 = 不启用技能收窄，保持旧行为） */
+  skillId?: string | null;
   /** Prior conversation turns (oldest first) used to give the agent memory. */
   history?: AgentChatTurn[];
 };
