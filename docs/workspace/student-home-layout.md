@@ -2,7 +2,7 @@
 
 学生登录后进入的「系统总览」首屏（`StudentView` → `StudentDashboardPanel`）的布局契约。本页规定模块顺序、固定区与可自定义区的边界、移动端断点行为，以及插件可挂载的扩展点。修改首屏布局时必须同时更新本页。
 
-> 来源：Gitee Issue `IKVKVF`（学生首屏布局优化）。适用范围：`0.7.17` 之后的版本（见 CHANGELOG `Unreleased`）。
+> 来源：Gitee Issue `IKVKVF`（学生首屏布局优化）。适用范围：`0.8.0` 及之后的版本（见 CHANGELOG `[0.8.0]`）。
 
 ---
 
