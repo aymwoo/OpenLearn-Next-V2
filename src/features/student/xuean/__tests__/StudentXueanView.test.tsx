@@ -118,10 +118,12 @@ describe('StudentXueanView', () => {
     render(<StudentXueanView lessonId="lesson-1" lessonTitle="探究课" />);
 
     expect(await screen.findByLabelText('活动 1：虚拟实验')).toBeTruthy();
-    const slot = screen.getByTestId('plugin-activity-slot');
-    expect(slot.getAttribute('data-slot')).toBe('xuean.activity.student');
+    const slots = screen.getAllByTestId('plugin-activity-slot');
+    const slot = slots.find((el) => el.getAttribute('data-slot') === 'xuean.activity.student')!;
     expect(slot.getAttribute('data-activity-type')).toBe('@acme/lab:experiment');
     expect(slot.getAttribute('data-activity-id')).toBe('a1');
+    // 插件活动同样要有学生附加区（与内置活动保持一致）
+    expect(slots.some((el) => el.getAttribute('data-slot') === 'xuean.activity.student.addon')).toBe(true);
   });
 
   it('绑定 assignment 的试题活动渲染内嵌作答卡片', async () => {

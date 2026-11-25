@@ -76,7 +76,8 @@
     "student.fullscreen",
     "global.setting",
     "nav.user_menu",
-    "mode.pack"
+    "mode.pack",
+    "assessment.question_type"
   ],
   "b_loose_keys": [
     "header.action",
@@ -138,12 +139,20 @@
     "assessment.result.item.addon",
     "xuean.activity.type",
     "xuean.activity.editor",
-    "xuean.activity.student"
+    "xuean.activity.student",
+    "xuean.editor.toolbar",
+    "xuean.activity.card.action",
+    "xuean.activity.card.badge",
+    "xuean.activity.editor.footer",
+    "xuean.activity.student.addon",
+    "xuean.progress.summary",
+    "xuean.home.block"
   ],
-  "a_total": 75,
-  "b_total": 60,
+  "a_total": 76,
+  "b_total": 67,
   "a_not_in_extension_slot": [
     "ai.persona.provider",
+    "assessment.question_type",
     "learning.surface",
     "locales",
     "mode.pack",

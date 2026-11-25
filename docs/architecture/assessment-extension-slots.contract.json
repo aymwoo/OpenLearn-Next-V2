@@ -587,24 +587,31 @@
   ],
   "questionTypeExtension": {
     "phase": "P2",
-    "status": "needs-separate-review",
+    "status": "implemented",
+    "implementedAt": "2026-11-25",
     "manifestKey": "assessment.question_type",
     "entryShape": {
-      "id": "string（必须等于服务端已注册题型 type，格式 <pluginId>:<name>）",
+      "id": "string（必须满足服务端题型命名规则 <prefix>:<name>，且与 registerQuestionType 的 type 一致）",
       "label": "string",
       "labelEn": "string?",
-      "category": "'objective' | 'subjective'",
+      "category": "'objective' | 'subjective' | 'survey' | 'custom'",
       "supports": "Array<'quiz' | 'exam' | 'survey'>",
-      "autoGradable": "boolean",
-      "editorView": "string（storage/*.html）",
-      "answerView": "string（storage/*.html）"
+      "autoGradable": "boolean?",
+      "editorView": "string（storage/*.html，必填）",
+      "answerView": "string?（storage/*.html）",
+      "reviewView": "string?（storage/*.html，结果页逐题复盘）",
+      "defaultConfig": "object?",
+      "defaultAnswerKey": "unknown?"
     },
-    "bridgeOpsToAdd": ["question.getConfig", "question.setConfig", "question.getValue", "question.setValue"],
-    "precedence": "同 type 时 inline ctx.ui.registerAssessmentQuestionType 优先（内建插件可覆盖）",
+    "bridgeOpsToAdd": ["question.setConfig", "question.setAnswerKey", "question.setValue"],
+    "bridgeReadApi": ["getState", "onUpdate"],
+    "precedence": "同 type 时 inline ctx.ui.registerAssessmentQuestionType 优先（内建插件可覆盖，停用后回退 manifest 版本）",
     "constraints": [
-      "新增 bridge op 必须限定在当前题型上下文，拒绝任意 id 探测",
-      "不得绕过服务端 registerQuestionType：UI 声明不等于判分实现存在",
-      "安装期校验 id 与 manifest.id 命名空间一致，否则告警"
+      "question.* 调用必须限定在当前题型上下文，并按角色校验（editor 可写 config/answerKey，answer 只写 value，review 只读）",
+      "answerView 永不接收 answerKey；reviewView 是否拿到 answerKey 由 showAnalysis 决定",
+      "回写 payload 必须 JSON 安全且 ≤64KB",
+      "不得绕过服务端 registerQuestionType：UI 声明不等于判分实现存在（两段式注册）",
+      "跨插件同 type 的 manifest 声明先到先得并告警，不阻断插件激活"
     ]
   },
   "services": [

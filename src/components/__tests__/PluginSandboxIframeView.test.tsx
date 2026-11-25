@@ -1,6 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, cleanup, act } from '@testing-library/react';
-import { PluginSandboxIframeView, sanitizeViewPath } from '../PluginSandboxIframeView';
+import {
+  PluginSandboxIframeView,
+  sanitizeQuestionState,
+  sanitizeSandboxContext,
+  sanitizeViewPath,
+} from '../PluginSandboxIframeView';
 import { PLUGIN_VIEW_CHANNEL } from '../../plugin-host/sandbox-frame';
 import { appStore } from '../../store/appStore';
 import { useThemeStore } from '../../store/themeStore';
@@ -22,6 +27,39 @@ describe('sanitizeViewPath', () => {
     expect(sanitizeViewPath('javascript:alert(1)')).toBeNull();
     expect(sanitizeViewPath('data:text/html,bad')).toBeNull();
     expect(sanitizeViewPath('')).toBeNull();
+  });
+});
+
+describe('sanitizeQuestionState', () => {
+  it('answer 角色永远不携带 answerKey', () => {
+    const state = sanitizeQuestionState({
+      type: 'ext:pair',
+      role: 'answer',
+      config: { left: [] },
+      answerKey: { pairs: [{ leftId: 'l1', rightId: 'r1' }] },
+      value: null,
+    });
+    expect(state).not.toBeNull();
+    expect('answerKey' in (state as object)).toBe(false);
+    expect(state?.value).toBeNull();
+  });
+
+  it('editor / review 角色保留 answerKey', () => {
+    const key = { pairs: [] };
+    expect(sanitizeQuestionState({ type: 'ext:pair', role: 'editor', config: {}, answerKey: key })?.answerKey).toBe(
+      key,
+    );
+    expect(sanitizeQuestionState({ type: 'ext:pair', role: 'review', config: {}, answerKey: key })?.answerKey).toBe(
+      key,
+    );
+  });
+});
+
+describe('sanitizeSandboxContext budget', () => {
+  it('默认 16KB 会丢弃超大上下文，放宽预算后可保留', () => {
+    const raw = { activity: { config: 'x'.repeat(20 * 1024) } };
+    expect(sanitizeSandboxContext(raw)).toBeNull();
+    expect(sanitizeSandboxContext(raw, 64 * 1024)).not.toBeNull();
   });
 });
 

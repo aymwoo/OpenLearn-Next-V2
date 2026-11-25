@@ -97,6 +97,8 @@ export interface ItemResultView {
   feedback: string | null;
   /** 学生自己的作答，原样回显 */
   answer: unknown;
+  /** 题型展示配置（不含标准答案），结果页 Review 组件用它还原题面结构 */
+  config: Record<string, unknown>;
   /** 标准答案：仅当允许看解析时提供 */
   answerKey?: unknown;
 }
@@ -231,6 +233,7 @@ export function buildItemResultView(params: {
     needsManualReview,
     feedback,
     answer,
+    config: item.config,
   };
   if (withAnswerKey) base.answerKey = item.answerKey;
   return base;

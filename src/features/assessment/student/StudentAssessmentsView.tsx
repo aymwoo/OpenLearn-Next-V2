@@ -28,7 +28,7 @@ import {
   type StudentAttemptPayload,
   type StudentResultPayload,
 } from '../api';
-import { assessmentQuestionTypeUiRegistry } from '../question-type-ui-registry';
+import { assessmentQuestionTypeUiRegistry, useAssessmentQuestionTypes } from '../question-type-ui-registry';
 import '../register-builtin-question-uis';
 import { FallbackAnswer } from './answer-uis';
 import { ExtensionPointRenderer } from '../../../plugin-host/extension-point-renderer';
@@ -123,6 +123,8 @@ export function StudentAssessmentsView({
         lang={lang}
         payload={view.payload}
         initialAnswers={view.answers}
+        hiddenPluginIds={hiddenPluginIds}
+        hiddenExtensionIds={hiddenExtensionIds}
         onSubmitted={(result) => setView({ mode: 'result', result })}
         onExit={() => setView({ mode: 'list' })}
       />
@@ -134,6 +136,8 @@ export function StudentAssessmentsView({
       <ResultView
         lang={lang}
         result={view.result}
+        hiddenPluginIds={hiddenPluginIds}
+        hiddenExtensionIds={hiddenExtensionIds}
         onBack={() => {
           setView({ mode: 'list' });
           void load();
@@ -397,14 +401,20 @@ export function AssessmentRunner({
   initialAnswers,
   onSubmitted,
   onExit,
+  hiddenPluginIds,
+  hiddenExtensionIds,
 }: {
   lang: 'zh' | 'en';
   payload: StudentAttemptPayload;
   initialAnswers: Record<string, unknown>;
   onSubmitted: (result: StudentResultPayload) => void;
   onExit: () => void;
+  /** 教师配置的学生端可见性策略：作答页的插件槽位同样要遵守。 */
+  hiddenPluginIds?: string[];
+  hiddenExtensionIds?: string[];
 }) {
   const zh = lang === 'zh';
+  const questionTypes = useAssessmentQuestionTypes();
   const attemptId = payload.attempt!.id;
   const isExam = payload.assignment.kind === 'exam' || Boolean(payload.assignment.settings?.strictProctor);
   const [answers, setAnswers] = useState<Record<string, unknown>>(initialAnswers);
@@ -675,6 +685,8 @@ export function AssessmentRunner({
         <ExtensionPointRenderer
           slot="assessment.attempt.toolbar"
           slotProps={{ assignmentId: payload.assignment.id, attemptId, lang }}
+          excludePluginIds={hiddenPluginIds}
+          excludeExtensionIds={hiddenExtensionIds}
           lang={lang}
         />
       </div>
@@ -708,7 +720,7 @@ export function AssessmentRunner({
       <div className="relative z-10 flex-1 overflow-y-auto p-5">
         <ol className="space-y-4 max-w-3xl mx-auto">
           {items.map((item, index) => {
-            const ui = assessmentQuestionTypeUiRegistry.get(item.type);
+            const ui = questionTypes.find((entry) => entry.type === item.type);
             const Answer = ui?.Answer ?? FallbackAnswer;
             return (
               <li
@@ -739,6 +751,8 @@ export function AssessmentRunner({
                       index,
                       lang,
                     }}
+                    excludePluginIds={hiddenPluginIds}
+                    excludeExtensionIds={hiddenExtensionIds}
                     lang={lang}
                   />
                 </div>
@@ -757,12 +771,17 @@ export function ResultView({
   lang,
   result,
   onBack,
+  hiddenPluginIds,
+  hiddenExtensionIds,
 }: {
   lang: 'zh' | 'en';
   result: StudentResultPayload;
   onBack: () => void;
+  hiddenPluginIds?: string[];
+  hiddenExtensionIds?: string[];
 }) {
   const zh = lang === 'zh';
+  const questionTypes = useAssessmentQuestionTypes();
   const { attempt, assignment } = result;
   return (
     <div className="flex-1 flex flex-col min-h-0 bg-surface border border-theme rounded-2xl shadow-xl overflow-hidden">
@@ -816,89 +835,109 @@ export function ResultView({
         )}
 
         <ul className="space-y-3">
-          {result.items.map((item, index) => (
-            <li
-              key={item.itemId}
-              data-testid={`result-item-${item.itemId}`}
-              className="border border-theme rounded-xl p-4 space-y-2"
-            >
-              <div className="flex items-start gap-2">
-                <span className="text-2xs font-bold text-muted mt-0.5">#{index + 1}</span>
-                <p className="text-sm font-semibold text-main whitespace-pre-wrap break-words flex-1">{item.stem}</p>
-                {result.showAnalysis &&
-                  (item.needsManualReview ? (
-                    <span className="text-2xs text-amber-700 dark:text-amber-300 shrink-0">
-                      {zh ? '待批改' : 'pending'}
-                    </span>
-                  ) : item.isCorrect ? (
-                    <CheckCircle2
-                      size={15}
-                      className="text-emerald-600 shrink-0"
-                      aria-label={zh ? '正确' : 'Correct'}
-                    />
-                  ) : (
-                    <XCircle size={15} className="text-rose-600 shrink-0" aria-label={zh ? '错误' : 'Incorrect'} />
-                  ))}
-              </div>
-              <p className="text-xs text-main bg-surface-secondary rounded-lg px-2 py-1.5 whitespace-pre-wrap break-words">
-                <span className="text-muted mr-1">{zh ? '你的作答：' : 'Your answer:'}</span>
-                {answerToText(item.answer)}
-              </p>
-              {result.showAnalysis && item.answerKey !== undefined && item.answerKey !== null && (
-                <p className="text-2xs text-muted">
-                  {zh ? '参考答案：' : 'Reference answer:'} {answerToText(item.answerKey)}
-                </p>
-              )}
-              {result.showAnalysis && item.feedback && (
-                <p className="text-2xs text-indigo-700 dark:text-indigo-300">
-                  {zh ? '教师评语：' : 'Feedback:'} {item.feedback}
-                </p>
-              )}
-              {result.showAnalysis && item.score !== null && (
-                <p className="text-2xs text-muted">
-                  {zh ? '本题得分' : 'Item score'}：{item.score}/{item.maxScore}
-                </p>
-              )}
-              {attempt && (
-                <div className="pt-2 border-t border-theme">
-                  {/* P2：结果页逐题扩展。answerKey 仅在 showAnalysis 时进入 source */}
-                  <ExtensionPointRenderer
-                    slot="assessment.result.item.addon"
-                    slotProps={{
-                      assignmentId: assignment.id,
-                      attemptId: attempt.id,
-                      item: {
-                        itemId: item.itemId,
-                        type: item.type,
-                        stem: item.stem,
-                        maxScore: item.maxScore,
-                        answer: item.answer,
-                        score: item.score,
-                        isCorrect: item.isCorrect,
-                        feedback: item.feedback,
-                      },
-                      lang,
-                    }}
-                    resolveExtensionProps={(ext) => {
-                      const projected = projectAssessmentSensitive(ext, {
-                        slot: 'assessment.result.item.addon',
-                        viewer: 'student',
-                        role: 'student',
-                        source: {
-                          answerKey: result.showAnalysis ? item.answerKey : undefined,
-                          studentAnswer: item.answer,
-                        },
-                      });
-                      return projected.sensitive
-                        ? { sensitiveAccess: true, sensitive: projected.sensitive }
-                        : { sensitiveAccess: false };
-                    }}
-                    lang={lang}
-                  />
+          {result.items.map((item, index) => {
+            const Review = questionTypes.find((entry) => entry.type === item.type)?.Review;
+            return (
+              <li
+                key={item.itemId}
+                data-testid={`result-item-${item.itemId}`}
+                className="border border-theme rounded-xl p-4 space-y-2"
+              >
+                <div className="flex items-start gap-2">
+                  <span className="text-2xs font-bold text-muted mt-0.5">#{index + 1}</span>
+                  <p className="text-sm font-semibold text-main whitespace-pre-wrap break-words flex-1">{item.stem}</p>
+                  {result.showAnalysis &&
+                    (item.needsManualReview ? (
+                      <span className="text-2xs text-amber-700 dark:text-amber-300 shrink-0">
+                        {zh ? '待批改' : 'pending'}
+                      </span>
+                    ) : item.isCorrect ? (
+                      <CheckCircle2
+                        size={15}
+                        className="text-emerald-600 shrink-0"
+                        aria-label={zh ? '正确' : 'Correct'}
+                      />
+                    ) : (
+                      <XCircle size={15} className="text-rose-600 shrink-0" aria-label={zh ? '错误' : 'Incorrect'} />
+                    ))}
                 </div>
-              )}
-            </li>
-          ))}
+                {Review ? (
+                  <Review
+                    config={item.config ?? {}}
+                    answer={item.answer}
+                    answerKey={result.showAnalysis ? item.answerKey : undefined}
+                    score={item.score}
+                    isCorrect={item.isCorrect}
+                    feedback={item.feedback}
+                    lang={lang}
+                    readOnly
+                  />
+                ) : (
+                  <>
+                    <p className="text-xs text-main bg-surface-secondary rounded-lg px-2 py-1.5 whitespace-pre-wrap break-words">
+                      <span className="text-muted mr-1">{zh ? '你的作答：' : 'Your answer:'}</span>
+                      {answerToText(item.answer)}
+                    </p>
+                    {result.showAnalysis && item.answerKey !== undefined && item.answerKey !== null && (
+                      <p className="text-2xs text-muted">
+                        {zh ? '参考答案：' : 'Reference answer:'} {answerToText(item.answerKey)}
+                      </p>
+                    )}
+                  </>
+                )}
+                {result.showAnalysis && item.feedback && (
+                  <p className="text-2xs text-indigo-700 dark:text-indigo-300">
+                    {zh ? '教师评语：' : 'Feedback:'} {item.feedback}
+                  </p>
+                )}
+                {result.showAnalysis && item.score !== null && (
+                  <p className="text-2xs text-muted">
+                    {zh ? '本题得分' : 'Item score'}：{item.score}/{item.maxScore}
+                  </p>
+                )}
+                {attempt && (
+                  <div className="pt-2 border-t border-theme">
+                    {/* P2：结果页逐题扩展。answerKey 仅在 showAnalysis 时进入 source */}
+                    <ExtensionPointRenderer
+                      slot="assessment.result.item.addon"
+                      slotProps={{
+                        assignmentId: assignment.id,
+                        attemptId: attempt.id,
+                        item: {
+                          itemId: item.itemId,
+                          type: item.type,
+                          stem: item.stem,
+                          maxScore: item.maxScore,
+                          answer: item.answer,
+                          score: item.score,
+                          isCorrect: item.isCorrect,
+                          feedback: item.feedback,
+                        },
+                        lang,
+                      }}
+                      excludePluginIds={hiddenPluginIds}
+                      excludeExtensionIds={hiddenExtensionIds}
+                      resolveExtensionProps={(ext) => {
+                        const projected = projectAssessmentSensitive(ext, {
+                          slot: 'assessment.result.item.addon',
+                          viewer: 'student',
+                          role: 'student',
+                          source: {
+                            answerKey: result.showAnalysis ? item.answerKey : undefined,
+                            studentAnswer: item.answer,
+                          },
+                        });
+                        return projected.sensitive
+                          ? { sensitiveAccess: true, sensitive: projected.sensitive }
+                          : { sensitiveAccess: false };
+                      }}
+                      lang={lang}
+                    />
+                  </div>
+                )}
+              </li>
+            );
+          })}
         </ul>
 
         {!assignment.scoreReleased && result.showScore && (

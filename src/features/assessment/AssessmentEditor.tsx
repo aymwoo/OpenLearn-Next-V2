@@ -6,6 +6,7 @@
  */
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  Activity,
   ArrowDown,
   ArrowLeft,
   ArrowUp,
@@ -28,10 +29,11 @@ import {
   type AssessmentItemView,
   type BankItem,
 } from './api';
-import { assessmentQuestionTypeUiRegistry } from './question-type-ui-registry';
+import { assessmentQuestionTypeUiRegistry, useAssessmentQuestionTypes } from './question-type-ui-registry';
 import './register-builtin-question-uis';
 import { GradingPanel } from './GradingPanel';
 import { StatsPanel } from './StatsPanel';
+import { LiveProgressPanel } from './LiveProgressPanel';
 import { ExtensionPointRenderer } from '../../plugin-host/extension-point-renderer';
 import { projectAssessmentSensitive } from './sensitive-props';
 import { toEditorItemSummary } from './extension-slot-props';
@@ -78,13 +80,15 @@ export function AssessmentEditor({
   const [notice, setNotice] = useState<string | null>(null);
   const [gradingAssignment, setGradingAssignment] = useState<AssignmentRow | null>(null);
   const [statsAssignment, setStatsAssignment] = useState<AssignmentRow | null>(null);
+  const [progressAssignment, setProgressAssignment] = useState<AssignmentRow | null>(null);
   const [bankPicker, setBankPicker] = useState<BankItem[] | null>(null);
 
   const isDraft = detail?.status === 'draft';
-  const questionTypes = useMemo(() => {
-    assessmentQuestionTypeUiRegistry.subscribe(() => undefined);
-    return assessmentQuestionTypeUiRegistry.list().filter((t) => t.supports.includes(detail?.kind ?? 'quiz'));
-  }, [detail?.kind]);
+  const registeredQuestionTypes = useAssessmentQuestionTypes();
+  const questionTypes = useMemo(
+    () => registeredQuestionTypes.filter((t) => t.supports.includes(detail?.kind ?? 'quiz')),
+    [registeredQuestionTypes, detail?.kind],
+  );
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -229,6 +233,10 @@ export function AssessmentEditor({
 
   if (statsAssignment) {
     return <StatsPanel assignment={statsAssignment} lang={lang} onBack={() => setStatsAssignment(null)} />;
+  }
+
+  if (progressAssignment) {
+    return <LiveProgressPanel assignment={progressAssignment} lang={lang} onBack={() => setProgressAssignment(null)} />;
   }
 
   return (
@@ -593,6 +601,7 @@ export function AssessmentEditor({
           }}
           onGrading={setGradingAssignment}
           onStats={setStatsAssignment}
+          onProgress={setProgressAssignment}
           onError={setError}
         />
       </div>
@@ -634,6 +643,7 @@ function PublishSection({
   onPublished,
   onGrading,
   onStats,
+  onProgress,
   onError,
 }: {
   lang: 'zh' | 'en';
@@ -644,6 +654,7 @@ function PublishSection({
   onPublished: () => Promise<void>;
   onGrading: (assignment: AssignmentRow) => void;
   onStats: (assignment: AssignmentRow) => void;
+  onProgress: (assignment: AssignmentRow) => void;
   onError: (message: string) => void;
 }) {
   const zh = lang === 'zh';
@@ -652,6 +663,16 @@ function PublishSection({
   const [closesAt, setClosesAt] = useState('');
   const [busy, setBusy] = useState(false);
   const [preflight, setPreflight] = useState<Array<{ level: 'error' | 'warn'; code: string; message: string }>>([]);
+  // 检查结果与「当前发布上下文」绑定：切班级/改题量后旧 error 必须失效，
+  // 否则插件一次报错会永久禁用发布按钮（且提示可能来自上一个班级）。
+  // 用渲染期派生状态而非 useEffect —— 子组件的 effect 先于父组件执行，
+  // 放在 effect 里会把本轮刚上报的结果立刻清掉。
+  const preflightKey = `${detail.id}:${classId}:${detail.itemCount}:${detail.totalScore}`;
+  const [preflightKeyState, setPreflightKeyState] = useState(preflightKey);
+  if (preflightKeyState !== preflightKey) {
+    setPreflightKeyState(preflightKey);
+    setPreflight([]);
+  }
   const preflightErrors = preflight.filter((item) => item.level === 'error');
 
   const publish = async () => {
@@ -671,6 +692,7 @@ function PublishSection({
         closesAt: closesAt ? new Date(closesAt).getTime() : null,
       });
       await onPublished();
+      setPreflight([]);
     } catch (e: any) {
       onError(e?.message ?? String(e));
     } finally {
@@ -755,6 +777,9 @@ function PublishSection({
               onResult: (result: { level: 'error' | 'warn'; code: string; message: string }) => {
                 setPreflight((prev) => [...prev.filter((item) => item.code !== result.code), result]);
               },
+              onClear: (code?: string) => {
+                setPreflight((prev) => (code === undefined ? [] : prev.filter((item) => item.code !== code)));
+              },
             }}
             lang={lang}
           />
@@ -803,6 +828,14 @@ function PublishSection({
                   <ExternalLink size={11} />
                   CSV
                 </a>
+                <button
+                  type="button"
+                  onClick={() => onProgress(assignment)}
+                  className="inline-flex items-center gap-1 px-2 py-1 rounded-lg border border-indigo-200 bg-indigo-50 text-2xs font-semibold text-indigo-700 hover:bg-indigo-100 cursor-pointer dark:border-indigo-800 dark:bg-indigo-950/40 dark:text-indigo-300"
+                >
+                  <Activity size={11} />
+                  {zh ? '实时进度' : 'Live'}
+                </button>
                 <button
                   type="button"
                   onClick={() => onStats(assignment)}

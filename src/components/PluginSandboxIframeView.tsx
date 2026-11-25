@@ -26,6 +26,20 @@ export interface PluginSandboxIframeViewProps {
    * 函数、超深对象、超大 payload 会被剥离，且总大小限制 16KB。
    */
   sandboxContext?: Record<string, unknown> | null;
+  /**
+   * 上下文 JSON 体积上限（字节）。默认 16KB —— 页面级槽位足够；学案这类
+   * 携带整篇活动内容的槽位需要放宽，否则整个 context 会被丢弃。
+   */
+  maxContextBytes?: number;
+  /**
+   * 题型 UI 状态（可选）。存在时随 init 下发，并在变化时推送 `question.update`。
+   * 只有题型包装组件会传，普通 view 槽位保持 undefined。
+   */
+  question?: QuestionSandboxState | null;
+  /**
+   * 宿主侧扩展调用入口。只接收 `question.*` 前缀的 op，避免绕过 api/storage 白名单。
+   */
+  onHostCall?: (call: { op: string; args: unknown[] }) => PluginHostCallResult | Promise<PluginHostCallResult>;
   className?: string;
   onResize?: (height: number) => void;
   /**
@@ -61,12 +75,45 @@ export interface PluginSandboxIframeViewProps {
 
 export type PluginViewVariant = 'panel' | 'floating';
 
+/** 题型沙箱视图的宿主状态（editor / answer / review 三种角色）。 */
+export interface QuestionSandboxState {
+  type: string;
+  role: 'editor' | 'answer' | 'review';
+  config: Record<string, unknown>;
+  /** 仅 editor / review 可见；answer 角色会被宿主剥离。 */
+  answerKey?: unknown;
+  /** answer / review 角色：学生作答值。 */
+  value?: unknown;
+  score?: number | null;
+  isCorrect?: boolean | null;
+  feedback?: string | null;
+  readOnly?: boolean;
+}
+
+export interface PluginHostCallResult {
+  handled: boolean;
+  value?: unknown;
+  error?: string;
+}
+
+/**
+ * 剥离 answer 角色的标准答案。
+ *
+ * 即使调用方误传，answer iframe 也永远拿不到 answerKey —— 这是题型通道的硬边界。
+ */
+export function sanitizeQuestionState(question: QuestionSandboxState | null | undefined): QuestionSandboxState | null {
+  if (!question) return null;
+  if (question.role !== 'answer') return question;
+  const { answerKey: _answerKey, ...rest } = question;
+  return rest;
+}
+
 /**
  * 把槽位上下文收敛为 JSON 安全子集：剥函数、限深度/数组长度、限制 16KB。
  *
  * 目的不是「信任插件」，而是避免把 React 回调或整张统计表塞进 postMessage。
  */
-export function sanitizeSandboxContext(raw: unknown): Record<string, unknown> | null {
+export function sanitizeSandboxContext(raw: unknown, maxBytes: number = 16 * 1024): Record<string, unknown> | null {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
   const walk = (value: unknown, depth: number): unknown => {
     if (depth > 4) return undefined;
@@ -93,7 +140,7 @@ export function sanitizeSandboxContext(raw: unknown): Record<string, unknown> | 
   try {
     const clean = walk(raw, 0);
     if (!clean || typeof clean !== 'object' || Array.isArray(clean)) return null;
-    if (JSON.stringify(clean).length > 16 * 1024) return null;
+    if (JSON.stringify(clean).length > maxBytes) return null;
     return clean as Record<string, unknown>;
   } catch {
     return null;
@@ -134,6 +181,9 @@ export function PluginSandboxIframeView({
   studentId,
   studentName,
   sandboxContext,
+  maxContextBytes,
+  question,
+  onHostCall,
   className,
   onResize,
   variant = 'panel',
@@ -151,6 +201,9 @@ export function PluginSandboxIframeView({
   surfaceRef.current = { surfaceId, surfaceRendererId, surfaceStateJson };
   const onSurfaceEventRef = useRef(onSurfaceEvent);
   onSurfaceEventRef.current = onSurfaceEvent;
+  // 题型回写 handler 每次渲染都会变；用 ref 保持 message 监听稳定，避免反复解绑/绑定。
+  const onHostCallRef = useRef(onHostCall);
+  onHostCallRef.current = onHostCall;
 
   const lang = useAppStore((s) => s.lang);
   const storeLessonId = useAppStore((s) => s.selectedLesson);
@@ -166,10 +219,19 @@ export function PluginSandboxIframeView({
 
   // 槽位上下文：只在内容真正变化时重新序列化，避免每次渲染都深拷贝。
   const contextKey = JSON.stringify(sandboxContext ?? null);
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- contextKey 是 sandboxContext 的稳定指纹
-  const safeSandboxContext = useMemo(() => sanitizeSandboxContext(sandboxContext), [contextKey]);
+  const safeSandboxContext = useMemo(
+    () => sanitizeSandboxContext(sandboxContext, maxContextBytes),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- contextKey 是 sandboxContext 的稳定指纹
+    [contextKey, maxContextBytes],
+  );
 
   const cleanView = sanitizeViewPath(view);
+
+  const safeQuestion = useMemo(
+    () => sanitizeQuestionState(question),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- questionKey 是 question 的稳定指纹
+    [question ? JSON.stringify(question) : null],
+  );
 
   const postInit = useCallback(() => {
     const iframe = iframeRef.current;
@@ -187,6 +249,7 @@ export function PluginSandboxIframeView({
           studentId: studentId ?? null,
           studentName: studentName ?? null,
           context: safeSandboxContext,
+          question: safeQuestion,
           lang,
           theme,
           themeMeta,
@@ -217,6 +280,7 @@ export function PluginSandboxIframeView({
     studentId,
     studentName,
     safeSandboxContext,
+    safeQuestion,
     lang,
     theme,
     resolvedColorScheme,
@@ -277,7 +341,22 @@ export function PluginSandboxIframeView({
         };
 
         try {
-          if (op === 'ui.toast') {
+          if (op.startsWith('question.')) {
+            // 题型通道只走宿主显式提供的 handler；未提供时按不支持处理，
+            // 不能落到下面的通用白名单。
+            if (!onHostCallRef.current) {
+              reply(false, undefined, `Unsupported op "${op}"`);
+            } else {
+              const result = await onHostCallRef.current({ op, args });
+              if (!result.handled) {
+                reply(false, undefined, `Unsupported op "${op}"`);
+              } else if (result.error) {
+                reply(false, undefined, result.error);
+              } else {
+                reply(true, result.value ?? true);
+              }
+            }
+          } else if (op === 'ui.toast') {
             const message = String(args[0] ?? '');
             const rawType = args[1];
             const type = rawType === 'success' || rawType === 'warning' || rawType === 'error' ? rawType : 'info';
@@ -398,6 +477,30 @@ export function PluginSandboxIframeView({
     getUnifiedPluginThemePayload,
     isLoaded,
   ]);
+
+  // 题型状态变化时推送给已加载的 iframe（init 只发一次，后续靠这里同步）。
+  const questionKey = question ? JSON.stringify(question) : null;
+  useEffect(() => {
+    if (!isLoaded || !questionKey || !iframeRef.current?.contentWindow) return;
+    if (questionKey.length > 64 * 1024) {
+      console.warn('[PluginSandboxIframeView] question payload exceeds 64KB, update dropped.');
+      return;
+    }
+    let payload: unknown;
+    try {
+      payload = JSON.parse(questionKey);
+    } catch {
+      return;
+    }
+    iframeRef.current.contentWindow.postMessage(
+      {
+        channel: PLUGIN_VIEW_CHANNEL,
+        type: 'question.update',
+        payload: sanitizeQuestionState(payload as QuestionSandboxState),
+      },
+      '*',
+    );
+  }, [isLoaded, questionKey]);
 
   // LearningSurface：attempt.state_json 变化时下发 state.patch 供插件恢复进度。
   useEffect(() => {

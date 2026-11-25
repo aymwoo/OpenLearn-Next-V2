@@ -39,6 +39,17 @@ describe('课内即时测评发起与课堂实时看板', () => {
 
   const db = kernelContainer.db as any;
   let assessmentId: string;
+  const emitted: Array<{
+    room: string;
+    event: string;
+    payload: { assignmentId?: string; studentId?: string | null };
+  }> = [];
+  const fakeIo = {
+    to: (room: string) => ({
+      emit: (event: string, payload: { assignmentId?: string; studentId?: string | null }) =>
+        emitted.push({ room, event, payload }),
+    }),
+  };
 
   const seedSession = (token: string, session: Record<string, unknown>) => {
     db.prepare('DELETE FROM client_sessions WHERE id = ?').run(token);
@@ -148,7 +159,7 @@ describe('课内即时测评发起与课堂实时看板', () => {
     const app = express();
     app.use(express.json());
     registerClassroomRoutes({ app, io: undefined } as any, classroomService);
-    registerAssessmentRoutes({ app } as any);
+    registerAssessmentRoutes({ app, io: fakeIo } as any);
 
     server = createServer(app);
     await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
@@ -201,12 +212,25 @@ describe('课内即时测评发起与课堂实时看板', () => {
     const start1 = await call('POST', `/api/assessment-assignments/${assignmentId}/attempts`, student1Token);
     expect(start1.status).toBe(201);
 
+    // 开考即向教师房间推送实时进度信号（学生不应收到：房间仅教师/管理员可加入）
+    const startSignal = emitted.find(
+      (item) => item.room === `assessment-${assignmentId}` && item.event === 'assessment:progress_updated',
+    );
+    expect(startSignal?.payload.studentId).toBe(student1Id);
+
     // 此时拉取看板：应有 1 人作答中，1 人未开始
     const inProgress = await call('GET', `/api/classroom/sessions/${lessonId}/assessment-progress`, teacherToken);
     expect(inProgress.status).toBe(200);
     expect(inProgress.json.unstartedCount).toBe(1);
     expect(inProgress.json.inProgressCount).toBe(1);
     expect(inProgress.json.submittedCount).toBe(0);
+
+    // 逐生答题进度：刚开考尚未作答
+    const stu1InProgress = inProgress.json.students.find((s: any) => s.studentId === student1Id);
+    expect(stu1InProgress.itemCount).toBe(1);
+    expect(stu1InProgress.answeredCount).toBe(0);
+    expect(stu1InProgress.progressPercent).toBe(0);
+    expect(stu1InProgress.lastActivityAt).toBeGreaterThan(0);
 
     // 学生 1 答题并交卷（得分 10）
     await call('PUT', `/api/assessment-attempts/${start1.json.attempt.id}/answers/q_1`, student1Token, {
@@ -227,5 +251,15 @@ describe('课内即时测评发起与课堂实时看板', () => {
     expect(stu1Status).toBeDefined();
     expect(['submitted', 'graded']).toContain(stu1Status.status);
     expect(stu1Status.score).toBe(10);
+    expect(stu1Status.answeredCount).toBe(1);
+    expect(stu1Status.itemCount).toBe(1);
+    expect(stu1Status.progressPercent).toBe(100);
+
+    // 保存作答与交卷都触发了实时信号
+    const saveSignals = emitted.filter(
+      (item) => item.room === `assessment-${assignmentId}` && item.event === 'assessment:progress_updated',
+    );
+    expect(saveSignals.length).toBeGreaterThanOrEqual(3); // 开考 + 保存 + 交卷
+    expect(saveSignals.every((item) => item.payload.assignmentId === assignmentId)).toBe(true);
   });
 });

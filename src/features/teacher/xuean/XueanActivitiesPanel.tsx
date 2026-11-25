@@ -21,6 +21,7 @@ import { CoursewarePicker } from './CoursewarePicker';
 import { ActivityConfigEditor } from './ActivityConfigEditor';
 import { parseActivityConfig, readFormConfig, readSurveyConfig } from '../../xuean/activity-config';
 import { ExtensionPointRenderer } from '../../../plugin-host/extension-point-renderer';
+import { useAppStore } from '../../../store/appStore';
 
 type Activity = {
   id: string;
@@ -63,8 +64,25 @@ function isPluginActivityType(type: string): boolean {
   return type.includes(':');
 }
 
+/** 给插件的活动摘要：刻意不含 config_json / rubric_json。 */
+function toActivitySummary(activity: Activity) {
+  return {
+    id: activity.id,
+    type: activity.type,
+    title: activity.title,
+    required: Boolean(activity.required),
+    visible: Boolean(activity.visible),
+    peer_review: Boolean(activity.peer_review),
+    order_index: activity.order_index,
+    release_at: activity.release_at,
+    due_at: activity.due_at,
+    surface_id: activity.surface_id ?? null,
+  };
+}
+
 export function XueanActivitiesPanel() {
   const appData = useOptionalAppData();
+  const lang = useAppStore((s) => s.lang);
   const lessonId = appData?.selectedLesson ?? '';
   const [activities, setActivities] = useState<Activity[]>([]);
   const [loading, setLoading] = useState(true);
@@ -152,13 +170,25 @@ export function XueanActivitiesPanel() {
           <span className="text-[10px] font-black uppercase tracking-wider text-primary-theme">学案活动编排</span>
           <span className="text-xs text-muted">· {activities.length} 项活动</span>
         </div>
-        <button
-          type="button"
-          onClick={() => setShowNewForm(true)}
-          className="px-3 py-1.5 text-xs font-bold rounded-lg bg-primary-theme text-white hover:opacity-90 transition"
-        >
-          + 新增活动
-        </button>
+        <div className="flex items-center gap-2">
+          <ExtensionPointRenderer
+            slot="xuean.editor.toolbar"
+            slotProps={{
+              lessonId,
+              activities: activities.map(toActivitySummary),
+              refresh,
+              lang,
+            }}
+            lang={lang}
+          />
+          <button
+            type="button"
+            onClick={() => setShowNewForm(true)}
+            className="px-3 py-1.5 text-xs font-bold rounded-lg bg-primary-theme text-white hover:opacity-90 transition"
+          >
+            + 新增活动
+          </button>
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto p-3 space-y-2">
@@ -284,6 +314,7 @@ function ActivityCard({
 }) {
   const typeLabel = types.find((t) => t.value === activity.type)?.label ?? activity.type;
   const summary = summarizeActivity(activity);
+  const lang = useAppStore((s) => s.lang);
   return (
     <div
       draggable
@@ -329,6 +360,13 @@ function ActivityCard({
           {activity.peer_review ? (
             <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-600">互评</span>
           ) : null}
+          <span draggable={false} onPointerDown={(e) => e.stopPropagation()} onDragStart={(e) => e.stopPropagation()}>
+            <ExtensionPointRenderer
+              slot="xuean.activity.card.badge"
+              slotProps={{ activity: toActivitySummary(activity), index, lang }}
+              lang={lang}
+            />
+          </span>
         </div>
         <p className="mt-1 text-sm font-semibold text-main truncate">{activity.title}</p>
         {summary.length > 0 && (
@@ -339,6 +377,18 @@ function ActivityCard({
       </div>
 
       <div className="flex gap-1 shrink-0">
+        <span draggable={false} onPointerDown={(e) => e.stopPropagation()} onDragStart={(e) => e.stopPropagation()}>
+          <ExtensionPointRenderer
+            slot="xuean.activity.card.action"
+            slotProps={{
+              activity: toActivitySummary(activity),
+              index,
+              lang,
+              commandPayload: { activityId: activity.id, lessonId: activity.lesson_id, index },
+            }}
+            lang={lang}
+          />
+        </span>
         <button
           type="button"
           onClick={onEdit}
@@ -371,6 +421,7 @@ function ActivityEditor({
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const lang = useAppStore((s) => s.lang);
   const [form, setForm] = useState({
     type: existing?.type ?? 'reading',
     title: existing?.title ?? '',
@@ -816,6 +867,18 @@ function ActivityEditor({
         {error && <p className="text-xs text-rose-600">{error}</p>}
 
         <div className="sticky bottom-0 -mx-5 -mb-5 flex justify-end gap-2 border-t border-theme bg-surface px-5 py-3">
+          <ExtensionPointRenderer
+            slot="xuean.activity.editor.footer"
+            slotProps={{
+              activityType: form.type,
+              activity: existing ? toActivitySummary(existing) : null,
+              lessonId,
+              lang,
+              onSaved,
+              commandPayload: { activityId: existing?.id, lessonId, activityType: form.type },
+            }}
+            lang={lang}
+          />
           <button
             type="button"
             onClick={onClose}

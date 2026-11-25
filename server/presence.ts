@@ -421,6 +421,8 @@ export function setupPresence({
       if (PUBLIC_BROADCAST_ROOMS.has(roomId)) return true;
       // 在线状态房间只能由连接时的角色判定自动加入，客户端不得主动 join（防学生自荐收听）
       if (roomId === PRESENCE_STAFF_ROOM) return false;
+      // 测评实时进度房间：仅教师/管理员可订阅，避免学生看到同学的作答状态
+      if (roomId.startsWith('assessment-')) return isTeacherOrAdmin;
       if (isTeacherOrAdmin) return true;
       // 作业工作区伪课节：学生仅可加入绑定自己的房间
       const pseudoSid = pseudoRoomStudentId(roomId);

@@ -623,6 +623,47 @@ const xueanActivityRendererSchema = z
   })
   .passthrough();
 
+/** 插件静态目录下的相对页面路径（拒穿越、协议与绝对路径）。 */
+const pluginViewPathSchema = z
+  .string()
+  .min(1)
+  .max(256)
+  .refine((value) => {
+    const trimmed = value.trim();
+    return (
+      !trimmed.includes('..') &&
+      !trimmed.includes('://') &&
+      !trimmed.startsWith('/') &&
+      !trimmed.startsWith('\\') &&
+      /^[a-zA-Z0-9_\-./]+$/.test(trimmed)
+    );
+  }, 'view 必须是插件目录下的相对路径');
+
+/**
+ * 声明式题型 UI（`assessment.question_type`）。
+ *
+ * manifest 只声明「编辑器 / 作答 / 复盘」三个沙箱页面；判分实现仍必须由插件
+ * 服务端在 activate 时调用 `registerQuestionType` 注册（两段式注册）。
+ */
+const assessmentQuestionTypeSchema = z
+  .object({
+    id: z.string().min(1).max(128),
+    label: z.string().min(1).max(120),
+    labelEn: z.string().max(120).optional(),
+    category: z.enum(['objective', 'subjective', 'survey', 'custom']),
+    supports: z
+      .array(z.enum(['quiz', 'exam', 'survey']))
+      .min(1)
+      .optional(),
+    autoGradable: z.boolean().optional(),
+    editorView: pluginViewPathSchema,
+    answerView: pluginViewPathSchema.optional(),
+    reviewView: pluginViewPathSchema.optional(),
+    defaultConfig: z.record(z.string(), z.unknown()).optional(),
+    defaultAnswerKey: z.unknown().optional(),
+  })
+  .passthrough();
+
 const frontendSlotsShape = {
   'header.action': z.array(frontendSlotEntrySchema).optional(),
   'statusbar.item': z.array(frontendSlotEntrySchema).optional(),
@@ -694,6 +735,15 @@ const frontendSlotsShape = {
   'xuean.activity.type': z.array(xueanActivityTypeSchema).optional(),
   'xuean.activity.editor': z.array(xueanActivityRendererSchema).optional(),
   'xuean.activity.student': z.array(xueanActivityRendererSchema).optional(),
+  // ── 学案编排与学习过程扩展槽 ──
+  'xuean.editor.toolbar': z.array(frontendSlotEntrySchema).optional(),
+  'xuean.activity.card.action': z.array(frontendSlotEntrySchema).optional(),
+  'xuean.activity.card.badge': z.array(frontendSlotEntrySchema).optional(),
+  // 按活动类型分发：与 editor/student 同一渲染器形状
+  'xuean.activity.editor.footer': z.array(xueanActivityRendererSchema).optional(),
+  'xuean.activity.student.addon': z.array(xueanActivityRendererSchema).optional(),
+  'xuean.progress.summary': z.array(frontendSlotEntrySchema).optional(),
+  'xuean.home.block': z.array(frontendSlotEntrySchema).optional(),
 } as const;
 
 export const pluginLocalesSchema = z
@@ -912,6 +962,8 @@ const contributesSchema = z
     'global.setting': z.array(globalSettingSchema).optional(),
     'nav.user_menu': z.array(navUserMenuSchema).optional(),
     'mode.pack': z.array(modePackSchema).optional(),
+    // 声明式题型 UI：不是渲染槽位，而是题型注册表的数据来源（判分仍走服务端注册）。
+    'assessment.question_type': z.array(assessmentQuestionTypeSchema).optional(),
     // 前端专属/演进 slot：宽松兜底（结构性错误仍会被拒）
     ...frontendSlotsShape,
     // v0.2.6: 锚点槽位（anchor:*）为开放命名空间，由宿主公布锚点 id。

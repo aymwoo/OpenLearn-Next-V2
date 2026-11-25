@@ -99,6 +99,8 @@ BRIDGE_MEMBERS = {
     "getContext",
     "api",
     "storage",
+    # 题型 UI 通道（assessment.question_type 的沙箱页面）
+    "question",
 }
 BRIDGE_FORBIDDEN = {"state", "command"}
 

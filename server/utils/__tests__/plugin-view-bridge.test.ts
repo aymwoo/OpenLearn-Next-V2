@@ -30,6 +30,13 @@ describe('Plugin View Bridge', () => {
     expect(PLUGIN_VIEW_BRIDGE_JS).toContain('onStatePatch:');
     expect(PLUGIN_VIEW_BRIDGE_JS).toContain("type: 'surface-event'");
     expect(PLUGIN_VIEW_BRIDGE_JS).toContain("post({ type: 'ready' })");
+    // 题型 UI 通道
+    expect(PLUGIN_VIEW_BRIDGE_JS).toContain('question:');
+    expect(PLUGIN_VIEW_BRIDGE_JS).toContain('getState:');
+    expect(PLUGIN_VIEW_BRIDGE_JS).toContain('setConfig:');
+    expect(PLUGIN_VIEW_BRIDGE_JS).toContain('setAnswerKey:');
+    expect(PLUGIN_VIEW_BRIDGE_JS).toContain('setValue:');
+    expect(PLUGIN_VIEW_BRIDGE_JS).toContain("data.type === 'question.update'");
   });
 
   it('server.ts mounts /plugin-sandbox/view-bridge.js and enhances /plugins authentication', () => {
