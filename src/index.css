@@ -1041,3 +1041,36 @@ progress.community-loading-progress::-moz-progress-bar {
     translate: 100cqi;
   }
 }
+
+/* 确定型进度：实时作答看板的逐生进度条 */
+progress.ol-progress {
+  appearance: none;
+  border: 0 solid;
+  overflow: clip;
+  border-radius: 1e5px;
+  background: #e2e8f0;
+  --progress-bar-fill: #4f46e5;
+}
+
+progress.ol-progress::-webkit-progress-bar {
+  background: transparent;
+}
+
+progress.ol-progress::-webkit-progress-value {
+  background: var(--progress-bar-fill);
+  border-radius: 1e5px;
+  transition: inline-size 300ms ease-out;
+}
+
+progress.ol-progress::-moz-progress-bar {
+  background: var(--progress-bar-fill);
+  border-radius: 1e5px;
+  transition: inline-size 300ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  progress.ol-progress::-webkit-progress-value,
+  progress.ol-progress::-moz-progress-bar {
+    transition: none;
+  }
+}

@@ -24,6 +24,14 @@ import type {
 import { normalizeViewerRole, currentLessonViewer, studentIdFromViewer } from './lesson-viewer.js';
 import { roundScore } from '../assessment/index.js';
 
+/**
+ * 允许输出「作答值分布」的题型白名单。
+ *
+ * 只包含取值空间有限的客观题；填空/简答/作文与未知插件题型的作答都是自由文本，
+ * 不能作为分布键（否则等于把逐生作答原文交给插件）。
+ */
+const DISTRIBUTABLE_QUESTION_TYPES = new Set(['single_choice', 'multiple_choice', 'true_false']);
+
 interface AssessmentRow {
   id: string;
   kind: string;
@@ -292,11 +300,16 @@ export class AssessmentReadService implements IAssessmentReadService {
       const rows = byItem.get(item.id) ?? [];
       const graded = rows.filter((row) => typeof row.score === 'number');
       const correct = rows.filter((row) => row.is_correct === 1);
+      // 只有「有限选项」题型才能安全地按作答值聚合：填空题/简答题的 answer_json
+      // 是自由文本，用它做分布键等于把逐生作答原文交给插件（且键数量随作答膨胀）。
+      // 未知插件题型一律按主观题处理，省略分布。
       const distribution: Record<string, number> = {};
-      for (const row of rows) {
-        const parsed = parseJson(row.answer_json);
-        const key = Array.isArray(parsed) ? parsed.join(',') : String(parsed);
-        distribution[key] = (distribution[key] ?? 0) + 1;
+      if (DISTRIBUTABLE_QUESTION_TYPES.has(item.type)) {
+        for (const row of rows) {
+          const parsed = parseJson(row.answer_json);
+          const key = Array.isArray(parsed) ? parsed.join(',') : String(parsed);
+          distribution[key] = (distribution[key] ?? 0) + 1;
+        }
       }
       return {
         itemId: item.id,

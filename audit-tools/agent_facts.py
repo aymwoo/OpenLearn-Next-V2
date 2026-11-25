@@ -240,7 +240,7 @@ def extract_bridge_ops() -> dict:
 
     view_src = REPO / "server/utils/plugin-view-bridge.ts"
     view_text = view_src.read_text(encoding="utf-8", errors="ignore") if view_src.exists() else ""
-    view_ops = sorted(set(re.findall(r"call\('([a-z]+\.[a-z]+)'", view_text)))
+    view_ops = sorted(set(re.findall(r"call\('([a-z]+\.[a-zA-Z]+)'", view_text)))
 
     return {
         "_note": "两套通道不是一回事。frame（隐藏 iframe）用 op 字符串，宿主侧在 "

@@ -18,11 +18,14 @@
     "api.get",
     "api.post",
     "command.invoke",
+    "question.setAnswerKey",
+    "question.setConfig",
+    "question.setValue",
     "storage.delete",
     "storage.get",
     "storage.set",
     "ui.toast"
   ],
   "frame_total": 10,
-  "view_total": 8
+  "view_total": 11
 }

@@ -904,6 +904,28 @@ export class AssessmentService {
       }
     }
 
+    // 实时看板：整卷题量与逐份作答的已答题数 / 最近活动时间。
+    // `answer_json` 为 'null' 表示学生清空过答案，按未作答计。
+    const totalItems = this.readItems(asg.assessmentId).length;
+    const answerRows = this.db
+      .prepare(
+        `SELECT a.attempt_id, COUNT(*) AS answered, MAX(a.updated_at) AS last_at
+           FROM assessment_answers a
+           JOIN assessment_attempts t ON t.id = a.attempt_id
+          WHERE t.assignment_id = ?
+            AND a.answer_json IS NOT NULL
+            AND a.answer_json <> 'null'
+          GROUP BY a.attempt_id`,
+      )
+      .all(asg.id) as Array<{ attempt_id: string; answered: number; last_at: number }>;
+    const answerMap = new Map(answerRows.map((row) => [row.attempt_id, row]));
+
+    const paperItemCount = (att: AttemptRow): number => {
+      if (!att.paper_json) return totalItems;
+      const paper = safeJsonParse<{ itemIds?: unknown } | null>(att.paper_json, null);
+      return Array.isArray(paper?.itemIds) ? paper.itemIds.length : totalItems;
+    };
+
     let submittedCount = 0;
     let inProgressCount = 0;
     let notStartedCount = 0;
@@ -916,24 +938,47 @@ export class AssessmentService {
       let score: number | null = null;
       let proctor: any = null;
       let submittedAt: number | null = null;
+      let startedAt: number | null = null;
+      let deadlineAt: number | null = null;
+      let answeredCount = 0;
+      let itemCount = totalItems;
+      let lastActivityAt: number | null = null;
 
       if (!att) {
         notStartedCount++;
       } else {
         proctor = safeJsonParse(att.proctor_json, {});
         submittedAt = att.submitted_at;
+        startedAt = att.started_at;
+        deadlineAt = att.deadline_at;
+        itemCount = paperItemCount(att);
+        const answered = answerMap.get(att.id);
+        answeredCount = Math.min(answered?.answered ?? 0, itemCount);
+        lastActivityAt = answered?.last_at ?? att.started_at;
         if (att.status === 'in_progress') {
           inProgressCount++;
           status = 'in_progress';
         } else {
           submittedCount++;
           status = att.status === 'graded' || att.status === 'released' ? 'graded' : 'submitted';
+          lastActivityAt = att.submitted_at ?? lastActivityAt;
           if (att.score !== null && att.score !== undefined) {
             score = att.score;
             totalScore += att.score;
             scoredStudents++;
           }
         }
+      }
+
+      const proctorSummary = proctor?.summary ?? {};
+      const proctorCounts = {
+        blur: Number(proctorSummary.blur ?? proctor?.blurCount ?? 0),
+        switchTab: Number(proctorSummary.visibility_hidden ?? proctor?.switchTabCount ?? 0),
+        fullscreenExit: Number(proctorSummary.fullscreen_exit ?? proctor?.fullscreenExitCount ?? 0),
+        total: Number(proctorSummary.total ?? 0),
+      };
+      if (!proctorCounts.total) {
+        proctorCounts.total = proctorCounts.blur + proctorCounts.switchTab + proctorCounts.fullscreenExit;
       }
 
       return {
@@ -943,7 +988,14 @@ export class AssessmentService {
         status,
         score,
         proctor,
+        proctorCounts,
         submittedAt,
+        startedAt,
+        deadlineAt,
+        answeredCount,
+        itemCount,
+        progressPercent: itemCount > 0 ? Math.round((answeredCount / itemCount) * 100) : 0,
+        lastActivityAt,
       };
     });
 
@@ -953,6 +1005,7 @@ export class AssessmentService {
       assignment: asg,
       title: assessment?.title || '随堂测评',
       kind: assessment?.kind || 'quiz',
+      itemCount: totalItems,
       totalStudents: roster.length,
       submittedCount,
       inProgressCount,
@@ -960,19 +1013,36 @@ export class AssessmentService {
       unstartedCount: notStartedCount,
       avgScore,
       averageScore: avgScore,
+      updatedAt: this.now(),
       students: studentList,
     };
   }
 
   /* ───────────────────────── 题库（教师） ───────────────────────── */
 
-  listBankItems(ownerId: string, filter: { type?: string } = {}) {
+  listBankItems(
+    ownerId: string,
+    filter: { type?: string; tags?: string[]; difficultyMin?: number; difficultyMax?: number } = {},
+  ) {
     const params: unknown[] = [ownerId];
     // Issue #186：自己的条目 + 同实例教师共享（visibility='school'）的条目
     let sql = "SELECT * FROM question_bank_items WHERE (owner_id = ? OR visibility = 'school')";
     if (filter.type) {
       sql += ' AND type = ?';
       params.push(filter.type);
+    }
+    for (const tag of filter.tags ?? []) {
+      if (typeof tag !== 'string' || !tag.trim()) continue;
+      sql += ' AND EXISTS (SELECT 1 FROM json_each(question_bank_items.tags_json) WHERE json_each.value = ?)';
+      params.push(tag.trim());
+    }
+    if (typeof filter.difficultyMin === 'number' && Number.isFinite(filter.difficultyMin)) {
+      sql += ' AND difficulty >= ?';
+      params.push(filter.difficultyMin);
+    }
+    if (typeof filter.difficultyMax === 'number' && Number.isFinite(filter.difficultyMax)) {
+      sql += ' AND difficulty <= ?';
+      params.push(filter.difficultyMax);
     }
     sql += ' ORDER BY updated_at DESC';
     const rows = this.db.prepare(sql).all(...params) as Array<Record<string, any>>;
@@ -1173,6 +1243,14 @@ export class AssessmentService {
       );
     const row = this.requireAttempt(id);
     return this.buildAttemptPayload(row, assessment, asg, settings, { newAttempt: true });
+  }
+
+  /** attempt 所属的发布记录 id（实时进度广播用）。 */
+  getAssignmentIdForAttempt(attemptId: string): string {
+    const row = this.db.prepare('SELECT assignment_id FROM assessment_attempts WHERE id = ?').get(attemptId) as
+      { assignment_id: string } | undefined;
+    if (!row) throw notFound('attempt');
+    return row.assignment_id;
   }
 
   /** 自动保存单题作答（不判分，判分在交卷时统一做）。 */
@@ -2438,6 +2516,9 @@ export class AssessmentService {
         type: item.type,
         stem: item.stem,
         maxScore: item.maxScore,
+        // config 在作答 payload 中本来就下发给学生（题型需要选项/题干结构），
+        // 结果页的 Review 组件同样需要它来画结构化作答；答案仍在 answerKey。
+        config: item.config,
         answer: row ? safeJsonParse<unknown>(row.answer_json, null) : null,
       };
       if (!showAnalysis) {

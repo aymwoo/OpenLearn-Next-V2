@@ -18,7 +18,9 @@ export const PLUGIN_VIEW_BRIDGE_JS = `(function () {
   const initCallbacks = [];
   const contextUpdateCallbacks = [];
   const statePatchCallbacks = [];
+  const questionUpdateCallbacks = [];
   let currentContext = null;
+  let currentQuestion = null;
 
   function post(msg) {
     if (window.parent && window.parent !== window) {
@@ -41,6 +43,7 @@ export const PLUGIN_VIEW_BRIDGE_JS = `(function () {
 
     if (data.type === 'init') {
       currentContext = data.payload || {};
+      currentQuestion = currentContext.question || null;
       targetOrigin = event.origin && event.origin !== 'null' ? event.origin : '*';
       for (let i = 0; i < initCallbacks.length; i++) {
         try {
@@ -59,6 +62,18 @@ export const PLUGIN_VIEW_BRIDGE_JS = `(function () {
           contextUpdateCallbacks[i](currentContext);
         } catch (e) {
           console.error('[OpenLearnPluginBridge] contextUpdate callback error:', e);
+        }
+      }
+      return;
+    }
+
+    if (data.type === 'question.update') {
+      currentQuestion = data.payload || null;
+      for (let i = 0; i < questionUpdateCallbacks.length; i++) {
+        try {
+          questionUpdateCallbacks[i](currentQuestion);
+        } catch (e) {
+          console.error('[OpenLearnPluginBridge] questionUpdate callback error:', e);
         }
       }
       return;
@@ -125,6 +140,39 @@ export const PLUGIN_VIEW_BRIDGE_JS = `(function () {
     },
     invokeCommand: function (type, payload) {
       return call('command.invoke', [type, payload]);
+    },
+    /**
+     * 题型 UI 通道（仅 assessment.question_type 的沙箱页面可用）。
+     *
+     * 页面通过 setConfig / setAnswerKey / setValue 把状态写回宿主；
+     * 宿主按角色校验（answer 只能写 value，review 只读）。
+     */
+    question: {
+      getState: function () {
+        return currentQuestion;
+      },
+      onUpdate: function (callback) {
+        if (typeof callback === 'function') {
+          if (currentQuestion) {
+            try {
+              callback(currentQuestion);
+            } catch (e) {
+              console.error('[OpenLearnPluginBridge] question onUpdate initial callback error:', e);
+            }
+          }
+          questionUpdateCallbacks.push(callback);
+        }
+        return bridge;
+      },
+      setConfig: function (config) {
+        return call('question.setConfig', [config]);
+      },
+      setAnswerKey: function (answerKey) {
+        return call('question.setAnswerKey', [answerKey]);
+      },
+      setValue: function (value) {
+        return call('question.setValue', [value]);
+      },
     },
     /**
      * LearningSurface 渲染器事件（阶段 4）。

@@ -10,7 +10,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
-_（下一版本待补充）_
+### Features
+
+- **教师端实时作答看板**：已发布测评的每条班级记录新增「实时进度」入口，展示全班应交 / 作答中 / 已交卷 / 未开始人数、平均分，以及逐生的答题进度（已答/总题数）、最近活动时间、监考异常次数与得分，可按状态筛选。学生开考、自动保存、交卷或触发监考事件时，服务端向 `assessment-<assignmentId>` 房间推送 `assessment:progress_updated`（仅教师与管理员可加入，学生不可订阅），面板收到信号立即重拉快照；无 socket 时退化为「作答中 3 秒 / 其他 10 秒」自适应轮询，标签页回到前台自动补拉。进度快照同步补充 `answeredCount` / `itemCount` / `progressPercent` / `lastActivityAt` / `startedAt` / `deadlineAt` / `proctorCounts` 与顶层 `itemCount`。
+- **学案编排与学习过程新增 7 个扩展槽**：`xuean.editor.toolbar`、`xuean.activity.card.action`、`xuean.activity.card.badge`、`xuean.activity.editor.footer`、`xuean.activity.student.addon`、`xuean.progress.summary`、`xuean.home.block`。其中 `xuean.activity.editor.footer` / `xuean.activity.student.addon` 与既有活动槽位一样按 `activityType` 精确分发；`ExtensionSlot` 成员数增至 161。
+- **声明式题型 UI（`assessment.question_type`）**：远程 ZIP 插件可通过 manifest 声明 `editorView` / `answerView` / `reviewView`，由宿主包装成题型编辑器、作答组件与结果页复盘组件。新增 `window.OpenLearnPluginBridge.question`（`getState` / `onUpdate` / `setConfig` / `setAnswerKey` / `setValue`）与 `question.update` 下行消息；`answerView` 永不接收 `answerKey`，`reviewView` 只读，回写 payload 限制 64KB。内联插件仍可用 `ctx.ui.registerAssessmentQuestionType`，同 type 时 inline 优先，插件停用后回退 manifest 版本。
+- **题型注册表新增可选 `Review` 组件位**：结果页可对连线题等结构化作答逐对渲染正误；缺省时退回「作答 / 参考答案」文本。
+- **学生结果 payload 增加题型 `config`**：供 `Review` 还原题面结构（不含标准答案）。
+- **题库槽位能力补齐**：`assessment.bank.import.source` / `assessment.bank.toolbar.action` 新增 `refresh`；`assessment.bank.filter` 支持 `tags` 与难度区间并真正生效；`assessment.publish.preflight` 新增 `onClear(code?)`，插件可在条件恢复后解除发布阻断。
+
+### Fixes
+
+- **学案插件编辑器 / 学生视图上下文丢失**：`xuean.activity.editor/student` 分发现在会把调用点传入的 `activityType` / `activity` / `lessonId` / `onSaved` 合并进组件 props，远程 view 同时收到 `sandboxContext`（学案槽位预算放宽到 64KB），修复「保存回调 undefined、插件活动视图空白」。
+- **manifest 顶层字段不生效**：`requiresSensitive` 与 `placement` 现在会提升到扩展配置顶层，声明式注册与命令式注册行为一致。
+- **发布前检查永久阻断**：preflight 结果在班级、题量或总分变化时自动失效，并支持 `onClear` 主动清除。
+- **学生端可见性策略覆盖不全**：作答工具条、逐题附加区、结果页逐题区现在同样遵守 `hiddenPlugins` / `hiddenExtensions`。
+- **测评统计分布泄露主观题作答**：`getAssignmentStats` 只对单选 / 多选 / 判断题输出 `distribution`，填空、简答与未知插件题型不再以作答原文作为分布键。
+- **题型注册表订阅失效**：`useAssessmentQuestionTypes()` 使用稳定快照，插件题型激活后能立即出现在题库/组卷下拉与作答页。
+
+### Breaking Changes
+
+- `AssessmentResultItemAddonProps` 改为与批改槽位同构的判别联合：标准答案与本人作答经 `sensitive` 注入，`item.answerKey` 已移除（运行时此前就未提供）。
 
 ## [0.8.0] - 2026-11-25
 

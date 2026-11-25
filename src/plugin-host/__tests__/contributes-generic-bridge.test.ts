@@ -12,6 +12,7 @@ import type {
   FrontendPluginContext,
 } from '../types';
 import { paletteItemRegistry } from '../../features/teacher/lesson-editor/palette-item-registry';
+import { assessmentQuestionTypeUiRegistry } from '../../features/assessment/question-type-ui-registry';
 import {
   getAllSegmentTypes,
   getSegmentType,
@@ -61,6 +62,7 @@ describe('manifest contributes 通用桥接（遗留债务 ① 回归）', () =>
     usePluginHostStore.setState({ activePlugins: [], extensionPoints: new Map() });
     paletteItemRegistry.unregisterPlugin('test-plugin');
     unregisterPluginSegmentTypes('test-plugin');
+    assessmentQuestionTypeUiRegistry.clearOwned('test-plugin');
   });
 
   it('非白名单槽位（class.tab）的 contributes 不再被静默丢弃', async () => {
@@ -150,6 +152,53 @@ describe('manifest contributes 通用桥接（遗留债务 ① 回归）', () =>
     expect(entries).toHaveLength(1);
     expect(entries[0].pluginId).toBe(dbId);
     expect(entries[0].slotProps).toMatchObject({ commandType: '@scope/remote-plugin.remote.act' });
+  });
+
+  it('manifest 的 requiresSensitive / placement 提升到扩展配置顶层', async () => {
+    await activateWithManifest({
+      contributes: {
+        'assessment.grading.answer.addon': [
+          {
+            id: 'grader-addon',
+            label: 'AI 初评',
+            view: 'views/grading.html',
+            requiresSensitive: ['answerKey'],
+            placement: 'before',
+          },
+        ],
+      },
+    });
+
+    const [entry] = usePluginHostStore.getState().getExtensions('assessment.grading.answer.addon');
+    expect(entry.requiresSensitive).toEqual(['answerKey']);
+    expect(entry.placement).toBe('before');
+    // 完整条目仍保留在 slotProps 中，兼容旧消费端
+    expect(entry.slotProps).toMatchObject({ requiresSensitive: ['answerKey'] });
+  });
+
+  it('assessment.question_type 注册为题型 UI，而不是伪扩展槽位', async () => {
+    await activateWithManifest({
+      contributes: {
+        'assessment.question_type': [
+          {
+            id: 'test-plugin:matching',
+            label: '连线题',
+            category: 'objective',
+            supports: ['quiz', 'exam'],
+            editorView: 'views/question-editor.html',
+            answerView: 'views/question-answer.html',
+            reviewView: 'views/question-review.html',
+          },
+        ],
+      },
+    });
+
+    expect(usePluginHostStore.getState().getExtensions('assessment.question_type')).toHaveLength(0);
+    const ui = assessmentQuestionTypeUiRegistry.get('test-plugin:matching');
+    expect(ui?.label.zh).toBe('连线题');
+    expect(typeof ui?.Editor).toBe('function');
+    expect(typeof ui?.Answer).toBe('function');
+    expect(typeof ui?.Review).toBe('function');
   });
 
   it('激活后插件状态为 ACTIVE（桥接不阻断生命周期）', async () => {

@@ -189,6 +189,17 @@ export function StudentXueanView({ lessonId, lessonTitle, lang = 'zh', onActivit
             <span className="shrink-0 text-[11px] tabular-nums text-muted">
               {completedCount} / {data.activities.length}
             </span>
+            <ExtensionPointRenderer
+              slot="xuean.progress.summary"
+              slotProps={{
+                lessonId: data.lessonId,
+                completedCount,
+                total: data.activities.length,
+                percent: Math.round(completedPercent),
+                lang,
+              }}
+              lang={lang}
+            />
           </div>
 
           {/* 活动导航：单行横向滚动，点击直接切换中间内容 */}
@@ -238,6 +249,11 @@ export function StudentXueanView({ lessonId, lessonTitle, lang = 'zh', onActivit
               .map((b) => (
                 <BlockCard key={b.id} block={b} />
               ))}
+            <ExtensionPointRenderer
+              slot="xuean.home.block"
+              slotProps={{ lessonId: data.lessonId, blocks: data.blocks, lang }}
+              lang={lang}
+            />
           </section>
         ) : currentItem ? (
           (() => {
@@ -518,6 +534,19 @@ function ActivityItem({
           slotProps={{ activity, activityType: activity.type, lessonId: activity.lesson_id }}
           fallback={<p className="text-[11px] text-amber-600">插件未加载，暂时无法显示此活动。</p>}
         />
+        <div className="pt-2 mt-2 border-t border-theme">
+          <ExtensionPointRenderer
+            slot="xuean.activity.student.addon"
+            slotProps={{
+              activity,
+              activityType: activity.type,
+              lessonId: activity.lesson_id,
+              progress: progress ?? null,
+              lang,
+            }}
+            lang={lang}
+          />
+        </div>
       </div>
     );
   }
@@ -624,6 +653,20 @@ function ActivityItem({
                 aria-valuenow={pct}
                 aria-valuemin={0}
                 aria-valuemax={100}
+              />
+            </div>
+
+            <div className="pt-2 mt-2 border-t border-theme">
+              <ExtensionPointRenderer
+                slot="xuean.activity.student.addon"
+                slotProps={{
+                  activity,
+                  activityType: activity.type,
+                  lessonId: activity.lesson_id,
+                  progress: progress ?? null,
+                  lang,
+                }}
+                lang={lang}
               />
             </div>
           </div>

@@ -5,6 +5,9 @@ import { registerBuiltinQuestionTypeUis } from '../register-builtin-question-uis
 describe('Issue #121 · 测评题型 UI 注册表', () => {
   afterEach(() => {
     // 清掉插件注册的题型，避免用例之间互相污染（内置题型保留）
+    for (const owner of ['ext-a', 'ext-b', 'ext-snap']) {
+      assessmentQuestionTypeUiRegistry.clearOwned(owner);
+    }
     for (const type of assessmentQuestionTypeUiRegistry.list().map((t) => t.type)) {
       if (type.includes(':')) assessmentQuestionTypeUiRegistry.unregister(type);
     }
@@ -57,5 +60,47 @@ describe('Issue #121 · 测评题型 UI 注册表', () => {
     expect(() => assessmentQuestionTypeUiRegistry.register({ type: 'x:y', label: { zh: '', en: '' } } as any)).toThrow(
       /Editor must be a component/,
     );
+  });
+
+  it('manifest 声明可被同 owner 的 inline 注册覆盖，停用后回退', () => {
+    registerBuiltinQuestionTypeUis();
+    const base = assessmentQuestionTypeUiRegistry.get('single_choice')!;
+    assessmentQuestionTypeUiRegistry.register({ ...base, type: 'ext-a:match' }, 'ext-a', { origin: 'manifest' });
+    expect(assessmentQuestionTypeUiRegistry.get('ext-a:match')?.label.zh).toBe(base.label.zh);
+
+    assessmentQuestionTypeUiRegistry.register(
+      { ...base, type: 'ext-a:match', label: { zh: '内联连线', en: 'Inline matching' } },
+      'ext-a',
+      { origin: 'inline' },
+    );
+    expect(assessmentQuestionTypeUiRegistry.get('ext-a:match')?.label.zh).toBe('内联连线');
+
+    // 激活失败/停用但保留声明式贡献时，应恢复 manifest 版本而不是删除
+    assessmentQuestionTypeUiRegistry.clearOwned('ext-a', { preserveManifest: true });
+    expect(assessmentQuestionTypeUiRegistry.get('ext-a:match')?.label.zh).toBe(base.label.zh);
+  });
+
+  it('跨插件的 manifest 冲突先到先得且不阻断激活', () => {
+    registerBuiltinQuestionTypeUis();
+    const base = assessmentQuestionTypeUiRegistry.get('single_choice')!;
+    assessmentQuestionTypeUiRegistry.register({ ...base, type: 'ext-a:shared' }, 'ext-a', { origin: 'manifest' });
+    expect(() =>
+      assessmentQuestionTypeUiRegistry.register(
+        { ...base, type: 'ext-a:shared', label: { zh: 'B 的题型', en: 'B' } },
+        'ext-b',
+        { origin: 'manifest' },
+      ),
+    ).not.toThrow();
+    expect(assessmentQuestionTypeUiRegistry.get('ext-a:shared')?.label.zh).toBe(base.label.zh);
+  });
+
+  it('getSnapshot 在状态未变时保持同一引用（useSyncExternalStore 前提）', () => {
+    registerBuiltinQuestionTypeUis();
+    const first = assessmentQuestionTypeUiRegistry.getSnapshot();
+    expect(assessmentQuestionTypeUiRegistry.getSnapshot()).toBe(first);
+
+    const base = assessmentQuestionTypeUiRegistry.get('single_choice')!;
+    assessmentQuestionTypeUiRegistry.register({ ...base, type: 'ext-snap:one' }, 'ext-snap');
+    expect(assessmentQuestionTypeUiRegistry.getSnapshot()).not.toBe(first);
   });
 });

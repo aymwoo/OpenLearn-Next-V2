@@ -288,7 +288,15 @@ export type ExtensionSlot =
   // ── 学案编辑器扩展槽位：第三方插件新增活动形式 ──
   | 'xuean.activity.type' // 声明新的学案活动类型（并进入教师端活动类型下拉）
   | 'xuean.activity.editor' // 该类型活动的教师端编辑器（按 activityType 分发）
-  | 'xuean.activity.student'; // 该类型活动的学生端渲染器（按 activityType 分发）
+  | 'xuean.activity.student' // 该类型活动的学生端渲染器（按 activityType 分发）
+  // ── 学案编排与学习过程扩展槽位 ──
+  | 'xuean.editor.toolbar' // 教师活动编排器工具栏（批量导入 / AI 生成活动 / 模板）
+  | 'xuean.activity.card.action' // 教师活动卡片操作区（复制 / 导出 / 预览）
+  | 'xuean.activity.card.badge' // 教师活动卡片状态角标（覆盖度预警 / 未交提醒）
+  | 'xuean.activity.editor.footer' // 活动编辑弹窗底部操作栏（按 activityType 分发）
+  | 'xuean.activity.student.addon' // 学生活动卡片附加区（笔记 / 提问 / AI 辅导）
+  | 'xuean.progress.summary' // 学生学案进度摘要区（完成度分析 / 学习路径）
+  | 'xuean.home.block'; // 学生学案首页块区域（聚合卡片 / 推荐内容）
 
 /**
  * Anchor slot — 锚点扩展槽（v0.2.6）。
@@ -929,6 +937,8 @@ export interface BankItemSummary {
 export interface AssessmentBankToolbarSlotProps {
   filters: { type?: string };
   lang?: string;
+  /** 宿主列表重载入口：插件写入题库后调用，避免「导入成功但列表不更新」。 */
+  refresh?: () => void | Promise<void>;
   dispatcher?: IHostActionDispatcher;
 }
 
@@ -942,6 +952,8 @@ export interface AssessmentBankItemActionSlotProps {
 /** Props passed to assessment.bank.import.source extensions */
 export interface AssessmentBankImportSourceSlotProps {
   lang?: string;
+  /** 宿主列表重载入口：批量导入/AI 生成完成后调用。 */
+  refresh?: () => void | Promise<void>;
   dispatcher?: IHostActionDispatcher;
 }
 
@@ -1012,6 +1024,13 @@ export interface AssessmentPublishPreflightSlotProps {
   totalScore: number;
   lang?: string;
   onResult?: (result: { level: 'error' | 'warn'; code: string; message: string }) => void;
+  /**
+   * 清除检查结果：无参清空全部，传 code 只清该条。
+   *
+   * 插件在条件恢复后（题库余量补足、题型安装完成）必须能解除阻断，
+   * 否则一次 error 会让发布按钮永久禁用。
+   */
+  onClear?: (code?: string) => void;
 }
 
 /** Props passed to assessment.grading.toolbar.action extensions */
@@ -1095,24 +1114,44 @@ export interface AssessmentAttemptQuestionAddonProps {
   lang?: string;
 }
 
-/** Props passed to assessment.result.item.addon extensions（学生本人） */
-export interface AssessmentResultItemAddonProps {
-  assignmentId: string;
-  attemptId: string;
-  item: {
-    itemId: string;
-    type: string;
-    stem: string;
-    maxScore: number;
-    answer: unknown;
-    score: number | null;
-    isCorrect: boolean | null;
-    feedback: string | null;
-    /** 仅 resultVisibility 允许且 showAnalysis 为真时出现 */
-    answerKey?: unknown;
-  };
-  lang?: string;
+/** 学生结果页逐题视图（基础字段不含标准答案）。 */
+export interface AssessmentResultItemBase {
+  itemId: string;
+  type: string;
+  stem: string;
+  maxScore: number;
+  answer: unknown;
+  score: number | null;
+  isCorrect: boolean | null;
+  feedback: string | null;
 }
+
+/**
+ * Props passed to assessment.result.item.addon extensions（学生本人）。
+ *
+ * 与 `AssessmentGradingAnswerAddonProps` 同构：标准答案/学生作答经
+ * `sensitive` 注入，`item` 内不再声明 `answerKey`（运行时从来不放）。
+ */
+export type AssessmentResultItemAddonProps =
+  | {
+      sensitiveAccess: false;
+      assignmentId: string;
+      attemptId: string;
+      item: AssessmentResultItemBase;
+      lang?: string;
+    }
+  | {
+      sensitiveAccess: true;
+      assignmentId: string;
+      attemptId: string;
+      item: AssessmentResultItemBase;
+      sensitive: {
+        /** 仅 resultVisibility 允许且 showAnalysis 为真时出现 */
+        answerKey?: unknown;
+        studentAnswer?: unknown;
+      };
+      lang?: string;
+    };
 
 /** Props passed to course.card.action extensions */
 export interface CourseCardActionSlotProps {
@@ -1373,4 +1412,98 @@ export interface ClassroomActiveSegmentMainSlotProps {
   lang?: string;
   flow: ClassroomFlowController;
   onRefresh?: () => void;
+}
+
+// ── 学案编排与学习过程扩展槽位 ──────────────────────────────────────
+
+/**
+ * 学案活动摘要（提供给插件）。
+ *
+ * 刻意不含 `config_json` / `rubric_json`：插件需要活动内容时应走活动类型
+ * 自己的渲染槽位（`xuean.activity.editor/student`），而不是从摘要里挖。
+ */
+export interface XueanActivitySummary {
+  id: string;
+  type: string;
+  title: string;
+  required: boolean;
+  visible: boolean;
+  peer_review: boolean;
+  order_index: number;
+  release_at: number | null;
+  due_at: number | null;
+  surface_id?: string | null;
+}
+
+/** Props passed to xuean.editor.toolbar extensions */
+export interface XueanEditorToolbarSlotProps {
+  lessonId: string;
+  activities: XueanActivitySummary[];
+  refresh: () => void | Promise<void>;
+  lang?: string;
+  dispatcher?: IHostActionDispatcher;
+}
+
+/** Props passed to xuean.activity.card.action extensions */
+export interface XueanActivityCardActionSlotProps {
+  activity: XueanActivitySummary;
+  index: number;
+  lang?: string;
+  commandPayload?: { activityId: string; lessonId: string; index: number };
+  dispatcher?: IHostActionDispatcher;
+}
+
+/** Props passed to xuean.activity.card.badge extensions */
+export interface XueanActivityCardBadgeSlotProps {
+  activity: XueanActivitySummary;
+  index: number;
+  lang?: string;
+}
+
+/** Props passed to xuean.activity.editor.footer extensions */
+export interface XueanActivityEditorFooterSlotProps {
+  activityType: string;
+  activity: XueanActivitySummary | null;
+  lessonId: string;
+  lang?: string;
+  /** 保存成功后通知宿主刷新列表；插件不实现保存时可不调用。 */
+  onSaved?: () => void | Promise<void>;
+  commandPayload?: { activityId?: string; lessonId: string; activityType: string };
+}
+
+/** Props passed to xuean.activity.student.addon extensions */
+export interface XueanActivityStudentAddonSlotProps {
+  activity: {
+    id: string;
+    lesson_id: string;
+    type: string;
+    title: string;
+    config_json?: string | null;
+    [key: string]: unknown;
+  };
+  activityType: string;
+  lessonId: string;
+  progress?: {
+    status: string;
+    progress_percent: number;
+    score?: number | null;
+    verified?: boolean;
+  } | null;
+  lang?: string;
+}
+
+/** Props passed to xuean.progress.summary extensions */
+export interface XueanProgressSummarySlotProps {
+  lessonId: string;
+  completedCount: number;
+  total: number;
+  percent: number;
+  lang?: string;
+}
+
+/** Props passed to xuean.home.block extensions */
+export interface XueanHomeBlockSlotProps {
+  lessonId: string;
+  blocks: Array<{ id: string; block_type: string; order_index: number; [key: string]: unknown }>;
+  lang?: string;
 }

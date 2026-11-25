@@ -54,6 +54,20 @@ export { isPluginBlown, resetPluginBreaker };
  */
 const FLOATING_VIEW_SLOTS = new Set<string>(['student.classroom.overlay']);
 
+/**
+ * 沙箱上下文体积预算（字节，按槽位）。
+ *
+ * 默认 16KB 足够传标识与摘要；学案槽位会把整条活动（含正文配置）交给插件，
+ * 16KB 很容易超限导致 `sanitizeSandboxContext` 整体返回 null —— 表现为
+ * 「传了上下文但插件什么也拿不到」。这类槽位放宽到 64KB。
+ */
+const SANDBOX_CONTEXT_BUDGET: Record<string, number> = {
+  'xuean.activity.editor': 64 * 1024,
+  'xuean.activity.student': 64 * 1024,
+  'xuean.activity.editor.footer': 64 * 1024,
+  'xuean.activity.student.addon': 64 * 1024,
+};
+
 function viewVariantFor(slot: string): 'panel' | 'floating' {
   return FLOATING_VIEW_SLOTS.has(slot) ? 'floating' : 'panel';
 }
@@ -548,7 +562,12 @@ export function ExtensionPointRenderer({
 
   if (extensions.length === 0) return null;
 
-  const renderTabPanelContent = (activeExt: any, extraProps: Record<string, any>, fallbackText: string) => {
+  const renderTabPanelContent = (
+    activeExt: any,
+    extraProps: Record<string, any>,
+    fallbackText: string,
+    baseProps: Record<string, any> = {},
+  ) => {
     // v0.7.0：显式错误态优先 —— 插件前端失败/被熔断时给出「错误 + 重试」，
     // 而不是静默留白（此前 isPluginBlown 直接 return null）。
     const pluginError = pluginErrors.get(activeExt.pluginId);
@@ -582,6 +601,7 @@ export function ExtensionPointRenderer({
     const mergedProps = {
       ...activeExt.slotProps,
       ...extraProps,
+      ...baseProps,
       dispatcher: getExtensionDispatcher(host, activeExt.pluginId, slotProps?.dispatcher),
     };
 
@@ -611,10 +631,12 @@ export function ExtensionPointRenderer({
                 view={String(activeExt.slotProps?.view || activeExt.view)}
                 label={activeExt.label}
                 slot={slot}
-                lessonId={selectedLesson}
-                classId={slotProps?.classId || liveClassSelectedClassId}
-                studentId={slotProps?.studentId ?? null}
-                studentName={slotProps?.studentName ?? null}
+                lessonId={baseProps.lessonId ?? selectedLesson}
+                classId={baseProps.classId || slotProps?.classId || liveClassSelectedClassId}
+                studentId={baseProps.studentId ?? slotProps?.studentId ?? null}
+                studentName={baseProps.studentName ?? slotProps?.studentName ?? null}
+                sandboxContext={mergedProps}
+                maxContextBytes={SANDBOX_CONTEXT_BUDGET[slot]}
                 variant={viewVariantFor(slot)}
                 locked={locked}
               />
@@ -1179,9 +1201,15 @@ export function ExtensionPointRenderer({
     );
   }
 
-  // xuean.activity.editor / xuean.activity.student —— 学案插件活动按 activityType 分发。
+  // xuean.activity.editor / xuean.activity.student / .editor.footer / .student.addon
+  // —— 学案插件活动按 activityType 分发。
   // 一个只实现了「虚拟实验」的编辑器不应出现在「阅读任务」的编辑弹窗里。
-  if (slot === 'xuean.activity.editor' || slot === 'xuean.activity.student') {
+  if (
+    slot === 'xuean.activity.editor' ||
+    slot === 'xuean.activity.student' ||
+    slot === 'xuean.activity.editor.footer' ||
+    slot === 'xuean.activity.student.addon'
+  ) {
     const wanted = String(slotProps?.activityType ?? slotProps?.activity?.type ?? '');
     if (!wanted) return null;
     const activeExt = extensions.find((ext) => {
@@ -1190,7 +1218,18 @@ export function ExtensionPointRenderer({
       return declared === wanted || ext.id === wanted;
     });
     if (!activeExt) return null;
-    return renderTabPanelContent(activeExt, { activity: slotProps?.activity }, '活动扩展加载失败');
+    // 调用点传入的是插件渲染所需的白名单上下文（activityType/lessonId/onSaved/lang），
+    // 不能只交 activity —— 否则教师端编辑器的保存回调与学生端活动标识都会丢失。
+    return renderTabPanelContent(activeExt, {}, '活动扩展加载失败', {
+      activityType: wanted,
+      activity: slotProps?.activity ?? null,
+      lessonId: slotProps?.lessonId ?? null,
+      onSaved: slotProps?.onSaved,
+      progress: slotProps?.progress ?? null,
+      index: slotProps?.index,
+      commandPayload: slotProps?.commandPayload,
+      lang: slotProps?.lang,
+    });
   }
 
   return (

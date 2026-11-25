@@ -60,6 +60,8 @@ import {
 import type { SegmentTypeMeta } from '../features/teacher/lesson-editor/timelineConfig';
 import { assignmentQuestionRendererRegistry } from '../features/teacher/assignment-question-registry';
 import { assessmentQuestionTypeUiRegistry } from '../features/assessment/question-type-ui-registry';
+import { createManifestQuestionUi } from '../features/assessment/manifest-question-views';
+import type { AssessmentKind, QuestionCategory } from '../../packages/core/assessment/index.js';
 
 const PALETTE_COLOR_KEYS = new Set<PaletteColorKey>([
   'slate',
@@ -220,8 +222,48 @@ export function registerManifestContributions(
   // SlotProps 读取），commandType 按 manifest.id 命名空间前缀化，组件为
   // 占位空组件（贡献本体是数据而非 UI 的槽位，如 command_palette.item）。
   if (contributes) {
+    // `assessment.question_type` 不是渲染槽位，而是声明式题型 UI：
+    // 转成题型注册表条目（origin: manifest），不能进下面的通用扩展点循环。
+    const questionTypes = contributes['assessment.question_type'];
+    if (Array.isArray(questionTypes)) {
+      for (const rawEntry of questionTypes) {
+        if (!rawEntry || typeof rawEntry !== 'object') continue;
+        const entry = rawEntry as Record<string, unknown>;
+        const type = typeof entry.id === 'string' ? entry.id.trim() : '';
+        if (!type.includes(':')) {
+          console.warn(
+            `[FrontendPluginHost] plugin "${pluginId}" question type "${type || '(empty)'}" must be namespaced as "<prefix>:<name>".`,
+          );
+          continue;
+        }
+        try {
+          const ui = createManifestQuestionUi({
+            pluginId,
+            type,
+            label: String(entry.label ?? type),
+            labelEn: typeof entry.labelEn === 'string' ? entry.labelEn : undefined,
+            category: entry.category as QuestionCategory,
+            supports: Array.isArray(entry.supports) ? (entry.supports as AssessmentKind[]) : undefined,
+            editorView: typeof entry.editorView === 'string' ? entry.editorView : undefined,
+            answerView: typeof entry.answerView === 'string' ? entry.answerView : undefined,
+            reviewView: typeof entry.reviewView === 'string' ? entry.reviewView : undefined,
+            defaultConfig:
+              entry.defaultConfig && typeof entry.defaultConfig === 'object' && !Array.isArray(entry.defaultConfig)
+                ? (entry.defaultConfig as Record<string, unknown>)
+                : undefined,
+            defaultAnswerKey: entry.defaultAnswerKey,
+          });
+          if (ui) assessmentQuestionTypeUiRegistry.register(ui, pluginId, { origin: 'manifest' });
+        } catch (err) {
+          // 单个题型声明失败不应阻断插件激活（其余能力仍可用）。
+          console.warn(`[FrontendPluginHost] plugin "${pluginId}" question type "${type}" skipped:`, err);
+        }
+      }
+    }
+
     for (const [slotName, entries] of Object.entries(contributes)) {
       if (!Array.isArray(entries)) continue;
+      if (slotName === 'assessment.question_type') continue;
       // classroom.tool 与 legacy manifest.classroomTools 二选一，避免双注册
       if (slotName === 'classroom.tool' && manifest.classroomTools) continue;
       for (const rawEntry of entries) {
@@ -234,6 +276,12 @@ export function registerManifestContributions(
           label: String(entry.title ?? entry.label ?? entry.name ?? entryId),
           icon: typeof entry.icon === 'string' ? entry.icon : undefined,
           view: typeof entry.view === 'string' ? entry.view : undefined,
+          // 渲染器与投影读取的是扩展配置**顶层**字段；manifest 条目整体进 slotProps，
+          // 不提升就会「安装期校验通过、运行期声明为空」（requiresSensitive 尤其明显）。
+          requiresSensitive: Array.isArray(entry.requiresSensitive)
+            ? (entry.requiresSensitive as ExtensionPointConfig['requiresSensitive'])
+            : undefined,
+          placement: entry.placement === 'before' || entry.placement === 'after' ? entry.placement : undefined,
           slotProps: entry.commandType
             ? {
                 ...entry,
@@ -1019,7 +1067,9 @@ export class FrontendPluginHost {
     unregisterPluginSegmentTypes(pluginId);
     // 注销该插件注册的全部题型渲染器
     assignmentQuestionRendererRegistry.clearOwned(pluginId);
-    assessmentQuestionTypeUiRegistry.clearOwned(pluginId);
+    assessmentQuestionTypeUiRegistry.clearOwned(pluginId, {
+      preserveManifest: Boolean(opts?.preserveManifestContributions),
+    });
     unregisterPluginLocales(pluginId);
     // v0.6.1 审计 N-6：熔断记录随插件注销清理 —— 模块级 pluginCrashRegistry
     // 此前不随生命周期回收，卸载后残留条目（重新安装后若曾 blown 会被跳过）
@@ -1131,7 +1181,7 @@ export class FrontendPluginHost {
         },
         /** 测评题型出题编辑器注册（Issue #121）：与后端 IAssessmentGraderRegistry 共用 type */
         registerAssessmentQuestionType: (config) => {
-          assessmentQuestionTypeUiRegistry.register(config, pluginId);
+          assessmentQuestionTypeUiRegistry.register(config, pluginId, { origin: 'inline' });
         },
         unregisterAssessmentQuestionType: (type) => {
           assessmentQuestionTypeUiRegistry.unregister(type, pluginId);

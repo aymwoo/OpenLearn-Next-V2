@@ -212,7 +212,15 @@ export type ExtensionSlot =
   // ── 学案编辑器活动类型扩展 ──
   | 'xuean.activity.type' // 声明新的学案活动类型（进入教师端类型下拉）
   | 'xuean.activity.editor' // 活动类型的教师端编辑器（按 activityType 分发）
-  | 'xuean.activity.student'; // 活动类型的学生端渲染器（按 activityType 分发）
+  | 'xuean.activity.student' // 活动类型的学生端渲染器（按 activityType 分发）
+  // ── 学案编排与学习过程扩展 ──
+  | 'xuean.editor.toolbar' // 教师活动编排器工具栏
+  | 'xuean.activity.card.action' // 教师活动卡片操作区
+  | 'xuean.activity.card.badge' // 教师活动卡片状态角标
+  | 'xuean.activity.editor.footer' // 活动编辑弹窗底部操作栏（按 activityType 分发）
+  | 'xuean.activity.student.addon' // 学生活动卡片附加区（按 activityType 分发）
+  | 'xuean.progress.summary' // 学生学案进度摘要区
+  | 'xuean.home.block'; // 学生学案首页块区域
 
 // v0.2.6: 锚点槽位（开放命名空间）
 export type AnchorSlot = `anchor:${string}`;
@@ -273,7 +281,7 @@ export type AnyExtensionSlot = ExtensionSlot | AnchorSlot | (string & {});
 
 实测口径：遍历 `src/**/*.tsx`（排除 `__tests__`），解析 `<ExtensionPointRenderer ... slot="…">`。
 
-- 生产调用点上的**固定名槽位值随版本增长**（当前联合类型 154 个成员，以 `docs/agent/contracts/slots.json` 为准；`command_palette.item` / `quick_insert.item` / `ai.prompt.template` / `ai.skill.provider` 等是**数据型或服务端消费**槽位，不经过渲染器，契约见 §12.7。消费率口径见文末统计节，复核命令见下）；
+- 生产调用点上的**固定名槽位值随版本增长**（当前联合类型 161 个成员，以 `docs/agent/contracts/slots.json` 为准；`command_palette.item` / `quick_insert.item` / `ai.prompt.template` / `ai.skill.provider` 等是**数据型或服务端消费**槽位，不经过渲染器，契约见 §12.7。消费率口径见文末统计节，复核命令见下）；
 - 另有 **8 个** `anchor:*` 锚点槽位（见 §1.1 附注）。
 
 | 槽位                                    | 渲染调用点（`src/` 下）                                                                                                                 | 调用点传入的 `slotProps`                                                                                                       |
@@ -437,6 +445,13 @@ export type AnyExtensionSlot = ExtensionSlot | AnchorSlot | (string & {});
 | `classroom.sessions.action`             | `src/features/classroom/ClassroomSessionManager.tsx`                                                                                    | `{ totalSessions, lang }`                                                                                                      |
 | `xuean.activity.editor`                 | `src/features/teacher/xuean/XueanActivitiesPanel.tsx`（活动编辑弹窗内，仅当 `activityType` 命中插件类型）                               | `{ activityType, activity, lessonId, onSaved }`                                                                                |
 | `xuean.activity.student`                | `src/features/student/xuean/StudentXueanView.tsx`（学生学案活动卡片，仅当 `activity.type` 命中插件类型）                                | `{ activity, activityType, lessonId }`                                                                                         |
+| `xuean.editor.toolbar`                  | `XueanActivitiesPanel.tsx`（编排器标题行右侧）                                                                                          | `{ lessonId, activities, refresh, lang }`                                                                                      |
+| `xuean.activity.card.action`            | `XueanActivitiesPanel.tsx`（活动卡片操作区）                                                                                            | `{ activity, index, lang, commandPayload }`                                                                                    |
+| `xuean.activity.card.badge`             | `XueanActivitiesPanel.tsx`（活动卡片状态角标行）                                                                                        | `{ activity, index, lang }`                                                                                                    |
+| `xuean.activity.editor.footer`          | `XueanActivitiesPanel.tsx`（活动编辑弹窗底部操作栏，按 `activityType` 分发）                                                            | `{ activityType, activity, lessonId, onSaved, commandPayload, lang }`                                                          |
+| `xuean.activity.student.addon`          | `StudentXueanView.tsx`（学生活动卡片底部，按 `activityType` 分发）                                                                      | `{ activity, activityType, lessonId, progress, lang }`                                                                         |
+| `xuean.progress.summary`                | `StudentXueanView.tsx`（学案头部进度条旁）                                                                                              | `{ lessonId, completedCount, total, percent, lang }`                                                                           |
+| `xuean.home.block`                      | `StudentXueanView.tsx`（学案首页块区域，整块渲染一次）                                                                                  | `{ lessonId, blocks, lang }`                                                                                                   |
 
 #### 1.1 锚点槽位（`anchor:*`，8 个）
 
@@ -475,7 +490,7 @@ export type AnyExtensionSlot = ExtensionSlot | AnchorSlot | (string & {});
 
 ### 1.1.1 槽位容器语义分类（layoutVariant）
 
-平台将扩展槽位（当前 154 个，以 `docs/agent/contracts/slots.json` 为准）按照挂载上下文的容器模型划分为 4 种语义类型：
+平台将扩展槽位（当前 161 个，以 `docs/agent/contracts/slots.json` 为准）按照挂载上下文的容器模型划分为 4 种语义类型：
 
 | 容器语义分类 (`layoutVariant`)                           | 核心特征与宿主环境                                                                                                    | 典型槽位                                                                                          | 插件视图样式规范与禁止项                                                                                                                                                                                                                                                                                                                                                                           |
 | :------------------------------------------------------- | :-------------------------------------------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------------ | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -1586,20 +1601,83 @@ ctx.ui.registerExtensionPoint('xuean.activity.student', {
 
 **缺省回退**：服务端目录接口 `GET /api/xuean/activity-types` 返回内置 + 已激活插件的类型；插件停用后其类型不再出现在下拉中（历史活动仍保留在库里，学生端渲染区域会提示插件未加载）。
 
+### 12.10 学案编排与学习过程槽位
+
+| 槽位                           | 容器语义   | 用途                                                          |
+| ------------------------------ | ---------- | ------------------------------------------------------------- |
+| `xuean.editor.toolbar`         | ActionItem | 编排器工具栏：批量导入、AI 生成活动、模板                     |
+| `xuean.activity.card.action`   | ActionItem | 活动卡片操作：复制、导出、预览                                |
+| `xuean.activity.card.badge`    | 微徽章     | 活动状态角标：覆盖度预警、未交提醒                            |
+| `xuean.activity.editor.footer` | ActionItem | 编辑弹窗底部操作（按 `activityType` 分发）                    |
+| `xuean.activity.student.addon` | Panel      | 学生活动附加区：笔记、提问、AI 辅导（按 `activityType` 分发） |
+| `xuean.progress.summary`       | Panel      | 学案进度摘要：完成度分析、学习路径                            |
+| `xuean.home.block`             | Panel      | 学案首页块区域：聚合卡片、推荐内容                            |
+
+约定：
+
+- `xuean.activity.editor.footer` / `xuean.activity.student.addon` 与 `xuean.activity.editor/student` 共用 `activityType` 精确匹配；未声明 `activityType` 时不会出现在任何活动里。
+- ActionItem 槽位推荐声明 `commandType`（远程插件）或内联组件；`view` 会按页面级面板渲染，不适合塞进标题行/操作区。
+- 活动卡片位于 `draggable` 容器内，宿主已阻止槽位内的指针事件冒泡；插件仍应避免在按钮上绑定拖拽。
+- 编辑弹窗底部槽位位于 `<form>` 内，插件按钮必须显式写 `type="button"`，否则会触发宿主表单提交。
+- `xuean.editor.toolbar` 的 `refresh`、`xuean.activity.editor.footer` 的 `onSaved` 是宿主注入的回调，用于写入后刷新列表。
+
+### 12.11 声明式题型 UI（`assessment.question_type`）
+
+远程 ZIP 插件可以通过 manifest 声明题型 UI，让题库/组卷/作答/结果页都识别该题型：
+
+```json
+{
+  "contributes": {
+    "assessment.question_type": [
+      {
+        "id": "ext-matching:pair",
+        "label": "连线题",
+        "labelEn": "Matching",
+        "category": "objective",
+        "supports": ["quiz", "exam"],
+        "editorView": "views/question-editor.html",
+        "answerView": "views/question-answer.html",
+        "reviewView": "views/question-review.html"
+      }
+    ]
+  }
+}
+```
+
+**两段式注册（必须）**：manifest 只提供 UI；插件服务端仍须在 `activate` 里
+`ctx.resolve(IAssessmentGraderRegistryToken).registerQuestionType(def, { pluginId })`
+注册判分配置，否则题目无法保存（`validateItemSnapshot` 拒绝）也无法自动判分。
+`id` 必须满足服务端题型命名规则 `<prefix>:<name>`（小写字母/数字/下划线/连字符），
+且与服务端 `definition.type` 完全一致；scoped manifest id（如 `@acme/lab`）需改用安全别名。
+
+沙箱页面通过 `window.OpenLearnPluginBridge.question` 与宿主交换状态：
+
+| 方法                  | 角色   | 说明                                                                             |
+| --------------------- | ------ | -------------------------------------------------------------------------------- |
+| `getState()`          | 全部   | 当前 `{ type, role, config, answerKey?, value?, score?, isCorrect?, feedback? }` |
+| `onUpdate(cb)`        | 全部   | 宿主状态变化回调（`question.update`）                                            |
+| `setConfig(config)`   | editor | 写回题目配置（对象，≤64KB）                                                      |
+| `setAnswerKey(value)` | editor | 写回标准答案                                                                     |
+| `setValue(value)`     | answer | 写回学生作答                                                                     |
+
+边界：`answerView` 永远收不到 `answerKey`；`reviewView` 只读，所有 setter 都会被拒绝；
+`answerKey` 是否进入 `reviewView` 由结果页 `showAnalysis` 决定。题型注册表另有可选的
+`Review` 组件位（内联插件用），缺省时结果页退回「作答 / 参考答案」文本。
+
 ---
 
 ## 13. 统计口径
 
 | 指标                                                           | 数值                                              |
 | -------------------------------------------------------------- | ------------------------------------------------- |
-| `ExtensionSlot` 联合类型成员                                   | **140**                                           |
-| 生产调用点（`src/**/*.tsx`，排除 `__tests__`）上的固定名槽位值 | **133**（`99` / `98` / `116` / `121` 为历史记录） |
-| 其中属于 `ExtensionSlot` 联合类型                              | **133**                                           |
+| `ExtensionSlot` 联合类型成员                                   | **161**                                           |
+| 生产调用点（`src/**/*.tsx`，排除 `__tests__`）上的固定名槽位值 | **154**（`99` / `98` / `116` / `121` 为历史记录） |
+| 其中属于 `ExtensionSlot` 联合类型                              | **154**                                           |
 | 不在联合类型内但有渲染器的字符串槽位                           | **0**                                             |
 | 已挂载的 `anchor:*` 锚点槽位                                   | **8**                                             |
 | 无渲染器的 `ExtensionSlot` 成员（数据型 / 服务端消费）         | **7**（见 §12.7、§11.6、§12.9）                   |
 | `ExtensionPointRenderer` 唯一槽位值总数（固定名 + 锚点）       | 随版本增长（含 8 个 `anchor:*` 锚点）             |
-| 在本页有使用说明的槽位（含 props 表 / 专项小节 / 代码示例）    | **148 / 148**                                     |
+| 在本页有使用说明的槽位（含 props 表 / 专项小节 / 代码示例）    | **161 / 161**                                     |
 
 > 复核命令：`python3 audit-tools/extract_slots.py --repo .`（槽位清单真值）与 `python3 audit-tools/slots_coverage.py --repo .`（文档覆盖分级）。两者均已接入 `bash audit-tools/run.sh`：**L0（文档中完全不存在）计为 drift 并阻断门禁**，L1/L2 仅作提示输出。
 >
@@ -1611,3 +1689,4 @@ ctx.ui.registerExtensionPoint('xuean.activity.student', {
 > 2026-11-15 更新：互动课堂顶栏与高级弹窗新增 `classroom.toolbar.quick_action`、`classroom.monitor.header_action`、`classroom.submissions.toolbar`、`classroom.top_performers.action`、`classroom.showcase_diff.action`、`classroom.macro_runner.action`、`classroom.hardware_bridge.addon`、`classroom.sessions.action` 8 个增量扩展槽位，`ExtensionSlot` 成员数由 125 增至 **133**（总槽位数含 8 个锚点共 **141** 个），详见 §12.8。
 > 2026-11-22 更新：学案编辑器新增 `xuean.activity.type`（服务端数据型）、`xuean.activity.editor`、`xuean.activity.student` 3 个扩展槽位，`ExtensionSlot` 成员数由 137 增至 **140**（总槽位数含 8 个锚点共 **148** 个），详见 §12.9。
 > 2026-11-23 更新：作业提交卡片新增 `assignment.submission.actions`（操作型：重新提交 / 分享 / 导出 / 第三方评分），`ExtensionSlot` 成员数由 140 增至 **141**（总槽位数含 8 个锚点共 **149** 个）。
+> 2026-11-25 更新：学案编排与学习过程新增 7 个槽位（`xuean.editor.toolbar`、`xuean.activity.card.action`、`xuean.activity.card.badge`、`xuean.activity.editor.footer`、`xuean.activity.student.addon`、`xuean.progress.summary`、`xuean.home.block`），并落地声明式题型 UI（`assessment.question_type`），`ExtensionSlot` 成员数增至 **161**（含 8 个锚点共 **169**），详见 §12.10 / §12.11。

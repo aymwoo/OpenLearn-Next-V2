@@ -68,6 +68,39 @@ export interface TeacherAttempt {
   proctor: Record<string, unknown>;
 }
 
+/** 实时进度：单个学生的作答状态与最近活动。 */
+export interface AssessmentProgressStudent {
+  studentId: string;
+  name: string;
+  studentNumber: string;
+  status: 'not_started' | 'in_progress' | 'submitted' | 'graded' | string;
+  score: number | null;
+  proctor: Record<string, unknown> | null;
+  proctorCounts?: { blur: number; switchTab: number; fullscreenExit: number; total: number };
+  submittedAt: number | null;
+  startedAt?: number | null;
+  deadlineAt?: number | null;
+  answeredCount?: number;
+  itemCount?: number;
+  progressPercent?: number;
+  lastActivityAt?: number | null;
+}
+
+/** 实时进度：某次发布的整班快照。 */
+export interface AssessmentProgressSnapshot {
+  assignmentId: string;
+  title: string;
+  kind: string;
+  itemCount?: number;
+  totalStudents: number;
+  submittedCount: number;
+  inProgressCount: number;
+  notStartedCount: number;
+  avgScore: number | null;
+  updatedAt?: number;
+  students: AssessmentProgressStudent[];
+}
+
 export interface TeacherItemDetail {
   itemId: string;
   type: string;
@@ -203,6 +236,8 @@ export interface StudentResultPayload {
     type: string;
     stem: string;
     maxScore: number;
+    /** 题型展示配置（不含标准答案）。 */
+    config?: Record<string, unknown>;
     answer: unknown;
     score: number | null;
     isCorrect: boolean | null;
@@ -299,8 +334,16 @@ export const assessmentApi = {
     }),
 
   /* 题库 */
-  listBank: (type?: string) =>
-    request<{ items: BankItem[] }>(`/api/question-bank${type ? `?type=${encodeURIComponent(type)}` : ''}`),
+  listBank: (filter?: string | { type?: string; tags?: string[]; difficultyMin?: number; difficultyMax?: number }) => {
+    const params = new URLSearchParams();
+    const normalized = typeof filter === 'string' ? { type: filter } : (filter ?? {});
+    if (normalized.type) params.set('type', normalized.type);
+    if (normalized.tags?.length) params.set('tags', normalized.tags.join(','));
+    if (typeof normalized.difficultyMin === 'number') params.set('difficultyMin', String(normalized.difficultyMin));
+    if (typeof normalized.difficultyMax === 'number') params.set('difficultyMax', String(normalized.difficultyMax));
+    const query = params.toString();
+    return request<{ items: BankItem[] }>(`/api/question-bank${query ? `?${query}` : ''}`);
+  },
   createBankItem: (input: {
     type: string;
     stem: string;
@@ -367,25 +410,7 @@ export const assessmentApi = {
       { method: 'POST' },
     ),
   getAssignmentProgress: (assignmentId: string) =>
-    request<{
-      assignmentId: string;
-      title: string;
-      kind: string;
-      totalStudents: number;
-      submittedCount: number;
-      inProgressCount: number;
-      notStartedCount: number;
-      avgScore: number | null;
-      students: Array<{
-        studentId: string;
-        name: string;
-        studentNumber: string;
-        status: string;
-        score: number | null;
-        proctor: any;
-        submittedAt: number | null;
-      }>;
-    }>(`/api/assessment-assignments/${encodeURIComponent(assignmentId)}/progress`),
+    request<AssessmentProgressSnapshot>(`/api/assessment-assignments/${encodeURIComponent(assignmentId)}/progress`),
 
   /* 批改 / 统计 / 导出 */
   listAttempts: (assignmentId: string) =>
@@ -426,25 +451,7 @@ export const assessmentApi = {
   getClassroomAssessmentProgress: (lessonId: string, assignmentId?: string) =>
     request<{
       success: boolean;
-      progress: {
-        assignmentId: string;
-        title: string;
-        kind: string;
-        totalStudents: number;
-        submittedCount: number;
-        inProgressCount: number;
-        notStartedCount: number;
-        avgScore: number | null;
-        students: Array<{
-          studentId: string;
-          name: string;
-          studentNumber: string;
-          status: string;
-          score: number | null;
-          proctor: any;
-          submittedAt: number | null;
-        }>;
-      };
+      progress: AssessmentProgressSnapshot;
     }>(
       `/api/classroom/sessions/${encodeURIComponent(lessonId)}/assessment-progress${
         assignmentId ? `?assignmentId=${encodeURIComponent(assignmentId)}` : ''

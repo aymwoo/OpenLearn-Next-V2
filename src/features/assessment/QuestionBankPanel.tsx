@@ -7,7 +7,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { BookMarked, Loader2, Plus, Trash2 } from 'lucide-react';
 import { assessmentApi, ApiError, type BankItem } from './api';
-import { assessmentQuestionTypeUiRegistry } from './question-type-ui-registry';
+import { assessmentQuestionTypeUiRegistry, useAssessmentQuestionTypes } from './question-type-ui-registry';
 import { ExtensionPointRenderer } from '../../plugin-host/extension-point-renderer';
 import { toBankItemSummary } from './extension-slot-props';
 import './register-builtin-question-uis';
@@ -28,24 +28,32 @@ export function QuestionBankPanel({ lang }: { lang: 'zh' | 'en' }) {
   const [visibility, setVisibility] = useState<'private' | 'school'>('private');
   const [saving, setSaving] = useState(false);
   const [filterType, setFilterType] = useState('');
+  const [filterTags, setFilterTags] = useState<string[]>([]);
+  const [filterDifficultyMin, setFilterDifficultyMin] = useState('');
+  const [filterDifficultyMax, setFilterDifficultyMax] = useState('');
   const [previewId, setPreviewId] = useState<string | null>(null);
 
-  const types = assessmentQuestionTypeUiRegistry.list();
-  const activeType = assessmentQuestionTypeUiRegistry.get(type);
+  const types = useAssessmentQuestionTypes();
+  const activeType = types.find((entry) => entry.type === type);
   const Editor = activeType?.Editor;
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await assessmentApi.listBank(filterType || undefined);
+      const res = await assessmentApi.listBank({
+        type: filterType || undefined,
+        tags: filterTags.length > 0 ? filterTags : undefined,
+        difficultyMin: filterDifficultyMin ? Number(filterDifficultyMin) : undefined,
+        difficultyMax: filterDifficultyMax ? Number(filterDifficultyMax) : undefined,
+      });
       setItems(res.items);
     } catch (e: any) {
       setError(e instanceof ApiError ? e.message : String(e?.message ?? e));
     } finally {
       setLoading(false);
     }
-  }, [filterType]);
+  }, [filterType, filterTags, filterDifficultyMin, filterDifficultyMax]);
 
   useEffect(() => {
     void load();
@@ -149,7 +157,11 @@ export function QuestionBankPanel({ lang }: { lang: 'zh' | 'en' }) {
           </button>
           {/* P1：批量导入 / 第三方题库同步入口；插件声明 view 或 commandType */}
           <div className="pt-1">
-            <ExtensionPointRenderer slot="assessment.bank.import.source" slotProps={{ lang }} lang={lang} />
+            <ExtensionPointRenderer
+              slot="assessment.bank.import.source"
+              slotProps={{ lang, refresh: load }}
+              lang={lang}
+            />
           </div>
         </form>
       </section>
@@ -162,7 +174,7 @@ export function QuestionBankPanel({ lang }: { lang: 'zh' | 'en' }) {
           </h2>
           <ExtensionPointRenderer
             slot="assessment.bank.toolbar.action"
-            slotProps={{ filters: { type: filterType || undefined }, lang }}
+            slotProps={{ filters: { type: filterType || undefined }, lang, refresh: load }}
             lang={lang}
           />
         </div>
@@ -186,10 +198,22 @@ export function QuestionBankPanel({ lang }: { lang: 'zh' | 'en' }) {
           <ExtensionPointRenderer
             slot="assessment.bank.filter"
             slotProps={{
-              activeFilters: { type: filterType || undefined },
+              activeFilters: {
+                type: filterType || undefined,
+                tags: filterTags.length > 0 ? filterTags : undefined,
+                difficultyMin: filterDifficultyMin ? Number(filterDifficultyMin) : undefined,
+                difficultyMax: filterDifficultyMax ? Number(filterDifficultyMax) : undefined,
+              },
               lang,
               onChange: (patch: Record<string, unknown>) => {
                 if (typeof patch.type === 'string') setFilterType(patch.type);
+                if (Array.isArray(patch.tags)) {
+                  setFilterTags(patch.tags.map((tag) => String(tag)).filter(Boolean));
+                }
+                if (patch.difficultyMin === null) setFilterDifficultyMin('');
+                else if (typeof patch.difficultyMin === 'number') setFilterDifficultyMin(String(patch.difficultyMin));
+                if (patch.difficultyMax === null) setFilterDifficultyMax('');
+                else if (typeof patch.difficultyMax === 'number') setFilterDifficultyMax(String(patch.difficultyMax));
               },
             }}
             lang={lang}

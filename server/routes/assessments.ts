@@ -43,6 +43,20 @@ function studentActor(req: any): string | null {
 export function registerAssessmentRoutes(ctx: ServerContext, service: AssessmentService = assessmentService) {
   const { app } = ctx;
 
+  /**
+   * 实时进度信号：只投递到 `assessment-<assignmentId>` 房间（仅教师/管理员可加入），
+   * 不进入班级 / 课节房间，避免把同学作答状态泄露给学生。
+   * 事件本身只带定位信息，客户端收到后重新拉取快照，服务端不必广播明细。
+   */
+  const broadcastProgress = (assignmentId: string, studentId: string | null) => {
+    if (!assignmentId) return;
+    ctx.io?.to(`assessment-${assignmentId}`).emit('assessment:progress_updated', {
+      assignmentId,
+      studentId,
+      at: Date.now(),
+    });
+  };
+
   /* ───────────────────────── 元信息：已注册题型 ───────────────────────── */
 
   app.get('/api/assessment-question-types', requireScopedAuth('authenticated'), (_req, res) => {
@@ -130,9 +144,20 @@ export function registerAssessmentRoutes(ctx: ServerContext, service: Assessment
 
   app.get('/api/question-bank', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
+      const rawTags = req.query.tags;
+      const tags = (Array.isArray(rawTags) ? rawTags : typeof rawTags === 'string' ? rawTags.split(',') : [])
+        .map((tag) => String(tag).trim())
+        .filter(Boolean);
+      const asNumber = (value: unknown): number | undefined => {
+        const parsed = typeof value === 'string' && value.trim() ? Number(value) : NaN;
+        return Number.isFinite(parsed) ? parsed : undefined;
+      };
       res.json({
         items: service.listBankItems(teacherActor(req), {
           type: typeof req.query.type === 'string' ? req.query.type : undefined,
+          tags,
+          difficultyMin: asNumber(req.query.difficultyMin),
+          difficultyMax: asNumber(req.query.difficultyMax),
         }),
       });
     } catch (e: any) {
@@ -457,7 +482,9 @@ export function registerAssessmentRoutes(ctx: ServerContext, service: Assessment
       const asg = service.getAssignment(req.params.id);
       const decision = authorizeClass(kernelContainer.db as any, (req as any).session, asg.classId, 'member');
       if (rejectUnless(res, decision) || !decision.ok) return;
-      res.status(201).json(service.startAttempt(asg.id, sid));
+      const payload = service.startAttempt(asg.id, sid);
+      res.status(201).json(payload);
+      broadcastProgress(asg.id, sid);
     } catch (e: any) {
       sendSafeError(res, e);
     }
@@ -468,7 +495,9 @@ export function registerAssessmentRoutes(ctx: ServerContext, service: Assessment
     try {
       const sid = studentActor(req);
       if (!sid) return res.status(403).json({ error: 'Forbidden' });
-      res.json(service.saveAnswer(req.params.id, sid, req.params.itemId, req.body?.answer ?? null));
+      const result = service.saveAnswer(req.params.id, sid, req.params.itemId, req.body?.answer ?? null);
+      res.json(result);
+      broadcastProgress(service.getAssignmentIdForAttempt(req.params.id), sid);
     } catch (e: any) {
       sendSafeError(res, e);
     }
@@ -478,7 +507,9 @@ export function registerAssessmentRoutes(ctx: ServerContext, service: Assessment
     try {
       const sid = studentActor(req);
       if (!sid) return res.status(403).json({ error: 'Forbidden' });
-      res.json(service.submitAttempt(req.params.id, sid));
+      const result = service.submitAttempt(req.params.id, sid);
+      res.json(result);
+      broadcastProgress(service.getAssignmentIdForAttempt(req.params.id), sid);
     } catch (e: any) {
       sendSafeError(res, e);
     }
@@ -489,7 +520,9 @@ export function registerAssessmentRoutes(ctx: ServerContext, service: Assessment
       const sid = studentActor(req);
       if (!sid) return res.status(403).json({ error: 'Forbidden' });
       const event = req.body ?? {};
-      res.json(service.recordProctor(req.params.id, sid, event));
+      const result = service.recordProctor(req.params.id, sid, event);
+      res.json(result);
+      broadcastProgress(service.getAssignmentIdForAttempt(req.params.id), sid);
     } catch (e: any) {
       sendSafeError(res, e);
     }

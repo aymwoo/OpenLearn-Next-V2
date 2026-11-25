@@ -145,9 +145,16 @@
 - `attempt.question.addon` **不含** `config` 中的答案字段与 `answerKey`，只给定位信息。
 - 统计扩展采用**行内附加**而不是「任意追加列」，避免多插件列数/表头协调（见评审问题 Q5）。
 
-### 4.5 题型扩展增强（P2）
+### 4.5 题型扩展增强（P2，已实现 2026-11-25）
 
 目标：让远程 ZIP 插件也能交付一个「有编辑器、有作答组件」的题型。
+
+> 落地说明：manifest 键为 `assessment.question_type`（严格 A 组，不属于渲染槽位），
+> 沙箱页面通过 `window.OpenLearnPluginBridge.question` 的
+> `getState / onUpdate / setConfig / setAnswerKey / setValue` 与宿主交换状态。
+> 新增可选 `reviewView` 承载结果页逐题复盘；内联插件仍可用题型注册表的
+> `Review` 组件位。`answerView` 永不接收 `answerKey`，`reviewView` 只读。
+> 判分仍要求插件服务端 `registerQuestionType`（两段式注册）。
 
 ```json
 // manifest.contributes
@@ -160,15 +167,15 @@
     "supports": ["quiz", "exam"],
     "autoGradable": false,
     "editorView": "storage/question-editor.html",
-    "answerView": "storage/question-answer.html"
+    "answerView": "storage/question-answer.html",
+    "reviewView": "storage/question-review.html"
   }
 ]
 ```
 
-- `id` 必须等于服务端已注册的题型 `type`（`<pluginId>:<name>`），否则声明无效并在安装期告警。
-- 两个 `view` 走现有桥接；新增 bridge op：`question.getConfig` / `question.setConfig` / `question.getValue` / `question.setValue`，仅在该题型上下文内可调用。
-- 不改变既有 `ctx.ui.registerAssessmentQuestionType` 的 inline 行为；两者同 `type` 时**inline 优先**（内建插件可覆盖）。
-- 这是本稿中唯一需要扩展桥接 op 白名单的部分，建议单独立项评审。
+- `id` 必须满足服务端题型命名规则（`<prefix>:<name>`），且与服务端已注册的题型 `type` 完全一致，否则声明无效并告警。
+- 两个/三个 `view` 走现有桥接；桥接 op：`question.setConfig` / `question.setAnswerKey` / `question.setValue`，仅在该题型上下文内可调用。
+- 不改变既有 `ctx.ui.registerAssessmentQuestionType` 的 inline 行为；两者同 `type` 时**inline 优先**（内建插件可覆盖，停用后回退 manifest 版本）。
 
 ---
 
