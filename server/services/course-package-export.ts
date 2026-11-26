@@ -286,10 +286,17 @@ export async function exportLessonAsCoursePackage(
     });
   }
 
-  // ── 2. 收集正文与元素里引用的 /uploads 与 /api/files 附件 ────────────────────
+  // ── 2. 收集正文、元素与学案活动/首页块里引用的 /uploads 与 /api/files 附件 ──────
   const referenced = new Set<string>();
   collectUploadReferences(lesson.content ?? '', referenced);
   for (const element of elements) collectUploadReferences(element.data, referenced);
+  for (const activity of activities) {
+    if (activity.config) collectUploadReferences(activity.config, referenced);
+    if (activity.rubric) collectUploadReferences(activity.rubric, referenced);
+  }
+  for (const block of blocks) {
+    if (block.content) collectUploadReferences(block.content, referenced);
+  }
 
   // ── 3. 读盘/存储层 + 内联（base64），并记录可替换的占位符 ──────────────────
   const pending: PendingAsset[] = [];
@@ -404,6 +411,24 @@ export async function exportLessonAsCoursePackage(
     };
   });
 
+  const resolvedActivities = activities.map((activity) => {
+    const next: CoursePackageActivity = { ...activity };
+    if (activity.config) {
+      next.config = replaceUploadReferences(activity.config, placeholderByRefKey) as Record<string, unknown>;
+    }
+    if (activity.rubric) {
+      next.rubric = replaceUploadReferences(activity.rubric, placeholderByRefKey) as Record<string, unknown>;
+    }
+    return next;
+  });
+  const resolvedBlocks = blocks.map((block) => {
+    const next: CoursePackageBlock = { blockType: block.blockType };
+    if (block.content) {
+      next.content = replaceUploadReferences(block.content, placeholderByRefKey) as Record<string, unknown>;
+    }
+    return next;
+  });
+
   const assets: CoursePackageAsset[] = pending.map((asset) => ({
     id: asset.id,
     filename: asset.filename,
@@ -434,8 +459,8 @@ export async function exportLessonAsCoursePackage(
       timeline,
       deliveryMode,
       ...(lesson.mode_pack_id ? { modePackId: lesson.mode_pack_id } : {}),
-      activities,
-      blocks,
+      activities: resolvedActivities,
+      blocks: resolvedBlocks,
     },
     assets,
     elements: resolvedElements,

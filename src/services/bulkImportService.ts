@@ -689,10 +689,15 @@ function defaultXueanTimeline(lang: 'zh' | 'en') {
  *
  * CSV 只有标题与正文；学案课的推进单位是活动，因此写入默认三环节并为每个
  * 环节生成对应活动（预习→阅读、研读→作品提交、练习→测验），与课程向导
- * 创建学案课的行为保持一致。补齐失败只告警：课程本身已经成功落库。
+ * 创建学案课的行为保持一致。
+ *
+ * 阅读活动必须带上 CSV 正文：学案学生端不渲染 `lessons.content`，否则教师
+ * 导入的长篇 Markdown 在课堂里完全不可见。补齐失败只告警：课程本身已经成功落库。
  */
-async function seedCsvXueanLesson(lessonId: string, lang: 'zh' | 'en'): Promise<void> {
+async function seedCsvXueanLesson(lessonId: string, content: string, lang: 'zh' | 'en'): Promise<void> {
+  const zh = lang === 'zh';
   const timeline = defaultXueanTimeline(lang);
+  const readingContent = content.trim();
   try {
     const timelineRes = await fetch(`/api/lessons/${lessonId}/timeline`, {
       method: 'PUT',
@@ -704,12 +709,24 @@ async function seedCsvXueanLesson(lessonId: string, lang: 'zh' | 'en'): Promise<
       return;
     }
     for (const segment of timeline) {
+      const type = xueanActivityTypeForSegment(segment.type);
+      const config =
+        type === 'reading' && readingContent
+          ? { content: readingContent }
+          : type === 'submission'
+            ? {
+                instructions: zh ? '请提交本节的学习收获。' : 'Submit your takeaways for this lesson.',
+                acceptText: true,
+                acceptLink: true,
+              }
+            : undefined;
       const res = await fetch(`/api/lessons/${lessonId}/activities`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          type: xueanActivityTypeForSegment(segment.type),
+          type,
           title: segment.title,
+          ...(config ? { config } : {}),
         }),
       });
       if (!res.ok) {
@@ -751,7 +768,7 @@ export async function submitCSVLessons(
           const body = await response.json().catch(() => null);
           const lessonId = body?.result?.lessonId;
           if (typeof lessonId === 'string' && lessonId) {
-            await seedCsvXueanLesson(lessonId, lang);
+            await seedCsvXueanLesson(lessonId, item.content, lang);
           }
         }
       } else {

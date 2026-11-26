@@ -207,10 +207,66 @@ describe('course package routes', () => {
     expect(body.result.activities).toBe(template.lesson.timeline.length);
 
     const activities = db
-      .prepare('SELECT type FROM lesson_activities WHERE lesson_id = ? ORDER BY order_index ASC')
-      .all(body.result.lessonId) as Array<{ type: string }>;
+      .prepare('SELECT type, config_json FROM lesson_activities WHERE lesson_id = ? ORDER BY order_index ASC')
+      .all(body.result.lessonId) as Array<{ type: string; config_json: string | null }>;
     // 与课程向导的环节→活动映射一致：预习→阅读、研读→作品提交、练习→测验
     expect(activities.map((a) => a.type)).toEqual(['reading', 'submission', 'quiz']);
+    // 学生端不渲染 lessons.content：自动生成的阅读活动必须带上课程正文
+    expect(JSON.parse(String(activities[0].config_json)).content).toContain('## 🎯 教学目标');
+  });
+
+  it('resolves asset placeholders inside xuean activity configs and re-inlines them on export', async () => {
+    const template = await buildTemplateCoursePackage('xuean');
+    template.lesson.title = '【CPKG-TEST】学案活动附件';
+    template.meta = { ...template.meta, id: 'cpkg-xuean-activity-asset' };
+    template.assets = [
+      {
+        id: 'reading-note',
+        filename: '阅读材料.md',
+        contentType: 'md',
+        base64: Buffer.from('# 阅读材料\n\n正文').toString('base64'),
+      },
+    ];
+    const reading = template.lesson.activities.find((activity) => activity.type === 'reading')!;
+    reading.config = { content: '# 阅读材料\n\n![示意图](${asset:reading-note})', url: '' };
+    // 首页块背景图必须与路由同口径收敛：只接受本实例上传文件 URL
+    template.lesson.blocks = [
+      { blockType: 'xuean_home', content: { intro: '首页简介', backgroundImage: 'javascript:alert(1)' } },
+    ];
+
+    const res = await fetch(baseUrl + '/api/course-packages/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...cookie(teacherToken) },
+      body: JSON.stringify({ package: template }),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    recordImport(body);
+    const lessonId = body.result.lessonId as string;
+
+    const activity = db
+      .prepare("SELECT config_json FROM lesson_activities WHERE lesson_id = ? AND type = 'reading'")
+      .get(lessonId) as { config_json: string };
+    const activityConfig = JSON.parse(activity.config_json);
+    expect(activityConfig.content).toContain('/api/files/');
+    expect(activityConfig.content).not.toContain('${asset:');
+
+    const block = db
+      .prepare("SELECT content_json FROM lesson_activity_blocks WHERE lesson_id = ? AND block_type = 'xuean_home'")
+      .get(lessonId) as { content_json: string };
+    expect(JSON.parse(block.content_json).backgroundImage).toBe('');
+
+    // 导出必须把 /api/files URL 逆向换回占位符并内联附件，否则学案包换实例就坏
+    const exported = await fetch(baseUrl + '/api/lessons/' + lessonId + '/export-package', {
+      headers: cookie(teacherToken),
+    });
+    expect(exported.status).toBe(200);
+    const pkg = await exported.json();
+    const exportedReading = (pkg.lesson.activities as Array<{ type: string; config?: { content?: string } }>).find(
+      (item) => item.type === 'reading',
+    );
+    expect(exportedReading?.config?.content).toContain('${asset:');
+    expect((pkg.assets as Array<{ filename: string }>).some((asset) => asset.filename === '阅读材料.md')).toBe(true);
   });
 
   it('round-trips a guided-study lesson through export and re-import', async () => {

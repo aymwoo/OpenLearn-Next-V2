@@ -199,10 +199,10 @@ CSV 表头可选增加 `mode`（也识别 `delivery_mode` / `课程模式` / `�
 
 `Block`（学案首页块，导入时写入 `lesson_activity_blocks`）：
 
-| 字段        | 类型   | 必填 | 说明                                                           |
-| ----------- | ------ | ---- | -------------------------------------------------------------- |
-| `blockType` | string | 是   | `xuean_home` / `learning_goals` / `resources` / `free_html` 等 |
-| `content`   | object | 否   | 块内容；`xuean_home` 为 `{ intro, backgroundImage }`           |
+| 字段        | 类型   | 必填 | 说明                                                                                                                   |
+| ----------- | ------ | ---- | ---------------------------------------------------------------------------------------------------------------------- |
+| `blockType` | string | 是   | `xuean_home` / `learning_goals` / `resources` / `free_html` 等                                                         |
+| `content`   | object | 否   | 块内容；`xuean_home` 为 `{ intro, backgroundImage }`，背景图只接受本实例上传文件 URL（`/api/files/*` 或 `/uploads/*`） |
 
 ### 2.4 `assets`
 
@@ -252,6 +252,7 @@ CSV 表头可选增加 `mode`（也识别 `delivery_mode` / `课程模式` / `�
 
 - 白板元素：`data.fileUrl = "${asset:asset-sample-handout}"`
 - 课程正文（Markdown）：图片写 `![示意图](${asset:img-1})`；下载链接则是普通超链接，把圆括号里的地址写成 `${asset:doc-1}`。
+- 学案活动 / 首页块：`activities[].config`、`activities[].rubric`、`blocks[].content` 里的字符串同样支持占位符（如阅读材料中的图片），导入时一并解析、导出时一并逆向替换。
 
 导入时，占位符会被替换成**导入方实例统一文件存储返回的** `/api/files/<assetId>`（旧数据里的 `/uploads/<随机名>.<ext>` 仍由 `file_aliases` 兼容读取）：
 

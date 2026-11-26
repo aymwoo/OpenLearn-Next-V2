@@ -37,7 +37,12 @@ import {
   type MaterializedAsset,
 } from './course-package-assets.js';
 import { resolveCoursePackageIdentity, type CoursePackageIdentity } from './course-package-identity.js';
-import { isSupportedElementType, type CoursePackage, type CoursePackageActivity } from './course-package.js';
+import {
+  isSupportedElementType,
+  type CoursePackage,
+  type CoursePackageActivity,
+  type CoursePackageBlock,
+} from './course-package.js';
 import { upsertLearningSurface, validateLearningContentRef } from './learning-surface-service.js';
 import { xueanActivityTypeForSegment } from '../../packages/core/plugin-host/course-delivery-mode.js';
 import { BUILTIN_XUEAN_MODE_PACK_ID } from '../../packages/core/plugin-host/mode-pack.js';
@@ -247,14 +252,43 @@ function toLearningSurfaceElement(
  * 包内显式声明 `lesson.activities` 时原样使用；学案包缺省时按 timeline 自动生成
  * （`xuean:preview` → 阅读、`xuean` → 作品提交、`xuean:drill` → 测验），
  * 与课程向导「环节即活动」的行为一致 —— 否则导入得到的是一节没有任何活动的空学案。
+ *
+ * 自动生成时把课程正文塞进阅读活动：学案学生端不渲染 `lessons.content`，
+ * 不这么做的话「CSV / 精简课程包只有正文」会变成一节学生什么都看不到的课。
  */
 function resolvePackageActivities(pkg: CoursePackage): CoursePackageActivity[] {
   if (pkg.lesson.activities.length > 0) return pkg.lesson.activities;
   if (pkg.lesson.deliveryMode !== 'xuean') return [];
-  return pkg.lesson.timeline.map((segment) => ({
-    type: xueanActivityTypeForSegment(segment.type),
-    title: segment.title,
-  }));
+  const content = (pkg.lesson.content ?? '').trim();
+  return pkg.lesson.timeline.map((segment) => {
+    const type = xueanActivityTypeForSegment(segment.type);
+    if (type === 'reading' && content) {
+      return { type, title: segment.title, config: { content } };
+    }
+    if (type === 'submission') {
+      return { type, title: segment.title, config: { acceptText: true, acceptLink: true } };
+    }
+    return { type, title: segment.title };
+  });
+}
+
+/**
+ * 学案首页块的内容约束。
+ *
+ * 与 `/api/lessons/:lessonId/blocks` 的 `parseBlock` 保持同一口径 —— 课程包导入
+ * 是另一条写库通道，不能因为它绕过了路由校验就放宽约束：`backgroundImage`
+ * 只接受本实例的上传文件 URL，`intro` 截断到 2000 字符。
+ */
+function normalizeBlockContent(
+  blockType: string,
+  content: Record<string, unknown> | undefined,
+): Record<string, unknown> | undefined {
+  if (blockType !== 'xuean_home') return content;
+  const raw = content ?? {};
+  const intro = typeof raw.intro === 'string' ? raw.intro.trim().slice(0, 2000) : '';
+  const rawBackground = typeof raw.backgroundImage === 'string' ? raw.backgroundImage.trim() : '';
+  const backgroundImage = /^(\/api\/files\/|\/uploads\/)/.test(rawBackground) ? rawBackground.slice(0, 500) : '';
+  return { intro, backgroundImage };
 }
 
 /**
@@ -333,8 +367,10 @@ export async function importCoursePackage(
       'VALUES (?, ?, ?, ?, ?, ?, ?)',
   );
 
-  const activities = resolvePackageActivities(pkg);
-  const blocks = pkg.lesson.blocks ?? [];
+  // 活动 / 首页块在 `try` 内组装：`config` 里的 `${asset:<id>}` 占位符
+  // 与元素、正文走同一套解析，引用缺失资产时同样整体失败并清理已落盘文件。
+  let activities: CoursePackageActivity[] = [];
+  let blocks: CoursePackageBlock[] = [];
 
   let elements: Array<{ type: string; data: string }> = [];
   try {
@@ -378,6 +414,26 @@ export async function importCoursePackage(
     // 教师可以在大纲里写 `![示意图](${asset:img-1})` 或 `[参考讲义](${asset:doc-1})`。
     // 此前这里直接写入原始占位符，导入后图片与下载链接都是坏的。
     const lessonContent = resolveAssetPlaceholders(pkg.lesson.content ?? '', materialized) as string;
+
+    // 学案活动 / 首页块：与正文、元素一样解析 `${asset:<id>}`（阅读材料里的
+    // 图片、首页背景图都可能是内嵌附件），再按块类型收敛首页块内容。
+    activities = resolvePackageActivities(pkg).map((activity) => {
+      const next: CoursePackageActivity = { ...activity };
+      if (activity.config) {
+        next.config = resolveAssetPlaceholders(activity.config, materialized) as Record<string, unknown>;
+      }
+      if (activity.rubric) {
+        next.rubric = resolveAssetPlaceholders(activity.rubric, materialized) as Record<string, unknown>;
+      }
+      return next;
+    });
+    blocks = (pkg.lesson.blocks ?? []).map((block) => {
+      const content = block.content
+        ? (resolveAssetPlaceholders(block.content, materialized) as Record<string, unknown>)
+        : undefined;
+      const normalized = normalizeBlockContent(block.blockType, content);
+      return { blockType: block.blockType, ...(normalized ? { content: normalized } : {}) };
+    });
 
     const write = db.transaction(() => {
       // 事务内再查一次：前面的预检查与真正写入之间存在时间窗口，

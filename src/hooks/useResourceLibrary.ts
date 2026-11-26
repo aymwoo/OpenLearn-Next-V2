@@ -239,11 +239,20 @@ export function useResourceLibrary(deps: {
       setImportStatus('success');
       setPackageDuplicate(null);
       await fetchLessons();
+      const summary = result.result;
+      const activityPart =
+        summary.deliveryMode === 'xuean'
+          ? lang === 'zh'
+            ? `${summary.activities ?? 0} 个学案活动、${summary.blocks ?? 0} 个首页块`
+            : `${summary.activities ?? 0} activities, ${summary.blocks ?? 0} home blocks`
+          : lang === 'zh'
+            ? `${summary.elements} 个白板元素`
+            : `${summary.elements} whiteboard elements`;
       addToast(
         lang === 'zh' ? '课程包导入成功' : 'Course package imported',
         lang === 'zh'
-          ? `已导入「${result.result.title}」：${result.result.segments} 个教学环节、${result.result.elements} 个白板元素、${result.result.assets} 份课件附件。`
-          : `Imported "${result.result.title}": ${result.result.segments} segments, ${result.result.elements} elements, ${result.result.assets} assets.`,
+          ? `已导入「${summary.title}」：${summary.segments} 个教学环节、${activityPart}、${summary.assets} 份课件附件。`
+          : `Imported "${summary.title}": ${summary.segments} segments, ${activityPart}, ${summary.assets} assets.`,
         'success',
       );
       return;

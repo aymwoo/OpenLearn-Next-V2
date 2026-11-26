@@ -7,6 +7,7 @@ import {
   normalizeLessonDeliveryMode,
   parseLessonCSV,
   parseAndImportClassesOrStudents,
+  submitCSVLessons,
 } from '../bulkImportService';
 
 describe('splitCsvLine', () => {
@@ -213,6 +214,67 @@ describe('downloadLessonCSVTemplate', () => {
     expect(records).toHaveLength(2);
     expect(splitCsvLine(records[0])[2]).toBe('whiteboard');
     expect(splitCsvLine(records[1])[2]).toBe('xuean');
+  });
+});
+
+describe('submitCSVLessons —— 学案模式补齐时间轴与活动', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  function mockFetch(calls: Array<{ url: string; body: string }>) {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+        const key = String(url);
+        calls.push({ url: key, body: typeof init?.body === 'string' ? init.body : '' });
+        if (key === '/api/lessons') {
+          return {
+            ok: true,
+            json: async () => ({ success: true, result: { lessonId: 'les_csv_xuean' } }),
+          } as unknown as Response;
+        }
+        return { ok: true, json: async () => ({}) } as unknown as Response;
+      }),
+    );
+  }
+
+  it('posts deliveryMode and puts the CSV content into the derived reading activity', async () => {
+    const calls: Array<{ url: string; body: string }> = [];
+    mockFetch(calls);
+
+    const result = await submitCSVLessons([{ title: '学案课', content: '# 预习正文', deliveryMode: 'xuean' }], {
+      lang: 'zh',
+      setImportProgress: vi.fn(),
+      fetchLessons: vi.fn(),
+    });
+
+    expect(result.success).toBe(true);
+    expect(JSON.parse(calls[0].body)).toMatchObject({ title: '学案课', deliveryMode: 'xuean' });
+
+    const timelineCall = calls.find((call) => call.url === '/api/lessons/les_csv_xuean/timeline');
+    expect(timelineCall).toBeDefined();
+    expect(JSON.parse(timelineCall!.body).timeline).toHaveLength(3);
+
+    const activityCalls = calls.filter((call) => call.url === '/api/lessons/les_csv_xuean/activities');
+    expect(activityCalls.map((call) => JSON.parse(call.body).type)).toEqual(['reading', 'submission', 'quiz']);
+    // 学案学生端不渲染 lessons.content：阅读活动必须携带 CSV 正文
+    expect(JSON.parse(activityCalls[0].body).config).toMatchObject({ content: '# 预习正文' });
+  });
+
+  it('does not seed timeline/activities for whiteboard rows', async () => {
+    const calls: Array<{ url: string; body: string }> = [];
+    mockFetch(calls);
+
+    await submitCSVLessons([{ title: '白板课', content: '正文', deliveryMode: 'whiteboard' }], {
+      lang: 'zh',
+      setImportProgress: vi.fn(),
+      fetchLessons: vi.fn(),
+    });
+
+    expect(calls).toHaveLength(1);
+    expect(JSON.parse(calls[0].body)).toMatchObject({ title: '白板课', deliveryMode: 'whiteboard' });
   });
 });
 

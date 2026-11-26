@@ -501,8 +501,12 @@ export function ImportLessonsModal(props: ImportLessonsModalProps) {
               <p className="text-xs text-muted mt-1 max-w-md mx-auto">
                 {packagePreview
                   ? lang === 'zh'
-                    ? `课程包已导入：${packagePreview.segments} 个教学环节、${packagePreview.elements} 个白板元素、${packagePreview.assets} 份课件附件均已写入。`
-                    : `Course package imported: ${packagePreview.segments} segments, ${packagePreview.elements} elements and ${packagePreview.assets} assets written.`
+                    ? packagePreview.deliveryMode === 'xuean'
+                      ? `课程包已导入：${packagePreview.segments} 个教学环节、${packagePreview.activities ?? 0} 个学案活动、${packagePreview.assets} 份课件附件均已写入。`
+                      : `课程包已导入：${packagePreview.segments} 个教学环节、${packagePreview.elements} 个白板元素、${packagePreview.assets} 份课件附件均已写入。`
+                    : packagePreview.deliveryMode === 'xuean'
+                      ? `Course package imported: ${packagePreview.segments} segments, ${packagePreview.activities ?? 0} activities and ${packagePreview.assets} assets written.`
+                      : `Course package imported: ${packagePreview.segments} segments, ${packagePreview.elements} elements and ${packagePreview.assets} assets written.`
                   : lang === 'zh'
                     ? `所有 ${previewImportData.length} 门学科教案数据已顺畅写入系统底层 SQLite 数据仓库，现在已可以用于备课。`
                     : `All ${previewImportData.length} curriculum lessons records have been successfully saved into security logs and SQLite storage.`}
