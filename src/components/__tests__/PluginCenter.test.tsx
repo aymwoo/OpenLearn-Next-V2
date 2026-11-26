@@ -29,7 +29,6 @@ describe('PluginCenter Sub-components', () => {
             },
           ]}
           lang="zh"
-          showSystemPlugins={false}
           marketMap={new Map()}
           checkingUpdateId={null}
           oneClickUpdatingId={null}
@@ -79,7 +78,6 @@ describe('PluginCenter Sub-components', () => {
             },
           ]}
           lang="zh"
-          showSystemPlugins={false}
           marketMap={new Map()}
           checkingUpdateId={null}
           oneClickUpdatingId={null}

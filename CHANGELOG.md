@@ -32,6 +32,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - **测评统计分布泄露主观题作答**：`getAssignmentStats` 只对单选 / 多选 / 判断题输出 `distribution`，填空、简答与未知插件题型不再以作答原文作为分布键。
 - **题型注册表订阅失效**：`useAssessmentQuestionTypes()` 使用稳定快照，插件题型激活后能立即出现在题库/组卷下拉与作答页。
 
+### Refactor / Performance
+
+- **插件中心移除「显示系统核心插件」开关**：发现页不再提供该系统核心插件显隐切换，插件列表始终展示全部已安装插件（含 `@openlearn/*` 核心插件），ZIP 安装入口保持不变。
+
 ### Breaking Changes
 
 - `AssessmentResultItemAddonProps` 改为与批改槽位同构的判别联合：标准答案与本人作答经 `sensitive` 注入，`item.answerKey` 已移除（运行时此前就未提供）。

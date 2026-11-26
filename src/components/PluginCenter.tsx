@@ -55,7 +55,6 @@ export function PluginCenter({
   handlePurgeOrphanData?: (item: OrphanDataItem) => Promise<void> | void;
   handleDownloadOrphanArchive?: (item: OrphanDataItem) => void;
 }) {
-  const [showSystemPlugins, setShowSystemPlugins] = useState(false);
   const [dismissMigration, setDismissMigration] = useState(false);
   const [selectedZipFile, setSelectedZipFile] = useState<File | null>(null);
   const [updateTargetPluginId, setUpdateTargetPluginId] = useState<string | null>(null);
@@ -409,16 +408,6 @@ export function PluginCenter({
 
             {storeTab === 'store' && (
               <div className="flex items-center gap-3">
-                <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-gray-500 hover:text-gray-900 select-none transition-colors border border-gray-200 rounded-lg px-3 py-1.5 bg-gray-50/50 shadow-sm">
-                  <input
-                    type="checkbox"
-                    checked={showSystemPlugins}
-                    onChange={(e) => setShowSystemPlugins(e.target.checked)}
-                    className="w-3.5 h-3.5 rounded text-indigo-600 border-gray-300 focus:ring-indigo-500 cursor-pointer"
-                  />
-                  <span>{lang === 'zh' ? '显示系统核心插件' : 'Show System Core Plugins'}</span>
-                </label>
-
                 <button
                   type="button"
                   className={`flex items-center gap-1.5 cursor-pointer text-xs font-semibold select-none transition-colors border rounded-lg px-3 py-1.5 shadow-sm ${
@@ -473,7 +462,6 @@ export function PluginCenter({
               plugins={plugins}
               lang={lang}
               isAdmin={isAdmin}
-              showSystemPlugins={showSystemPlugins}
               marketMap={mergedMarketMap}
               checkingUpdateId={checkingUpdateId}
               oneClickUpdatingId={oneClickUpdatingId}
