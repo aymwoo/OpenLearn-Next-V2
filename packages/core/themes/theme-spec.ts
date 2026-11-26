@@ -133,6 +133,10 @@ export interface ThemeAppearanceOverrides {
   borderRadius?: ThemeBorderRadius;
   density?: ThemeDensity;
   fontScale?: number;
+  /** 全局弹窗背景色（十六进制），覆盖所有 `dialog.openlearn-dialog` 的 `--ol-dialog-bg` */
+  dialogBackgroundColor?: string;
+  /** 全局弹窗圆角档位，覆盖所有 `dialog.openlearn-dialog` 的 `--ol-dialog-radius` */
+  dialogBorderRadius?: ThemeBorderRadius;
 }
 
 export interface ValidatedThemeBundle {
@@ -736,6 +740,20 @@ export function buildRuntimeThemeCss(
     effectiveTokens['--color-primary'] = primaryOverride;
     effectiveTokens['--primary-solid'] = primaryOverride;
     effectiveTokens['--primary-ink'] = primaryOverride;
+  }
+
+  // 全局弹窗外观覆盖：与单实例 props 保持一致，自定义底色下标题栏/底栏让位
+  const dialogBackgroundOverride = sanitizeHexColor(overrides.dialogBackgroundColor);
+  if (dialogBackgroundOverride) {
+    effectiveTokens['--ol-dialog-bg'] = dialogBackgroundOverride;
+    effectiveTokens['--ol-dialog-surface-image'] = 'none';
+    effectiveTokens['--ol-dialog-header-bg'] = 'transparent';
+    effectiveTokens['--ol-dialog-footer-bg'] = 'transparent';
+    effectiveTokens['--ol-dialog-header-image'] = 'none';
+  }
+  const dialogRadius = overrides.dialogBorderRadius ? radiusCardMap[overrides.dialogBorderRadius] : undefined;
+  if (dialogRadius) {
+    effectiveTokens['--ol-dialog-radius'] = dialogRadius;
   }
 
   const fontFaceBlocks: string[] = [];

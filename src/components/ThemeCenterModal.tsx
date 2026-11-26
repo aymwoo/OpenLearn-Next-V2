@@ -391,6 +391,60 @@ export function ThemeCenterModal({ isOpen, onClose, lang = 'zh', isAdmin = false
                 />
               </label>
             </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 pt-3 mt-3 border-t border-theme-subtle text-xs">
+              <label className="space-y-1">
+                <span className="text-muted font-medium block">
+                  {lang === 'zh' ? '弹窗背景色覆盖' : 'Dialog Background'}
+                </span>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="color"
+                    aria-label={lang === 'zh' ? '弹窗背景色覆盖' : 'Dialog background color override'}
+                    value={appearanceOverrides.dialogBackgroundColor || '#ffffff'}
+                    onChange={(e) =>
+                      void setAppearanceOverrides({ ...appearanceOverrides, dialogBackgroundColor: e.target.value })
+                    }
+                    className="h-8 w-10 rounded border border-theme bg-surface cursor-pointer"
+                  />
+                  {appearanceOverrides.dialogBackgroundColor && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const next = { ...appearanceOverrides };
+                        delete next.dialogBackgroundColor;
+                        void setAppearanceOverrides(next);
+                      }}
+                      className="text-xs text-muted hover:text-main underline cursor-pointer"
+                    >
+                      {lang === 'zh' ? '清除' : 'Clear'}
+                    </button>
+                  )}
+                </div>
+              </label>
+
+              <label className="space-y-1">
+                <span className="text-muted font-medium block">
+                  {lang === 'zh' ? '弹窗圆角' : 'Dialog Corner Radius'}
+                </span>
+                <select
+                  value={appearanceOverrides.dialogBorderRadius || ''}
+                  onChange={(e) => {
+                    const val = e.target.value as ThemeBorderRadius | '';
+                    const next = { ...appearanceOverrides };
+                    if (val) next.dialogBorderRadius = val;
+                    else delete next.dialogBorderRadius;
+                    void setAppearanceOverrides(next);
+                  }}
+                  className="w-full px-2.5 py-1.5 rounded-lg border border-theme bg-surface text-main text-xs"
+                >
+                  <option value="">{lang === 'zh' ? '跟随组件圆角' : 'Follow Component Radius'}</option>
+                  <option value="sharp">{lang === 'zh' ? '利落直角 (sharp)' : 'Sharp'}</option>
+                  <option value="rounded">{lang === 'zh' ? '标准圆角 (rounded)' : 'Rounded'}</option>
+                  <option value="pill">{lang === 'zh' ? '柔和胶囊 (pill)' : 'Pill'}</option>
+                </select>
+              </label>
+            </div>
           </section>
 
           {/* Install Third-Party ZIP Package */}

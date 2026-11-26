@@ -175,26 +175,36 @@
     overscroll-behavior: contain;
   }
   dialog.openlearn-dialog {
+    /* 显式钉在视口层并居中：不依赖各浏览器 UA 对 <dialog> 的
+       position / height 推断。height: fit-content + 上下 auto 外边距，
+       让面板在内容不足一屏时垂直居中，内容超高时再由 max-height 收敛。 */
+    position: fixed;
+    inset: 0;
+    height: fit-content;
     margin: auto;
     padding: 0;
     width: calc(100% - 2rem);
-    max-width: calc(100vw - 2rem);
+    /* 默认给一个对话框宽度上限：不传 max-w-* 的调用方也不会横跨整屏 */
+    max-width: min(var(--ol-dialog-max-width), calc(100vw - 2rem));
     max-height: calc(100dvh - 2rem);
     background-color: var(--ol-dialog-bg);
     background-image: var(--ol-dialog-surface-image, none);
+    background-repeat: no-repeat;
     color: var(--ol-dialog-body-fg);
     border: var(--ol-dialog-border-width) solid var(--ol-dialog-border-color);
     border-radius: var(--ol-dialog-radius);
-    box-shadow: var(--ol-dialog-shadow);
+    box-shadow:
+      inset 0 1px 0 var(--ol-dialog-inset-highlight),
+      var(--ol-dialog-shadow);
     opacity: 0;
     transition-property: opacity, transform, display, overlay;
-    transition-duration: 0.2s;
-    transition-timing-function: ease-out;
+    transition-duration: 0.22s;
+    transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
     transition-behavior: allow-discrete;
   }
   @media (prefers-reduced-motion: no-preference) {
     dialog.openlearn-dialog {
-      transform: scale(0.96);
+      transform: translateY(0.5rem) scale(0.97);
     }
   }
   dialog.openlearn-dialog[open] {
@@ -207,19 +217,19 @@
     }
 
     @media (prefers-reduced-motion: no-preference) {
-      transform: scale(1);
+      transform: translateY(0) scale(1);
 
       @starting-style {
-        transform: scale(0.96);
+        transform: translateY(0.5rem) scale(0.97);
       }
     }
   }
   dialog.openlearn-dialog::backdrop {
     background-color: transparent;
-    backdrop-filter: blur(var(--ol-dialog-backdrop-blur));
+    backdrop-filter: blur(var(--ol-dialog-backdrop-blur)) saturate(1.08);
     transition-property: background-color, display, overlay;
-    transition-duration: 0.2s;
-    transition-timing-function: ease-out;
+    transition-duration: 0.22s;
+    transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
     transition-behavior: allow-discrete;
   }
   dialog.openlearn-dialog[open]::backdrop {
@@ -350,29 +360,41 @@
    docs/architecture/theming-system.md「Dialog 主题契约」一节。 */
 :root {
   --ol-dialog-bg: var(--bg-surface-elevated);
-  --ol-dialog-surface-image: none;
+  /* 面板顶部一层极淡的主色光晕，避免大块纯色显得平板；主题可置为 none */
+  --ol-dialog-surface-image: radial-gradient(
+    120% 64% at 50% 0%,
+    color-mix(in srgb, var(--color-primary) 6%, transparent),
+    transparent 62%
+  );
+  --ol-dialog-max-width: 34rem;
   --ol-dialog-border-color: var(--border-theme);
   --ol-dialog-border-width: 1px;
   --ol-dialog-radius: var(--ol-radius-card, 1rem);
   --ol-dialog-control-radius: var(--ol-radius-control, 0.75rem);
-  --ol-dialog-shadow: 0 28px 70px -24px rgb(15 23 42 / 0.35), 0 10px 28px -16px rgb(15 23 42 / 0.22);
+  --ol-dialog-shadow: 0 30px 80px -28px rgb(15 23 42 / 0.4), 0 12px 32px -18px rgb(15 23 42 / 0.24);
+  --ol-dialog-inset-highlight: rgb(255 255 255 / 0.7);
   --ol-dialog-backdrop: rgb(15 23 42 / 0.52);
   --ol-dialog-backdrop-blur: 6px;
-  --ol-dialog-header-bg: var(--bg-surface-secondary);
+  --ol-dialog-header-bg: color-mix(in srgb, var(--bg-surface-secondary) 55%, var(--bg-surface-elevated));
+  --ol-dialog-header-image: linear-gradient(
+    180deg,
+    var(--ol-dialog-header-bg),
+    color-mix(in srgb, var(--ol-dialog-header-bg) 28%, var(--ol-dialog-bg))
+  );
   --ol-dialog-header-fg: var(--text-main);
-  --ol-dialog-footer-bg: var(--bg-surface-secondary);
+  --ol-dialog-footer-bg: color-mix(in srgb, var(--bg-surface-secondary) 70%, var(--bg-surface-elevated));
   --ol-dialog-divider: var(--border-theme-subtle);
   --ol-dialog-body-fg: var(--text-main);
   --ol-dialog-title-fg: var(--text-main);
-  --ol-dialog-title-size: 1rem;
+  --ol-dialog-title-size: 1.0625rem;
   --ol-dialog-title-weight: 700;
-  --ol-dialog-padding-x: 1.25rem;
-  --ol-dialog-padding-y: 1rem;
-  --ol-dialog-body-padding-x: 1.25rem;
+  --ol-dialog-padding-x: 1.375rem;
+  --ol-dialog-padding-y: 1.125rem;
+  --ol-dialog-body-padding-x: 1.375rem;
   --ol-dialog-body-padding-y: 1.25rem;
-  --ol-dialog-footer-padding-x: 1.25rem;
-  --ol-dialog-footer-padding-y: 0.875rem;
-  --ol-dialog-gap: 0.75rem;
+  --ol-dialog-footer-padding-x: 1.375rem;
+  --ol-dialog-footer-padding-y: 1rem;
+  --ol-dialog-gap: 0.875rem;
   --ol-dialog-accent: var(--color-primary);
   --ol-dialog-icon-radius: var(--ol-radius-control, 0.75rem);
   --ol-dialog-icon-bg: var(--color-primary-light);
@@ -384,13 +406,14 @@
 }
 
 /* 深色类主题：阴影更沉、遮罩更暗，避免浅色投影在暗底「发灰」；
-   标题/底栏带一点主色晕染，在深色面上拉开层次。 */
+   标题/底栏只保留很轻的主色晕染，避免大面积紫蓝色块显得脏。 */
 [data-theme='dark'],
 [data-theme='chalkboard'] {
+  --ol-dialog-inset-highlight: rgb(255 255 255 / 0.06);
   --ol-dialog-shadow: 0 32px 90px -20px rgb(0 0 0 / 0.75), 0 12px 36px -18px rgb(0 0 0 / 0.6);
   --ol-dialog-backdrop: rgb(2 6 23 / 0.68);
-  --ol-dialog-header-bg: color-mix(in srgb, var(--bg-surface-elevated) 78%, var(--color-primary) 22%);
-  --ol-dialog-footer-bg: color-mix(in srgb, var(--bg-surface-elevated) 86%, var(--color-primary) 14%);
+  --ol-dialog-header-bg: color-mix(in srgb, var(--bg-surface-elevated) 92%, var(--color-primary) 8%);
+  --ol-dialog-footer-bg: color-mix(in srgb, var(--bg-surface-elevated) 95%, var(--color-primary) 5%);
 }
 
 /* ── Dialog 统一视觉系统（结构层）──────────────────────────────────────
@@ -413,6 +436,7 @@
     padding: var(--ol-dialog-padding-y) var(--ol-dialog-padding-x);
     color: var(--ol-dialog-header-fg);
     background-color: var(--ol-dialog-header-bg);
+    background-image: var(--ol-dialog-header-image, none);
     border-bottom: 1px solid var(--ol-dialog-divider);
     border-start-start-radius: var(--ol-dialog-radius);
     border-start-end-radius: var(--ol-dialog-radius);
@@ -420,7 +444,19 @@
 
   .ol-dialog-header[data-variant='plain'] {
     background-color: transparent;
+    background-image: none;
     border-bottom-color: transparent;
+  }
+
+  /* 单实例自定义底色：去掉主题预置光晕，标题栏/底栏让位给统一底色 */
+  dialog.openlearn-dialog[data-dialog-surface='custom'] {
+    background-image: none;
+  }
+
+  dialog.openlearn-dialog[data-dialog-surface='custom'] .ol-dialog-header,
+  dialog.openlearn-dialog[data-dialog-surface='custom'] .ol-dialog-footer {
+    background-color: transparent;
+    background-image: none;
   }
 
   .ol-dialog-title {
@@ -429,8 +465,8 @@
     color: var(--ol-dialog-title-fg);
     font-size: var(--ol-dialog-title-size);
     font-weight: var(--ol-dialog-title-weight);
-    line-height: 1.3;
-    letter-spacing: -0.01em;
+    line-height: 1.35;
+    letter-spacing: -0.012em;
   }
 
   .ol-dialog-title-text {
@@ -440,7 +476,7 @@
   }
 
   .ol-dialog-description {
-    margin: 0.125rem 0 0;
+    margin: 0.1875rem 0 0;
     color: var(--text-muted);
     font-size: 0.8125rem;
     line-height: 1.5;
@@ -474,12 +510,13 @@
     flex-shrink: 0;
     align-items: center;
     justify-content: center;
-    width: 2.5rem;
-    height: 2.5rem;
+    width: 2.625rem;
+    height: 2.625rem;
     color: var(--ol-dialog-icon-fg);
     background-color: var(--ol-dialog-icon-bg);
     border: 1px solid var(--ol-dialog-icon-border);
     border-radius: var(--ol-dialog-icon-radius);
+    box-shadow: inset 0 1px 0 var(--ol-dialog-inset-highlight);
   }
 
   .ol-dialog-icon[data-variant='danger'] {
@@ -555,9 +592,9 @@
   }
 
   .ol-dialog-section {
-    padding: 0.875rem;
-    background-color: var(--bg-surface-secondary);
-    border: 1px solid var(--border-theme);
+    padding: 0.875rem 1rem;
+    background-color: color-mix(in srgb, var(--bg-surface-secondary) 62%, transparent);
+    border: 1px solid var(--border-theme-subtle);
     border-radius: var(--ol-dialog-control-radius);
   }
 
@@ -566,10 +603,11 @@
     align-items: center;
     justify-content: center;
     gap: 0.375rem;
-    padding: 0.5rem 0.875rem;
+    min-height: 2.25rem;
+    padding: 0.5rem 1rem;
     color: var(--text-main);
     font-size: 0.8125rem;
-    font-weight: 700;
+    font-weight: 600;
     line-height: 1.2;
     white-space: nowrap;
     background-color: transparent;
@@ -580,7 +618,12 @@
       background-color 150ms ease,
       border-color 150ms ease,
       color 150ms ease,
-      box-shadow 150ms ease;
+      box-shadow 150ms ease,
+      transform 120ms ease;
+  }
+
+  .ol-dialog-btn:active:not(:disabled) {
+    transform: translateY(1px);
   }
 
   .ol-dialog-btn:focus-visible {
@@ -597,10 +640,12 @@
     color: var(--text-main);
     background-color: var(--bg-surface);
     border-color: var(--border-theme);
+    box-shadow: 0 1px 2px rgb(15 23 42 / 0.06);
   }
 
   .ol-dialog-btn[data-variant='secondary']:hover:not(:disabled) {
     background-color: var(--bg-surface-secondary);
+    border-color: color-mix(in srgb, var(--border-theme) 72%, var(--text-muted));
   }
 
   .ol-dialog-btn[data-variant='ghost'] {
@@ -615,7 +660,10 @@
   .ol-dialog-btn[data-variant='primary'] {
     color: var(--color-primary-text);
     background-color: var(--primary-solid);
-    box-shadow: 0 8px 20px -10px color-mix(in srgb, var(--primary-solid) 70%, transparent);
+    background-image: linear-gradient(180deg, rgb(255 255 255 / 0.14), transparent 62%);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.22),
+      0 10px 22px -12px color-mix(in srgb, var(--primary-solid) 85%, transparent);
   }
 
   .ol-dialog-btn[data-variant='primary']:hover:not(:disabled) {
@@ -625,7 +673,10 @@
   .ol-dialog-btn[data-variant='danger'] {
     color: #ffffff;
     background-color: #dc2626;
-    box-shadow: 0 8px 20px -10px rgb(220 38 38 / 0.55);
+    background-image: linear-gradient(180deg, rgb(255 255 255 / 0.14), transparent 62%);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.2),
+      0 10px 22px -12px rgb(220 38 38 / 0.6);
   }
 
   .ol-dialog-btn[data-variant='danger']:hover:not(:disabled) {
@@ -635,7 +686,10 @@
   .ol-dialog-btn[data-variant='warning'] {
     color: #ffffff;
     background-color: #b45309;
-    box-shadow: 0 8px 20px -10px rgb(180 83 9 / 0.5);
+    background-image: linear-gradient(180deg, rgb(255 255 255 / 0.14), transparent 62%);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.2),
+      0 10px 22px -12px rgb(180 83 9 / 0.55);
   }
 
   .ol-dialog-btn[data-variant='warning']:hover:not(:disabled) {

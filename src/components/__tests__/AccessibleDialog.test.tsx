@@ -287,4 +287,40 @@ describe('AccessibleDialog design-system primitives', () => {
     expect(confirm.className).toContain('ol-dialog-btn');
     expect(confirm.getAttribute('data-variant')).toBe('primary');
   });
+
+  it('applies per-instance background color and radius overrides', () => {
+    const { container } = render(
+      <AccessibleDialog
+        open
+        onClose={vi.fn()}
+        ariaLabel="Custom surface"
+        backgroundColor="#fff7ed"
+        borderRadius="1.5rem"
+        style={{ color: 'rgb(120, 53, 15)' }}
+      >
+        <DialogBody>Custom surface</DialogBody>
+      </AccessibleDialog>,
+    );
+
+    const dialog = container.querySelector<HTMLDialogElement>('dialog.openlearn-dialog');
+    expect(dialog).not.toBeNull();
+    expect(dialog?.style.getPropertyValue('--ol-dialog-bg')).toBe('#fff7ed');
+    expect(dialog?.style.getPropertyValue('--ol-dialog-radius')).toBe('1.5rem');
+    expect(dialog?.getAttribute('data-dialog-surface')).toBe('custom');
+    // 调用方传入的普通内联样式保持不变
+    expect(dialog?.style.color).toBe('rgb(120, 53, 15)');
+  });
+
+  it('does not mark the surface as custom without an explicit background color', () => {
+    const { container } = render(
+      <AccessibleDialog open onClose={vi.fn()} ariaLabel="Default surface" borderRadius="0.5rem">
+        <DialogBody>Default surface</DialogBody>
+      </AccessibleDialog>,
+    );
+
+    const dialog = container.querySelector<HTMLDialogElement>('dialog.openlearn-dialog');
+    expect(dialog).not.toBeNull();
+    expect(dialog?.getAttribute('data-dialog-surface')).toBeNull();
+    expect(dialog?.style.getPropertyValue('--ol-dialog-radius')).toBe('0.5rem');
+  });
 });

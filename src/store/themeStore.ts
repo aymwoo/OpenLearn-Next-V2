@@ -7,6 +7,7 @@ import {
   buildRuntimeThemeCss,
   isBuiltinThemeId,
   resolveSafeLayouts,
+  sanitizeHexColor,
   type ResolvedThemeLayouts,
   type ThemeAppearanceOverrides,
   type ThemeColorMode,
@@ -269,6 +270,12 @@ function writeAnonymousBrowserAppearance(snapshot: BrowserAppearanceSnapshot): v
         ...(snapshot.appearanceOverrides?.fontScale !== undefined
           ? { fontScale: snapshot.appearanceOverrides.fontScale }
           : {}),
+        ...(snapshot.appearanceOverrides?.dialogBackgroundColor
+          ? { dialogBackgroundColor: snapshot.appearanceOverrides.dialogBackgroundColor }
+          : {}),
+        ...(snapshot.appearanceOverrides?.dialogBorderRadius
+          ? { dialogBorderRadius: snapshot.appearanceOverrides.dialogBorderRadius }
+          : {}),
       },
     };
     localStorage.setItem(BROWSER_APPEARANCE_STORAGE_KEY, JSON.stringify(clean));
@@ -317,6 +324,12 @@ function clearDocumentOverrides(): void {
     '--ol-font-display',
     '--ol-font-mono',
     '--ol-shadow-card',
+    '--ol-dialog-bg',
+    '--ol-dialog-radius',
+    '--ol-dialog-surface-image',
+    '--ol-dialog-header-bg',
+    '--ol-dialog-header-image',
+    '--ol-dialog-footer-bg',
   ]) {
     style.removeProperty(prop);
   }
@@ -383,6 +396,28 @@ function applyThemeAndOverridesToDOM(
       }
       if (overrides.fontScale) {
         document.documentElement.style.setProperty('--ol-font-scale', String(overrides.fontScale));
+      }
+      // 全局弹窗外观覆盖：内置主题直接落到 :root，与单实例 props 的视觉行为一致
+      const dialogBackground = sanitizeHexColor(overrides.dialogBackgroundColor);
+      if (dialogBackground) {
+        const rootStyle = document.documentElement.style;
+        rootStyle.setProperty('--ol-dialog-bg', dialogBackground);
+        rootStyle.setProperty('--ol-dialog-surface-image', 'none');
+        rootStyle.setProperty('--ol-dialog-header-bg', 'transparent');
+        rootStyle.setProperty('--ol-dialog-header-image', 'none');
+        rootStyle.setProperty('--ol-dialog-footer-bg', 'transparent');
+        effectiveTokens['--ol-dialog-bg'] = dialogBackground;
+        effectiveTokens['--ol-dialog-surface-image'] = 'none';
+        effectiveTokens['--ol-dialog-header-bg'] = 'transparent';
+        effectiveTokens['--ol-dialog-header-image'] = 'none';
+        effectiveTokens['--ol-dialog-footer-bg'] = 'transparent';
+      }
+      const dialogRadius = overrides.dialogBorderRadius
+        ? OVERRIDE_RADIUS_CARD[overrides.dialogBorderRadius]
+        : undefined;
+      if (dialogRadius) {
+        document.documentElement.style.setProperty('--ol-dialog-radius', dialogRadius);
+        effectiveTokens['--ol-dialog-radius'] = dialogRadius;
       }
     }
 

@@ -242,13 +242,22 @@ describe('第三方主题包校验、目录共享、账号隔离与治理 (Issue
       body: JSON.stringify({
         themeId: 'aurora-edu',
         mode: 'dark',
-        appearanceOverrides: { primaryColor: '#14b8a6', borderRadius: 'pill', density: 'spacious', fontScale: 1.1 },
+        appearanceOverrides: {
+          primaryColor: '#14b8a6',
+          borderRadius: 'pill',
+          density: 'spacious',
+          fontScale: 1.1,
+          dialogBackgroundColor: '#fff7ed',
+          dialogBorderRadius: 'rounded',
+        },
       }),
     });
     expect(applyB.status).toBe(200);
     const stateB = await applyB.json();
     expect(stateB.themeId).toBe('aurora-edu');
     expect(stateB.installedVersion).toBe('1.0.0');
+    expect(stateB.appearanceOverrides.dialogBackgroundColor).toBe('#fff7ed');
+    expect(stateB.appearanceOverrides.dialogBorderRadius).toBe('rounded');
 
     // Teacher A remains isolated on default light
     const stateA = await (await fetch(`${baseUrl}/api/themes/me`, { headers: cookie(tokTeacherA) })).json();
