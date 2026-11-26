@@ -1,3 +1,5 @@
+import { xueanActivityTypeForSegment } from '../../packages/core/plugin-host/course-delivery-mode';
+
 /** 归一化后的学生导入行（与后端 `RosterImportInput` 字段一一对应） */
 export interface ParsedStudent {
   name: string;
@@ -7,6 +9,33 @@ export interface ParsedStudent {
   private_notes: string;
   /** 性别（男/女 或 male/female）；空串表示未提供，服务端落 NULL */
   gender: string;
+}
+
+/** 课程交付模式（与 `lessons.delivery_mode` 对齐）。 */
+export type LessonDeliveryMode = 'whiteboard' | 'xuean';
+
+/** 课程 CSV 的一行。 */
+export interface ParsedLessonRow {
+  title: string;
+  content: string;
+  /** 交付模式；未写 `mode` 列或值无法识别时省略（服务端按白板处理）。 */
+  deliveryMode?: LessonDeliveryMode;
+}
+
+/**
+ * 把 CSV 的「模式」列归一化成交付模式。
+ *
+ * 兼容中英文与常见写法；无法识别时返回 undefined（而不是猜一个），
+ * 让服务端按既有的白板缺省口径处理。
+ */
+export function normalizeLessonDeliveryMode(raw: string | null | undefined): LessonDeliveryMode | undefined {
+  const value = String(raw ?? '')
+    .trim()
+    .toLowerCase();
+  if (!value) return undefined;
+  if (['xuean', '学案', '学案式', '导学案', 'guided study', 'study'].includes(value)) return 'xuean';
+  if (['whiteboard', 'board', 'interactive whiteboard', '白板', '互动白板'].includes(value)) return 'whiteboard';
+  return undefined;
 }
 
 /**
@@ -268,6 +297,51 @@ export function downloadCSVTemplate(type: 'class' | 'student', lang: 'zh' | 'en'
   URL.revokeObjectURL(url);
 }
 
+/**
+ * 下载课程批量导入的 CSV 模板。
+ *
+ * 与班级/学生模板不同，课程 CSV 只有三列：课程标题、教学大纲、课程模式。
+ * `mode` 列可留空（按白板处理），也可写 `whiteboard` / `xuean`（或「白板」/「学案」）——
+ * 学案课导入后会自动生成「预习 / 研读 / 练习」三个环节与对应活动。
+ */
+export function downloadLessonCSVTemplate(lang: 'zh' | 'en') {
+  const zh = lang === 'zh';
+  const headers = csvRow([
+    zh ? '课程标题' : 'Title',
+    zh ? '课程内容' : 'Content',
+    zh ? '课程模式 (whiteboard/xuean)' : 'Delivery Mode (whiteboard/xuean)',
+  ]);
+  const sampleRows = [
+    csvRow([
+      zh ? '【白板】一次函数的图像' : '[Whiteboard] Linear Functions',
+      zh
+        ? '## 教学目标\n\n- 理解一次函数图像的斜率与截距\n- 能在白板上画出图像'
+        : '## Objectives\n\n- Understand slope and intercept\n- Draw the graph on the whiteboard',
+      'whiteboard',
+    ]),
+    csvRow([
+      zh ? '【学案】勾股定理预习' : '[Guided Study] Pythagorean Theorem',
+      zh
+        ? '## 预习目标\n\n- 阅读教材并记录疑问\n- 完成「预习 / 研读 / 练习」三个活动'
+        : '## Preview\n\n- Read the material and note questions\n- Complete preview, study and practice activities',
+      'xuean',
+    ]),
+  ];
+
+  const filename = zh ? '课程批量导入模板.csv' : 'course_import_template.csv';
+  const blob = new Blob(['\uFEFF' + headers + '\n' + sampleRows.join('\n') + '\n'], {
+    type: 'text/csv;charset=utf-8;',
+  });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.setAttribute('download', filename);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
 export async function parseAndImportClassesOrStudents(
   file: File,
   options: {
@@ -515,7 +589,7 @@ export async function parseAndImportClassesOrStudents(
   });
 }
 
-export function parseLessonCSV(file: File, lang: 'zh' | 'en'): Promise<{ title: string; content: string }[]> {
+export function parseLessonCSV(file: File, lang: 'zh' | 'en'): Promise<ParsedLessonRow[]> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = (event) => {
@@ -541,6 +615,17 @@ export function parseLessonCSV(file: File, lang: 'zh' | 'en'): Promise<{ title: 
         const contentIndex = headers.findIndex(
           (h) => h.includes('content') || h.includes('内容') || h.includes('正文'),
         );
+        // 交付模式列是可选列：旧模板（只有 title + content）继续按白板导入。
+        const modeIndex = findHeaderIdx(headers, [
+          'delivery_mode',
+          'deliverymode',
+          'delivery mode',
+          'mode',
+          '课程模式',
+          '授课模式',
+          '课程类型',
+          '模式',
+        ]);
 
         if (titleIndex === -1 || contentIndex === -1) {
           throw new Error(
@@ -557,7 +642,7 @@ export function parseLessonCSV(file: File, lang: 'zh' | 'en'): Promise<{ title: 
         // 教师看到的是「导入了，但内容少了一截」。
         const records = splitCsvRecords(lines.slice(1));
 
-        const parsedList: { title: string; content: string }[] = [];
+        const parsedList: ParsedLessonRow[] = [];
         for (const record of records) {
           if (!record.trim()) continue;
 
@@ -566,7 +651,8 @@ export function parseLessonCSV(file: File, lang: 'zh' | 'en'): Promise<{ title: 
           const content = cells[contentIndex]?.trim();
 
           if (title && content) {
-            parsedList.push({ title, content });
+            const deliveryMode = modeIndex === -1 ? undefined : normalizeLessonDeliveryMode(cells[modeIndex]);
+            parsedList.push({ title, content, ...(deliveryMode ? { deliveryMode } : {}) });
           }
         }
 
@@ -588,8 +674,55 @@ export function parseLessonCSV(file: File, lang: 'zh' | 'en'): Promise<{ title: 
   });
 }
 
+/** CSV 学案课导入时自动生成的默认环节（与课程向导的「预习-研读-练习」一致）。 */
+function defaultXueanTimeline(lang: 'zh' | 'en') {
+  const zh = lang === 'zh';
+  return [
+    { id: 'seg-xuean-preview', title: zh ? '预习' : 'Preview', type: 'xuean:preview', duration: '10m', notes: '' },
+    { id: 'seg-xuean-study', title: zh ? '研读' : 'Study', type: 'xuean', duration: '20m', notes: '' },
+    { id: 'seg-xuean-drill', title: zh ? '练习' : 'Practice', type: 'xuean:drill', duration: '15m', notes: '' },
+  ];
+}
+
+/**
+ * 给 CSV 导入的学案课补齐「时间轴 + 活动」。
+ *
+ * CSV 只有标题与正文；学案课的推进单位是活动，因此写入默认三环节并为每个
+ * 环节生成对应活动（预习→阅读、研读→作品提交、练习→测验），与课程向导
+ * 创建学案课的行为保持一致。补齐失败只告警：课程本身已经成功落库。
+ */
+async function seedCsvXueanLesson(lessonId: string, lang: 'zh' | 'en'): Promise<void> {
+  const timeline = defaultXueanTimeline(lang);
+  try {
+    const timelineRes = await fetch(`/api/lessons/${lessonId}/timeline`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ timeline }),
+    });
+    if (!timelineRes.ok) {
+      console.warn('[bulk-import] 学案时间轴写入失败:', await timelineRes.text());
+      return;
+    }
+    for (const segment of timeline) {
+      const res = await fetch(`/api/lessons/${lessonId}/activities`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: xueanActivityTypeForSegment(segment.type),
+          title: segment.title,
+        }),
+      });
+      if (!res.ok) {
+        console.warn('[bulk-import] 学案活动写入失败:', await res.text());
+      }
+    }
+  } catch (err) {
+    console.warn('[bulk-import] 学案课初始化失败（课程已创建）:', err);
+  }
+}
+
 export async function submitCSVLessons(
-  previewImportData: { title: string; content: string }[],
+  previewImportData: ParsedLessonRow[],
   options: {
     lang: 'zh' | 'en';
     setImportProgress: (n: number) => void;
@@ -608,11 +741,19 @@ export async function submitCSVLessons(
         body: JSON.stringify({
           title: item.title,
           content: item.content,
+          ...(item.deliveryMode ? { deliveryMode: item.deliveryMode } : {}),
         }),
       });
 
       if (response.ok) {
         succeeded++;
+        if (item.deliveryMode === 'xuean') {
+          const body = await response.json().catch(() => null);
+          const lessonId = body?.result?.lessonId;
+          if (typeof lessonId === 'string' && lessonId) {
+            await seedCsvXueanLesson(lessonId, lang);
+          }
+        }
       } else {
         const errData = await response.json();
         console.warn(`Failed to import item ${i + 1}:`, errData);

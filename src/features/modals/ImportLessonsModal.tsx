@@ -9,16 +9,19 @@ import AccessibleDialog, {
   DialogTitle,
 } from '../../components/AccessibleDialog';
 import { AccessibleTableRegion } from '../../components/AccessibleTableRegion';
-import type { CoursePackagePreview, CoursePackageDuplicate } from '../../services/coursePackageService';
+import type {
+  CoursePackagePreview,
+  CoursePackageDuplicate,
+  CourseDeliveryMode,
+} from '../../services/coursePackageService';
+import type { ParsedLessonRow } from '../../services/bulkImportService';
 import { COURSE_PACKAGE_MAX_FILE_BYTES } from '../../services/coursePackageService';
 
 /** 导入框承诺的文件体积上限（MB）—— 与实际校验口径同源。 */
 const IMPORT_MAX_FILE_MB = Math.round(COURSE_PACKAGE_MAX_FILE_BYTES / (1024 * 1024));
 
-export interface ImportRow {
-  title: string;
-  content: string;
-}
+/** CSV 预览行（与 `parseLessonCSV` 的返回结构一致）。 */
+export type ImportRow = ParsedLessonRow;
 
 export type ImportStatus = 'idle' | 'parsing' | 'importing' | 'success' | 'error';
 
@@ -32,8 +35,8 @@ export interface ImportLessonsModalProps {
   /** 导入框的统一文件入口（按后缀分派到 CSV / 课程包）。 */
   handleImportFileChange: (file: File) => void;
   downloadCsvTemplate: () => void;
-  /** 下载内置课程模板（JSON，自包含课件附件）。 */
-  downloadCourseTemplate: () => void;
+  /** 下载内置课程模板（JSON，自包含课件附件）；按交付模式返回白板 / 学案模板。 */
+  downloadCourseTemplate: (mode: CourseDeliveryMode) => void;
   /** 已选中的课程包摘要；非空时预览区切换为课程包视图。 */
   packagePreview: CoursePackagePreview | null;
   /**
@@ -149,6 +152,12 @@ export function ImportLessonsModal(props: ImportLessonsModalProps) {
                   <strong>content</strong>:{' '}
                   {lang === 'zh' ? '教学大纲 / Markdown 格式的课堂细目' : 'Syllabus content supporting rich markdown.'}
                 </li>
+                <li>
+                  <strong>mode</strong>
+                  {lang === 'zh'
+                    ? '（可选）：whiteboard / xuean，也可写「白板」/「学案」；留空按白板导入，学案课会自动生成预习 / 研读 / 练习三个活动。'
+                    : ' (optional): whiteboard / xuean; empty defaults to whiteboard. Guided-study lessons get preview/study/practice activities automatically.'}
+                </li>
               </ul>
               <div className="mt-3.5 flex flex-wrap gap-2 justify-start">
                 <button
@@ -159,18 +168,26 @@ export function ImportLessonsModal(props: ImportLessonsModalProps) {
                   {lang === 'zh' ? '获取标准 CSV 模板' : 'Download Template CSV'}
                 </button>
                 <button
-                  onClick={downloadCourseTemplate}
+                  onClick={() => downloadCourseTemplate('whiteboard')}
                   data-testid="download-course-package-template-btn"
                   className="flex items-center gap-1 p-2 text-xs font-bold text-emerald-700 dark:text-emerald-400 bg-surface border border-emerald-500/20 rounded-lg shadow-3xs hover:bg-emerald-500/10 hover:-translate-y-0.5 hover:shadow-xs transition-all cursor-pointer"
                 >
                   <FileJson size={12} />
-                  {lang === 'zh' ? '下载完整课程模板（含图片 / 示例文档）' : 'Download Full Course Template'}
+                  {lang === 'zh' ? '下载白板课程模板' : 'Download Whiteboard Template'}
+                </button>
+                <button
+                  onClick={() => downloadCourseTemplate('xuean')}
+                  data-testid="download-xuean-course-package-template-btn"
+                  className="flex items-center gap-1 p-2 text-xs font-bold text-teal-700 dark:text-teal-400 bg-surface border border-teal-500/20 rounded-lg shadow-3xs hover:bg-teal-500/10 hover:-translate-y-0.5 hover:shadow-xs transition-all cursor-pointer"
+                >
+                  <FileJson size={12} />
+                  {lang === 'zh' ? '下载学案课程模板' : 'Download Guided-Study Template'}
                 </button>
               </div>
               <p className="text-[11px] text-muted mt-2.5 leading-relaxed">
                 {lang === 'zh'
-                  ? '课程模板是一个自包含的 JSON 文件：包含教学环节、全部预设组件的白板元素，以及内嵌的图片 / PDF / PPTX / DOCX / XLSX / ZIP / MD / TXT / CSV 附件（解码后合计不超过 20MB）—— 拖回本对话框即可导入成一节完整的课。大纲中可用 ${asset:<id>} 引用内嵌素材，例如 ![示意图](${asset:img-1}) 或 [参考讲义](${asset:doc-1})，导入后会自动替换为真实文件地址。'
-                  : 'The course template is a self-contained JSON file: teaching segments, whiteboard elements for every preset component, and embedded images / PDF / PPTX / DOCX / XLSX / ZIP / MD / TXT / CSV assets (up to 20MB decoded in total) — drop it back here to import a complete lesson. Reference embedded assets from the outline with ${asset:<id>}, e.g. ![diagram](${asset:img-1}) or [handout](${asset:doc-1}); the placeholders are resolved to real file URLs on import.'}
+                  ? '课程模板是一个自包含的 JSON 文件：白板模板包含教学环节、全部预设组件的白板元素，学案模板包含教学环节、学案活动与首页块；两者都可内嵌图片 / PDF / PPTX / DOCX / XLSX / ZIP / MD / TXT / CSV 附件（解码后合计不超过 20MB）—— 拖回本对话框即可导入成一节完整的课。大纲中可用 ${asset:<id>} 引用内嵌素材，例如 ![示意图](${asset:img-1}) 或 [参考讲义](${asset:doc-1})，导入后会自动替换为真实文件地址。'
+                  : 'A course template is a self-contained JSON file: the whiteboard template carries segments and every preset component, while the guided-study template carries segments, activities and home blocks. Both can embed images / PDF / PPTX / DOCX / XLSX / ZIP / MD / TXT / CSV assets (up to 20MB decoded in total) — drop it back here to import a complete lesson. Reference embedded assets from the outline with ${asset:<id>}, e.g. ![diagram](${asset:img-1}) or [handout](${asset:doc-1}); the placeholders are resolved to real file URLs on import.'}
               </p>
             </div>
 
@@ -256,14 +273,25 @@ export function ImportLessonsModal(props: ImportLessonsModalProps) {
                   <h4 className="text-sm font-bold text-main truncate" title={packagePreview.title}>
                     {packagePreview.title}
                   </h4>
-                  {packagePreview.metaName && (
-                    <p className="text-[11px] text-muted mt-0.5 truncate">{packagePreview.metaName}</p>
-                  )}
+                  <div className="mt-1 flex items-center gap-2">
+                    <span className="px-1.5 py-0.5 rounded bg-primary-theme-light border border-primary-theme/30 text-[10px] font-bold text-primary-ink">
+                      {packagePreview.deliveryMode === 'xuean'
+                        ? lang === 'zh'
+                          ? '学案'
+                          : 'Guided Study'
+                        : lang === 'zh'
+                          ? '白板'
+                          : 'Whiteboard'}
+                    </span>
+                    {packagePreview.metaName && (
+                      <p className="text-[11px] text-muted truncate">{packagePreview.metaName}</p>
+                    )}
+                  </div>
                   <p className="text-[11px] text-subtle mt-0.5 font-mono truncate">{packagePreview.fileName}</p>
                 </div>
               </div>
 
-              <dl className="grid grid-cols-3 gap-2 mt-3">
+              <dl className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3">
                 <div className="p-2 bg-surface-secondary border border-theme rounded-lg">
                   <dt className="text-[10px] text-muted font-semibold">{lang === 'zh' ? '教学环节' : 'Segments'}</dt>
                   <dd className="text-base font-bold text-main">{packagePreview.segments}</dd>
@@ -271,6 +299,10 @@ export function ImportLessonsModal(props: ImportLessonsModalProps) {
                 <div className="p-2 bg-surface-secondary border border-theme rounded-lg">
                   <dt className="text-[10px] text-muted font-semibold">{lang === 'zh' ? '白板元素' : 'Elements'}</dt>
                   <dd className="text-base font-bold text-main">{packagePreview.elements}</dd>
+                </div>
+                <div className="p-2 bg-surface-secondary border border-theme rounded-lg">
+                  <dt className="text-[10px] text-muted font-semibold">{lang === 'zh' ? '学案活动' : 'Activities'}</dt>
+                  <dd className="text-base font-bold text-main">{packagePreview.activities ?? 0}</dd>
                 </div>
                 <div className="p-2 bg-surface-secondary border border-theme rounded-lg">
                   <dt className="text-[10px] text-muted font-semibold">{lang === 'zh' ? '课件附件' : 'Assets'}</dt>
@@ -344,7 +376,10 @@ export function ImportLessonsModal(props: ImportLessonsModalProps) {
                     <th scope="col" className="p-3 w-1/4">
                       {lang === 'zh' ? '课程名称' : 'Course Title'}
                     </th>
-                    <th scope="col" className="p-3 w-3/4">
+                    <th scope="col" className="p-3 w-20">
+                      {lang === 'zh' ? '模式' : 'Mode'}
+                    </th>
+                    <th scope="col" className="p-3">
                       {lang === 'zh' ? '大纲简介片段' : 'Syllabus Preview'}
                     </th>
                   </tr>
@@ -360,6 +395,17 @@ export function ImportLessonsModal(props: ImportLessonsModalProps) {
                       >
                         {row.title}
                       </th>
+                      <td data-label={lang === 'zh' ? '模式' : 'Mode'} className="p-3 align-top whitespace-nowrap">
+                        <span className="px-1.5 py-0.5 rounded bg-primary-theme-light border border-primary-theme/30 text-[10px] font-bold text-primary-ink">
+                          {row.deliveryMode === 'xuean'
+                            ? lang === 'zh'
+                              ? '学案'
+                              : 'Guided Study'
+                            : lang === 'zh'
+                              ? '白板'
+                              : 'Whiteboard'}
+                        </span>
+                      </td>
                       <td
                         data-label={lang === 'zh' ? '大纲简介片段' : 'Syllabus Preview'}
                         className="p-3 text-muted font-mono text-xs leading-relaxed break-words"

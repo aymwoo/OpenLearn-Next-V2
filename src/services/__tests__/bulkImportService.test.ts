@@ -3,6 +3,9 @@ import {
   splitCsvLine,
   splitCsvRecords,
   downloadCSVTemplate,
+  downloadLessonCSVTemplate,
+  normalizeLessonDeliveryMode,
+  parseLessonCSV,
   parseAndImportClassesOrStudents,
 } from '../bulkImportService';
 
@@ -144,6 +147,72 @@ describe('downloadCSVTemplate', () => {
       .filter((l) => l.trim());
     const second = splitCsvLine(rows[2]);
     expect(second[6]).toBe('数学较弱'); // 备注列
+  });
+});
+
+describe('normalizeLessonDeliveryMode', () => {
+  it('accepts English and Chinese aliases', () => {
+    expect(normalizeLessonDeliveryMode('xuean')).toBe('xuean');
+    expect(normalizeLessonDeliveryMode('学案')).toBe('xuean');
+    expect(normalizeLessonDeliveryMode('whiteboard')).toBe('whiteboard');
+    expect(normalizeLessonDeliveryMode('白板')).toBe('whiteboard');
+  });
+
+  it('returns undefined for empty or unknown values (server keeps the whiteboard default)', () => {
+    expect(normalizeLessonDeliveryMode('')).toBeUndefined();
+    expect(normalizeLessonDeliveryMode(undefined)).toBeUndefined();
+    expect(normalizeLessonDeliveryMode('something-else')).toBeUndefined();
+  });
+});
+
+describe('parseLessonCSV — 交付模式列', () => {
+  const makeFile = (csv: string) => new File([csv], 'courses.csv', { type: 'text/csv' });
+
+  it('reads the optional mode column and normalizes values', async () => {
+    const rows = await parseLessonCSV(
+      makeFile('title,content,mode\n"白板课","白板正文",whiteboard\n"学案课","学案正文",学案\n"旧课","旧正文",'),
+      'zh',
+    );
+    expect(rows).toHaveLength(3);
+    expect(rows[0].deliveryMode).toBe('whiteboard');
+    expect(rows[1].deliveryMode).toBe('xuean');
+    expect(rows[2].deliveryMode).toBeUndefined();
+  });
+
+  it('keeps old templates without a mode column working', async () => {
+    const rows = await parseLessonCSV(makeFile('Title,Content\n旧课程,旧正文'), 'zh');
+    expect(rows[0]).toMatchObject({ title: '旧课程', content: '旧正文' });
+    expect(rows[0].deliveryMode).toBeUndefined();
+  });
+});
+
+describe('downloadLessonCSVTemplate', () => {
+  let blobs: Blob[];
+
+  beforeEach(() => {
+    blobs = [];
+    URL.createObjectURL = vi.fn((blob: Blob) => {
+      blobs.push(blob);
+      return 'blob:mock';
+    }) as unknown as typeof URL.createObjectURL;
+    URL.revokeObjectURL = vi.fn() as unknown as typeof URL.revokeObjectURL;
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('contains title/content/mode headers with one sample per delivery mode', async () => {
+    downloadLessonCSVTemplate('zh');
+    const text = await blobs[0].text();
+    const rows = text.replace(/^\uFEFF/, '').split('\n');
+    expect(rows[0]).toBe('课程标题,课程内容,课程模式 (whiteboard/xuean)');
+
+    const records = splitCsvRecords(rows.slice(1));
+    expect(records).toHaveLength(2);
+    expect(splitCsvLine(records[0])[2]).toBe('whiteboard');
+    expect(splitCsvLine(records[1])[2]).toBe('xuean');
   });
 });
 

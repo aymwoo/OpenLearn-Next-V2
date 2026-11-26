@@ -37,17 +37,25 @@ import {
   type MaterializedAsset,
 } from './course-package-assets.js';
 import { resolveCoursePackageIdentity, type CoursePackageIdentity } from './course-package-identity.js';
-import { isSupportedElementType, type CoursePackage } from './course-package.js';
+import { isSupportedElementType, type CoursePackage, type CoursePackageActivity } from './course-package.js';
 import { upsertLearningSurface, validateLearningContentRef } from './learning-surface-service.js';
+import { xueanActivityTypeForSegment } from '../../packages/core/plugin-host/course-delivery-mode.js';
+import { BUILTIN_XUEAN_MODE_PACK_ID } from '../../packages/core/plugin-host/mode-pack.js';
 
 /** 导入结果摘要（回给前端展示）。 */
 export interface ImportCoursePackageResult {
   lessonId: string;
   title: string;
+  /** 落库的交付模式（`whiteboard` / `xuean`）。 */
+  deliveryMode: string;
   /** 写入的教学环节数。 */
   segments: number;
   /** 写入的白板元素数。 */
   elements: number;
+  /** 写入的学案活动数。 */
+  activities: number;
+  /** 写入的学案首页块数。 */
+  blocks: number;
   /** 落盘的附件数。 */
   assets: number;
   /** 落盘附件的明细（文件名 + URL），供教师核对。 */
@@ -234,6 +242,22 @@ function toLearningSurfaceElement(
 }
 
 /**
+ * 课程包里的学案活动。
+ *
+ * 包内显式声明 `lesson.activities` 时原样使用；学案包缺省时按 timeline 自动生成
+ * （`xuean:preview` → 阅读、`xuean` → 作品提交、`xuean:drill` → 测验），
+ * 与课程向导「环节即活动」的行为一致 —— 否则导入得到的是一节没有任何活动的空学案。
+ */
+function resolvePackageActivities(pkg: CoursePackage): CoursePackageActivity[] {
+  if (pkg.lesson.activities.length > 0) return pkg.lesson.activities;
+  if (pkg.lesson.deliveryMode !== 'xuean') return [];
+  return pkg.lesson.timeline.map((segment) => ({
+    type: xueanActivityTypeForSegment(segment.type),
+    title: segment.title,
+  }));
+}
+
+/**
  * 导入一个课程包。
  *
  * @param pkg 已通过 `parseCoursePackage` 校验的课程包
@@ -285,14 +309,32 @@ export async function importCoursePackage(
     ...(segment.gates ? { gates: segment.gates } : {}),
   }));
 
+  const deliveryMode = pkg.lesson.deliveryMode ?? 'whiteboard';
+  // 学案课缺省绑定内置学案包，保证 `mode_pack_id` 优先读取时仍走学案工作区；
+  // 白板课保持 NULL（旧课兼容），除非课程包显式声明了模式包。
+  const modePackId = pkg.lesson.modePackId ?? (deliveryMode === 'xuean' ? BUILTIN_XUEAN_MODE_PACK_ID : null);
+
   const insertLesson = db.prepare(
     'INSERT INTO lessons (id, title, content, timeline, progress_mode, creator_id, created_at, updated_at, ' +
-      'source_package_key, source_package_hash, source_package_id) ' +
-      'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      'source_package_key, source_package_hash, source_package_id, delivery_mode, mode_pack_id) ' +
+      'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
   );
   const insertElement = db.prepare(
     'INSERT INTO whiteboard_elements (id, lesson_id, type, data, created_at) VALUES (?, ?, ?, ?, ?)',
   );
+  const insertActivity = db.prepare(
+    'INSERT INTO lesson_activities ' +
+      '(id, lesson_id, order_index, type, title, config_json, required, visible, peer_review, ' +
+      'group_mode, submission_type, rubric_json, release_at, due_at, created_at, updated_at) ' +
+      'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+  );
+  const insertBlock = db.prepare(
+    'INSERT INTO lesson_activity_blocks (id, lesson_id, block_type, order_index, content_json, created_at, updated_at) ' +
+      'VALUES (?, ?, ?, ?, ?, ?, ?)',
+  );
+
+  const activities = resolvePackageActivities(pkg);
+  const blocks = pkg.lesson.blocks ?? [];
 
   let elements: Array<{ type: string; data: string }> = [];
   try {
@@ -364,11 +406,36 @@ export async function importCoursePackage(
         identity.key,
         identity.hash,
         identity.packageId,
+        deliveryMode,
+        modePackId,
       );
       for (const element of elements) {
         const converted = toLearningSurfaceElement(db, lessonId, element);
         insertElement.run(converted.id, lessonId, converted.type, converted.data, now);
       }
+      activities.forEach((activity, index) => {
+        insertActivity.run(
+          uuidv7(),
+          lessonId,
+          index,
+          activity.type,
+          activity.title,
+          activity.config === undefined ? null : JSON.stringify(activity.config),
+          activity.required === false ? 0 : 1,
+          activity.visible === false ? 0 : 1,
+          activity.peerReview ? 1 : 0,
+          activity.groupMode ?? 'none',
+          activity.submissionType ?? null,
+          activity.rubric === undefined ? null : JSON.stringify(activity.rubric),
+          activity.releaseAt ?? null,
+          activity.dueAt ?? null,
+          now,
+          now,
+        );
+      });
+      blocks.forEach((block, index) => {
+        insertBlock.run(uuidv7(), lessonId, block.blockType, index, JSON.stringify(block.content ?? {}), now, now);
+      });
     });
 
     write();
@@ -410,8 +477,11 @@ export async function importCoursePackage(
   return {
     lessonId,
     title: pkg.lesson.title,
+    deliveryMode,
     segments: timeline.length,
     elements: elements.length,
+    activities: activities.length,
+    blocks: blocks.length,
     assets: materialized.size,
     assetFiles: Array.from(materialized.values()).map((asset) => ({
       filename: asset.fileName,
