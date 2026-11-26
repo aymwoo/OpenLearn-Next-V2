@@ -299,4 +299,53 @@ describe('AdminPanel (管理后台页面样式规范化与标签切换)', () => 
     });
     expect(putCalls[0].body.allowPublicStudentLookup).toBe(false);
   });
+
+  it('renders and persists apiBodyLimitMb setting in Site Settings tab', async () => {
+    const putCalls: Array<{ url: string; body: Record<string, unknown> }> = [];
+    global.fetch = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+      if (url === '/api/users') {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+      }
+      if (url === '/api/admin/runtime-policies') {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(runtimePolicyResponse) });
+      }
+      if (url === '/api/site-settings' && init?.method === 'PUT') {
+        putCalls.push({ url, body: JSON.parse(String(init.body || '{}')) });
+        return Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              ok: true,
+              siteInfo: {
+                siteName: 'OpenLearn Next',
+                slogan: 'Next-Gen Educational OS',
+                logoUrl: null,
+              },
+            }),
+        });
+      }
+      if (url === '/api/site-settings') {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ apiBodyLimitMb: 6 }),
+        });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+    });
+
+    render(<AdminPanel {...defaultProps} />);
+
+    fireEvent.click(screen.getByText('站点信息设置'));
+    const input = (await screen.findByLabelText(/API 请求体上限/)) as HTMLInputElement;
+    expect(input.value).toBe('6');
+    expect(input.min).toBe('1');
+    expect(input.max).toBe('50');
+
+    fireEvent.change(input, { target: { value: '8' } });
+    fireEvent.click(screen.getByRole('button', { name: /保存站点信息/ }));
+    await vi.waitFor(() => {
+      expect(putCalls).toHaveLength(1);
+    });
+    expect(putCalls[0].body.apiBodyLimitMb).toBe(8);
+  });
 });

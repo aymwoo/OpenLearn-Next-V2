@@ -8,14 +8,14 @@
 
 ## 1. 通用约定
 
-| 项           | 约定                                                                           | 证据                                            |
-| ------------ | ------------------------------------------------------------------------------ | ----------------------------------------------- |
-| 基址         | 同源，无 `/api/v1` 版本前缀                                                    | `server/routes/*.ts` 内均为 `/api/...` 绝对路径 |
-| 认证         | Cookie session（`getCookieToken`）                                             | `server/middleware/auth.ts`                     |
-| 错误体       | `{ success: false, code?, error }`                                             | `server/utils/error-handler.ts` L27-79          |
-| 成功体       | 各路由自定义；多数直接返回对象或数组，命令端点固定 `{ success: true, result }` | `server/routes/os.ts` L128                      |
-| 请求体上限   | 全局 2MB；特定上传端点由 `mountLargeBodyParsers` 放宽                          | `server.ts` L300-304                            |
-| 4xx/5xx 差异 | 4xx 透传 message + code；5xx 生产环境替换为通用文案且丢 code                   | 同上 L61-79                                     |
+| 项           | 约定                                                                                                                             | 证据                                            |
+| ------------ | -------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| 基址         | 同源，无 `/api/v1` 版本前缀                                                                                                      | `server/routes/*.ts` 内均为 `/api/...` 绝对路径 |
+| 认证         | Cookie session（`getCookieToken`）                                                                                               | `server/middleware/auth.ts`                     |
+| 错误体       | `{ success: false, code?, error }`                                                                                               | `server/utils/error-handler.ts` L27-79          |
+| 成功体       | 各路由自定义；多数直接返回对象或数组，命令端点固定 `{ success: true, result }`                                                   | `server/routes/os.ts` L128                      |
+| 请求体上限   | 全局默认 2MB，管理员可在「站点信息设置 → API 请求体上限」配置（1–50MB，保存即生效）；特定上传端点由 `mountLargeBodyParsers` 放宽 | `server/middleware/body-limits.ts`              |
+| 4xx/5xx 差异 | 4xx 透传 message + code；5xx 生产环境替换为通用文案且丢 code                                                                     | 同上 L61-79                                     |
 
 ---
 

@@ -51,14 +51,14 @@ grep -c "^\s*'" packages/core/plugin-host/sql-guard.ts                       # �
 
 请求链路：
 
-| 结论            | 坐标                                                                                                                                               |
-| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 中间件顺序      | `server.ts` L211（helmet）→ L287（写限流）→ L300（大 body）→ L303（2MB parser）→ L307（csrf）→ L308（observability）→ L396（cors）→ L423（强改密） |
-| 命令 HTTP 入口  | `server/routes/os.ts` L112-132（10s 超时赛跑）                                                                                                     |
-| 命令清单查询    | `server/routes/os.ts` L134（`getAllActions`）                                                                                                      |
-| 统一错误出口    | `server/utils/error-handler.ts → sendSafeError（L27）`；4xx 透传 code（L74-79）、5xx 替换文案（L66）                                               |
-| 数据范围枚举    | `server/security/route-scope.ts → DataScope（L31）`                                                                                                |
-| 路由 scope 审计 | 同文件 `collectAuthRoutes` / `auditRouteScopes`                                                                                                    |
+| 结论            | 坐标                                                                                                                                                                |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 中间件顺序      | `server.ts` L211（helmet）→ L287（写限流）→ L300（大 body）→ L303（可配置全局 parser，默认 2MB）→ L307（csrf）→ L308（observability）→ L396（cors）→ L423（强改密） |
+| 命令 HTTP 入口  | `server/routes/os.ts` L112-132（10s 超时赛跑）                                                                                                                      |
+| 命令清单查询    | `server/routes/os.ts` L134（`getAllActions`）                                                                                                                       |
+| 统一错误出口    | `server/utils/error-handler.ts → sendSafeError（L27）`；4xx 透传 code（L74-79）、5xx 替换文案（L66）                                                                |
+| 数据范围枚举    | `server/security/route-scope.ts → DataScope（L31）`                                                                                                                 |
+| 路由 scope 审计 | 同文件 `collectAuthRoutes` / `auditRouteScopes`                                                                                                                     |
 
 实时：
 

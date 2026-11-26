@@ -28,6 +28,7 @@ import { pluginApiGatewayMiddleware } from './plugin-api-gateway.js';
 import { clearPersonaProviderReferences } from '../ai-persona-registry.js';
 import { isSafeExternalUrl, fetchWithSafeRedirects } from '../utils/url-safety.js';
 import { isPublicStudentLookupEnabled } from '../utils/site-settings.js';
+import { MAX_API_BODY_LIMIT_MB, MIN_API_BODY_LIMIT_MB } from '../middleware/body-limits.js';
 import {
   AIFetchTimeoutError,
   AiProviderBlockedError,
@@ -2322,12 +2323,12 @@ export function registerPluginsRoutes(ctx: ServerContext) {
     }
   });
 
-  // 站点信息设置端点（站点名称、口号、Logo 图片、上传大小上限）
+  // 站点信息设置端点（站点名称、口号、Logo 图片、上传大小上限、API 请求体上限）
   app.get('/api/site-settings', (req, res) => {
     try {
       const row = kernelContainer.db
         .prepare(
-          'SELECT site_name, slogan, logo_url, upload_max_file_mb, current_academic_year, academic_start_month, logout_clear_site_data, allow_public_student_lookup, default_theme_id FROM site_settings WHERE id = ?',
+          'SELECT site_name, slogan, logo_url, upload_max_file_mb, api_body_limit_mb, current_academic_year, academic_start_month, logout_clear_site_data, allow_public_student_lookup, default_theme_id FROM site_settings WHERE id = ?',
         )
         .get('global') as any;
       const academicStartMonth = row?.academic_start_month ?? 9;
@@ -2343,6 +2344,8 @@ export function registerPluginsRoutes(ctx: ServerContext) {
         logoUrl: row?.logo_url || null,
         // null = 管理员未配置，客户端用默认 10MB
         uploadMaxFileMb: row?.upload_max_file_mb ?? null,
+        // null = 管理员未配置，服务端用默认 2MB
+        apiBodyLimitMb: row?.api_body_limit_mb ?? null,
         currentAcademicYear,
         academicStartMonth,
         logoutClearSiteData: Boolean(row?.logout_clear_site_data),
@@ -2361,6 +2364,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
         slogan,
         logoUrl,
         uploadMaxFileMb,
+        apiBodyLimitMb,
         currentAcademicYear,
         academicStartMonth,
         logoutClearSiteData,
@@ -2375,6 +2379,19 @@ export function registerPluginsRoutes(ctx: ServerContext) {
         if (!Number.isInteger(maxFileMb) || maxFileMb < 1 || maxFileMb > 90) {
           return res.status(400).json({ error: '上传大小上限必须是 1–90 之间的整数（MB）' });
         }
+      }
+
+      // 全局 API 请求体上限（整数 1–50，默认 2）。undefined = 不修改。
+      // 保存后无需重启：解析器在每次处理带请求体的请求前读取该配置。
+      let normalizedApiBodyLimitMb: number | undefined = undefined;
+      if (apiBodyLimitMb !== undefined && apiBodyLimitMb !== null) {
+        const candidate = Number(apiBodyLimitMb);
+        if (!Number.isInteger(candidate) || candidate < MIN_API_BODY_LIMIT_MB || candidate > MAX_API_BODY_LIMIT_MB) {
+          return res.status(400).json({
+            error: `API 请求体上限必须是 ${MIN_API_BODY_LIMIT_MB}–${MAX_API_BODY_LIMIT_MB} 之间的整数（MB）`,
+          });
+        }
+        normalizedApiBodyLimitMb = candidate;
       }
 
       let normalizedLogoutClearSiteData: number | null = null;
@@ -2427,9 +2444,10 @@ export function registerPluginsRoutes(ctx: ServerContext) {
 
       kernelContainer.db
         .prepare(
-          `INSERT INTO site_settings (id, site_name, slogan, logo_url, upload_max_file_mb, current_academic_year, academic_start_month, logout_clear_site_data, allow_public_student_lookup, default_theme_id) VALUES ('global', ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `INSERT INTO site_settings (id, site_name, slogan, logo_url, upload_max_file_mb, api_body_limit_mb, current_academic_year, academic_start_month, logout_clear_site_data, allow_public_student_lookup, default_theme_id) VALUES ('global', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT(id) DO UPDATE SET site_name = excluded.site_name, slogan = excluded.slogan, logo_url = excluded.logo_url,
              upload_max_file_mb = COALESCE(excluded.upload_max_file_mb, site_settings.upload_max_file_mb),
+             api_body_limit_mb = COALESCE(excluded.api_body_limit_mb, site_settings.api_body_limit_mb),
              current_academic_year = COALESCE(excluded.current_academic_year, site_settings.current_academic_year),
              academic_start_month = COALESCE(excluded.academic_start_month, site_settings.academic_start_month),
              logout_clear_site_data = COALESCE(?, site_settings.logout_clear_site_data, 0),
@@ -2441,6 +2459,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
           slogan || '',
           logoUrl || null,
           maxFileMb ?? null,
+          normalizedApiBodyLimitMb ?? null,
           normalizedAcademicYear ?? null,
           normalizedStartMonth ?? null,
           normalizedLogoutClearSiteData ?? 0,
@@ -2452,7 +2471,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
         );
       const row = kernelContainer.db
         .prepare(
-          'SELECT upload_max_file_mb, current_academic_year, academic_start_month, logout_clear_site_data, allow_public_student_lookup, default_theme_id FROM site_settings WHERE id = ?',
+          'SELECT upload_max_file_mb, api_body_limit_mb, current_academic_year, academic_start_month, logout_clear_site_data, allow_public_student_lookup, default_theme_id FROM site_settings WHERE id = ?',
         )
         .get('global') as any;
       const resolvedLogoutClear = Boolean(row?.logout_clear_site_data);
@@ -2469,6 +2488,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
           defaultThemeId: resolvedDefaultThemeId,
         },
         uploadMaxFileMb: row?.upload_max_file_mb ?? null,
+        apiBodyLimitMb: row?.api_body_limit_mb ?? null,
         currentAcademicYear: row?.current_academic_year ?? null,
         academicStartMonth: row?.academic_start_month ?? 9,
         logoutClearSiteData: resolvedLogoutClear,

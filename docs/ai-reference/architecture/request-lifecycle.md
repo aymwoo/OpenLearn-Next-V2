@@ -44,21 +44,21 @@ sequenceDiagram
 
 `server.ts` 的挂载顺序即执行顺序：
 
-| #   | 中间件                                     | 行号     | 拒绝时返回                                                    |
-| --- | ------------------------------------------ | -------- | ------------------------------------------------------------- |
-| 1   | `helmet`                                   | L211     | 不拒绝，只加头（CSP / X-Frame-Options / HSTS）                |
-| 2   | 写请求限流 `writeLimiter`                  | L287     | 429；`view-state` 端点走独立 `viewStateLimiter`，不占全站配额 |
-| 3   | `mountLargeBodyParsers`                    | L~300    | 413（仅特定上传端点放宽）                                     |
-| 4   | `express.json({limit:'2mb'})` / urlencoded | L303-304 | 413                                                           |
-| 5   | `csrfGuard`                                | L307     | 403（`Sec-Fetch-Site/Dest` 判定 + 豁免清单）                  |
-| 6   | `requestObservability()`                   | L308     | 不拒绝，注入 `req.requestId`、慢请求日志                      |
-| 7   | `/uploads` 鉴权静态                        | L312     | 401（需有效 session）                                         |
-| 8   | `/plugins` token 静态                      | L338     | 401 / 403                                                     |
-| 9   | `createCorsMiddleware()`                   | L396     | 403（不在白名单）                                             |
-| 10  | `enforcePasswordChanged`                   | L423     | 403（种子账号未改密时的写操作）                               |
+| #   | 中间件                                               | 行号  | 拒绝时返回                                                    |
+| --- | ---------------------------------------------------- | ----- | ------------------------------------------------------------- |
+| 1   | `helmet`                                             | L211  | 不拒绝，只加头（CSP / X-Frame-Options / HSTS）                |
+| 2   | 写请求限流 `writeLimiter`                            | L287  | 429；`view-state` 端点走独立 `viewStateLimiter`，不占全站配额 |
+| 3   | `mountLargeBodyParsers`                              | L~300 | 413（仅特定上传端点放宽）                                     |
+| 4   | `mountConfigurableBodyParsers`（站点设置，默认 2MB） | L303  | 413                                                           |
+| 5   | `csrfGuard`                                          | L307  | 403（`Sec-Fetch-Site/Dest` 判定 + 豁免清单）                  |
+| 6   | `requestObservability()`                             | L308  | 不拒绝，注入 `req.requestId`、慢请求日志                      |
+| 7   | `/uploads` 鉴权静态                                  | L312  | 401（需有效 session）                                         |
+| 8   | `/plugins` token 静态                                | L338  | 401 / 403                                                     |
+| 9   | `createCorsMiddleware()`                             | L396  | 403（不在白名单）                                             |
+| 10  | `enforcePasswordChanged`                             | L423  | 403（种子账号未改密时的写操作）                               |
 
 **硬约束**：第 2 步必须在第 4 步之前 —— 先限流再解析 body，否则恶意超大 JSON 会先消耗 CPU/内存。
-第 3 步必须在第 4 步之前 —— 否则大文件上传会被 2MB 全局限制挡掉。
+第 3 步必须在第 4 步之前 —— 否则大文件上传会被全局上限挡掉。
 
 ---
 
