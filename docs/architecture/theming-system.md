@@ -161,7 +161,7 @@ campus-atelier/
 
 ### 6.3 多账号隔离、版本更新与管理员治理
 
-- **共享安装，账号隔离生效**：所有已登录账号（学生、教师、管理员）均可上传 `.zip` 主题包至平台共享目录 (`themes`)，用户个人选择的主题、锁定版本、`light/dark/auto` 模式与基础外观覆盖（强调色、圆角、密度、字号比例）按 `principal_key` 严格隔离存储在 `user_theme_preferences`；
+- **共享安装，账号隔离生效**：所有已登录账号（学生、教师、管理员）均可上传 `.zip` 主题包至平台共享目录 (`themes`)，用户个人选择的主题、锁定版本、`light/dark/auto` 模式与基础外观覆盖（强调色、圆角、密度、字号比例、弹窗背景色/圆角）按 `principal_key` 严格隔离存储在 `user_theme_preferences`；
 - **作者版本发布与非静默升级**：仅原上传者可向同一主题 ID 发布更高 SemVer 版本。新版进入共享目录后，**不会静默替换** 其他账号当前正在使用的旧版本，而是在主题中心提示「确认升级」并展示变更日志；
 - **匿名登录前隐私保护**：未登录接口 `GET /api/themes/public` 仅返回平台默认主题与公开摘要，不包含任何账号 ID 或个人偏好；浏览器本地仅保存纯视觉快照键 `openlearn_browser_appearance`；
 - **管理员治理与故障回退**：仅管理员可通过 `/api/themes/:id/disable`、`/api/themes/:id/enable`、`DELETE /api/themes/:id` 停用或删除主题，并在站点设置配置全站默认主题 (`default_theme_id`)。当主题被停用、删除、不兼容或样式异常时，系统自动回退至安全默认主题，并在全端左下角常驻独立内联样式的 **「一键恢复默认主题」** 按钮 (`ThemeFailsafeRecoveryButton.tsx`)，确保样式损坏时仍可一键自救。
@@ -200,31 +200,57 @@ window.addEventListener('openlearn:themechange', (ev) => applyHostTheme(ev.detai
 
 ### 7.1 可覆盖令牌
 
-| 令牌                             | 默认来源                 | 作用                         |
-| -------------------------------- | ------------------------ | ---------------------------- |
-| `--ol-dialog-bg`                 | `--bg-surface-elevated`  | 弹窗面板底色                 |
-| `--ol-dialog-border-color`       | `--border-theme`         | 面板描边颜色                 |
-| `--ol-dialog-border-width`       | `1px`                    | 面板描边宽度（`0` 可去边框） |
-| `--ol-dialog-radius`             | `--ol-radius-card`       | 面板圆角（跟随外观覆盖）     |
-| `--ol-dialog-shadow`             | 平台阴影                 | 面板投影                     |
-| `--ol-dialog-backdrop`           | `rgb(15 23 42 / 0.52)`   | `::backdrop` 遮罩色          |
-| `--ol-dialog-backdrop-blur`      | `6px`                    | 遮罩模糊半径                 |
-| `--ol-dialog-header-bg`          | `--bg-surface-secondary` | 标题栏底色                   |
-| `--ol-dialog-footer-bg`          | `--bg-surface-secondary` | 底部操作栏底色               |
-| `--ol-dialog-divider`            | `--border-theme-subtle`  | 标题/底栏分隔线              |
-| `--ol-dialog-title-fg`           | `--text-main`            | 标题文字色                   |
-| `--ol-dialog-body-fg`            | `--text-main`            | 正文文字色                   |
-| `--ol-dialog-padding-x/y`        | `1.25rem / 1rem`         | 标题栏内边距                 |
-| `--ol-dialog-body-padding-x/y`   | `1.25rem / 1.25rem`      | 正文内边距                   |
-| `--ol-dialog-footer-padding-x/y` | `1.25rem / 0.875rem`     | 底栏内边距                   |
-| `--ol-dialog-gap`                | `0.75rem`                | 标题栏元素间距               |
-| `--ol-dialog-control-radius`     | `--ol-radius-control`    | 按钮/分段容器圆角            |
-| `--ol-dialog-icon-bg/fg/border`  | 主色浅底                 | 标题图标容器                 |
-| `--ol-dialog-close-fg`           | `--text-subtle`          | 关闭按钮默认色               |
-| `--ol-dialog-close-fg-hover`     | `--text-main`            | 关闭按钮悬停色               |
-| `--ol-dialog-close-bg-hover`     | `--bg-surface-secondary` | 关闭按钮悬停底色             |
-| `--ol-dialog-accent`             | `--color-primary`        | 焦点环与强调色               |
-| `--ol-dialog-surface-image`      | `none`                   | 面板可选背景图/渐变          |
+| 令牌                             | 默认来源                 | 作用                           |
+| -------------------------------- | ------------------------ | ------------------------------ |
+| `--ol-dialog-bg`                 | `--bg-surface-elevated`  | 弹窗面板底色                   |
+| `--ol-dialog-max-width`          | `34rem`                  | 面板默认最大宽度               |
+| `--ol-dialog-border-color`       | `--border-theme`         | 面板描边颜色                   |
+| `--ol-dialog-border-width`       | `1px`                    | 面板描边宽度（`0` 可去边框）   |
+| `--ol-dialog-radius`             | `--ol-radius-card`       | 面板圆角（跟随外观覆盖）       |
+| `--ol-dialog-shadow`             | 平台阴影                 | 面板投影                       |
+| `--ol-dialog-inset-highlight`    | 白色 70% / 深色主题 6%   | 面板顶部内高光                 |
+| `--ol-dialog-backdrop`           | `rgb(15 23 42 / 0.52)`   | `::backdrop` 遮罩色            |
+| `--ol-dialog-backdrop-blur`      | `6px`                    | 遮罩模糊半径                   |
+| `--ol-dialog-header-bg`          | 面板底与次级面混合       | 标题栏底色                     |
+| `--ol-dialog-header-image`       | 由标题栏底色派生的渐变   | 标题栏背景图（置 `none` 取消） |
+| `--ol-dialog-footer-bg`          | 面板底与次级面混合       | 底部操作栏底色                 |
+| `--ol-dialog-divider`            | `--border-theme-subtle`  | 标题/底栏分隔线                |
+| `--ol-dialog-title-fg`           | `--text-main`            | 标题文字色                     |
+| `--ol-dialog-body-fg`            | `--text-main`            | 正文文字色                     |
+| `--ol-dialog-padding-x/y`        | `1.375rem / 1.125rem`    | 标题栏内边距                   |
+| `--ol-dialog-body-padding-x/y`   | `1.375rem / 1.25rem`     | 正文内边距                     |
+| `--ol-dialog-footer-padding-x/y` | `1.375rem / 1rem`        | 底栏内边距                     |
+| `--ol-dialog-gap`                | `0.875rem`               | 标题栏元素间距                 |
+| `--ol-dialog-control-radius`     | `--ol-radius-control`    | 按钮/分段容器圆角              |
+| `--ol-dialog-icon-bg/fg/border`  | 主色浅底                 | 标题图标容器                   |
+| `--ol-dialog-close-fg`           | `--text-subtle`          | 关闭按钮默认色                 |
+| `--ol-dialog-close-fg-hover`     | `--text-main`            | 关闭按钮悬停色                 |
+| `--ol-dialog-close-bg-hover`     | `--bg-surface-secondary` | 关闭按钮悬停底色               |
+| `--ol-dialog-accent`             | `--color-primary`        | 焦点环与强调色                 |
+| `--ol-dialog-surface-image`      | 主色淡光晕               | 面板可选背景图/渐变            |
+
+> 面板始终通过 `position: fixed; inset: 0; margin: auto` 居中；调用方传入的 `max-w-*` 工具类会覆盖 `--ol-dialog-max-width`，`h-*` 会覆盖自适应高度，内容超高时由 `max-height: 100dvh - 2rem` 收敛并在 `.ol-dialog-body` 内部滚动。
+
+### 7.1.1 单实例覆盖
+
+只需个别弹窗换底色/圆角时，不必改主题令牌，直接使用 `AccessibleDialog` 的 `backgroundColor` 与 `borderRadius` props：
+
+```tsx
+<AccessibleDialog open={open} onClose={onClose} backgroundColor="#fff7ed" borderRadius="1.5rem">
+  <DialogHeader>{/* 标题栏 */}</DialogHeader>
+  <DialogBody>{/* 正文 */}</DialogBody>
+</AccessibleDialog>
+```
+
+两者分别写入面板自身的 `--ol-dialog-bg` / `--ol-dialog-radius`，标题栏与底栏通过继承同步内角；`backgroundColor` 生效时面板会标记 `[data-dialog-surface="custom"]`，去掉主题预置光晕并让标题栏/底栏透明，保证整块面板统一使用该底色。props 无法表达的背景图/渐变仍可通过 `--ol-dialog-surface-image` 覆盖。
+
+### 7.1.2 账号级全局覆盖
+
+「主题中心 → 当前账号基础外观覆盖」提供「弹窗背景色覆盖」与「弹窗圆角」两项，对应 `appearanceOverrides.dialogBackgroundColor`（十六进制色值）与 `appearanceOverrides.dialogBorderRadius`（`sharp / rounded / pill`）。它们作用于**当前账号所有由统一 Dialog（`AccessibleDialog`）渲染的弹窗**，并随账号主题偏好持久化、按 `principal_key` 隔离：
+
+- 内置主题：直接写入 `:root` 的 `--ol-dialog-bg` / `--ol-dialog-radius`；
+- 第三方主题：由 `buildRuntimeThemeCss` 合并进有效令牌并随主题 CSS 输出；
+- 设置弹窗背景色时同时把 `--ol-dialog-header-bg` / `--ol-dialog-footer-bg` 置为透明并移除 `--ol-dialog-surface-image` / `--ol-dialog-header-image`，与单实例 `backgroundColor` 的视觉行为一致。
 
 ### 7.2 稳定结构钩子
 
@@ -233,6 +259,7 @@ window.addEventListener('openlearn:themechange', (ev) => applyHostTheme(ev.detai
 | `dialog.openlearn-dialog`                         | 原生 `<dialog>` 面板                                  |
 | `[data-dialog]`                                   | 所有统一弹窗的根标记                                  |
 | `[data-dialog-variant]`                           | `default / danger / warning / success`                |
+| `[data-dialog-surface="custom"]`                  | 使用单实例自定义底色（标题栏/底栏透明）               |
 | `.ol-dialog-header` `[data-dialog-part="header"]` | 标题栏                                                |
 | `.ol-dialog-heading`                              | 图标 + 标题 + 描述 容器                               |
 | `.ol-dialog-title`                                | 标题文本                                              |

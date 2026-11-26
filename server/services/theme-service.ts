@@ -129,6 +129,19 @@ export function sanitizeAppearanceOverrides(raw: unknown): ThemeAppearanceOverri
       out.fontScale = Math.min(1.25, Math.max(0.85, Number(scale.toFixed(2))));
     }
   }
+  if (typeof input.dialogBackgroundColor === 'string') {
+    const trimmed = input.dialogBackgroundColor.trim();
+    if (trimmed && HEX_COLOR_REGEX.test(trimmed)) {
+      out.dialogBackgroundColor = sanitizeCssTokenValue('--ol-dialog-bg', trimmed);
+    }
+  }
+  if (
+    input.dialogBorderRadius === 'sharp' ||
+    input.dialogBorderRadius === 'rounded' ||
+    input.dialogBorderRadius === 'pill'
+  ) {
+    out.dialogBorderRadius = input.dialogBorderRadius;
+  }
   return out;
 }
 
