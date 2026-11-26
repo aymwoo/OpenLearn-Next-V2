@@ -334,7 +334,7 @@ sandbox allow-scripts allow-forms allow-downloads; frame-ancestors 'self'; defau
    都没用在这里。目录穿越防线在**浏览器侧**（§5.2）。
 ```
 
-另外注意 `express.json({ limit: '2mb' })` 是全局 body 上限，
+另外注意全局 body 上限默认 `2mb`（管理员可在「站点信息设置 → API 请求体上限」调整），
 `OPENLEARN_MAX_ZIP_SIZE` 默认 `300 * 1024 * 1024` 是 ZIP 上限；
 **沙箱路径上没有任何 HTML/JS 资源体积上限** —— `frontend.js` 是
 `await res.text()` 全量读入，无截断。

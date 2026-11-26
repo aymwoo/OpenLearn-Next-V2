@@ -53,6 +53,8 @@ export interface SiteInfo {
   logoUrl: string | null;
   /** 上传文件大小上限（MB）；null/undefined = 未配置，运行时取默认 10 */
   uploadMaxFileMb?: number | null;
+  /** 普通 API 请求体上限（MB）；null/undefined = 未配置，服务端取默认 2 */
+  apiBodyLimitMb?: number | null;
   currentAcademicYear?: string | null;
   academicStartMonth?: number;
   logoutClearSiteData?: boolean;
@@ -95,6 +97,7 @@ export function AdminPanel({
   const [siteLogoUrl, setSiteLogoUrl] = useState<string | null>(siteInfo?.logoUrl || null);
   const [siteLogoInput, setSiteLogoInput] = useState(siteInfo?.logoUrl || '');
   const [uploadMaxFileMb, setUploadMaxFileMb] = useState<number>(siteInfo?.uploadMaxFileMb ?? 10);
+  const [apiBodyLimitMb, setApiBodyLimitMb] = useState<number>(siteInfo?.apiBodyLimitMb ?? 2);
   const [currentAcademicYear, setCurrentAcademicYear] = useState<string>(siteInfo?.currentAcademicYear ?? '');
   const [academicStartMonth, setAcademicStartMonth] = useState<number>(9);
   const [logoutClearSiteData, setLogoutClearSiteData] = useState<boolean>(Boolean(siteInfo?.logoutClearSiteData));
@@ -224,6 +227,9 @@ export function AdminPanel({
         if (typeof data.uploadMaxFileMb === 'number' && data.uploadMaxFileMb > 0) {
           setUploadMaxFileMb(data.uploadMaxFileMb);
         }
+        if (typeof data.apiBodyLimitMb === 'number' && data.apiBodyLimitMb > 0) {
+          setApiBodyLimitMb(data.apiBodyLimitMb);
+        }
         if (typeof data.currentAcademicYear === 'string' && data.currentAcademicYear) {
           setCurrentAcademicYear(data.currentAcademicYear);
         }
@@ -266,6 +272,7 @@ export function AdminPanel({
           slogan: siteSlogan.trim(),
           logoUrl: logoToSave,
           uploadMaxFileMb: Math.round(Number(uploadMaxFileMb)),
+          apiBodyLimitMb: Math.round(Number(apiBodyLimitMb)),
           currentAcademicYear: currentAcademicYear.trim() || undefined,
           academicStartMonth: Math.round(Number(academicStartMonth)),
           logoutClearSiteData,
@@ -1414,6 +1421,32 @@ export function AdminPanel({
                         ? '课件（PDF/PPTX）等文件上传的体积上限，范围 1–90 MB，保存后立即生效。'
                         : 'Size cap for file uploads (PDF/PPTX), 1–90 MB. Takes effect immediately after saving.'}
                     </p>
+
+                    <div className="space-y-1 pt-2">
+                      <label
+                        htmlFor="site_api_body_limit_mb"
+                        className="block text-xs font-bold text-gray-500 uppercase tracking-wider"
+                      >
+                        {lang === 'zh' ? 'API 请求体上限 (MB)' : 'API Request Body Limit (MB)'}
+                      </label>
+                      <input
+                        id="site_api_body_limit_mb"
+                        name="apiBodyLimitMb"
+                        type="number"
+                        min={1}
+                        max={50}
+                        inputMode="numeric"
+                        aria-describedby="site_api_body_limit_mb_hint"
+                        value={apiBodyLimitMb}
+                        onChange={(e) => setApiBodyLimitMb(Number(e.target.value))}
+                        className="w-40 text-sm bg-gray-50 hover:bg-gray-100/50 focus:bg-white border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all font-semibold"
+                      />
+                      <p id="site_api_body_limit_mb_hint" className="text-xs text-gray-400 mt-1">
+                        {lang === 'zh'
+                          ? '普通 API（JSON / 表单提交）请求体上限，范围 1–50 MB，默认 2 MB，保存后立即生效；课件上传等专用端点不受此限制。请求过大被拒时（413），可在此调高。'
+                          : 'Body size cap for regular API requests (JSON / form), 1–50 MB, default 2 MB. Takes effect immediately after saving; dedicated upload endpoints are not affected. Raise it if large requests are rejected with 413.'}
+                      </p>
+                    </div>
 
                     <div className="space-y-1">
                       <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider">
