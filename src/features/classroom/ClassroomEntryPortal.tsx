@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Activity,
   AlertTriangle,
+  Archive,
   ArrowRight,
   BookOpen,
   CalendarDays,
@@ -32,6 +33,14 @@ import {
 } from 'lucide-react';
 import { ExtensionPointRenderer } from '../../plugin-host/extension-point-renderer';
 import { useNetworkLatency } from '../../hooks/useNetworkLatency';
+import AccessibleDialog, {
+  DialogBody,
+  DialogButton,
+  DialogCloseButton,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '../../components/AccessibleDialog';
 import { fetchTeachingModes, teachingModeColor, type TeachingMode } from './teaching-modes-client';
 import { ComputerLabSeatingMap } from './ComputerLabSeatingMap';
 import { DEFAULT_SEGMENT_SECONDS, formatSegmentDuration, resolveSegmentDuration } from '../../utils/timeline-duration';
@@ -1235,6 +1244,8 @@ export function ClassroomEntryPortal({
   // ── 课堂会话恢复：探测所选课程是否有进行中的会话 ──
   const [activeSession, setActiveSession] = useState<{
     lessonId: string;
+    /** 服务端会话 id，用于「一键归档结束课程」直接调用归档接口 */
+    sessionId: string | null;
     stage: string;
     classId: string | null;
     classLocked: boolean;
@@ -1258,7 +1269,13 @@ export function ClassroomEntryPortal({
         const classId = data.session?.class_id ? String(data.session.class_id) : null;
         if (!classLocked) return;
         // classId 取自会话行（开课时已确定）。进行中时本地选择不能覆盖它。
-        setActiveSession({ lessonId: selectedLesson, stage: data.stage, classId, classLocked: true });
+        setActiveSession({
+          lessonId: selectedLesson,
+          sessionId: data.session?.id ? String(data.session.id) : null,
+          stage: data.stage,
+          classId,
+          classLocked: true,
+        });
         if (classId) {
           classLockRef.current = { lessonId: selectedLesson, classId };
           setLiveClassSelectedClassId(classId);
@@ -1312,6 +1329,62 @@ export function ClassroomEntryPortal({
       if (mountedRef.current) setResuming(false);
     }
   }, [activeSession, addToast, currentClass, currentLesson, onEnterClassroom, selectedModeId, zh]);
+
+  // ── 「一键归档结束课程」：在「课堂进行中」横幅（回到课堂处）就地结束课节 ──
+  //
+  // 此前教师想结束横幅里的课节，只能「回到课堂 → 结课通票 → 学情简报 → 归档并结束课堂」
+  // 四步；现在直接复用既有幂等接口 POST /api/classroom/sessions/:sessionId/archive
+  // （与学情简报页 / 会话管理页 / 进行中列表三个入口同一链路），一次确认即封存会话、
+  // 广播 classroom:stage_changed，班级锁定随之解除。
+  const [archiveConfirmOpen, setArchiveConfirmOpen] = useState(false);
+  const [archiving, setArchiving] = useState(false);
+
+  /** 归档成功后清理本门户的会话恢复与班级锁定状态，让横幅消失、班级可重选 */
+  const releaseActiveSessionLock = useCallback(() => {
+    setActiveSession(null);
+    classLockRef.current = null;
+  }, []);
+
+  const handleArchiveActiveSession = useCallback(async () => {
+    const sessionId = activeSession?.sessionId;
+    if (!sessionId) {
+      addToast?.(
+        zh ? '暂时无法归档' : 'Cannot Archive Yet',
+        zh ? '未获取到课堂会话 id，请刷新门户后重试。' : 'Session id unavailable. Refresh the portal and retry.',
+        'warning',
+      );
+      setArchiveConfirmOpen(false);
+      return;
+    }
+    setArchiving(true);
+    const doFetch = fetcher ?? ((...args: Parameters<typeof fetch>) => fetch(...args));
+    try {
+      const res = await doFetch(`/api/classroom/sessions/${encodeURIComponent(sessionId)}/archive`, {
+        method: 'POST',
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(body?.error || `HTTP ${res.status}`);
+      }
+      releaseActiveSessionLock();
+      setArchiveConfirmOpen(false);
+      addToast?.(
+        zh ? '归档成功' : 'Archived successfully',
+        zh
+          ? '课堂会话已封存并移入「已归档战报」库，本节课程已结束。'
+          : 'Session sealed into the archived reports. The class is now closed.',
+        'success',
+      );
+    } catch (err) {
+      addToast?.(
+        zh ? '归档失败' : 'Failed to archive',
+        err instanceof Error ? err.message : zh ? '未知错误' : 'Unknown error',
+        'error',
+      );
+    } finally {
+      if (mountedRef.current) setArchiving(false);
+    }
+  }, [activeSession, addToast, fetcher, releaseActiveSessionLock, zh]);
 
   const applyNextSchedule = useCallback(() => {
     if (!nextSchedule) return;
@@ -1501,20 +1574,98 @@ export function ClassroomEntryPortal({
                 </p>
                 <p className="text-xs text-emerald-600 mt-0.5">
                   {zh
-                    ? '学生数据、作业与课堂动态均已保存，点击右侧回到当前状态。'
-                    : 'Student data, assignments and feed are saved. Resume to continue.'}
+                    ? '学生数据、作业与课堂动态均已保存，可回到课堂继续，或一键归档结束本节课程。'
+                    : 'Student data, assignments and feed are saved. Resume to continue, or archive and end the class.'}
                 </p>
               </div>
             </div>
-            <button
-              onClick={() => void handleResume()}
-              disabled={resuming || !(currentClass || activeSession?.classId)}
-              className="shrink-0 inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 text-white text-sm font-bold hover:bg-emerald-700 disabled:opacity-50 transition-colors cursor-pointer disabled:cursor-not-allowed"
-            >
-              {resuming ? (zh ? '恢复中…' : 'Resuming…') : zh ? '回到课堂' : 'Resume'}
-            </button>
+            <div className="shrink-0 flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => void handleResume()}
+                disabled={resuming || !(currentClass || activeSession?.classId)}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 text-white text-sm font-bold hover:bg-emerald-700 disabled:opacity-50 transition-colors cursor-pointer disabled:cursor-not-allowed"
+              >
+                {resuming ? (zh ? '恢复中…' : 'Resuming…') : zh ? '回到课堂' : 'Resume'}
+              </button>
+              <button
+                type="button"
+                id="portal-active-session-archive-btn"
+                data-testid="portal-active-session-archive-btn"
+                onClick={() => setArchiveConfirmOpen(true)}
+                disabled={archiving || !activeSession?.sessionId}
+                title={zh ? '一键归档并结束当前课堂会话' : 'Archive and end the current classroom session in one click'}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-rose-600 text-white text-sm font-bold hover:bg-rose-700 disabled:opacity-50 transition-colors cursor-pointer disabled:cursor-not-allowed"
+              >
+                {archiving ? <Loader2 size={14} className="animate-spin" /> : <Archive size={14} />}
+                <span>{zh ? '一键归档结束课程' : 'End & Archive'}</span>
+              </button>
+            </div>
           </section>
         )}
+
+        {/* 「一键归档结束课程」二次确认：原生 dialog 模态（AccessibleDialog 封装），autofocus 落在安全的取消键 */}
+        <AccessibleDialog
+          open={archiveConfirmOpen}
+          onClose={() => {
+            if (!archiving) setArchiveConfirmOpen(false);
+          }}
+          ariaLabelledBy="portal-archive-confirm-title"
+          variant="danger"
+        >
+          <DialogHeader>
+            <DialogTitle
+              id="portal-archive-confirm-title"
+              icon={<AlertTriangle size={18} />}
+              iconVariant="danger"
+              description={
+                zh
+                  ? '归档后本次课堂会话将立即封存并移入「已归档战报」，学生端将退出本节课堂，班级锁定解除，操作不可撤销。'
+                  : 'The session will be sealed into the archived reports immediately. Students will leave the class and the class lock is released. This cannot be undone.'
+              }
+            >
+              {zh ? '一键归档结束课程？' : 'Archive and end this class?'}
+            </DialogTitle>
+            <DialogCloseButton
+              label={zh ? '取消' : 'Cancel'}
+              onClick={() => {
+                if (!archiving) setArchiveConfirmOpen(false);
+              }}
+            />
+          </DialogHeader>
+
+          <DialogBody>
+            <p className="text-xs text-secondary">
+              {zh
+                ? '学生数据、作业与课堂动态均已保存，归档后仍可在「课堂会话与档案管理」中查看本次会话记录。'
+                : 'Student data, assignments and the class feed are saved. The session stays viewable under Session Management after archiving.'}
+            </p>
+          </DialogBody>
+
+          <DialogFooter>
+            <DialogButton
+              variant="secondary"
+              autoFocus
+              onClick={() => setArchiveConfirmOpen(false)}
+              disabled={archiving}
+            >
+              {zh ? '取消' : 'Cancel'}
+            </DialogButton>
+            <DialogButton variant="danger" onClick={() => void handleArchiveActiveSession()} disabled={archiving}>
+              {archiving ? (
+                <>
+                  <Loader2 size={13} className="animate-spin mr-1" />
+                  {zh ? '归档中…' : 'Archiving…'}
+                </>
+              ) : (
+                <>
+                  <Archive size={13} className="mr-1" />
+                  {zh ? '确认归档并结束' : 'Archive & End'}
+                </>
+              )}
+            </DialogButton>
+          </DialogFooter>
+        </AccessibleDialog>
 
         {/* 主工作区：左 8 / 右 4 */}
         <div className="grid grid-cols-1 xl:grid-cols-12 gap-4">

@@ -12,6 +12,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Features
 
+- **互动课堂门户「一键归档结束课程」**：「课堂进行中」提示条（回到课堂处）新增一键归档按钮，与绿色「回到课堂」并列。此前教师想从门户结束进行中的课节，只能「回到课堂 → 结课通票 → 学情简报 → 归档并结束课堂」四步；现在经原生 `<dialog>` 二次确认（AccessibleDialog，焦点落在安全的取消键）后直接调用既有幂等接口 `POST /api/classroom/sessions/:sessionId/archive`，封存会话、移入已归档战报并解除班级锁定，横幅随即消失、班级卡片恢复可点。会话 id 由 `GET /api/classroom/sessions/:lessonId` 探测结果携带，缺失时按钮禁用；归档失败保留横幅并可在确认框内重试。
 - **学案页两栏布局 + 导读侧栏**：`StudentXueanView` 头部由三行（标题 / 独立细进度条 / 活动导航）收成两行（标题 + 完成圆环 `0/3` + 活动导航），进度语义仍由 `role="progressbar"` 暴露；正文改为 `xl:grid-cols-[minmax(0,1fr)_280px]`（1280px 起才出现右栏，1024 及以下单栏全宽），左栏限宽 `max-w-5xl` 居中便于长文阅读，右栏「学案导读」常驻展示活动进度（只读状态徽标）与 `learning_goals` / `key_points` / `resources` / `operation_tips` 首页块——块内容兼容数组、`{goals:[…]}` 与纯文本三种历史形态；1024 及以下隐藏右栏，切换仍走顶部活动导航。阅读活动没有材料时由一行灰字改为空态引导卡。学生课堂里外层顶栏已显示环节名，卡内标题与 `学案式学习` 标记不再重复（头部收成「活动导航 + 进度」单行）；学案首页本身就在展示这些块，此时不并排重复导读栏；0% 进度条与无插件贡献的空 addon 分隔块不再渲染，块内 schema 键名（`GOALS` / `POINTS`…）也不再直接露给学生。
 
 - **课程导入与模板支持学案 / 白板双模式**：课程包格式升级到 v3，`lesson` 新增 `deliveryMode` / `modePackId` / `activities` / `blocks`；导入把交付模式写入 `lessons.delivery_mode` / `mode_pack_id`，并在同一事务内写入学案活动与首页块（学案包缺省时按 timeline 自动生成活动）。导出会带出真实交付模式与活动；`GET /api/course-packages/template?mode=xuean` 返回「预习-研读-练习」学案模板，课程管理工具栏与导入弹窗提供白板 / 学案两个模板下载入口。CSV 批量导入新增可选 `mode` 列（`whiteboard` / `xuean`，兼容「白板」/「学案」），学案行自动补齐默认三环节与活动；课程 CSV 模板改为真正的课程表头（此前误用班级模板）。
