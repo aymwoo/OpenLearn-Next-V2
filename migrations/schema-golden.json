@@ -1,7 +1,7 @@
 {
   "_comment": "数据库结构金样（自动生成，勿手改）：空库跑完 migrations/ 全部迁移后的表→列快照。启动时 assertSchemaMatchesGolden 以子集校验（实际库缺金样结构即拒绝启动；多出的表/列不报错）。改迁移后请运行 pnpm db:gen-golden 再生成。",
-  "migrationCount": 81,
-  "generatedAt": "2026-11-26T00:21:51.662Z",
+  "migrationCount": 82,
+  "generatedAt": "2026-11-27T12:03:53.618Z",
   "tables": {
     "_academic_year_backfill": ["backfilled_at", "id"],
     "_class_passcode_encryption": ["id", "note"],
@@ -813,7 +813,17 @@
       "slogan",
       "upload_max_file_mb"
     ],
-    "skill_bindings": ["enabled", "id", "scope_id", "scope_type", "skill_id", "surface", "updated_at", "updated_by"],
+    "skill_bindings": [
+      "enabled",
+      "id",
+      "roles_json",
+      "scope_id",
+      "scope_type",
+      "skill_id",
+      "surface",
+      "updated_at",
+      "updated_by"
+    ],
     "skill_config_rollbacks": [
       "applied_by",
       "created_at",

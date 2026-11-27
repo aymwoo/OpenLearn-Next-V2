@@ -12,7 +12,7 @@
 import crypto from 'node:crypto';
 import { kernelContainer } from '../packages/core/kernel/index.js';
 import { resolvePluginCommandType } from '../packages/core/plugin-host/plugin-namespace.js';
-import { loadSkillBindings, loadSkillSettings, resolveBindingEnabled } from './skill-store.js';
+import { loadSkillBindings, loadSkillSettings, resolveSkillBinding, type SkillBinding } from './skill-store.js';
 
 const CAP_SKILL_SCRIPT = 'skill:script';
 
@@ -326,6 +326,24 @@ export function parseManifestSkills(source: string | object | null | undefined):
 }
 
 /**
+ * 把生效绑定合并进技能描述符。
+ *
+ * 角色规则：绑定 roles 只能**收窄**技能声明，不能扩大。
+ * 未声明 roles 的技能默认角色是 teacher + administrator；因此绑定声明
+ * student 时交集为空（该范围内无人可用，fail-closed）。
+ */
+export function applyBindingToSkill(
+  skill: SkillDescriptor,
+  binding: Pick<SkillBinding, 'enabled' | 'roles'>,
+): SkillDescriptor {
+  const next: SkillDescriptor = { ...skill, enabled: binding.enabled };
+  if (!binding.roles) return next;
+  const declared: SkillRole[] = skill.roles ?? ['teacher', 'administrator'];
+  next.roles = declared.filter((role) => binding.roles!.includes(role));
+  return next;
+}
+
+/**
  * 读取全部 active 插件的 manifest 并解析技能，并合并管理员设置与细粒度绑定。
  * `includeDisabled: true` 仅供管理端使用：不应用绑定、不过滤停用技能。
  */
@@ -361,13 +379,13 @@ export function collectSkillDescriptors(
       next = { ...next, script: undefined };
     }
     if (!options.includeDisabled && options.surface) {
-      const bound = resolveBindingEnabled(bindings, {
+      const binding = resolveSkillBinding(bindings, {
         skillId: next.id,
         surface: options.surface,
         lessonId: options.lessonId,
         classId: options.classId,
       });
-      if (bound !== undefined) next = { ...next, enabled: bound };
+      if (binding) next = applyBindingToSkill(next, binding);
     }
     return next;
   });

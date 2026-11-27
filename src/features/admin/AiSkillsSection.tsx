@@ -40,6 +40,7 @@ interface AdminBinding {
   scopeType: 'global' | 'class' | 'lesson';
   scopeId: string;
   enabled: boolean;
+  roles?: string[] | null;
 }
 
 interface Option {
@@ -69,6 +70,12 @@ const SCOPE_LABELS: Record<ScopeType, { zh: string; en: string }> = {
   lesson: { zh: '课节', en: 'Lesson' },
 };
 
+const ROLE_LABELS: Record<string, { zh: string; en: string }> = {
+  administrator: { zh: '管理员', en: 'Admin' },
+  teacher: { zh: '教师', en: 'Teacher' },
+  student: { zh: '学生', en: 'Student' },
+};
+
 interface AiSkillsSectionProps {
   lang: 'zh' | 'en';
 }
@@ -92,6 +99,7 @@ export function AiSkillsSection({ lang }: AiSkillsSectionProps) {
   const [formSurface, setFormSurface] = useState('lesson_prep');
   const [formScopeType, setFormScopeType] = useState<ScopeType>('global');
   const [formScopeId, setFormScopeId] = useState('');
+  const [formRoles, setFormRoles] = useState<string[]>([]);
   const [bindingBusy, setBindingBusy] = useState(false);
 
   const load = useCallback(async () => {
@@ -201,6 +209,7 @@ export function AiSkillsSection({ lang }: AiSkillsSectionProps) {
     setFormSurface(skill.surfaces[0] ?? 'lesson_prep');
     setFormScopeType('global');
     setFormScopeId('');
+    setFormRoles([]);
     void loadOptions();
     await loadBindings(skill);
   };
@@ -222,6 +231,7 @@ export function AiSkillsSection({ lang }: AiSkillsSectionProps) {
           scopeType: formScopeType,
           scopeId: formScopeType === 'global' ? '' : formScopeId,
           enabled: true,
+          roles: formRoles.length > 0 ? formRoles : null,
         }),
       });
       const data = await res.json().catch(() => null);
@@ -436,6 +446,13 @@ export function AiSkillsSection({ lang }: AiSkillsSectionProps) {
                                 {SURFACE_LABELS[binding.surface]?.[zh ? 'zh' : 'en']}
                               </span>
                               <span className="text-secondary ml-2">{scopeLabel(binding)}</span>
+                              <span className="text-secondary ml-2">
+                                {binding.roles && binding.roles.length > 0
+                                  ? binding.roles.map((role) => ROLE_LABELS[role]?.[zh ? 'zh' : 'en'] ?? role).join('/')
+                                  : zh
+                                    ? '跟随声明'
+                                    : 'declared'}
+                              </span>
                               <span className={`ml-2 ${binding.enabled ? 'text-emerald-600' : 'text-red-500'}`}>
                                 {binding.enabled ? (zh ? '启用' : 'on') : zh ? '停用' : 'off'}
                               </span>
@@ -497,6 +514,30 @@ export function AiSkillsSection({ lang }: AiSkillsSectionProps) {
                           ))}
                         </select>
                       )}
+                      <div className="flex items-center gap-1.5" role="group" aria-label={zh ? '角色' : 'Roles'}>
+                        {(['teacher', 'administrator', 'student'] as const).map((role) => {
+                          const active = formRoles.includes(role);
+                          return (
+                            <button
+                              key={role}
+                              type="button"
+                              aria-pressed={active}
+                              onClick={() =>
+                                setFormRoles((prev) =>
+                                  active ? prev.filter((item) => item !== role) : [...prev, role],
+                                )
+                              }
+                              className={`px-2 py-1.5 text-xs rounded-lg border transition-colors cursor-pointer ${
+                                active
+                                  ? 'bg-indigo-50 border-indigo-300 text-indigo-700'
+                                  : 'border-border text-secondary hover:text-main'
+                              }`}
+                            >
+                              {ROLE_LABELS[role][zh ? 'zh' : 'en']}
+                            </button>
+                          );
+                        })}
+                      </div>
                       <button
                         type="button"
                         onClick={() => void addBinding(skill)}
@@ -508,8 +549,8 @@ export function AiSkillsSection({ lang }: AiSkillsSectionProps) {
                     </div>
                     <p className="text-[11px] text-secondary">
                       {zh
-                        ? '优先级：课节 > 班级 > 全局；绑定会覆盖全局启停。'
-                        : 'Priority: lesson > class > global; bindings override global enablement.'}
+                        ? '优先级：课节 > 班级 > 全局；绑定会覆盖全局启停。未选角色 = 跟随技能声明；角色只会收窄，不会扩大。'
+                        : 'Priority: lesson > class > global; bindings override global enablement. No role selected = follow declaration; bindings can only narrow roles.'}
                     </p>
                   </div>
                 )}

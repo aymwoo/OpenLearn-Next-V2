@@ -11,7 +11,7 @@
 
 import crypto from 'node:crypto';
 import { kernelContainer } from '../packages/core/kernel/index.js';
-import type { SkillSurface } from './skill-registry.js';
+import type { SkillRole, SkillSurface } from './skill-registry.js';
 
 export interface SkillSetting {
   enabled: boolean;
@@ -53,8 +53,25 @@ export interface SkillBinding {
   scopeType: SkillScopeType;
   scopeId: string;
   enabled: boolean;
+  /** null / undefined = 跟随技能声明；数组 = 在该绑定内只允许这些角色（只可收窄） */
+  roles?: SkillRole[] | null;
   updatedBy?: string | null;
   updatedAt: number;
+}
+
+const VALID_ROLES: readonly SkillRole[] = ['administrator', 'teacher', 'student'];
+
+function parseBindingRoles(raw: unknown): SkillRole[] | null {
+  if (typeof raw !== 'string' || !raw.trim()) return null;
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return null;
+    return parsed.filter(
+      (item): item is SkillRole => typeof item === 'string' && (VALID_ROLES as readonly string[]).includes(item),
+    );
+  } catch {
+    return null;
+  }
 }
 
 const VALID_SURFACES: readonly SkillSurface[] = ['lesson_prep', 'admin_settings', 'classroom_live'];
@@ -298,7 +315,7 @@ export function loadSkillBindings(): SkillBinding[] {
   try {
     const rows = kernelContainer.db
       .prepare(
-        `SELECT id, skill_id, surface, scope_type, scope_id, enabled, updated_by, updated_at
+        `SELECT id, skill_id, surface, scope_type, scope_id, enabled, roles_json, updated_by, updated_at
          FROM skill_bindings`,
       )
       .all() as Array<{
@@ -308,6 +325,7 @@ export function loadSkillBindings(): SkillBinding[] {
       scope_type: string;
       scope_id: string;
       enabled: number;
+      roles_json?: string | null;
       updated_by?: string | null;
       updated_at: number;
     }>;
@@ -318,6 +336,7 @@ export function loadSkillBindings(): SkillBinding[] {
       scopeType: row.scope_type as SkillScopeType,
       scopeId: row.scope_id,
       enabled: row.enabled !== 0,
+      roles: parseBindingRoles(row.roles_json),
       updatedBy: row.updated_by ?? null,
       updatedAt: row.updated_at,
     }));
@@ -327,21 +346,27 @@ export function loadSkillBindings(): SkillBinding[] {
 }
 
 /** 解析最具体的绑定：lesson > class > global；没有绑定时返回 undefined。 */
+export function resolveSkillBinding(
+  bindings: SkillBinding[],
+  args: { skillId: string; surface: SkillSurface; lessonId?: string | null; classId?: string | null },
+): SkillBinding | undefined {
+  const candidates = bindings.filter((binding) => binding.skillId === args.skillId && binding.surface === args.surface);
+  if (args.lessonId) {
+    const lesson = candidates.find((binding) => binding.scopeType === 'lesson' && binding.scopeId === args.lessonId);
+    if (lesson) return lesson;
+  }
+  if (args.classId) {
+    const cls = candidates.find((binding) => binding.scopeType === 'class' && binding.scopeId === args.classId);
+    if (cls) return cls;
+  }
+  return candidates.find((binding) => binding.scopeType === 'global');
+}
+
 export function resolveBindingEnabled(
   bindings: SkillBinding[],
   args: { skillId: string; surface: SkillSurface; lessonId?: string | null; classId?: string | null },
 ): boolean | undefined {
-  const candidates = bindings.filter((binding) => binding.skillId === args.skillId && binding.surface === args.surface);
-  if (args.lessonId) {
-    const lesson = candidates.find((binding) => binding.scopeType === 'lesson' && binding.scopeId === args.lessonId);
-    if (lesson) return lesson.enabled;
-  }
-  if (args.classId) {
-    const cls = candidates.find((binding) => binding.scopeType === 'class' && binding.scopeId === args.classId);
-    if (cls) return cls.enabled;
-  }
-  const global = candidates.find((binding) => binding.scopeType === 'global');
-  return global ? global.enabled : undefined;
+  return resolveSkillBinding(bindings, args)?.enabled;
 }
 
 export function upsertSkillBinding(params: {
@@ -350,17 +375,23 @@ export function upsertSkillBinding(params: {
   scopeType: SkillScopeType;
   scopeId?: string;
   enabled: boolean;
+  roles?: SkillRole[] | null;
   actorId?: string;
 }): SkillBinding {
   const scopeId = params.scopeType === 'global' ? '' : (params.scopeId ?? '').trim();
   const id = `skillbind_${crypto.randomUUID()}`;
   const now = Date.now();
+  const rolesJson =
+    params.roles && params.roles.length > 0
+      ? JSON.stringify(params.roles.filter((r) => VALID_ROLES.includes(r)))
+      : null;
   kernelContainer.db
     .prepare(
-      `INSERT INTO skill_bindings (id, skill_id, surface, scope_type, scope_id, enabled, updated_by, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `INSERT INTO skill_bindings (id, skill_id, surface, scope_type, scope_id, enabled, roles_json, updated_by, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(skill_id, surface, scope_type, scope_id) DO UPDATE SET
          enabled = excluded.enabled,
+         roles_json = excluded.roles_json,
          updated_by = excluded.updated_by,
          updated_at = excluded.updated_at`,
     )
@@ -371,12 +402,13 @@ export function upsertSkillBinding(params: {
       params.scopeType,
       scopeId,
       params.enabled ? 1 : 0,
+      rolesJson,
       params.actorId ?? null,
       now,
     );
   const saved = kernelContainer.db
     .prepare(
-      `SELECT id, skill_id, surface, scope_type, scope_id, enabled, updated_by, updated_at
+      `SELECT id, skill_id, surface, scope_type, scope_id, enabled, roles_json, updated_by, updated_at
        FROM skill_bindings WHERE skill_id = ? AND surface = ? AND scope_type = ? AND scope_id = ?`,
     )
     .get(params.skillId, params.surface, params.scopeType, scopeId) as {
@@ -386,6 +418,7 @@ export function upsertSkillBinding(params: {
     scope_type: string;
     scope_id: string;
     enabled: number;
+    roles_json?: string | null;
     updated_by?: string | null;
     updated_at: number;
   };
@@ -396,6 +429,7 @@ export function upsertSkillBinding(params: {
     scopeType: saved.scope_type as SkillScopeType,
     scopeId: saved.scope_id,
     enabled: saved.enabled !== 0,
+    roles: parseBindingRoles(saved.roles_json),
     updatedBy: saved.updated_by ?? null,
     updatedAt: saved.updated_at,
   };

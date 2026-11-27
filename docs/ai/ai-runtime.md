@@ -23,5 +23,5 @@ Skill 不是新的执行通道，而是 `ai.skill.provider` 之上的「目录 +
   - `classroom_card`（课堂）：确认后由 `POST /api/skills/:id/apply-card` 走 `whiteboardService.drawElement` 投屏。
 - **运行审计**：每次运行写入 `skill_runs`；管理端可查询并回滚配置变更。
 - **脚本技能**：manifest 声明 `script` 时走 `server/skill-script-sandbox.ts`（`node:vm` + 禁用代码生成 + 硬超时），不经过大模型；需获批 `skill:script`。
-- **细粒度绑定**：`skill_bindings` 按 lesson > class > global 覆盖可用性；运行时目录与 `/api/agent/chat` 都会带 `lessonId` / `classId` 解析。
+- **细粒度绑定**：`skill_bindings` 按 lesson > class > global 覆盖可用性；绑定可带 `roles` 收窄技能声明（只减不增，交集为空即不可用）；运行时目录与 `/api/agent/chat` 都会带 `lessonId` / `classId` 解析。
 - **接口**：`GET /api/skills?surface=`、`POST /api/skills/:id/run`；管理端 `GET/PATCH /api/admin/skills`、`GET /api/admin/skill-runs`、`POST /api/admin/skill-runs/:runId/rollback`、`GET/PUT/DELETE /api/admin/skills/:id/bindings`。

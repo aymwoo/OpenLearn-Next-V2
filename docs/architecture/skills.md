@@ -118,11 +118,17 @@ Skill 不是新的执行通道，也不新建第二套 AI 链路。它是 `ai.sk
 | scope_type | `global`（scope_id 为空）/ `class` / `lesson`                |
 | 解析优先级 | lesson > class > global > `skill_settings`                   |
 | 作用       | 最具体的绑定会覆盖全局启停（可用于「全局关闭、单节课开启」） |
+| roles_json | `NULL` = 跟随技能声明；数组 = 该绑定内只允许这些角色         |
+
+角色合并规则：**绑定只能收窄技能声明的 `roles`，不能扩大**，最终角色 =
+声明 ∩ 绑定。未声明 `roles` 的技能默认角色为 `teacher + administrator`，因此
+绑定写 `student` 时交集为空（该范围内无人可用，fail-closed）。学生侧 SEC-01
+仍是硬底线。
 
 管理端接口：
 
 - `GET /api/admin/skills/:id/bindings`
-- `PUT /api/admin/skills/:id/bindings`（`{ surface, scopeType, scopeId, enabled }`）
+- `PUT /api/admin/skills/:id/bindings`（`{ surface, scopeType, scopeId, enabled, roles? }`）
 - `DELETE /api/admin/skills/:id/bindings?surface=&scopeType=&scopeId=`
 
 运行时目录与运行接口都会带上 `lessonId` / `classId` 解析绑定；`/api/agent/chat` 同样接受 `classId`。
@@ -130,8 +136,8 @@ Skill 不是新的执行通道，也不新建第二套 AI 链路。它是 `ai.sk
 ## 状态
 
 - **P0 / P1 / P2 已完成**：备课环节生成、管理端启停与配置体检、课堂卡片投屏。
-- **脚本沙箱与细粒度绑定已完成**：`skill:script` 能力门禁 + `node:vm` 隔离执行；`skill_bindings` 支持全局 / 班级 / 课节三级覆盖。
-- 待办：技能市场导入、进程级（worker）脚本隔离、按角色的绑定维度。
+- **脚本沙箱、细粒度绑定与角色收窄已完成**：`skill:script` 能力门禁 + `node:vm` 隔离执行；`skill_bindings` 支持全局 / 班级 / 课节三级覆盖与角色交集。
+- 待办：技能市场导入、进程级（worker）脚本隔离、管理员 super-role 语义。
 
 ## 相关文档
 

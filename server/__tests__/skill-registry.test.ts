@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  applyBindingToSkill,
   buildSkillToolBindings,
   isSkillVisible,
   normalizeConfigPatch,
@@ -8,7 +9,7 @@ import {
   parseSkillArtifact,
   type SkillDescriptor,
 } from '../skill-registry.js';
-import { resolveBindingEnabled, type SkillBinding } from '../skill-store.js';
+import { resolveBindingEnabled, resolveSkillBinding, type SkillBinding } from '../skill-store.js';
 
 /**
  * P0 Skill 注册表回归：manifest → 描述符、场景/角色过滤、产物解析。
@@ -280,5 +281,57 @@ describe('resolveBindingEnabled', () => {
     expect(
       resolveBindingEnabled([], { skillId: 'demo.skill', surface: 'lesson_prep', lessonId: 'l1', classId: 'c1' }),
     ).toBeUndefined();
+  });
+
+  it('resolveSkillBinding 返回胜出绑定本身（含角色收窄）', () => {
+    const bindings: SkillBinding[] = [
+      { ...binding('global', '', true), roles: null },
+      { ...binding('lesson', 'l1', true), roles: ['teacher'] },
+    ];
+    const winner = resolveSkillBinding(bindings, {
+      skillId: 'demo.skill',
+      surface: 'lesson_prep',
+      lessonId: 'l1',
+      classId: 'c1',
+    });
+    expect(winner?.scopeType).toBe('lesson');
+    expect(winner?.roles).toEqual(['teacher']);
+  });
+});
+
+describe('applyBindingToSkill', () => {
+  const skill: SkillDescriptor = {
+    id: 'demo.skill',
+    source: 'plugin',
+    pluginId: '@scope/demo',
+    name: 'demo',
+    description: 'demo',
+    surfaces: ['lesson_prep'],
+    roles: ['teacher', 'administrator'],
+    tools: [],
+    latencyClass: 'interactive',
+    enabled: true,
+  };
+
+  it('绑定角色只能收窄声明', () => {
+    const next = applyBindingToSkill(skill, { enabled: true, roles: ['teacher'] });
+    expect(next.roles).toEqual(['teacher']);
+    expect(isSkillVisible(next, 'lesson_prep', 'administrator')).toBe(false);
+    expect(isSkillVisible(next, 'lesson_prep', 'teacher')).toBe(true);
+  });
+
+  it('未声明 roles 时默认 teacher + administrator，再与绑定交集', () => {
+    const declaredless: SkillDescriptor = { ...skill, roles: undefined };
+    expect(applyBindingToSkill(declaredless, { enabled: true, roles: ['administrator'] }).roles).toEqual([
+      'administrator',
+    ]);
+    // 绑定想开放学生，但声明没有学生 → 交集为空，谁也不可用（fail-closed）
+    expect(applyBindingToSkill(declaredless, { enabled: true, roles: ['student'] }).roles).toEqual([]);
+  });
+
+  it('roles 为 null 时保持技能声明，只覆盖开关', () => {
+    const next = applyBindingToSkill(skill, { enabled: false, roles: null });
+    expect(next.roles).toEqual(['teacher', 'administrator']);
+    expect(next.enabled).toBe(false);
   });
 });

@@ -37,6 +37,7 @@ import {
   listSkillCatalog,
   normalizeConfigPatch,
   parseSkillArtifact,
+  type SkillRole,
   type SkillSurface,
 } from '../skill-registry.js';
 import { executeSkillScript, SkillScriptError } from '../skill-script-sandbox.js';
@@ -590,12 +591,29 @@ export function registerSkillRoutes(ctx: ServerContext) {
         if (!exists) return res.status(404).json({ success: false, error: 'LESSON_NOT_FOUND' });
       }
 
+      let roles: SkillRole[] | null = null;
+      if (req.body?.roles !== undefined && req.body.roles !== null) {
+        if (!Array.isArray(req.body.roles)) {
+          return res.status(400).json({ success: false, error: 'INVALID_ROLES' });
+        }
+        const validRoles: readonly SkillRole[] = ['administrator', 'teacher', 'student'];
+        const parsedRoles = req.body.roles.filter(
+          (item: unknown): item is SkillRole =>
+            typeof item === 'string' && (validRoles as readonly string[]).includes(item),
+        );
+        if (parsedRoles.length !== req.body.roles.length) {
+          return res.status(400).json({ success: false, error: 'INVALID_ROLES' });
+        }
+        roles = parsedRoles;
+      }
+
       const binding = upsertSkillBinding({
         skillId: skill.id,
         surface,
         scopeType,
         scopeId,
         enabled: req.body.enabled,
+        roles,
         actorId: getActorId(req),
       });
       recordSecurityAudit('admin.skill_binding_updated', {
@@ -604,6 +622,7 @@ export function registerSkillRoutes(ctx: ServerContext) {
         scopeType,
         scopeId: binding.scopeId,
         enabled: binding.enabled,
+        roles: binding.roles ?? null,
         actorId: getActorId(req),
       });
       res.json({ success: true, binding });

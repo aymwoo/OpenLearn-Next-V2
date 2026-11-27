@@ -587,7 +587,7 @@ MFE 远端登记。MFE 执行边界已移除，表保留作历史数据兼容。
 
 <!-- AUTO-GENERATED:table-inventory BEGIN -->
 
-共 **112** 张表（迁移 81 个，金样生成于 2026-11-26T00:21:51.662Z）。列清单为列名（类型与约束见迁移 SQL）：
+共 **112** 张表（迁移 82 个，金样生成于 2026-11-27T12:03:53.618Z）。列清单为列名（类型与约束见迁移 SQL）：
 
 - `_academic_year_backfill`: backfilled_at, id
 - `_class_passcode_encryption`: id, note
@@ -679,7 +679,7 @@ MFE 远端登记。MFE 执行边界已移除，表保留作历史数据兼容。
 - `segment_gate_overrides`: actor_id, created_at, lesson_id, reason, segment_id, student_id
 - `segment_visits`: entered_at, id, left_at, lesson_id, segment_id, student_id
 - `site_settings`: academic_start_month, allow_public_student_lookup, allow_unsigned_plugins, bridge_hook_telemetry, community_install_enabled, community_registry_url, current_academic_year, default_theme_id, file_storage_config, http_access_log_ignore, http_access_log_mode, http_slow_ms, id, logo_url, logout_clear_site_data, mode_pack_show_xuean_tab, mode_packs_enabled, site_name, slogan, upload_max_file_mb
-- `skill_bindings`: enabled, id, scope_id, scope_type, skill_id, surface, updated_at, updated_by
+- `skill_bindings`: enabled, id, roles_json, scope_id, scope_type, skill_id, surface, updated_at, updated_by
 - `skill_config_rollbacks`: applied_by, created_at, id, patch_json, previous_json, rolled_back_at, rolled_back_by, run_id
 - `skill_runs`: actor_id, artifact_kind, created_at, error, finished_at, id, scope_json, skill_id, status, surface
 - `skill_settings`: enabled, skill_id, surfaces_json, updated_at, updated_by
