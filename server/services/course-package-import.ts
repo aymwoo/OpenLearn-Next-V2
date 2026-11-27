@@ -43,7 +43,11 @@ import {
   type CoursePackageActivity,
   type CoursePackageBlock,
 } from './course-package.js';
-import { upsertLearningSurface, validateLearningContentRef } from './learning-surface-service.js';
+import {
+  upsertLearningSurface,
+  validateLearningContentRef,
+  type LearningContentRef,
+} from './learning-surface-service.js';
 import { xueanActivityTypeForSegment } from '../../packages/core/plugin-host/course-delivery-mode.js';
 import { BUILTIN_XUEAN_MODE_PACK_ID } from '../../packages/core/plugin-host/mode-pack.js';
 
@@ -273,22 +277,55 @@ function resolvePackageActivities(pkg: CoursePackage): CoursePackageActivity[] {
 }
 
 /**
- * 学案首页块的内容约束。
+ * 学案首页 / 互动课件块的内容约束。
  *
  * 与 `/api/lessons/:lessonId/blocks` 的 `parseBlock` 保持同一口径 —— 课程包导入
  * 是另一条写库通道，不能因为它绕过了路由校验就放宽约束：`backgroundImage`
- * 只接受本实例的上传文件 URL，`intro` 截断到 2000 字符。
+ * 只接受本实例的上传文件 URL，`intro` 截断到 2000 字符，互动课件块只留
+ * `coursewareUuid` / `resourceId` / `title`。
  */
 function normalizeBlockContent(
   blockType: string,
   content: Record<string, unknown> | undefined,
 ): Record<string, unknown> | undefined {
+  // 互动课件块只存「内容源描述」三字段，与路由的 `parseBlock` 一致 ——
+  // 多带的键（尤其是历史遗留的 `code` / `surfaceId`）不应进入新实例的库里。
+  if (blockType === 'interactive_courseware') {
+    const raw = content ?? {};
+    const short = (value: unknown, max: number) =>
+      typeof value === 'string' && value.trim() ? value.trim().slice(0, max) : null;
+    return {
+      coursewareUuid: short(raw.coursewareUuid, 128),
+      resourceId: short(raw.resourceId, 128),
+      title: short(raw.title, 120),
+    };
+  }
   if (blockType !== 'xuean_home') return content;
   const raw = content ?? {};
   const intro = typeof raw.intro === 'string' ? raw.intro.trim().slice(0, 2000) : '';
   const rawBackground = typeof raw.backgroundImage === 'string' ? raw.backgroundImage.trim() : '';
   const backgroundImage = /^(\/api\/files\/|\/uploads\/)/.test(rawBackground) ? rawBackground.slice(0, 500) : '';
   return { intro, backgroundImage };
+}
+
+/**
+ * 互动课件块的 Surface 内容引用（与路由的 `buildBlockContentRef` 同一口径）。
+ *
+ * 学生端只认 `surface_id`：导入只写 `lesson_activity_blocks` 而不建 Surface 时，
+ * 互动课件块会退化成一段原始 JSON，而不是课件本身。
+ */
+function blockContentRef(content: Record<string, unknown> | undefined): LearningContentRef | null {
+  if (!content) return null;
+  const coursewareUuid = typeof content.coursewareUuid === 'string' ? content.coursewareUuid : null;
+  const resourceId = typeof content.resourceId === 'string' ? content.resourceId : null;
+  const sourceId = coursewareUuid ?? resourceId;
+  if (!sourceId) return null;
+  const validated = validateLearningContentRef({
+    rendererId: 'html_courseware',
+    source: { kind: coursewareUuid ? 'courseware' : 'resource', id: sourceId },
+    ...(typeof content.title === 'string' && content.title ? { config: { title: content.title } } : {}),
+  });
+  return validated.ok ? validated.value : null;
 }
 
 /**
@@ -490,7 +527,21 @@ export async function importCoursePackage(
         );
       });
       blocks.forEach((block, index) => {
-        insertBlock.run(uuidv7(), lessonId, block.blockType, index, JSON.stringify(block.content ?? {}), now, now);
+        const blockId = uuidv7();
+        insertBlock.run(blockId, lessonId, block.blockType, index, JSON.stringify(block.content ?? {}), now, now);
+        if (block.blockType !== 'interactive_courseware') return;
+        const contentRef = blockContentRef(block.content);
+        if (!contentRef) return;
+        const surface = upsertLearningSurface(db, {
+          lessonId,
+          kind: 'lesson_block',
+          ownerId: blockId,
+          contentRef,
+          now,
+        });
+        if (surface.ok) {
+          db.prepare('UPDATE lesson_activity_blocks SET surface_id = ? WHERE id = ?').run(surface.surface.id, blockId);
+        }
       });
     });
 

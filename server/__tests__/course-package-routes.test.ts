@@ -47,6 +47,8 @@ async function purgeTestRows() {
   db.prepare('DELETE FROM whiteboard_elements WHERE lesson_id NOT IN (SELECT id FROM lessons)').run();
   db.prepare('DELETE FROM lesson_activities WHERE lesson_id NOT IN (SELECT id FROM lessons)').run();
   db.prepare('DELETE FROM lesson_activity_blocks WHERE lesson_id NOT IN (SELECT id FROM lessons)').run();
+  db.prepare('DELETE FROM learning_surface_attempts WHERE lesson_id NOT IN (SELECT id FROM lessons)').run();
+  db.prepare('DELETE FROM learning_surfaces WHERE lesson_id NOT IN (SELECT id FROM lessons)').run();
   db.prepare("DELETE FROM lessons WHERE title LIKE '【CPKG-TEST】%'").run();
   importedLessonIds.length = 0;
   const fileStorage = getFileStorageService();
@@ -213,6 +215,52 @@ describe('course package routes', () => {
     expect(activities.map((a) => a.type)).toEqual(['reading', 'submission', 'quiz']);
     // 学生端不渲染 lessons.content：自动生成的阅读活动必须带上课程正文
     expect(JSON.parse(String(activities[0].config_json)).content).toContain('## 🎯 教学目标');
+  });
+
+  it('binds an interactive courseware block to a lesson-block surface on import', async () => {
+    const template = await buildTemplateCoursePackage('xuean');
+    template.lesson.title = '【CPKG-TEST】学案互动课件块';
+    template.lesson.blocks = [
+      {
+        blockType: 'interactive_courseware',
+        content: { coursewareUuid: 'cw-demo-1', title: '互动课件', surplus: 'drop-me' },
+      },
+    ];
+
+    const res = await fetch(baseUrl + '/api/course-packages/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...cookie(teacherToken) },
+      body: JSON.stringify({ package: template }),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    recordImport(body);
+    const lessonId = body.result.lessonId as string;
+
+    const block = db
+      .prepare(
+        'SELECT id, content_json, surface_id FROM lesson_activity_blocks ' +
+          "WHERE lesson_id = ? AND block_type = 'interactive_courseware'",
+      )
+      .get(lessonId) as { id: string; content_json: string; surface_id: string | null };
+    // 与路由 parseBlock 同口径：只保留三个字段
+    expect(JSON.parse(block.content_json)).toEqual({
+      coursewareUuid: 'cw-demo-1',
+      resourceId: null,
+      title: '互动课件',
+    });
+    // 学生端只认 surface_id：没有 Surface 的互动课件块会退化成原始 JSON
+    expect(block.surface_id).toBeTruthy();
+
+    const surface = db
+      .prepare('SELECT kind, owner_id, content_ref_json FROM learning_surfaces WHERE id = ?')
+      .get(block.surface_id) as { kind: string; owner_id: string; content_ref_json: string };
+    expect(surface.kind).toBe('lesson_block');
+    expect(surface.owner_id).toBe(block.id);
+    expect(JSON.parse(surface.content_ref_json)).toMatchObject({
+      rendererId: 'html_courseware',
+      source: { kind: 'courseware', id: 'cw-demo-1' },
+    });
   });
 
   it('resolves asset placeholders inside xuean activity configs and re-inlines them on export', async () => {

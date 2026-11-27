@@ -201,8 +201,12 @@ CSV 表头可选增加 `mode`（也识别 `delivery_mode` / `课程模式` / `�
 
 | 字段        | 类型   | 必填 | 说明                                                                                                                   |
 | ----------- | ------ | ---- | ---------------------------------------------------------------------------------------------------------------------- |
-| `blockType` | string | 是   | `xuean_home` / `learning_goals` / `resources` / `free_html` 等                                                         |
+| `blockType` | string | 是   | `xuean_home` / `interactive_courseware` / `learning_goals` / `resources` / `free_html` 等                              |
 | `content`   | object | 否   | 块内容；`xuean_home` 为 `{ intro, backgroundImage }`，背景图只接受本实例上传文件 URL（`/api/files/*` 或 `/uploads/*`） |
+
+`interactive_courseware` 块的 `content` 为 `{ coursewareUuid, resourceId, title }`（二者至少一个），
+导入时会像 `/api/lessons/:lessonId/blocks` 一样创建 `lesson_block` 类型的 LearningSurface 并回写
+`surface_id`；只写块而不建 Surface 的话，学生端会退化成一段原始 JSON 而不是课件。
 
 ### 2.4 `assets`
 

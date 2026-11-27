@@ -27,6 +27,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 ### Fixes
 
 - **学案课程包正文不可见 / 活动附件失效**：自动派生的阅读活动会携带课程正文（学案学生端不渲染 `lessons.content`）；课程包导入会解析 `activities[].config` / `activities[].rubric` / `blocks[].content` 中的 `${asset:<id>}`，导出时逆向替换并内联附件；`xuean_home` 背景图按块路由同一口径收敛为上传文件 URL；CSV 学案导入把正文写入阅读活动。
+- **学案互动课件块导入后退化成原始 JSON**：导入 `interactive_courseware` 首页块时按块路由同一口径收敛为 `{ coursewareUuid, resourceId, title }`，并在同一事务内创建 `lesson_block` 类型的 LearningSurface 回写 `surface_id`；此前只写 `lesson_activity_blocks`，学生端因缺少 Surface 而无法渲染课件。
 - **学案插件编辑器 / 学生视图上下文丢失**：`xuean.activity.editor/student` 分发现在会把调用点传入的 `activityType` / `activity` / `lessonId` / `onSaved` 合并进组件 props，远程 view 同时收到 `sandboxContext`（学案槽位预算放宽到 64KB），修复「保存回调 undefined、插件活动视图空白」。
 - **manifest 顶层字段不生效**：`requiresSensitive` 与 `placement` 现在会提升到扩展配置顶层，声明式注册与命令式注册行为一致。
 - **发布前检查永久阻断**：preflight 结果在班级、题量或总分变化时自动失效，并支持 `onClear` 主动清除。
