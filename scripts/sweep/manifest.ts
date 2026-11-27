@@ -60,10 +60,10 @@ export const SUB_TABS_BY_TAB: Record<string, SweepSubTab[]> = {
   ],
   // 管理后台：AdminPanel.tsx
   admin_directory: [
-    { id: 'directory', label: '学校教职及系统配置', name: '学校教职及系统配置|Staff Accounts & Config' },
+    { id: 'directory', label: '用户管理', name: '用户管理|User Management' },
     { id: 'ai_providers', label: 'AI 模型提供商', name: 'AI 模型提供商|AI Providers' },
     { id: 'sqlite', label: '系统监控', name: '系统监控|System Monitor' },
-    { id: 'site_settings', label: '站点信息设置', name: '站点信息设置|Site Settings' },
+    { id: 'site_settings', label: '站点设置', name: '站点设置|Site Settings' },
   ],
 };
 

@@ -15,7 +15,7 @@ import {
 export { computeSha256, hashMatches };
 
 export const COMMUNITY_INSTALL_DISABLED_MESSAGE =
-  '社区安装已被关闭。请由管理员在「站点信息设置 → 运行时策略」或插件中心「社区」页开启「允许从社区注册表安装」。';
+  '社区安装已被关闭。请由管理员在「站点设置 → 运行时策略」或插件中心「社区」页开启「允许从社区注册表安装」。';
 
 export type CommunityInstallConfigSource = 'database' | 'default';
 

@@ -25,6 +25,7 @@ import {
   ArrowUpCircle,
   Copy,
   Sparkles,
+  ChevronDown,
 } from 'lucide-react';
 import { AiProvidersPanel, type AIProvider } from '../features/admin/AiProvidersPanel';
 import { DemoDataPanel } from '../features/admin/DemoDataPanel';
@@ -155,6 +156,8 @@ export function AdminPanel({
     latencyMs?: number;
   } | null>(null);
   const [loadingSqlite, setLoadingSqlite] = useState(false);
+  // 实体表行数字典默认展开，高度与右侧 PRAGMA / 维护工具箱两卡总高对齐，超出部分内部滚动
+  const [isSqliteTableExpanded, setIsSqliteTableExpanded] = useState(true);
 
   // System Upgrade Check state
   const [upgradeInfo, setUpgradeInfo] = useState<{
@@ -472,7 +475,7 @@ export function AdminPanel({
         <div>
           <h2 className="text-base sm:text-lg font-bold text-gray-800 flex items-center gap-2">
             <Shield className="text-indigo-600 shrink-0" size={20} />
-            <span>{lang === 'zh' ? '系统管理与教职后台' : 'Staff Directory & System Admin'}</span>
+            <span>{lang === 'zh' ? '系统管理' : 'System Management'}</span>
             <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100/80">
               {currentUserRole === 'administrator'
                 ? lang === 'zh'
@@ -558,7 +561,7 @@ export function AdminPanel({
               }`}
             >
               <Users size={14} />
-              <span>{lang === 'zh' ? '学校教职及系统配置' : 'Staff Accounts & Config'}</span>
+              <span>{lang === 'zh' ? '用户管理' : 'User Management'}</span>
             </button>
             <button
               onClick={() => setActiveAdminTab('ai_providers')}
@@ -589,7 +592,7 @@ export function AdminPanel({
               }`}
             >
               <Settings size={14} />
-              <span>{lang === 'zh' ? '站点信息设置' : 'Site Settings'}</span>
+              <span>{lang === 'zh' ? '站点设置' : 'Site Settings'}</span>
             </button>
 
             {/* admin.tab 扩展 Tab 按钮 */}
@@ -607,7 +610,7 @@ export function AdminPanel({
               className="px-3.5 py-1.5 text-xs font-bold rounded-lg flex items-center gap-1.5 transition-all cursor-pointer text-primary-theme hover:bg-primary-theme/10"
             >
               <Sparkles size={14} />
-              <span>{lang === 'zh' ? '第三方主题管理' : 'Themes'}</span>
+              <span>{lang === 'zh' ? '主题管理' : 'Theme Management'}</span>
             </button>
           </div>
         </div>
@@ -885,147 +888,172 @@ export function AdminPanel({
                 <ExtensionPointRenderer slot="admin.dashboard.card" slotProps={{ sqliteStats, lang }} />
               </div>
 
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-                {/* Table layout detail catalog (lg:col-span-8) */}
-                <div className="lg:col-span-8 bg-white border border-gray-200 rounded-xl shadow-3xs overflow-hidden flex flex-col">
-                  <div className="p-4 sm:p-5 border-b border-gray-100 bg-gray-50/60 flex items-center justify-between">
-                    <div className="text-left">
-                      <h3 className="font-extrabold text-gray-800 text-sm sm:text-base flex items-center gap-1.5 justify-start">
-                        <Database className="text-indigo-600" size={18} />
-                        {lang === 'zh' ? 'SQLite 数据库实体列表与行数字典' : 'SQLite Relational Entity Tables Catalog'}
-                      </h3>
-                      <p className="text-xs text-gray-400 mt-1 block">
-                        {lang === 'zh'
-                          ? '实时展示当前在 educational_os.db 内核中的关系型实体及在册记录行数。'
-                          : 'Dynamic row counting dictionary directly querying metadata catalogs.'}
-                      </p>
-                    </div>
-                    <button
-                      onClick={fetchSqliteStats}
-                      disabled={loadingSqlite}
-                      className="p-1 px-3 text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold border border-indigo-200/45 rounded-xl flex items-center gap-1 transition-all cursor-pointer"
-                    >
-                      <RefreshCw size={11} className={loadingSqlite ? 'animate-spin' : ''} />
-                      {lang === 'zh' ? '重算/刷新 font' : 'Refresh Metrics'}
-                    </button>
-                  </div>
-
-                  <div className="p-4 sm:p-5">
-                    {loadingSqlite && !sqliteStats ? (
-                      <div className="flex flex-col items-center justify-center py-12 text-slate-400 text-xs">
-                        <RefreshCw size={36} className="animate-spin text-indigo-500 mb-2" />
-                        <span>
-                          {lang === 'zh'
-                            ? '正在重算数据库实体表统计指标...'
-                            : 'Calculating database page allocation and statistics...'}
-                        </span>
-                      </div>
-                    ) : !sqliteStats ? (
-                      <div className="text-center text-xs py-12 text-slate-400">
-                        {lang === 'zh'
-                          ? '无法提取到 SQLite 信息，可能进程被独占。'
-                          : 'Failed to retrieve connection parameters.'}
-                      </div>
-                    ) : (
-                      <AccessibleTableRegion
-                        labelledBy="admin-sqlite-stats-caption"
-                        className="border border-gray-100 rounded-xl"
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
+                {/* Table layout detail catalog (lg:col-span-8)：展开时高度由右侧两卡总高决定 */}
+                <div className="lg:col-span-8 relative">
+                  <div
+                    className={`bg-white border border-gray-200 rounded-xl shadow-3xs overflow-hidden flex flex-col ${
+                      isSqliteTableExpanded ? 'lg:absolute lg:inset-0' : ''
+                    }`}
+                  >
+                    <div className="p-4 sm:p-5 border-b border-gray-100 bg-gray-50/60 flex items-center justify-between gap-3 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => setIsSqliteTableExpanded((prev) => !prev)}
+                        aria-expanded={isSqliteTableExpanded}
+                        aria-controls="admin-sqlite-table-region"
+                        className="flex-1 min-w-0 text-left cursor-pointer select-none rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-inset"
                       >
-                        <table
-                          className="responsive-data-table w-full text-left border-collapse"
-                          data-stack-mobile="true"
+                        <h3 className="font-extrabold text-gray-800 text-sm sm:text-base flex items-center gap-1.5 justify-start">
+                          <ChevronDown
+                            size={16}
+                            className={`shrink-0 text-slate-500 transition-transform ${
+                              isSqliteTableExpanded ? 'rotate-180' : ''
+                            }`}
+                          />
+                          <Database className="text-indigo-600" size={18} />
+                          {lang === 'zh'
+                            ? 'SQLite 数据库实体列表与行数字典'
+                            : 'SQLite Relational Entity Tables Catalog'}
+                        </h3>
+                        <p className="text-xs text-gray-400 mt-1 block">
+                          {lang === 'zh'
+                            ? '实时展示当前在 educational_os.db 内核中的关系型实体及在册记录行数。'
+                            : 'Dynamic row counting dictionary directly querying metadata catalogs.'}
+                        </p>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={fetchSqliteStats}
+                        disabled={loadingSqlite}
+                        className="shrink-0 p-1 px-3 text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold border border-indigo-200/45 rounded-xl flex items-center gap-1 transition-all cursor-pointer"
+                      >
+                        <RefreshCw size={11} className={loadingSqlite ? 'animate-spin' : ''} />
+                        {lang === 'zh' ? '重算/刷新' : 'Refresh Metrics'}
+                      </button>
+                    </div>
+
+                    <div
+                      id="admin-sqlite-table-region"
+                      hidden={!isSqliteTableExpanded}
+                      className="p-4 sm:p-5 flex-1 min-h-0 overflow-y-auto"
+                    >
+                      {loadingSqlite && !sqliteStats ? (
+                        <div className="flex flex-col items-center justify-center py-12 text-slate-400 text-xs">
+                          <RefreshCw size={36} className="animate-spin text-indigo-500 mb-2" />
+                          <span>
+                            {lang === 'zh'
+                              ? '正在重算数据库实体表统计指标...'
+                              : 'Calculating database page allocation and statistics...'}
+                          </span>
+                        </div>
+                      ) : !sqliteStats ? (
+                        <div className="text-center text-xs py-12 text-slate-400">
+                          {lang === 'zh'
+                            ? '无法提取到 SQLite 信息，可能进程被独占。'
+                            : 'Failed to retrieve connection parameters.'}
+                        </div>
+                      ) : (
+                        <AccessibleTableRegion
+                          labelledBy="admin-sqlite-stats-caption"
+                          className="border border-gray-100 rounded-xl"
                         >
-                          <caption id="admin-sqlite-stats-caption" className="sr-only">
-                            {lang === 'zh' ? 'SQLite 数据表行数统计' : 'SQLite Table Row Statistics'}
-                          </caption>
-                          <thead>
-                            <tr className="bg-slate-50/70 border-b border-gray-100 text-gray-500 font-bold text-xs uppercase tracking-wider font-sans">
-                              <th scope="col" className="py-3 px-4">
-                                {lang === 'zh' ? '实体数据表名' : 'Table Name'}
-                              </th>
-                              <th scope="col" className="py-3 px-4">
-                                {lang === 'zh' ? '当前承载行数' : 'Active Rows'}
-                              </th>
-                              <th scope="col" className="py-3 px-4">
-                                {lang === 'zh' ? '行数比例分布' : 'Distribution Scale'}
-                              </th>
-                              <th scope="col" className="py-3 px-4 font-mono select-none">
-                                {lang === 'zh' ? '系统属性类型' : 'Metadata Type'}
-                              </th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-gray-100 text-xs text-gray-700 font-sans">
-                            {sqliteStats.tables.map((tbl) => {
-                              const maxRows = Math.max(...sqliteStats.tables.map((t) => t.rows), 1);
-                              const percentage = Math.min((tbl.rows / maxRows) * 100, 100);
+                          <table
+                            className="responsive-data-table w-full text-left border-collapse"
+                            data-stack-mobile="true"
+                          >
+                            <caption id="admin-sqlite-stats-caption" className="sr-only">
+                              {lang === 'zh' ? 'SQLite 数据表行数统计' : 'SQLite Table Row Statistics'}
+                            </caption>
+                            <thead>
+                              <tr className="bg-slate-50/70 border-b border-gray-100 text-gray-500 font-bold text-xs uppercase tracking-wider font-sans">
+                                <th scope="col" className="py-3 px-4">
+                                  {lang === 'zh' ? '实体数据表名' : 'Table Name'}
+                                </th>
+                                <th scope="col" className="py-3 px-4">
+                                  {lang === 'zh' ? '当前承载行数' : 'Active Rows'}
+                                </th>
+                                <th scope="col" className="py-3 px-4">
+                                  {lang === 'zh' ? '行数比例分布' : 'Distribution Scale'}
+                                </th>
+                                <th scope="col" className="py-3 px-4 font-mono select-none">
+                                  {lang === 'zh' ? '系统属性类型' : 'Metadata Type'}
+                                </th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100 text-xs text-gray-700 font-sans">
+                              {sqliteStats.tables.map((tbl) => {
+                                const maxRows = Math.max(...sqliteStats.tables.map((t) => t.rows), 1);
+                                const percentage = Math.min((tbl.rows / maxRows) * 100, 100);
 
-                              let desc = 'Core Application Storage';
-                              if (tbl.name === 'users') desc = 'Teacher & Administrator profiles';
-                              else if (tbl.name === 'students') desc = 'Student accounts and lock states';
-                              else if (tbl.name === 'classes') desc = 'Active classes, metadata & codes';
-                              else if (tbl.name === 'lessons') desc = 'Lectures, slides and markdown modules';
-                              else if (tbl.name === 'ai_providers') desc = 'Third party API key provider gateways';
-                              else if (tbl.name === 'vfs_nodes') desc = 'Virtual file storage hierarchies';
-                              else if (tbl.name === 'client_sessions') desc = 'Active browser auth cookies';
+                                let desc = 'Core Application Storage';
+                                if (tbl.name === 'users') desc = 'Teacher & Administrator profiles';
+                                else if (tbl.name === 'students') desc = 'Student accounts and lock states';
+                                else if (tbl.name === 'classes') desc = 'Active classes, metadata & codes';
+                                else if (tbl.name === 'lessons') desc = 'Lectures, slides and markdown modules';
+                                else if (tbl.name === 'ai_providers') desc = 'Third party API key provider gateways';
+                                else if (tbl.name === 'vfs_nodes') desc = 'Virtual file storage hierarchies';
+                                else if (tbl.name === 'client_sessions') desc = 'Active browser auth cookies';
 
-                              return (
-                                <tr key={tbl.name} className="hover:bg-slate-50/40 transition-colors">
-                                  <th
-                                    scope="row"
-                                    data-label={lang === 'zh' ? '实体数据表名' : 'Table Name'}
-                                    className="py-3 px-4 text-left font-normal"
-                                  >
-                                    <div className="flex items-center gap-2 justify-start">
-                                      <span className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
-                                      <span className="font-extrabold text-slate-800 font-mono text-sm">
-                                        {tbl.name}
-                                      </span>
-                                    </div>
-                                    <span className="text-xs text-gray-400 block mt-0.5">{desc}</span>
-                                  </th>
-                                  <td
-                                    data-label={lang === 'zh' ? '当前承载行数' : 'Active Rows'}
-                                    className="py-3 px-4 font-mono font-bold text-gray-750 text-left"
-                                  >
-                                    {tbl.rows >= 0 ? (
-                                      tbl.rows.toLocaleString()
-                                    ) : (
-                                      <span className="text-rose-500 italic font-normal">error</span>
-                                    )}
-                                  </td>
-                                  <td
-                                    data-label={lang === 'zh' ? '行数比例分布' : 'Distribution Scale'}
-                                    className="py-3 px-4 min-w-[150px]"
-                                  >
-                                    <div className="flex items-center gap-2">
-                                      <div className="w-24 bg-gray-100 rounded-full h-1.5 overflow-hidden border border-gray-200/50 shrink-0">
-                                        <div
-                                          className="bg-indigo-600 h-1.5 rounded-full"
-                                          style={{ width: `${percentage}%` }}
-                                        />
+                                return (
+                                  <tr key={tbl.name} className="hover:bg-slate-50/40 transition-colors">
+                                    <th
+                                      scope="row"
+                                      data-label={lang === 'zh' ? '实体数据表名' : 'Table Name'}
+                                      className="py-3 px-4 text-left font-normal"
+                                    >
+                                      <div className="flex items-center gap-2 justify-start">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
+                                        <span className="font-extrabold text-slate-800 font-mono text-sm">
+                                          {tbl.name}
+                                        </span>
                                       </div>
-                                      <span className="text-xs font-mono font-bold text-slate-400">
-                                        {Math.round(percentage)}%
+                                      <span className="text-xs text-gray-400 block mt-0.5">{desc}</span>
+                                    </th>
+                                    <td
+                                      data-label={lang === 'zh' ? '当前承载行数' : 'Active Rows'}
+                                      className="py-3 px-4 font-mono font-bold text-gray-750 text-left"
+                                    >
+                                      {tbl.rows >= 0 ? (
+                                        tbl.rows.toLocaleString()
+                                      ) : (
+                                        <span className="text-rose-500 italic font-normal">error</span>
+                                      )}
+                                    </td>
+                                    <td
+                                      data-label={lang === 'zh' ? '行数比例分布' : 'Distribution Scale'}
+                                      className="py-3 px-4 min-w-[150px]"
+                                    >
+                                      <div className="flex items-center gap-2">
+                                        <div className="w-24 bg-gray-100 rounded-full h-1.5 overflow-hidden border border-gray-200/50 shrink-0">
+                                          <div
+                                            className="bg-indigo-600 h-1.5 rounded-full"
+                                            style={{ width: `${percentage}%` }}
+                                          />
+                                        </div>
+                                        <span className="text-xs font-mono font-bold text-slate-400">
+                                          {Math.round(percentage)}%
+                                        </span>
+                                      </div>
+                                    </td>
+                                    <td
+                                      data-label={lang === 'zh' ? '系统属性类型' : 'Metadata Type'}
+                                      className="py-3 px-4 text-left"
+                                    >
+                                      <span className="bg-slate-100 text-slate-700 font-bold border border-slate-200 text-xs font-mono px-2 py-0.5 rounded uppercase">
+                                        {tbl.name === 'vfs_nodes' || tbl.name === 'whiteboard_strokes'
+                                          ? 'BLOB_JSON'
+                                          : 'RELATIONAL'}
                                       </span>
-                                    </div>
-                                  </td>
-                                  <td
-                                    data-label={lang === 'zh' ? '系统属性类型' : 'Metadata Type'}
-                                    className="py-3 px-4 text-left"
-                                  >
-                                    <span className="bg-slate-100 text-slate-700 font-bold border border-slate-200 text-xs font-mono px-2 py-0.5 rounded uppercase">
-                                      {tbl.name === 'vfs_nodes' || tbl.name === 'whiteboard_strokes'
-                                        ? 'BLOB_JSON'
-                                        : 'RELATIONAL'}
-                                    </span>
-                                  </td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </AccessibleTableRegion>
-                    )}
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </AccessibleTableRegion>
+                      )}
+                    </div>
                   </div>
                 </div>
 

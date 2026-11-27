@@ -7,7 +7,7 @@
  * 2. 校验 SQLite 数据库监控指标（健康状态、实体表数量、数据总行数）
  * 3. 校验 SQLite PRAGMA 物理控制参数面板（WAL 模式、扇区大小、分配页面等）
  * 4. 触发物理完整性自检交互（PRAGMA integrity_check）并捕获弹窗确认
- * 5. 切换至「站点信息设置」Tab，校验站点名称/口号输入控件与 DemoDataPanel 挂载
+ * 5. 切换至「站点设置」Tab，校验站点名称/口号输入控件与 DemoDataPanel 挂载
  * 6. 修改站点名称与标语并提交保存，验证成功提示反馈，随后自动恢复初始配置保持状态纯净
  * 7. 检验演示数据（Demo）状态查询与一键刷新功能
  * 8. 真实渲染全幅截图存盘 (Generates Artifact: Screenshot)
@@ -65,7 +65,7 @@ test.describe('管理后台：系统监控与全局配置 E2E 测试', () => {
       await expect(adminNavBtn).toBeVisible({ timeout: 15_000 });
       await adminNavBtn.click();
 
-      await expect(page.getByText('系统管理与教职后台')).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByText('系统管理')).toBeVisible({ timeout: 15_000 });
 
       // 3. 切换至「系统监控」Tab
       const monitorTabBtn = page.getByRole('button', { name: /系统监控|System Monitor/ }).first();
@@ -94,8 +94,8 @@ test.describe('管理后台：系统监控与全局配置 E2E 测试', () => {
       await expect(integrityBtn).toBeVisible();
       await integrityBtn.click();
 
-      // 6. 切换至「站点信息设置」Tab
-      const siteSettingsTabBtn = page.getByRole('button', { name: /站点信息设置|Site Settings/ }).first();
+      // 6. 切换至「站点设置」Tab
+      const siteSettingsTabBtn = page.getByRole('button', { name: /站点设置|Site Settings/ }).first();
       await expect(siteSettingsTabBtn).toBeVisible({ timeout: 10_000 });
       await siteSettingsTabBtn.click();
 

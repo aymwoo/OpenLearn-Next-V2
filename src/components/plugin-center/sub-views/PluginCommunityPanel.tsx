@@ -1110,7 +1110,7 @@ export function PluginCommunityPanel({
             <p className="text-xs text-gray-500 leading-relaxed mt-1">
               {canConfigure
                 ? zh
-                  ? '默认开启。管理员可在此或「站点信息设置 → 运行时策略」开关。保存后立即对安装、URL 更新和社区直传生效，无需重启。环境变量不再控制此开关。'
+                  ? '默认开启。管理员可在此或「站点设置 → 运行时策略」开关。保存后立即对安装、URL 更新和社区直传生效，无需重启。环境变量不再控制此开关。'
                   : 'On by default. Administrators can change it here or under Site Settings → Runtime policies. It applies immediately to install, URL update, and community upload, without a restart. Environment variables no longer control this switch.'
                 : zh
                   ? '社区安装由管理员在插件中心配置，默认开启。'
