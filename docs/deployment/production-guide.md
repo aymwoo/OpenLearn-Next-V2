@@ -114,11 +114,11 @@ sudo systemctl enable --now openlearn
 
 **三个子技能**：
 
-| 子技能               | 覆盖范围                                                                                                                                                       |
-| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 子技能               | 覆盖范围                                                                                                                                                  |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 部署与启动           | Node 24 预检、`corepack pnpm install`、`pnpm dev` 启动、`/health` 健康检查、生产构建与 systemd / PM2 守护；排查端口 9000、防火墙、better-sqlite3 编译失败 |
-| 插件开发与仓库协作   | `server-only` / `full-stack` / `frontend-only` 插件，manifest 与能力权限、构建安装验证、L0–L3 测试护栏、报错归因，以及 Gitee / GitHub issue 与 PR 协作         |
-| 外部贡献者 Fork 贡献 | Fork → Clone → 配置 upstream → 建分支 → 提交 → push → 发起 PR → 同步；覆盖 GitHub 主仓与 Gitee 镜像                                                             |
+| 插件开发与仓库协作   | `server-only` / `full-stack` / `frontend-only` 插件，manifest 与能力权限、构建安装验证、L0–L3 测试护栏、报错归因，以及 Gitee / GitHub issue 与 PR 协作    |
+| 外部贡献者 Fork 贡献 | Fork → Clone → 配置 upstream → 建分支 → 提交 → push → 发起 PR → 同步；覆盖 GitHub 主仓与 Gitee 镜像                                                       |
 
 > **边界**：Skill 提供的是操作指引，不改变平台本身；生产密钥、备份与回滚仍以本指南第 3 节为准。插件开发另见[插件开发完全指南](../tutorials/plugin-development-tutorial.md)，贡献流程见[贡献者指南](../contributing/contributing.md)。
 
