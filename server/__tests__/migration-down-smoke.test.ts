@@ -37,15 +37,21 @@ describe('迁移链 DOWN 烟雾测试（回滚 → 重放 → 金样对账）', 
       expect(tail.length).toBe(SMOKE_TAIL);
 
       for (const migration of tail) {
-        rollbackMigration(db, migration);
+        const rollbackIndex = migrations.findIndex((item) => item.name === migration.name);
+        // 回滚：从链尾倒序回退到目标迁移。较晚的迁移可能依赖目标迁移的结构
+        // （例如给目标迁移新建的表加列），必须先退干净的才不会留半截结构。
+        for (const later of migrations.slice(rollbackIndex).reverse()) {
+          if (later.down.trim() === '') continue;
+          rollbackMigration(db, later);
+        }
         // 台账同步后退
         const ledger = (db.prepare('SELECT name FROM _migrations').all() as { name: string }[]).map((r) => r.name);
         expect(ledger).not.toContain(migration.name);
         // 结构可能变（DDL 迁移）也可能不变（纯数据迁移的 DOWN 只动数据/只留注释）——
         // 两者都合法；强约束放在「重放后与金样完全一致」上
 
-        // 重放
-        runMigrations(db, [migration]);
+        // 重放：被回滚迁移及之后的全部迁移，恢复到链尾结构
+        runMigrations(db, migrations.slice(rollbackIndex));
         expect(extractSchemaSnapshot(db)).toEqual(golden.tables);
       }
     } finally {
