@@ -320,12 +320,14 @@ export function StudentLessonView(props: StudentLessonViewProps) {
   const lessonTitle = lesson?.title || (lang === 'zh' ? '课堂' : 'Class');
   const segmentTitle = segmentForWorkspace?.title?.trim() || '';
   const topic = segmentTitle || lessonTitle;
+  const segmentIndex = activeSegmentId
+    ? (timelineSegments as Array<{ id: string }>).findIndex((s) => s.id === activeSegmentId) + 1
+    : 0;
   const shellProps = {
     props,
-    topic,
-    lessonTitle,
     classId: effectiveClassId,
     segmentAccess,
+    blockSegmentContent,
   };
 
   return (
@@ -341,7 +343,10 @@ export function StudentLessonView(props: StudentLessonViewProps) {
         selectedLesson={selectedLesson}
         addToast={addToast}
         lang={lang}
-        showTitle={false}
+        topic={topic}
+        lessonTitle={lessonTitle}
+        segmentIndex={segmentIndex}
+        segmentCount={timelineSegments?.length ?? 0}
         onOpenIcebreaker={() => setIcebreakerOpen(true)}
       />
       <SegmentGateBanner access={segmentAccess} lang={lang} />
@@ -349,14 +354,12 @@ export function StudentLessonView(props: StudentLessonViewProps) {
         <XueanStudentClassroom
           {...shellProps}
           flow={studentFlowController}
-          blockSegmentContent={blockSegmentContent}
           segment={segmentForWorkspace ?? { id: selectedLesson || 'xuean', type: 'xuean', title: topic }}
         />
       ) : (
         <WhiteboardStudentClassroom
           {...shellProps}
           contentSegmentId={contentSegmentId}
-          blockSegmentContent={blockSegmentContent}
           studentName={studentName}
           primarySurface={primaryStudentWorkspace ? workspace : null}
           extraSurface={!primaryStudentWorkspace && matchingStudentMain.length > 0 ? workspace : null}

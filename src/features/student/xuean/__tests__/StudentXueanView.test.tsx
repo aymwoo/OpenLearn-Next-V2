@@ -2,8 +2,10 @@
  * StudentXueanView：插件活动分发、试题活动内嵌作答。
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, cleanup, fireEvent } from '@testing-library/react';
+import { render, screen, cleanup, fireEvent, within } from '@testing-library/react';
 import { StudentXueanView } from '../StudentXueanView';
+import { PluginHostProvider } from '../../../../plugin-host/plugin-host-context';
+import type { FrontendPluginHost } from '../../../../plugin-host/plugin-host';
 
 const getXuean = vi.hoisted(() => vi.fn());
 
@@ -115,15 +117,43 @@ describe('StudentXueanView', () => {
       },
     });
 
-    render(<StudentXueanView lessonId="lesson-1" lessonTitle="探究课" />);
+    // 插件活动同样要有学生附加区（与内置活动保持一致）——附加区只在确有插件贡献时渲染
+    const host = {
+      getExtensions: (slot: string) =>
+        slot === 'xuean.activity.student.addon'
+          ? [{ id: 'ext-addon', pluginId: 'acme', slotProps: {}, component: () => null }]
+          : [],
+    } as unknown as FrontendPluginHost;
+    render(
+      <PluginHostProvider host={host}>
+        <StudentXueanView lessonId="lesson-1" lessonTitle="探究课" />
+      </PluginHostProvider>,
+    );
 
     expect(await screen.findByLabelText('活动 1：虚拟实验')).toBeTruthy();
     const slots = screen.getAllByTestId('plugin-activity-slot');
     const slot = slots.find((el) => el.getAttribute('data-slot') === 'xuean.activity.student')!;
     expect(slot.getAttribute('data-activity-type')).toBe('@acme/lab:experiment');
     expect(slot.getAttribute('data-activity-id')).toBe('a1');
-    // 插件活动同样要有学生附加区（与内置活动保持一致）
     expect(slots.some((el) => el.getAttribute('data-slot') === 'xuean.activity.student.addon')).toBe(true);
+  });
+
+  it('没有插件贡献附加区时不再输出空的 addon 分隔块', async () => {
+    getXuean.mockResolvedValue({
+      ok: true,
+      data: {
+        lessonId: 'lesson-1',
+        blocks: [],
+        activities: [{ ...baseActivity, id: 'a1', type: 'reading', title: '预习导读' }],
+        progressByActivity: {},
+      },
+    });
+
+    render(<StudentXueanView lessonId="lesson-1" />);
+
+    expect(await screen.findByLabelText('活动 1：预习导读')).toBeTruthy();
+    const slots = screen.getAllByTestId('plugin-activity-slot');
+    expect(slots.some((el) => el.getAttribute('data-slot') === 'xuean.activity.student.addon')).toBe(false);
   });
 
   it('绑定 assignment 的试题活动渲染内嵌作答卡片', async () => {
@@ -170,5 +200,75 @@ describe('StudentXueanView', () => {
     expect(screen.queryByRole('button', { name: '开始' })).toBeNull();
     expect(screen.queryByRole('button', { name: '提交' })).toBeNull();
     expect(screen.queryByRole('button', { name: '重新提交' })).toBeNull();
+  });
+
+  it('导读栏展示学习目标 / 重难点条目与只读活动进度', async () => {
+    getXuean.mockResolvedValue({
+      ok: true,
+      data: {
+        lessonId: 'lesson-1',
+        blocks: [
+          {
+            id: 'b1',
+            lesson_id: 'lesson-1',
+            block_type: 'learning_goals',
+            order_index: 0,
+            content_json: JSON.stringify({ goals: ['掌握分数的意义', '会用分数表示部分与整体'] }),
+            surface_id: null,
+          },
+          {
+            id: 'b2',
+            lesson_id: 'lesson-1',
+            block_type: 'key_points',
+            order_index: 1,
+            content_json: JSON.stringify(['真分数与假分数的区别']),
+            surface_id: null,
+          },
+        ],
+        activities: [
+          { ...baseActivity, id: 'a1', type: 'reading', title: '预习导读', order_index: 0 },
+          { ...baseActivity, id: 'a2', type: 'reading', title: '学案研读', order_index: 1 },
+        ],
+        progressByActivity: {
+          a1: {
+            activity_id: 'a1',
+            student_id: 's1',
+            status: 'submitted',
+            progress_percent: 100,
+            verified: 1,
+            score: null,
+          },
+        },
+      },
+    });
+
+    render(<StudentXueanView lessonId="lesson-1" lessonTitle="预习导读" />);
+
+    const rail = await screen.findByRole('complementary', { name: '学案导读' });
+    expect(within(rail).getByText('学习目标')).toBeTruthy();
+    expect(within(rail).getByText('掌握分数的意义')).toBeTruthy();
+    expect(within(rail).getByText('真分数与假分数的区别')).toBeTruthy();
+    // 活动进度只读展示，与状态文案一致
+    expect(within(rail).getByText('已提交')).toBeTruthy();
+    expect(within(rail).queryByRole('button')).toBeNull();
+    // 顶部细进度条已换成圆环，但进度语义仍可被读屏获取
+    expect(screen.getByRole('progressbar', { name: '学案活动完成进度' }).getAttribute('aria-valuenow')).toBe('1');
+  });
+
+  it('阅读活动没有材料时给出空态引导而不是一行灰字', async () => {
+    getXuean.mockResolvedValue({
+      ok: true,
+      data: {
+        lessonId: 'lesson-1',
+        blocks: [],
+        activities: [{ ...baseActivity, id: 'a1', type: 'reading', title: '预习导读', config_json: null }],
+        progressByActivity: {},
+      },
+    });
+
+    render(<StudentXueanView lessonId="lesson-1" />);
+
+    expect(await screen.findByText('本环节还没有阅读材料')).toBeTruthy();
+    expect(screen.getByRole('button', { name: '标记为已读' })).toBeTruthy();
   });
 });

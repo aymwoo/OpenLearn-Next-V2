@@ -26,19 +26,19 @@ export function StudentToolDrawer({
       aria-label={title}
       className={
         open
-          ? 'flex w-full max-w-sm shrink-0 flex-col min-h-0 border border-gray-200 bg-white rounded-xl shadow-sm overflow-hidden'
+          ? 'flex w-full max-w-sm shrink-0 flex-col min-h-0 border border-theme bg-surface rounded-xl shadow-sm overflow-hidden'
           : ''
       }
     >
       {open ? (
         <>
-          <div className="flex items-center justify-between gap-2 border-b border-gray-100 px-3 py-2">
-            <h2 className="text-sm font-semibold text-gray-800">{title}</h2>
+          <div className="flex items-center justify-between gap-2 border-b border-theme px-3 py-2">
+            <h2 className="text-sm font-semibold text-main">{title}</h2>
             <button
               type="button"
               data-testid="student-tool-drawer-close"
               onClick={onClose}
-              className="text-xs font-semibold text-gray-600 hover:text-gray-900 cursor-pointer px-2 py-1 rounded-md"
+              className="text-xs font-semibold text-muted hover:text-main cursor-pointer px-2 py-1 rounded-md"
             >
               关闭
             </button>

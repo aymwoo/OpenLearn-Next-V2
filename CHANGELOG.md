@@ -12,6 +12,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Features
 
+- **学案页两栏布局 + 导读侧栏**：`StudentXueanView` 头部由三行（标题 / 独立细进度条 / 活动导航）收成两行（标题 + 完成圆环 `0/3` + 活动导航），进度语义仍由 `role="progressbar"` 暴露；正文改为 `xl:grid-cols-[minmax(0,1fr)_280px]`（1280px 起才出现右栏，1024 及以下单栏全宽），左栏限宽 `max-w-5xl` 居中便于长文阅读，右栏「学案导读」常驻展示活动进度（只读状态徽标）与 `learning_goals` / `key_points` / `resources` / `operation_tips` 首页块——块内容兼容数组、`{goals:[…]}` 与纯文本三种历史形态；1024 及以下隐藏右栏，切换仍走顶部活动导航。阅读活动没有材料时由一行灰字改为空态引导卡。学生课堂里外层顶栏已显示环节名，卡内标题与 `学案式学习` 标记不再重复（头部收成「活动导航 + 进度」单行）；学案首页本身就在展示这些块，此时不并排重复导读栏；0% 进度条与无插件贡献的空 addon 分隔块不再渲染，块内 schema 键名（`GOALS` / `POINTS`…）也不再直接露给学生。
+
 - **课程导入与模板支持学案 / 白板双模式**：课程包格式升级到 v3，`lesson` 新增 `deliveryMode` / `modePackId` / `activities` / `blocks`；导入把交付模式写入 `lessons.delivery_mode` / `mode_pack_id`，并在同一事务内写入学案活动与首页块（学案包缺省时按 timeline 自动生成活动）。导出会带出真实交付模式与活动；`GET /api/course-packages/template?mode=xuean` 返回「预习-研读-练习」学案模板，课程管理工具栏与导入弹窗提供白板 / 学案两个模板下载入口。CSV 批量导入新增可选 `mode` 列（`whiteboard` / `xuean`，兼容「白板」/「学案」），学案行自动补齐默认三环节与活动；课程 CSV 模板改为真正的课程表头（此前误用班级模板）。
 - **Dialog 账号级全局主题覆盖**：`ThemeAppearanceOverrides` 新增 `dialogBackgroundColor` 与 `dialogBorderRadius`，主题中心的「当前账号基础外观覆盖」增加「弹窗背景色覆盖」与「弹窗圆角」控件。覆盖值随账号主题偏好持久化并按 `principal_key` 隔离：内置主题写入 `:root` 的 `--ol-dialog-bg` / `--ol-dialog-radius`，第三方主题由 `buildRuntimeThemeCss` 合并进有效令牌；自定义底色下自动将标题栏/底栏置为透明并移除主题光晕，与单实例 `backgroundColor` 行为一致。服务端 `sanitizeAppearanceOverrides` 对色值做十六进制校验、圆角档位做枚举收敛；契约见 `docs/architecture/theming-system.md` §7.1.2。
 - **Dialog 单实例背景色与圆角**：`AccessibleDialog` 新增 `backgroundColor` 与 `borderRadius` props，分别写入面板的 `--ol-dialog-bg` / `--ol-dialog-radius`，标题栏与底栏内角自动跟随；`backgroundColor` 生效时面板标记 `[data-dialog-surface="custom"]`，移除主题预置光晕并让标题栏/底栏透明，整块面板统一使用自定义底色。调用方原有的 `style` 保持不变，主题级 `--ol-dialog-*` 覆盖方式继续可用；契约见 `docs/architecture/theming-system.md` §7.1.1。
@@ -26,6 +28,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixes
 
+- **学生课堂顶栏压成一行、暗色主题课题恢复可读**：学案 / 白板两种课堂不再各自渲染「学案课堂 / 白板课堂 + 课题 + 课节」标题块，改由 `StudentLessonHeader` 单行顶栏统一承载「离开 / 专注锁定 + 课节 › 环节 + 环节位置 + 心情打卡」，顶部 chrome 由两行（约 110–130px）收到 56px。两处标题块写死的浅色（`text-stone-900` / `text-gray-900` / `bg-white` / `border-stone-200`）改为主题令牌，暗色主题下课题不再几乎不可见；活动名与当前环节同名时，卡片内不再重复第三遍。
 - **学案课程包正文不可见 / 活动附件失效**：自动派生的阅读活动会携带课程正文（学案学生端不渲染 `lessons.content`）；课程包导入会解析 `activities[].config` / `activities[].rubric` / `blocks[].content` 中的 `${asset:<id>}`，导出时逆向替换并内联附件；`xuean_home` 背景图按块路由同一口径收敛为上传文件 URL；CSV 学案导入把正文写入阅读活动。
 - **学案互动课件块导入后退化成原始 JSON**：导入 `interactive_courseware` 首页块时按块路由同一口径收敛为 `{ coursewareUuid, resourceId, title }`，并在同一事务内创建 `lesson_block` 类型的 LearningSurface 回写 `surface_id`；此前只写 `lesson_activity_blocks`，学生端因缺少 Surface 而无法渲染课件。
 - **学案插件编辑器 / 学生视图上下文丢失**：`xuean.activity.editor/student` 分发现在会把调用点传入的 `activityType` / `activity` / `lessonId` / `onSaved` 合并进组件 props，远程 view 同时收到 `sandboxContext`（学案槽位预算放宽到 64KB），修复「保存回调 undefined、插件活动视图空白」。
