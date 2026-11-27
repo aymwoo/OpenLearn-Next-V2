@@ -416,20 +416,21 @@ function purgeDemoNamespace(db: Database.Database): void {
 }
 
 /** 白板课环节（5 种全覆盖）。 */
-function whiteboardTimeline(prefix: string, subject: string): Record<string, unknown>[] {
+function whiteboardTimeline(prefix: string, subject: string, quizElementId: string): Record<string, unknown>[] {
   return [
     { id: `${prefix}-seg-intro`, title: '课堂导入', type: 'intro', duration: '5m', notes: `${subject}情境导入` },
     { id: `${prefix}-seg-lecture`, title: '概念精讲', type: 'lecture', duration: '15m', notes: '核心概念讲解' },
     { id: `${prefix}-seg-practice`, title: '动手实践', type: 'practice', duration: '15m', notes: '机房上机操作' },
+    { id: `${prefix}-seg-quiz`, title: '随堂测验', type: 'quiz', duration: '8m', notes: '完成测验后进入总结' },
     {
-      id: `${prefix}-seg-quiz`,
-      title: '随堂测验',
-      type: 'quiz',
-      duration: '8m',
-      notes: '答题后进入总结',
-      gates: [{ id: `${prefix}-gate-quiz`, type: 'allPreviousCompleted', params: {} }],
+      id: `${prefix}-seg-summary`,
+      title: '课堂总结',
+      type: 'summary',
+      duration: '5m',
+      notes: '回顾与作业布置',
+      // 用内置条件演示环节门禁：完成随堂测验后才放行课堂总结。
+      gates: [{ id: `${prefix}-gate-quiz`, type: 'quiz_completed', params: { elementId: quizElementId } }],
     },
-    { id: `${prefix}-seg-summary`, title: '课堂总结', type: 'summary', duration: '5m', notes: '回顾与作业布置' },
   ];
 }
 
@@ -509,7 +510,7 @@ function buildDemoLessons(): DemoLesson[] {
 > 本课为演示课程，对应义务教育信息科技课程标准（2022 年版）第二学段「数据与编码」。`,
       deliveryMode: 'whiteboard',
       modePackId: null,
-      timeline: whiteboardTimeline(wb1, '二进制'),
+      timeline: whiteboardTimeline(wb1, '二进制', `demo-el-${wb1}-06`),
       elements: [
         {
           type: 'page_meta',
@@ -643,7 +644,7 @@ function buildDemoLessons(): DemoLesson[] {
 > 对应第三学段「身边的算法」。`,
       deliveryMode: 'whiteboard',
       modePackId: null,
-      timeline: whiteboardTimeline(wb2, '排序'),
+      timeline: whiteboardTimeline(wb2, '排序', `demo-el-${wb2}-04`),
       elements: [
         {
           type: 'page_meta',
