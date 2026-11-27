@@ -28,6 +28,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixes
 
+- **学生端白板环节锁定与大纲「当前」误标（Gitee IKYK90）**：全班指针指向本课 `timeline` 中不存在的环节（旧会话 / 历史种子残留）时视为失效，不再把学生锁在「请跟随课堂当前环节」；该分支明确返回 `followedClassSegment`，学生端据此把本地指针对齐到全班环节并隐藏锁定横幅，而不是停在一个无法自行解除的解锁提示上。教师端 socket 重连后重新广播一次当前环节，避免服务端保留上次演示的旧指针。教学环节进度表里共享页只在正在演示的环节上标「当前」（此前每个环节都复用同一个全局页码，五个环节同时显示「当前」），组件计数也改为只统计本环节可见的组件。演示课程把无效的 `allPreviousCompleted` 门禁换成内置 `quiz_completed`，课堂总结环节可正常通过随堂测验放行。
 - **学生课堂顶栏压成一行、暗色主题课题恢复可读**：学案 / 白板两种课堂不再各自渲染「学案课堂 / 白板课堂 + 课题 + 课节」标题块，改由 `StudentLessonHeader` 单行顶栏统一承载「离开 / 专注锁定 + 课节 › 环节 + 环节位置 + 心情打卡」，顶部 chrome 由两行（约 110–130px）收到 56px。两处标题块写死的浅色（`text-stone-900` / `text-gray-900` / `bg-white` / `border-stone-200`）改为主题令牌，暗色主题下课题不再几乎不可见；活动名与当前环节同名时，卡片内不再重复第三遍。
 - **学案课程包正文不可见 / 活动附件失效**：自动派生的阅读活动会携带课程正文（学案学生端不渲染 `lessons.content`）；课程包导入会解析 `activities[].config` / `activities[].rubric` / `blocks[].content` 中的 `${asset:<id>}`，导出时逆向替换并内联附件；`xuean_home` 背景图按块路由同一口径收敛为上传文件 URL；CSV 学案导入把正文写入阅读活动。
 - **学案互动课件块导入后退化成原始 JSON**：导入 `interactive_courseware` 首页块时按块路由同一口径收敛为 `{ coursewareUuid, resourceId, title }`，并在同一事务内创建 `lesson_block` 类型的 LearningSurface 回写 `surface_id`；此前只写 `lesson_activity_blocks`，学生端因缺少 Surface 而无法渲染课件。

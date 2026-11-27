@@ -242,6 +242,23 @@ describe('useClassroomSocket — 教师端最大化视图同步', () => {
       expect(whiteboardViewStore.getState().remoteFullscreenElementId).toBeNull();
       expect(options.setStudentViewStatus).toHaveBeenLastCalledWith('assignment');
     });
+
+    it('教师端重连后重新广播当前环节，避免学生停在旧的全班指针上', () => {
+      const options = makeOptions({
+        activeRole: 'teacher',
+        session: { role: 'teacher', userId: 't1' } as never,
+        activeSegmentId: 'seg-2',
+      });
+      renderHook(() => useClassroomSocket(options));
+      fakeSocket.emit.mockClear();
+
+      trigger('connect');
+
+      expect(fakeSocket.emit).toHaveBeenCalledWith('teacher-broadcast-segment', {
+        lessonId: 'l1',
+        activeSegmentId: 'seg-2',
+      });
+    });
   });
 
   it('still handles refresh events without touching the fullscreen state', () => {

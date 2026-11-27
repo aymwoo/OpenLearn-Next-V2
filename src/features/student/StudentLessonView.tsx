@@ -91,6 +91,14 @@ export function StudentLessonView(props: StudentLessonViewProps) {
       ? segmentAccess.visibleSegmentId
       : activeSegmentId;
 
+  // 学生本地指针对（如刚切课时）可能与全班当前环节不一致。服务端要求「跟随」时
+  // 直接对齐到它给出的环节，而不是把学生留在锁定态等待下一次会话轮询。
+  useEffect(() => {
+    if (!segmentAccess.followedClassSegment) return;
+    const target = segmentAccess.visibleSegmentId;
+    if (target && target !== activeSegmentId) setActiveSegmentId(target);
+  }, [segmentAccess.followedClassSegment, segmentAccess.visibleSegmentId, activeSegmentId, setActiveSegmentId]);
+
   // 班级 id（供授课工作区控制器与破冰逻辑共用）
   const [resolvedClassId, setResolvedClassId] = useState<string | null>(null);
   const [sessionStage, setSessionStage] = useState('IN_CLASS_TEACHING');

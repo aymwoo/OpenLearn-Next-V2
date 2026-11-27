@@ -44,6 +44,8 @@ export interface SegmentAccessResult {
   classSegmentId: string | null;
   /** 未放行时，学生仍应看到的上一环节（便于补齐条件）。没有则为 null。 */
   visibleSegmentId: string | null;
+  /** 学生请求的环节与全班当前环节不一致，应把本地指针对齐到 visibleSegmentId。 */
+  followedClassSegment?: boolean;
   usedDeprecatedProgressConditions?: boolean;
 }
 
@@ -197,6 +199,14 @@ export class SegmentGateService {
 
   public async evaluate(input: EvaluateSegmentAccessInput): Promise<SegmentAccessResult> {
     const classSegmentId = this.readClassSegmentId(input.lessonId);
+    const lesson = kernelContainer.db
+      .prepare('SELECT timeline, progress_mode, progress_conditions FROM lessons WHERE id = ?')
+      .get(input.lessonId) as
+      { timeline: string | null; progress_mode: string | null; progress_conditions: string | null } | undefined;
+    const segments = parseTimeline(lesson?.timeline);
+    // 全班指针可能是旧会话 / 历史种子残留的失效 id。只有真实存在于本课 timeline
+    // 的环节才可作权威指针，否则学生会被告知「跟随」一个根本不存在的环节并一直锁定。
+    const validClassSegmentId = classSegmentId && segments.some((s) => s.id === classSegmentId) ? classSegmentId : null;
     const base = {
       segmentId: input.targetSegmentId,
       classSegmentId,
@@ -208,23 +218,16 @@ export class SegmentGateService {
       return { ...base, allowed: true, bypass: true };
     }
 
-    if (input.enforceClassSegment) {
-      const expected = classSegmentId;
-      if (expected && input.targetSegmentId !== expected) {
-        return {
-          ...base,
-          allowed: false,
-          reason: '请跟随课堂当前环节',
-          visibleSegmentId: expected,
-        };
-      }
+    if (input.enforceClassSegment && validClassSegmentId && input.targetSegmentId !== validClassSegmentId) {
+      return {
+        ...base,
+        allowed: false,
+        reason: '请跟随课堂当前环节',
+        followedClassSegment: true,
+        visibleSegmentId: validClassSegmentId,
+      };
     }
 
-    const lesson = kernelContainer.db
-      .prepare('SELECT timeline, progress_mode, progress_conditions FROM lessons WHERE id = ?')
-      .get(input.lessonId) as
-      { timeline: string | null; progress_mode: string | null; progress_conditions: string | null } | undefined;
-    const segments = parseTimeline(lesson?.timeline);
     const index = segments.findIndex((s) => s.id === input.targetSegmentId);
     const segment = index >= 0 ? segments[index] : null;
     const previousSegmentId = index > 0 ? segments[index - 1].id : null;

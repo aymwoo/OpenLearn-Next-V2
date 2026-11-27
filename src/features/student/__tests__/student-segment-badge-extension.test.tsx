@@ -130,6 +130,7 @@ describe('student.segment.badge extension slot', () => {
             gates: [],
             visibleSegmentId: null,
             segmentId: 'seg_locked',
+            followedClassSegment: false,
             reason: '前置探究未提交',
           }}
         />

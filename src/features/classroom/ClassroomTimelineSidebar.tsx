@@ -355,11 +355,15 @@ export function ClassroomTimelineSidebar({
 
                             {segPages.length > 0 ? (
                               segPages.map(({ page: p, globalIdx }) => {
-                                const isPageActive = globalIdx === currentWhiteboardPage;
+                                // 共享页会出现在每个环节的大纲里，但「当前」只能落在
+                                // 正在演示的环节上，否则所有环节会同时被标成当前。
+                                const isPageActive = isActive && globalIdx === currentWhiteboardPage;
                                 const pageElementsCount = elements.filter((el) => {
                                   try {
                                     const d = JSON.parse(el.data);
-                                    return (d.page ?? 0) === globalIdx;
+                                    if ((d.page ?? 0) !== globalIdx) return false;
+                                    // 与画布可见性一致：只统计本环节可见的组件。
+                                    return !d.segmentId || d.segmentId === seg.id;
                                   } catch {
                                     return false;
                                   }

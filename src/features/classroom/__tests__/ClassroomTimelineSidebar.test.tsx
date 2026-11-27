@@ -113,6 +113,41 @@ describe('ClassroomTimelineSidebar', () => {
     expect(onStartSegment).toHaveBeenCalledWith(mockSegments[1]);
   });
 
+  it('共享页只会在正在演示的环节上标记「当前」', () => {
+    const sharedPages: WhiteboardPageItem[] = [{ id: 'page-shared', title: '共享页', order: 0 }];
+    render(
+      <ClassroomTimelineSidebar
+        {...defaultProps}
+        whiteboardPages={sharedPages}
+        expandedSegmentMap={{ 'seg-1': true, 'seg-2': true }}
+        getPagesForSegment={() => [{ page: sharedPages[0], globalIdx: 0 }]}
+      />,
+    );
+
+    // 共享页在每个环节的大纲里都出现，但「当前」只属于激活的环节一。
+    expect(screen.getAllByText('共享页')).toHaveLength(2);
+    expect(screen.getAllByText('当前')).toHaveLength(1);
+  });
+
+  it('页面组件计数只统计本环节可见的组件', () => {
+    const elements = [
+      { id: 'el-a', data: JSON.stringify({ page: 0, segmentId: 'seg-1' }) },
+      { id: 'el-b', data: JSON.stringify({ page: 0, segmentId: 'seg-2' }) },
+      { id: 'el-c', data: JSON.stringify({ page: 0, segmentId: 'seg-1' }) },
+    ];
+    render(
+      <ClassroomTimelineSidebar
+        {...defaultProps}
+        elements={elements}
+        expandedSegmentMap={{ 'seg-1': true, 'seg-2': true }}
+        getPagesForSegment={(seg) => [{ page: mockPages[seg.id === 'seg-1' ? 0 : 1], globalIdx: 0 }]}
+      />,
+    );
+
+    expect(screen.getByText('2 组件')).toBeTruthy();
+    expect(screen.getByText('1 组件')).toBeTruthy();
+  });
+
   it('未选择课节时展示引导文案', () => {
     render(<ClassroomTimelineSidebar {...defaultProps} selectedLesson={null} />);
     expect(screen.getByText('请选择一个课节加载流程表')).toBeTruthy();

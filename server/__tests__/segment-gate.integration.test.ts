@@ -192,6 +192,8 @@ describe('教学环节门槛（segment-access）', () => {
     expect(off.body.reason).toBe('请跟随课堂当前环节');
     expect(off.body.visibleSegmentId).toBe('seg-b');
     expect(off.body.classSegmentId).toBe('seg-b');
+    // 该分支不是门禁拒绝，而是要求学生端把指针对齐到全班环节。
+    expect(off.body.followedClassSegment).toBe(true);
   });
 
   it('四阶段推进不读取环节条件', async () => {
@@ -364,5 +366,13 @@ describe('教学环节门槛（segment-access）', () => {
     allow = true;
     const passed = await access(studentToken, 'seg-b');
     expect(passed.body.allowed).toBe(true);
+  });
+
+  it('全班指针指向本课不存在的环节时视为失效，不把学生锁在跟随状态', async () => {
+    await follow('seg-stale');
+    const res = await access(studentToken, 'seg-a');
+    expect(res.status).toBe(200);
+    expect(res.body.allowed).toBe(true);
+    expect(res.body.followedClassSegment).toBeFalsy();
   });
 });

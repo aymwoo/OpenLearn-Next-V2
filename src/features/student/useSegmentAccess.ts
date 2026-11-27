@@ -22,6 +22,8 @@ export interface SegmentAccessState {
   gates: SegmentGateView[];
   visibleSegmentId: string | null;
   segmentId: string | null;
+  /** 服务端判定应跟随全班当前环节：把本地指针对齐到 visibleSegmentId 即可，不是门禁拒绝。 */
+  followedClassSegment: boolean;
 }
 
 const IDLE: SegmentAccessState = {
@@ -30,6 +32,7 @@ const IDLE: SegmentAccessState = {
   gates: [],
   visibleSegmentId: null,
   segmentId: null,
+  followedClassSegment: false,
 };
 
 function lockedFallback(segmentId: string | null, reason: string): SegmentAccessState {
@@ -40,6 +43,7 @@ function lockedFallback(segmentId: string | null, reason: string): SegmentAccess
     gates: [],
     visibleSegmentId: null,
     segmentId,
+    followedClassSegment: false,
   };
 }
 
@@ -79,6 +83,7 @@ export function useSegmentAccess(lessonId: string | null, targetSegmentId: strin
           visibleSegmentId:
             typeof body.visibleSegmentId === 'string' ? body.visibleSegmentId : body.allowed ? targetSegmentId : null,
           segmentId: targetSegmentId,
+          followedClassSegment: body.followedClassSegment === true,
         });
         return;
       }
