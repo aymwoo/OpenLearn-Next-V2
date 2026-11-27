@@ -31,9 +31,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - **题型注册表新增可选 `Review` 组件位**：结果页可对连线题等结构化作答逐对渲染正误；缺省时退回「作答 / 参考答案」文本。
 - **学生结果 payload 增加题型 `config`**：供 `Review` 还原题面结构（不含标准答案）。
 - **题库槽位能力补齐**：`assessment.bank.import.source` / `assessment.bank.toolbar.action` 新增 `refresh`；`assessment.bank.filter` 支持 `tags` 与难度区间并真正生效；`assessment.publish.preflight` 新增 `onClear(code?)`，插件可在条件恢复后解除发布阻断。
+- **学案学生端接入环节扩展与门禁兜底**：`XueanStudentClassroom` 新增 `primarySurface` / `extraSurface` / `segmentAccess`，学生端 `classroom.active_segment.student_main` 的 primary 贡献可替代内置学案工作区、其余贡献与其并列渲染（此前学案学生端硬编码绕过该槽位）；环节未解锁时渲染 `student.segment.gate_fallback`，与白板模式对齐。
 
 ### Fixes
 
+- **`rolesAllowed` 声明后从不生效**：扩展点的角色门控此前只有类型声明、运行时不消费，任何插件写了都等于没写。现在由 `extension-point-renderer` 在**渲染期**按 `activeRole` 过滤，教师切换「学生视图」预览时即时生效。注意 `activeRole` 只有 `teacher` / `student`，只声明 `['admin']` 的扩展不会被渲染。
+- **空槽位吞掉调用点 fallback**：`ExtensionPointRenderer` 在槽位没有贡献、或活动槽未匹配到扩展时直接返回 `null`，调用点传入的 `fallback`（如学案活动「插件未加载」提示）永远不会出现，现改为 `fallback ?? null`。
 - **学生端白板环节锁定与大纲「当前」误标（Gitee IKYK90）**：全班指针指向本课 `timeline` 中不存在的环节（旧会话 / 历史种子残留）时视为失效，不再把学生锁在「请跟随课堂当前环节」；该分支明确返回 `followedClassSegment`，学生端据此把本地指针对齐到全班环节并隐藏锁定横幅，而不是停在一个无法自行解除的解锁提示上。教师端 socket 重连后重新广播一次当前环节，避免服务端保留上次演示的旧指针；该自动重播只对主讲教师 / 管理员生效，协同教师的陈旧本地指针不会覆盖全班。指针有效性同时兼容 mode pack 合成的环节（如 `xuean:study`），避免把学案课的全班指针误判为失效。教学环节进度表里共享页只在正在演示的环节上标「当前」（此前每个环节都复用同一个全局页码，五个环节同时显示「当前」），组件计数也改为只统计本环节可见的组件。演示课程把无效的 `allPreviousCompleted` 门禁换成内置 `quiz_completed`，课堂总结环节可正常通过随堂测验放行。
 - **学生课堂顶栏压成一行、暗色主题课题恢复可读**：学案 / 白板两种课堂不再各自渲染「学案课堂 / 白板课堂 + 课题 + 课节」标题块，改由 `StudentLessonHeader` 单行顶栏统一承载「离开 / 专注锁定 + 课节 › 环节 + 环节位置 + 心情打卡」，顶部 chrome 由两行（约 110–130px）收到 56px。两处标题块写死的浅色（`text-stone-900` / `text-gray-900` / `bg-white` / `border-stone-200`）改为主题令牌，暗色主题下课题不再几乎不可见；活动名与当前环节同名时，卡片内不再重复第三遍。
 - **学案课程包正文不可见 / 活动附件失效**：自动派生的阅读活动会携带课程正文（学案学生端不渲染 `lessons.content`）；课程包导入会解析 `activities[].config` / `activities[].rubric` / `blocks[].content` 中的 `${asset:<id>}`，导出时逆向替换并内联附件；`xuean_home` 背景图按块路由同一口径收敛为上传文件 URL；CSV 学案导入把正文写入阅读活动。

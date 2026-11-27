@@ -112,6 +112,18 @@ describe('ExtensionPointRenderer — xuean.activity.* 按活动类型分发', ()
     expect(screen.queryByTestId('lab-student')).toBeNull();
   });
 
+  it('没有匹配扩展时渲染调用点传入的 fallback（而不是空白）', () => {
+    renderWithHost(
+      <ExtensionPointRenderer
+        slot="xuean.activity.student"
+        slotProps={{ activityType: 'reading' }}
+        fallback={<span data-testid="xuean-fallback">插件未加载</span>}
+      />,
+    );
+
+    expect(screen.getByTestId('xuean-fallback')).toBeTruthy();
+  });
+
   it('教师端编辑器收到调用点传入的 lessonId / onSaved（C1 回归）', async () => {
     const onSaved = vi.fn();
     const factory = () =>

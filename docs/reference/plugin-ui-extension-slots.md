@@ -657,7 +657,7 @@ interface HelpDocConfig {
    ```
    `ISocketService` 为 `emit/on/off/disconnect` 的薄封装（`src/plugin-host/types.ts`），**不是**原生 `Socket`。`FrontendPluginContext` 上**没有** `auth` / `user` / `role` 字段。
 
-**结论**：当前课程/班级由宿主统一注入——渲染场景读 `props.lessonId` / `props.classId`，非渲染场景用 `ctx.context.get()` / `ctx.context.subscribe()`。当前用户/角色/原生 `socket` 仍**不注入**：插件需通过 `usePluginHost()` → `services` 或 `ctx.services` 自行获取（**不要**尝试 `import { useAppStore } from '@/...'`——`@/` 别名是宿主内部路径，第三方插件打包时不可解析）。唯一的身份门控是声明式 `rolesAllowed`（`src/plugin-host/types.ts`），在**注册时**评估，而非渲染时。
+**结论**：当前课程/班级由宿主统一注入——渲染场景读 `props.lessonId` / `props.classId`，非渲染场景用 `ctx.context.get()` / `ctx.context.subscribe()`。当前用户/角色/原生 `socket` 仍**不注入**：插件需通过 `usePluginHost()` → `services` 或 `ctx.services` 自行获取（**不要**尝试 `import { useAppStore } from '@/...'`——`@/` 别名是宿主内部路径，第三方插件打包时不可解析）。唯一的身份门控是声明式 `rolesAllowed`（`src/plugin-host/types.ts`），在**渲染时**按当前 `activeRole` 过滤，而非注册时。注意 `activeRole` 只有 `teacher` / `student` 两个取值：只声明 `['admin']` 的扩展当前不会被任何界面渲染。
 
 ---
 

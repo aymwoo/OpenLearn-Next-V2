@@ -145,14 +145,14 @@ flowchart TD
   I -- 是 --> J["ErrorBoundary 捕获<br/>3 次/5min → 熔断摘除"]
 ```
 
-| 规则           | 值                                                                  | 证据                                                         |
-| -------------- | ------------------------------------------------------------------- | ------------------------------------------------------------ |
-| 注册主键       | `(slot, id)`，同键幂等覆盖                                          | `plugin-host-store.ts → registerExtensionPoint`              |
-| props 合并顺序 | `route` → `...ext.slotProps` → `...slotProps`（后者覆盖前者）       | `extension-point-renderer.tsx`（L519-536）                   |
-| 组件形态       | 直接组件，或带 `__isLazyFactory = true` 的 lazy 工厂                | `types.ts → ExtensionPointConfig.component` 注释（L274-282） |
-| 角色门控       | `rolesAllowed`，**注册时**求值一次                                  | `types.ts`（L290）                                           |
-| `origin` 语义  | `manifest` = 数据贡献，前端崩了也保留；`runtime` = 随前端健康度生死 | `types.ts`（L303-315）                                       |
-| 熔断阈值       | 3 次 / 5 分钟滑窗                                                   | `extension-breaker.ts`（L14-15）                             |
+| 规则           | 值                                                                       | 证据                                                         |
+| -------------- | ------------------------------------------------------------------------ | ------------------------------------------------------------ |
+| 注册主键       | `(slot, id)`，同键幂等覆盖                                               | `plugin-host-store.ts → registerExtensionPoint`              |
+| props 合并顺序 | `route` → `...ext.slotProps` → `...slotProps`（后者覆盖前者）            | `extension-point-renderer.tsx`（L519-536）                   |
+| 组件形态       | 直接组件，或带 `__isLazyFactory = true` 的 lazy 工厂                     | `types.ts → ExtensionPointConfig.component` 注释（L274-282） |
+| 角色门控       | `rolesAllowed`，**渲染时**按 `activeRole` 过滤（教师可切换学生视图预览） | `extension-point-renderer.tsx`                               |
+| `origin` 语义  | `manifest` = 数据贡献，前端崩了也保留；`runtime` = 随前端健康度生死      | `types.ts`（L303-315）                                       |
+| 熔断阈值       | 3 次 / 5 分钟滑窗                                                        | `extension-breaker.ts`（L14-15）                             |
 
 > **为什么 `origin` 很重要**：v0.7.0 的「Tab 闪现后消失」根因就是插件前端加载失败时把 manifest 贡献一并摘掉。
 > 现在 `origin:'manifest'` 的条目在 `catch` 分支被 `preserveManifestContributions` 保留。

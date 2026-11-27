@@ -1,6 +1,8 @@
+import type { ReactNode } from 'react';
 import type { SegmentAccessState } from '../useSegmentAccess';
 import type { StudentLessonViewProps } from '../StudentLessonView';
 import type { ClassroomFlowController } from '../../../plugin-host/types';
+import { ExtensionPointRenderer } from '../../../plugin-host/extension-point-renderer';
 import { XueanStudentModeWorkspace } from '../../classroom/mode-pack/XueanModeWorkspace';
 
 /**
@@ -11,9 +13,12 @@ import { XueanStudentModeWorkspace } from '../../classroom/mode-pack/XueanModeWo
 export function XueanStudentClassroom({
   props,
   classId,
+  segmentAccess,
   blockSegmentContent,
   flow,
   segment,
+  primarySurface,
+  extraSurface,
 }: {
   props: StudentLessonViewProps;
   classId: string | null;
@@ -21,6 +26,10 @@ export function XueanStudentClassroom({
   blockSegmentContent: boolean;
   flow: ClassroomFlowController;
   segment: { id: string; title?: string; type?: string };
+  /** `classroom.active_segment.student_main` 中 primary 贡献：命中时替代内置学案工作区。 */
+  primarySurface?: ReactNode;
+  /** 非 primary 贡献：与内置学案工作区并列渲染。 */
+  extraSurface?: ReactNode;
 }) {
   return (
     <div data-testid="student-xuean-classroom" className="flex min-h-0 flex-1 flex-col">
@@ -28,18 +37,35 @@ export function XueanStudentClassroom({
         {blockSegmentContent ? (
           <div
             role="status"
-            className="flex flex-1 flex-col items-center justify-center gap-2 p-6 text-center text-sm text-amber-800 dark:text-amber-300"
+            className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center text-sm text-amber-800 dark:text-amber-300"
           >
-            {props.lang === 'zh' ? '本教学环节尚未解锁' : 'This segment is not unlocked yet'}
+            <span>{props.lang === 'zh' ? '本教学环节尚未解锁' : 'This segment is not unlocked yet'}</span>
+            <ExtensionPointRenderer
+              slot="student.segment.gate_fallback"
+              lang={props.lang}
+              slotProps={{
+                lessonId: props.selectedLesson,
+                activeSegmentId: segment.id,
+                studentId: props.activeStudentId,
+                classId,
+                access: segmentAccess,
+                lang: props.lang,
+              }}
+            />
           </div>
         ) : (
-          <XueanStudentModeWorkspace
-            segment={segment}
-            lessonId={props.selectedLesson}
-            classId={classId}
-            lang={props.lang}
-            flow={flow}
-          />
+          <>
+            {primarySurface ?? (
+              <XueanStudentModeWorkspace
+                segment={segment}
+                lessonId={props.selectedLesson}
+                classId={classId}
+                lang={props.lang}
+                flow={flow}
+              />
+            )}
+            {extraSurface}
+          </>
         )}
       </main>
     </div>

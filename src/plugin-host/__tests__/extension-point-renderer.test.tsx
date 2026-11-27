@@ -15,6 +15,7 @@ import { ExtensionPointRenderer } from '../extension-point-renderer';
 import { PluginHostProvider } from '../plugin-host-context';
 import { FrontendPluginHost } from '../plugin-host';
 import { usePluginHostStore } from '../plugin-host-store';
+import { uiStore } from '../../store/uiStore';
 
 /**
  * Build a lazy component factory in the exact shape the renderer expects:
@@ -720,5 +721,47 @@ describe('classroom.active_segment.student_main — 学生端对称工作区按�
       />,
     );
     expect(await screen.findByTestId('generic-stu-work')).toBeTruthy();
+  });
+});
+
+describe('ExtensionPointRenderer — rolesAllowed 渲染期角色过滤', () => {
+  const registerRoleExt = () => {
+    usePluginHostStore.getState().registerExtensionPoint('classroom.tool', {
+      id: 'teacher-only-tool',
+      label: '教师工具',
+      pluginId: 'p-role',
+      rolesAllowed: ['teacher'],
+      component: lazyComponent(<span data-testid="teacher-only">teacher</span>),
+    });
+    usePluginHostStore.getState().registerExtensionPoint('classroom.tool', {
+      id: 'any-role-tool',
+      label: '通用工具',
+      pluginId: 'p-role',
+      component: lazyComponent(<span data-testid="any-role">any</span>),
+    });
+  };
+
+  afterEach(() => {
+    uiStore.setState({ activeRole: 'teacher' });
+  });
+
+  it('学生视图不渲染 teacher-only 扩展，但仍渲染未声明角色的扩展', async () => {
+    uiStore.setState({ activeRole: 'student' });
+    registerRoleExt();
+
+    renderWithHost(<ExtensionPointRenderer slot="classroom.tool" />);
+
+    expect(await screen.findByTestId('any-role')).toBeTruthy();
+    expect(screen.queryByTestId('teacher-only')).toBeNull();
+  });
+
+  it('教师视图渲染 teacher-only 扩展（角色切换即时生效）', async () => {
+    uiStore.setState({ activeRole: 'teacher' });
+    registerRoleExt();
+
+    renderWithHost(<ExtensionPointRenderer slot="classroom.tool" />);
+
+    expect(await screen.findByTestId('teacher-only')).toBeTruthy();
+    expect(screen.getByTestId('any-role')).toBeTruthy();
   });
 });
