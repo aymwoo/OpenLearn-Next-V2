@@ -15,7 +15,6 @@ export const STUDENT_UI_FEATURE_IDS = [
   'section.hero-widget',
   'section.roll-call-alarms',
   'section.learning-focus',
-  'section.layout-toolbar',
   'section.floating-quick-actions',
   'widget.upcoming-assignments',
   'widget.schedules',

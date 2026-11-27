@@ -53,7 +53,6 @@ export interface StudentQuickActionsFloatingMenuProps {
   setSelectedAssignment: (ast: any) => void;
   addToast?: (title: string, description: string, type?: string) => void;
   lang?: 'zh' | 'en';
-  onExpandWidget?: (widgetId: string) => void;
 
   /**
    * Force compact mode externally (true: icon-only FAB, false: expanded pill)
@@ -148,7 +147,6 @@ export function StudentQuickActionsFloatingMenu({
   setSelectedAssignment,
   addToast,
   lang = 'zh',
-  onExpandWidget,
   compactMode,
   autoCollapseOnMobile = true,
   mobileBreakpoint = 768,
@@ -330,7 +328,6 @@ export function StudentQuickActionsFloatingMenu({
   // 2. Action: View Latest Assignments
   const handleViewLatestAssignments = () => {
     setIsOpen(false);
-    onExpandWidget?.('upcoming-assignments');
 
     const widgetEl = document.getElementById('widget-upcoming-assignments');
     if (widgetEl) {

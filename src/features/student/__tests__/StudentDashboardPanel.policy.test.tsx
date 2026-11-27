@@ -59,15 +59,7 @@ afterEach(() => {
 });
 
 describe('StudentDashboardPanel — 教师可见性策略', () => {
-  it('隐藏组件时不渲染，但本地布局保留，重新允许后恢复', () => {
-    localStorage.setItem(
-      'student_dashboard_layout_v4_s1',
-      JSON.stringify([
-        { id: 'quick-stats', size: 'half', visible: true },
-        { id: 'upcoming-assignments', size: 'half', visible: true },
-      ]),
-    );
-
+  it('隐藏组件时不渲染，重新允许后恢复（顺序与尺寸始终取默认布局）', () => {
     renderPanel(policy({ 'widget.quick-stats': false }));
     expect(document.getElementById('widget-quick-stats')).toBeNull();
     expect(document.getElementById('widget-upcoming-assignments')).not.toBeNull();
@@ -75,7 +67,11 @@ describe('StudentDashboardPanel — 教师可见性策略', () => {
     cleanup();
     renderPanel(policy({}));
     expect(document.getElementById('widget-quick-stats')).not.toBeNull();
-    expect(localStorage.getItem('student_dashboard_layout_v4_s1')).toContain('quick-stats');
+    // 固定默认布局：quick-stats 仍位于默认顺序的位置，不依赖本地存储
+    const ids = Array.from(document.querySelectorAll('[data-widget-id]')).map((el) =>
+      el.getAttribute('data-widget-id'),
+    );
+    expect(ids[3]).toBe('quick-stats');
   });
 
   it('hideGuidance 关闭身份头与组件副标题', () => {
@@ -91,7 +87,7 @@ describe('StudentDashboardPanel — 教师可见性策略', () => {
     }
     renderPanel(policy(features));
     expect(screen.getByTestId('student-dashboard-empty')).toBeTruthy();
-    expect(document.getElementById('student-dashboard-modular-grid')).toBeNull();
+    expect(document.getElementById('student-dashboard-grid')).toBeNull();
   });
 
   it('插件贡献被隐藏后扩展卡片自动收起', async () => {
