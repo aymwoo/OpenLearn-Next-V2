@@ -662,21 +662,35 @@ export function setupPresence({
       },
     );
 
-    socket.on('teacher-broadcast-segment', (data: { lessonId: string; activeSegmentId: string }) => {
-      // SEC-AUTH: 仅教师或管理员可广播环节切换指令
-      if (session && !isTeacherOrAdmin) {
-        plog.warn(`[Presence Security] Unauthorized teacher-broadcast-segment by ${session?.userId}`);
-        return socket.emit('error', { message: 'Forbidden: Only teachers or administrators can broadcast segments' });
-      }
-      // 全班指针前进，并冻结其他环节上仍打开的停留。学生能否看到内容由 segment-access 再判。
-      if (data.lessonId && data.activeSegmentId) {
-        segmentGateService.setClassSegment(data.lessonId, String(data.activeSegmentId).slice(0, 128));
-      } else {
-        setActiveSegment(data.lessonId, data.activeSegmentId);
-      }
-      // Broadcast to everyone in the lesson room (including the teacher client)
-      io.to(data.lessonId).emit('student-active-segment-changed', data);
-    });
+    socket.on(
+      'teacher-broadcast-segment',
+      (data: { lessonId: string; activeSegmentId: string; reconnect?: boolean }) => {
+        // SEC-AUTH: 仅教师或管理员可广播环节切换指令
+        if (session && !isTeacherOrAdmin) {
+          plog.warn(`[Presence Security] Unauthorized teacher-broadcast-segment by ${session?.userId}`);
+          return socket.emit('error', { message: 'Forbidden: Only teachers or administrators can broadcast segments' });
+        }
+        // 重连自动重播会覆盖全班指针：只允许主讲教师 / 管理员，协同教师的陈旧本地指针不应把全班拉回。
+        if (
+          data.reconnect &&
+          data.lessonId &&
+          !segmentGateService.canApplyReconnectBroadcast(data.lessonId, session?.userId ?? null, session?.role ?? null)
+        ) {
+          plog.info(
+            `[Presence] Skip reconnect segment rebroadcast from non-primary teacher ${session?.userId} on ${data.lessonId}`,
+          );
+          return;
+        }
+        // 全班指针前进，并冻结其他环节上仍打开的停留。学生能否看到内容由 segment-access 再判。
+        if (data.lessonId && data.activeSegmentId) {
+          segmentGateService.setClassSegment(data.lessonId, String(data.activeSegmentId).slice(0, 128));
+        } else {
+          setActiveSegment(data.lessonId, data.activeSegmentId);
+        }
+        // Broadcast to everyone in the lesson room (including the teacher client)
+        io.to(data.lessonId).emit('student-active-segment-changed', data);
+      },
+    );
 
     socket.on('teacher-ping-student', (data: { studentId: string; lessonId: string; message?: string }) => {
       // SEC-AUTH: 仅教师或管理员可向学生发起单向提醒

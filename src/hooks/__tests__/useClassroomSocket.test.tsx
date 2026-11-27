@@ -257,6 +257,7 @@ describe('useClassroomSocket — 教师端最大化视图同步', () => {
       expect(fakeSocket.emit).toHaveBeenCalledWith('teacher-broadcast-segment', {
         lessonId: 'l1',
         activeSegmentId: 'seg-2',
+        reconnect: true,
       });
     });
   });

@@ -717,6 +717,8 @@ export function useClassroomSocket(options: UseClassroomSocketOptions) {
         socket.emit('teacher-broadcast-segment', {
           lessonId: selectedLessonRef.current,
           activeSegmentId: activeSegmentIdRef.current,
+          // 标记为自动重播：服务端只允许主讲教师覆盖全班指针（协同教师不生效）。
+          reconnect: true,
         });
       }
       // v0.6.1 审计 R-4：锁定状态来源是 students[].locked_lesson_id，断线

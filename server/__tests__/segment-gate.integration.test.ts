@@ -5,6 +5,7 @@ import type { AddressInfo } from 'net';
 import { registerClassroomRoutes } from '../routes/classroom.js';
 import { registerLessonsRoutes } from '../routes/lessons.js';
 import { ClassroomRuntimeService } from '../services/classroom-runtime-service.js';
+import { shouldApplyReconnectBroadcast } from '../services/segment-gate-service.js';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
 import { ensureTestSchema } from './helpers/test-schema.js';
 import { lessonActiveSegments } from '../shared-state.js';
@@ -374,5 +375,25 @@ describe('教学环节门槛（segment-access）', () => {
     expect(res.status).toBe(200);
     expect(res.body.allowed).toBe(true);
     expect(res.body.followedClassSegment).toBeFalsy();
+  });
+
+  it('mode pack 合成环节（如 xuean:study）仍作为权威全班指针', async () => {
+    await follow('xuean:study');
+    const res = await access(studentToken, 'seg-a');
+    expect(res.status).toBe(403);
+    expect(res.body.reason).toBe('请跟随课堂当前环节');
+    expect(res.body.visibleSegmentId).toBe('xuean:study');
+    expect(res.body.followedClassSegment).toBe(true);
+  });
+});
+
+describe('重连重播权限', () => {
+  it('只允许主讲教师或管理员覆盖全班指针', () => {
+    expect(shouldApplyReconnectBroadcast('usr-main', 'usr-main', 'teacher')).toBe(true);
+    expect(shouldApplyReconnectBroadcast('usr-main', 'usr-co', 'teacher')).toBe(false);
+    expect(shouldApplyReconnectBroadcast('usr-main', 'usr-admin', 'administrator')).toBe(true);
+    // 无会话 / 历史 teacher_id 占位时不做额外限制，保持旧行为。
+    expect(shouldApplyReconnectBroadcast(null, 'usr-any', 'teacher')).toBe(true);
+    expect(shouldApplyReconnectBroadcast('teacher', 'usr-any', 'teacher')).toBe(true);
   });
 });
