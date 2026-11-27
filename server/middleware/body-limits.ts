@@ -9,15 +9,99 @@
  * 与产品对教师的「20MB」承诺直接矛盾。
  *
  * 抽出来之后：
- *  - 装配顺序（必须在全局 2MB parser **之前**）在模块内自洽，读代码即可确认；
+ *  - 装配顺序（必须在全局 parser **之前**）在模块内自洽，读代码即可确认；
  *  - 可以在一个裸 express app 上单独挂载并断言行为（见 __tests__/body-limits.test.ts）。
+ *
+ * ## 全局上限可配置（管理后台 → 站点信息设置）
+ *
+ * 全局 2MB 是安全默认值，但不同学校的业务请求体差异很大（大教案、内联图片、
+ * 白板快照等），硬编码会把正常业务请求以裸 413 拒掉。现由
+ * `site_settings.api_body_limit_mb` 配置，`mountConfigurableBodyParsers` 每次
+ * 解析请求体前读取一次，管理员保存后**无需重启**即可生效。
  */
+import type Database from 'better-sqlite3';
 import express from 'express';
 import {
   COURSE_PACKAGE_IMPORT_BODY_LIMIT_BYTES,
   COURSE_PACKAGE_IMPORT_PATH,
   COURSE_PACKAGE_MAX_FILE_BYTES,
 } from '../services/course-package.js';
+
+/** 全局请求体上限默认值（MB），与历史硬编码 `2mb` 保持一致。 */
+export const DEFAULT_API_BODY_LIMIT_MB = 2;
+/** 管理后台可配置的最小值（MB）。 */
+export const MIN_API_BODY_LIMIT_MB = 1;
+/**
+ * 管理后台可配置的最大值（MB）。
+ *
+ * 全局上限作用于所有非上传端点，抬得越高，恶意/异常请求造成的内存放大风险越大；
+ * 50MB 足以覆盖当前业务里最大的内联 JSON（白板快照、大教案），又远低于
+ * 专用上传端点的 110MB。需要更大体积的文件请走上传端点。
+ */
+export const MAX_API_BODY_LIMIT_MB = 50;
+
+/**
+ * 把任意来源（数据库 / 请求体）的上限值归一化为可用的 MB 整数。
+ *
+ * 非法值（空、非整数、越界）一律回落到安全默认值，避免坏配置把服务带崩。
+ */
+export function normalizeApiBodyLimitMb(raw: unknown): number {
+  if (raw === null || raw === undefined || raw === '') return DEFAULT_API_BODY_LIMIT_MB;
+  const value = Number(raw);
+  if (!Number.isInteger(value)) return DEFAULT_API_BODY_LIMIT_MB;
+  if (value < MIN_API_BODY_LIMIT_MB) return DEFAULT_API_BODY_LIMIT_MB;
+  if (value > MAX_API_BODY_LIMIT_MB) return MAX_API_BODY_LIMIT_MB;
+  return value;
+}
+
+/**
+ * 读取管理员配置的全局请求体上限（MB）。
+ *
+ * 列缺失（旧库/极简测试库）时回落到默认值，不阻断请求。
+ * 单次主键 SELECT 开销极低，且只在「可能带请求体」的请求上调用（见下）。
+ */
+export function resolveApiBodyLimitMb(db: Pick<Database.Database, 'prepare'>): number {
+  try {
+    const row = db.prepare('SELECT api_body_limit_mb FROM site_settings WHERE id = ?').get('global') as
+      { api_body_limit_mb?: unknown } | undefined;
+    return normalizeApiBodyLimitMb(row?.api_body_limit_mb);
+  } catch {
+    return DEFAULT_API_BODY_LIMIT_MB;
+  }
+}
+
+/**
+ * 挂载「上限可配置」的全局 JSON / urlencoded 解析器。
+ *
+ * body-parser 的 `limit` 在创建时固定，因此这里按当前配置缓存一对解析器，
+ * 配置变化时重建 —— 管理员保存后下一个请求即生效，无需重启。
+ *
+ * **必须挂在 `mountLargeBodyParsers` 之后**：专用上传端点的解析器要先消费请求体。
+ */
+export function mountConfigurableBodyParsers(app: express.Express, resolveLimitMb: () => number): void {
+  let cachedLimitMb = DEFAULT_API_BODY_LIMIT_MB;
+  let jsonParser = express.json({ limit: `${cachedLimitMb}mb` });
+  let urlencodedParser = express.urlencoded({ limit: `${cachedLimitMb}mb`, extended: true });
+
+  app.use((req, res, next) => {
+    // 没有请求体的请求（绝大多数 GET / 静态资源）不读配置，避免给热路径加库查询。
+    // 判定逻辑与 body-parser 的 hasBody 保持一致（content-length: '0' 也视为有请求体）。
+    const hasBody = 'transfer-encoding' in req.headers || !Number.isNaN(Number(req.headers['content-length']));
+    if (!hasBody) return next();
+
+    const limitMb = normalizeApiBodyLimitMb(resolveLimitMb());
+    if (limitMb !== cachedLimitMb) {
+      cachedLimitMb = limitMb;
+      jsonParser = express.json({ limit: `${limitMb}mb` });
+      urlencodedParser = express.urlencoded({ limit: `${limitMb}mb`, extended: true });
+    }
+
+    jsonParser(req, res, (err?: unknown) => {
+      if (err) return next(err);
+      urlencodedParser(req, res, next);
+    });
+  });
+}
 
 /**
  * 允许接收超大请求体的端点（解析上限 110MB）。
@@ -57,7 +141,7 @@ export const MEDIUM_UPLOAD_LIMIT = '30mb';
 /**
  * 挂载大体积请求体解析器。
  *
- * **必须在全局 `express.json({ limit: '2mb' })` 之前调用** —— body parser
+ * **必须在全局解析器（`mountConfigurableBodyParsers`）之前调用** —— body parser
  * 是「谁先处理谁说了算」，挂晚了就等于没挂。
  */
 export function mountLargeBodyParsers(app: express.Express): void {

@@ -81,6 +81,47 @@ sudo systemctl daemon-reload
 sudo systemctl enable --now openlearn
 ```
 
+### 方式三：GUI 助手本地部署（openlearn-manager）
+
+面向不熟悉命令行的教师，用桌面图形界面管理本机 `openlearn-next` 服务。它是 CLI 的**薄封装**：GUI 只负责环境检测、参数拼装与子进程调度，核心业务仍由 `openlearn-next` 执行。
+
+**适用场景**：教师机、机房单机、演示与教学现场；服务固定绑定 `127.0.0.1`，不替代公网生产部署（反向代理、HTTPS、Systemd / PM2 仍按方式一 / 方式二配置）。
+
+**获取与安装**：从 [gitee.com/aymwoo/openlearn-manager](https://gitee.com/aymwoo/openlearn-manager) 的 Releases 下载对应平台安装包（Windows x64、macOS Apple Silicon / Intel、Linux x64）。三种分发形态：
+
+- **Full 安装版**：内嵌 Node.js 24 LTS，下载即用，无需预装开发环境；
+- **Lite 便携版**：复用系统 Node.js，体积更小，未检测到 Node 时首页会提示；
+- **Windows 绿色便携版**：免安装 zip，配置与数据写入同级 `data/`，可随 U 盘迁移。
+
+**日常运维要点**：
+
+- 首页一键启动 / 停止服务，实时显示运行日志与 PID，启动前做端口占用预检（默认 `9000`）；
+- 「备份」页一键生成时间戳快照并支持安全恢复，统一存放于 `Documents/OpenLearn/backups`；
+- 「高级」页提供 `doctor` 体检与 `doctor --fix`、重置管理员密码、清理 npx 缓存、钉死 CLI 版本、切换 npm 镜像源（默认国内镜像）；
+- 关闭窗口时可选择最小化到系统托盘并保持服务后台运行。
+
+> **边界**：GUI 只管本机单实例。跨校、公网、多副本部署请用 [多校部署](multi-school.md) 与 [Docker & Nginx](docker-nginx.md)。
+
+### 方式四：AI Skill 辅助部署、插件开发与贡献（openlearn-next-skill）
+
+把部署排错、插件开发与 Fork 贡献的流程交给 AI Agent 执行。该 Skill 发布于 [SkillHub](https://skillhub.cn/skills/user_37fa416d/openlearn-next-skill)（v1.0.0），包含三个子技能。
+
+**安装**：将下面的提示词发给你的 AI Agent（WorkBuddy / Claude Code / Antigravity 等）：
+
+```text
+请根据 https://skillhub.cn/install/skillhub.md ，安装 @user_37fa416d/openlearn-next-skill 。
+```
+
+**三个子技能**：
+
+| 子技能               | 覆盖范围                                                                                                                                                  |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 部署与启动           | Node 24 预检、`corepack pnpm install`、`pnpm dev` 启动、`/health` 健康检查、生产构建与 systemd / PM2 守护；排查端口 9000、防火墙、better-sqlite3 编译失败 |
+| 插件开发与仓库协作   | `server-only` / `full-stack` / `frontend-only` 插件，manifest 与能力权限、构建安装验证、L0–L3 测试护栏、报错归因，以及 Gitee / GitHub issue 与 PR 协作    |
+| 外部贡献者 Fork 贡献 | Fork → Clone → 配置 upstream → 建分支 → 提交 → push → 发起 PR → 同步；覆盖 GitHub 主仓与 Gitee 镜像                                                       |
+
+> **边界**：Skill 提供的是操作指引，不改变平台本身；生产密钥、备份与回滚仍以本指南第 3 节为准。插件开发另见[插件开发完全指南](../tutorials/plugin-development-tutorial.md)，贡献流程见[贡献者指南](../contributing/contributing.md)。
+
 ---
 
 ## 2.5 多校部署（一校一实例）
@@ -300,3 +341,7 @@ OPENLEARN_ERROR_DSN="https://<public-key>@glitchtip.example/1"
 ```bash
 curl -fsS -H "Authorization: Bearer $METRICS_TOKEN" http://127.0.0.1:9000/metrics
 ```
+
+---
+
+> 最后更新：2026-11-27

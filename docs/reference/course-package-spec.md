@@ -1,7 +1,7 @@
 # 课程包（Course Package）规范与多媒体导入指南
 
-> **适用范围**：`openlearn-next` 0.7.8+（格式版本 `version: 1`）。
-> 本页是「课程包 JSON」的权威说明：格式字典、附件内嵌方式、导入/导出边界与安全契约。
+> **适用范围**：`openlearn-next` 0.8.x+（格式版本 `version: 3`）。
+> 本页是「课程包 JSON」的权威说明：格式字典、交付模式（白板 / 学案）、附件内嵌方式、导入/导出边界与安全契约。
 > 实证来源：`server/services/course-package.ts`、`course-package-assets.ts`、`course-package-import.ts`、`course-package-export.ts`。
 
 ---
@@ -10,17 +10,30 @@
 
 平台有两条课程导入通道，能力差别很大：
 
-| 维度        | CSV 简易导入（`POST /api/lessons`） | 课程包 JSON（`/api/course-packages/*`）                              |
-| ----------- | ----------------------------------- | -------------------------------------------------------------------- |
-| 文件形态    | `.csv`，两列 `title` + `content`    | `.json`，单个自包含文档                                              |
-| 教学环节    | ❌ 不导入，课程没有 timeline        | ✅ 完整导入 `lesson.timeline`（讲授 / 练习 / 测验 / 总结…）          |
-| 白板元素    | ❌ 空白板                           | ✅ 导入 `elements[]`（演示文稿、测验、代码沙箱、数学函数等预设组件） |
-| 附件 / 图片 | ❌ 只能依赖公网图床链接             | ✅ 附件 base64 内联，导入时落盘并返回本实例 `/api/files/<assetId>`   |
-| 事务性      | 逐条写入，中途失败会留下半截数据    | ✅ 单事务写入，失败整体回滚并清理已落盘文件                          |
-| 幂等去重    | 无                                  | ✅ `meta.id` 或内容哈希去重，重复导入返回 409 并询问                 |
-| 适用场景    | 批量建「空壳课」、快速占位          | 完整教案交换、备课备份、模板分发、带讲义/课件的课堂                  |
+| 维度        | CSV 简易导入（`POST /api/lessons`）             | 课程包 JSON（`/api/course-packages/*`）                              |
+| ----------- | ----------------------------------------------- | -------------------------------------------------------------------- |
+| 文件形态    | `.csv`，`title` + `content`（可选 `mode`）      | `.json`，单个自包含文档                                              |
+| 交付模式    | 可选 `mode` 列（`whiteboard` / `xuean`）        | `lesson.deliveryMode`（缺省白板）                                    |
+| 教学环节    | ❌ 不导入（学案课自动补默认三环节）             | ✅ 完整导入 `lesson.timeline`（讲授 / 练习 / 测验 / 总结…）          |
+| 白板元素    | ❌ 空白板                                       | ✅ 导入 `elements[]`（演示文稿、测验、代码沙箱、数学函数等预设组件） |
+| 学案活动    | ❌ 仅学案课自动生成三个默认活动                 | ✅ 导入 `lesson.activities` / `lesson.blocks`（学案课）              |
+| 附件 / 图片 | ❌ 只能依赖公网图床链接                         | ✅ 附件 base64 内联，导入时落盘并返回本实例 `/api/files/<assetId>`   |
+| 事务性      | 逐条写入，中途失败会留下半截数据                | ✅ 单事务写入，失败整体回滚并清理已落盘文件                          |
+| 幂等去重    | 无                                              | ✅ `meta.id` 或内容哈希去重，重复导入返回 409 并询问                 |
+| 适用场景    | 批量建「空壳课」、快速占位、批量指定白板 / 学案 | 完整教案交换、备课备份、模板分发、带讲义/课件的课堂                  |
 
-**结论**：只要课程需要教学环节、白板组件或任何物理文件，就必须走课程包通道。CSV 只适合批量创建标题与大纲。
+**结论**：只要课程需要教学环节、白板组件、学案活动或任何物理文件，就必须走课程包通道。CSV 只适合批量创建标题与大纲（可指定交付模式）。
+
+### 1.1 CSV 的 `mode` 列
+
+CSV 表头可选增加 `mode`（也识别 `delivery_mode` / `课程模式` / `授课模式` / `模式`）列：
+
+| 值                           | 结果                                                       |
+| ---------------------------- | ---------------------------------------------------------- |
+| `whiteboard` / `白板` / 留空 | 创建白板课（缺省行为，与旧模板一致）                       |
+| `xuean` / `学案` / `导学案`  | 创建学案课，并自动生成「预习 / 研读 / 练习」三个环节与活动 |
+
+无法识别的值按白板处理，不会让整行导入失败。
 
 ---
 
@@ -31,7 +44,7 @@
 ```json
 {
   "format": "openlearn.course-package",
-  "version": 1,
+  "version": 3,
   "meta": {
     "id": "my-lesson-2026-spring",
     "name": "函数的单调性",
@@ -43,6 +56,7 @@
     "title": "函数的单调性",
     "content": "## 教学目标\n\n- 理解单调性的定义\n\n![示意图](${asset:img-1})",
     "progressMode": "manual",
+    "deliveryMode": "whiteboard",
     "timeline": [
       { "id": "seg-intro", "title": "课堂导入", "type": "intro", "duration": "5m" },
       { "id": "seg-lecture", "title": "概念精讲", "type": "lecture", "duration": "20m" }
@@ -71,12 +85,59 @@
 }
 ```
 
+一个最小的**学案课**课程包（课堂按活动推进，不依赖白板元素）：
+
+```json
+{
+  "format": "openlearn.course-package",
+  "version": 3,
+  "lesson": {
+    "title": "勾股定理 · 预习-研读-练习",
+    "content": "## 学习目标\n\n- 理解勾股定理的证明思路",
+    "progressMode": "manual",
+    "deliveryMode": "xuean",
+    "modePackId": "@openlearn/mode-xuean",
+    "timeline": [
+      { "id": "seg-preview", "title": "预习", "type": "xuean:preview", "duration": "10m" },
+      { "id": "seg-study", "title": "研读", "type": "xuean", "duration": "20m" },
+      { "id": "seg-drill", "title": "练习", "type": "xuean:drill", "duration": "15m" }
+    ],
+    "activities": [
+      {
+        "type": "reading",
+        "title": "预习：阅读导学材料",
+        "config": { "content": "阅读教材第 3 节，记录两个疑问。", "url": "" }
+      },
+      {
+        "type": "submission",
+        "title": "研读：提交阅读收获",
+        "submissionType": "text",
+        "config": { "instructions": "写下本节最重要的一个观点。", "acceptText": true, "acceptLink": false }
+      },
+      {
+        "type": "discussion",
+        "title": "练习：课堂讨论",
+        "config": { "prompt": "还有哪些证明方法？", "allowReplies": true }
+      }
+    ],
+    "blocks": [
+      { "blockType": "xuean_home", "content": { "intro": "按预习 → 研读 → 练习完成本节课。", "backgroundImage": "" } }
+    ]
+  },
+  "assets": [],
+  "elements": []
+}
+```
+
+> 学案包可以只写 `deliveryMode: "xuean"` 而不写 `activities`：导入端会按 timeline
+> 自动生成活动（`xuean:preview` → 阅读、`xuean` → 作品提交、`xuean:drill` → 测验）。
+
 ### 2.1 顶层字段
 
 | 字段       | 类型    | 必填 | 约束与说明                                                                 |
 | ---------- | ------- | ---- | -------------------------------------------------------------------------- |
 | `format`   | string  | 是   | 固定为 `openlearn.course-package`；不匹配直接判为非课程包                  |
-| `version`  | integer | 是   | 正整数，当前为 `1`                                                         |
+| `version`  | integer | 是   | 正整数，当前为 `3`（v1/v2 旧包仍可导入，按白板处理）                       |
 | `meta`     | object  | 否   | 缺省为 `{ name: '未命名课程模板', description: '', author: '', tags: [] }` |
 | `lesson`   | object  | 是   | 课程本体                                                                   |
 | `assets`   | array   | 否   | 内嵌附件，缺省 `[]`                                                        |
@@ -96,26 +157,56 @@
 
 ### 2.3 `lesson`
 
-| 字段           | 类型      | 必填 | 说明                                                    |
-| -------------- | --------- | ---- | ------------------------------------------------------- |
-| `title`        | string    | 是   | 课程标题                                                |
-| `content`      | string    | 否   | Markdown 教学大纲；支持 `${asset:<id>}` 占位符（见 §3） |
-| `progressMode` | string    | 否   | 缺省 `manual`                                           |
-| `timeline`     | Segment[] | 否   | 教学环节；元素通过 `segmentId` 归属环节                 |
+| 字段           | 类型       | 必填 | 说明                                                           |
+| -------------- | ---------- | ---- | -------------------------------------------------------------- |
+| `title`        | string     | 是   | 课程标题                                                       |
+| `content`      | string     | 否   | Markdown 教学大纲；支持 `${asset:<id>}` 占位符（见 §3）        |
+| `progressMode` | string     | 否   | 缺省 `manual`                                                  |
+| `timeline`     | Segment[]  | 否   | 教学环节；元素通过 `segmentId` 归属环节                        |
+| `deliveryMode` | string     | 否   | `whiteboard`（缺省）/ `xuean`；写入 `lessons.delivery_mode`    |
+| `modePackId`   | string     | 否   | 课时绑定的模式包 id；学案包缺省回落内置学案包，白板包保持 NULL |
+| `activities`   | Activity[] | 否   | 学案活动；`xuean` 且缺省时按 timeline 自动生成                 |
+| `blocks`       | Block[]    | 否   | 学案首页块（如 `xuean_home` 简介）                             |
 
 `Segment`：
 
-| 字段       | 类型   | 必填 | 说明                                                           |
-| ---------- | ------ | ---- | -------------------------------------------------------------- |
-| `id`       | string | 是   | 环节 id，**包内唯一**；重复会导致导入失败                      |
-| `title`    | string | 是   | 环节标题                                                       |
-| `type`     | string | 是   | 建议使用 `intro` / `lecture` / `practice` / `quiz` / `summary` |
-| `duration` | string | 否   | 例如 `"5m"`                                                    |
-| `notes`    | string | 否   | 教师备注                                                       |
-| `color`    | string | 否   | 环节配色（Tailwind class 字符串）                              |
-| `gates`    | Gate[] | 否   | 进入条件，与备课编辑器「环节门禁」同构                         |
+| 字段       | 类型   | 必填 | 说明                                                                                                               |
+| ---------- | ------ | ---- | ------------------------------------------------------------------------------------------------------------------ |
+| `id`       | string | 是   | 环节 id，**包内唯一**；重复会导致导入失败                                                                          |
+| `title`    | string | 是   | 环节标题                                                                                                           |
+| `type`     | string | 是   | 白板课用 `intro` / `lecture` / `practice` / `quiz` / `summary`；学案课用 `xuean:preview` / `xuean` / `xuean:drill` |
+| `duration` | string | 否   | 例如 `"5m"`                                                                                                        |
+| `notes`    | string | 否   | 教师备注                                                                                                           |
+| `color`    | string | 否   | 环节配色（Tailwind class 字符串）                                                                                  |
+| `gates`    | Gate[] | 否   | 进入条件，与备课编辑器「环节门禁」同构                                                                             |
 
 `Gate`：`{ "id"?: string, "type": string, "params"?: object }`。
+
+`Activity`（学案活动，导入时写入 `lesson_activities`）：
+
+| 字段                  | 类型    | 必填 | 说明                                                                                                      |
+| --------------------- | ------- | ---- | --------------------------------------------------------------------------------------------------------- |
+| `type`                | string  | 是   | `reading` / `submission` / `quiz` / `survey` / `discussion` / `courseware` / `scratch` / `form` / `other` |
+| `title`               | string  | 是   | 活动标题                                                                                                  |
+| `config`              | object  | 否   | 活动配置（阅读正文、提交说明、讨论题等），写入 `config_json`                                              |
+| `required`            | boolean | 否   | 缺省 `true`                                                                                               |
+| `visible`             | boolean | 否   | 缺省 `true`                                                                                               |
+| `peerReview`          | boolean | 否   | 缺省 `false`                                                                                              |
+| `groupMode`           | string  | 否   | 缺省 `none`                                                                                               |
+| `submissionType`      | string  | 否   | 仅作品提交活动使用，例如 `text`                                                                           |
+| `rubric`              | object  | 否   | 评分量规，写入 `rubric_json`                                                                              |
+| `releaseAt` / `dueAt` | number  | 否   | 毫秒时间戳                                                                                                |
+
+`Block`（学案首页块，导入时写入 `lesson_activity_blocks`）：
+
+| 字段        | 类型   | 必填 | 说明                                                                                                                   |
+| ----------- | ------ | ---- | ---------------------------------------------------------------------------------------------------------------------- |
+| `blockType` | string | 是   | `xuean_home` / `interactive_courseware` / `learning_goals` / `resources` / `free_html` 等                              |
+| `content`   | object | 否   | 块内容；`xuean_home` 为 `{ intro, backgroundImage }`，背景图只接受本实例上传文件 URL（`/api/files/*` 或 `/uploads/*`） |
+
+`interactive_courseware` 块的 `content` 为 `{ coursewareUuid, resourceId, title }`（二者至少一个），
+导入时会像 `/api/lessons/:lessonId/blocks` 一样创建 `lesson_block` 类型的 LearningSurface 并回写
+`surface_id`；只写块而不建 Surface 的话，学生端会退化成一段原始 JSON 而不是课件。
 
 ### 2.4 `assets`
 
@@ -165,6 +256,7 @@
 
 - 白板元素：`data.fileUrl = "${asset:asset-sample-handout}"`
 - 课程正文（Markdown）：图片写 `![示意图](${asset:img-1})`；下载链接则是普通超链接，把圆括号里的地址写成 `${asset:doc-1}`。
+- 学案活动 / 首页块：`activities[].config`、`activities[].rubric`、`blocks[].content` 里的字符串同样支持占位符（如阅读材料中的图片），导入时一并解析、导出时一并逆向替换。
 
 导入时，占位符会被替换成**导入方实例统一文件存储返回的** `/api/files/<assetId>`（旧数据里的 `/uploads/<随机名>.<ext>` 仍由 `file_aliases` 兼容读取）：
 
@@ -282,11 +374,14 @@ echo "$BASE64" | base64 -d > /tmp/check.png && cmp /tmp/check.png ./monotonicity
 ### 6.1 下载内置模板
 
 ```text
-GET /api/course-packages/template
+GET /api/course-packages/template               # 白板模板（缺省）
+GET /api/course-packages/template?mode=xuean    # 学案模板
 ```
 
-返回自包含 JSON（含 PDF 讲义与 PPTX 课件两份真实附件），覆盖备课面板全部预设组件——
-适合作为「照着改」的起点，也适合验证导入链路。
+- 白板模板：自包含 JSON（含 PDF 讲义与 PPTX 课件两份真实附件），覆盖备课面板全部预设组件，
+  适合作为「照着改」的起点，也适合验证导入链路。
+- 学案模板：`deliveryMode: "xuean"` + 预习 / 研读 / 练习三个环节 + 阅读 / 作品提交 / 讨论三个活动
+  - 一个 `xuean_home` 首页块，不携带白板元素与附件。
 
 ### 6.2 导入
 
@@ -321,7 +416,8 @@ GET /api/lessons/:id/export-package
 
 - 课程管理列表：每张课程卡片的操作栏 → **导出课程包**（仅创建者或管理员可见）。
 - 教案设计器顶栏 → **导出课程包**。
-- 导入对话框中的 **下载完整课程模板（含图片 / 示例文档）** 按钮。
+- 课程管理工具栏 → **白板模板** / **学案模板** 两个下载入口。
+- 导入对话框中的 **下载白板课程模板** / **下载学案课程模板** 按钮。
 
 导出的文件可以直接拖回导入对话框；因为 `meta.id` 沿用原课程 id，同一教师重复导入同一份导出物时，
 会按幂等规则返回 409 并询问是否仍要导入副本。
@@ -347,3 +443,8 @@ A：课程引用的附件解码后合计超限。课程包是单文件自包含�
 
 **Q：重新导入自己导出的包时提示重复？**
 A：这是幂等保护。确实要两份时，在冲突提示中选择「仍然导入副本」（`allowDuplicate: true`）。
+
+**Q：白板模板和学案模板有什么区别？**
+A：白板课按教学环节 + 白板元素推进，课堂使用互动白板；学案课按活动推进（`lesson.activities`），
+课堂使用学案工作区，白板元素可以为空。两者的课程包结构相同，由 `lesson.deliveryMode` 区分；
+导出已有课程时会自动带上真实的交付模式与学案活动。

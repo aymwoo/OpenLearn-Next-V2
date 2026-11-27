@@ -14,6 +14,7 @@ import { SurveyActivityCard } from './activities/SurveyActivityCard';
 import { FormActivityCard } from './activities/FormActivityCard';
 import { DiscussionActivityCard } from './activities/DiscussionActivityCard';
 import { ExtensionPointRenderer } from '../../../plugin-host/extension-point-renderer';
+import { useOptionalPluginHost } from '../../../plugin-host/plugin-host-context';
 
 type Block = {
   id: string;
@@ -90,13 +91,27 @@ interface Props {
   lessonId: string;
   lessonTitle?: string;
   lang?: 'zh' | 'en';
+  /** 外层顶栏（学生课堂）已经显示环节名时置 false：头部只留活动导航 + 进度，避免同一句话相邻重复。 */
+  showTitle?: boolean;
   /** Mode Pack 工作区可选：进度写库成功后通知（如 ClassroomMessage xuean:task） */
   onActivityProgressReported?: (info: { activityId: string; status: string }) => void;
 }
 
-export function StudentXueanView({ lessonId, lessonTitle, lang = 'zh', onActivityProgressReported }: Props) {
+export function StudentXueanView({
+  lessonId,
+  lessonTitle,
+  lang = 'zh',
+  showTitle = true,
+  onActivityProgressReported,
+}: Props) {
   const [data, setData] = useState<XueanData | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // 没有插件贡献 addon 时不再渲染那层「pt-2 mt-2 border-t」包裹，避免卡片底部多出一条空分隔线。
+  const pluginHost = useOptionalPluginHost();
+  const hasActivityAddon = Boolean(
+    pluginHost && (pluginHost.getExtensions('xuean.activity.student.addon' as never) ?? []).length > 0,
+  );
 
   const refresh = useCallback(async () => {
     if (!lessonId) return;
@@ -160,146 +175,187 @@ export function StudentXueanView({ lessonId, lessonTitle, lang = 'zh', onActivit
 
   const completedPercent = data.activities.length > 0 ? (completedCount / data.activities.length) * 100 : 0;
 
+  // 活动导航：单行横向滚动，点击直接切换中间内容
+  const tabsNode = (
+    <div
+      ref={tablistRef}
+      role="tablist"
+      aria-label="学案活动导航"
+      className="scrollbar-none -mx-1 flex min-w-0 flex-1 snap-x snap-proximity items-center gap-1 overflow-x-auto scroll-px-1 px-1 pb-1"
+    >
+      {data.blocks.length > 0 && (
+        <ActivityNavTab
+          selected={currentItem === 'home'}
+          label={lang === 'zh' ? '学案首页' : 'Overview'}
+          onClick={() => setActiveItem('home')}
+        />
+      )}
+      {data.activities.map((activity, index) => {
+        const progress = data.progressByActivity[activity.id];
+        const done =
+          progress && (progress.status === 'graded' || (progress.verified && progress.status === 'submitted'));
+        return (
+          <ActivityNavTab
+            key={activity.id}
+            selected={currentItem === activity.id}
+            index={index + 1}
+            label={activity.title}
+            done={Boolean(done)}
+            active={progress?.status === 'in_progress'}
+            onClick={() => setActiveItem(activity.id)}
+          />
+        );
+      })}
+    </div>
+  );
+
+  const progressNode = (
+    <div className="ml-auto flex shrink-0 items-center gap-2.5">
+      <div
+        className="inline-flex items-center gap-1.5"
+        role="progressbar"
+        aria-label={lang === 'zh' ? '学案活动完成进度' : 'Activity completion'}
+        aria-valuemin={0}
+        aria-valuemax={data.activities.length}
+        aria-valuenow={completedCount}
+      >
+        <CompletionRing percent={completedPercent} />
+        <span className="text-[11px] tabular-nums text-muted">
+          {completedCount} / {data.activities.length}
+        </span>
+      </div>
+      <ExtensionPointRenderer
+        slot="xuean.progress.summary"
+        slotProps={{
+          lessonId: data.lessonId,
+          completedCount,
+          total: data.activities.length,
+          percent: Math.round(completedPercent),
+          lang,
+        }}
+        lang={lang}
+      />
+    </div>
+  );
+
   return (
-    <div className="flex h-full flex-col overflow-y-auto">
-      {/* 学案头部 + 活动导航：共用一层 sticky 容器，避免硬编码吸顶高度 */}
-      <div className="sticky top-0 z-20 border-b border-theme bg-surface/95 backdrop-blur-md">
-        <div className="w-full px-5 pt-4 sm:px-6">
-          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-            <h2 className="text-base font-black tracking-tight text-main sm:text-lg">{lessonTitle ?? data.lessonId}</h2>
-            <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-muted">
-              <span className="inline-block h-1.5 w-1.5 rounded-full bg-primary-theme" aria-hidden="true" />
-              {lang === 'zh' ? '学案式学习' : 'Guided study'}
-            </span>
-          </div>
-
-          {/* 完成进度：一条细进度条 + 计数，替代散落的文字 */}
-          <div className="mt-2 flex items-center gap-2.5">
-            <div className="h-1 flex-1 overflow-hidden rounded-full bg-surface-secondary">
-              <div
-                className="h-full rounded-full bg-emerald-500 transition-[width] duration-300"
-                style={{ width: `${completedPercent}%` }}
-                role="progressbar"
-                aria-label={lang === 'zh' ? '学案活动完成进度' : 'Activity completion'}
-                aria-valuemin={0}
-                aria-valuemax={data.activities.length}
-                aria-valuenow={completedCount}
-              />
+    <div className="flex h-full min-h-0 flex-col overflow-hidden">
+      {/* 学案头部：默认两行（标题 + 进度 + 活动导航）；外层顶栏已显示环节名时收成一行 */}
+      <div className="z-20 shrink-0 border-b border-theme bg-surface/95 backdrop-blur-md">
+        {showTitle ? (
+          <div className="w-full px-5 pt-4 sm:px-6">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <h2 className="min-w-0 truncate text-base font-black tracking-tight text-main sm:text-lg">
+                {lessonTitle ?? data.lessonId}
+              </h2>
+              <span className="inline-flex shrink-0 items-center gap-1.5 text-[11px] font-medium text-muted">
+                <span className="inline-block h-1.5 w-1.5 rounded-full bg-primary-theme" aria-hidden="true" />
+                {lang === 'zh' ? '学案式学习' : 'Guided study'}
+              </span>
+              {progressNode}
             </div>
-            <span className="shrink-0 text-[11px] tabular-nums text-muted">
-              {completedCount} / {data.activities.length}
-            </span>
-            <ExtensionPointRenderer
-              slot="xuean.progress.summary"
-              slotProps={{
-                lessonId: data.lessonId,
-                completedCount,
-                total: data.activities.length,
-                percent: Math.round(completedPercent),
-                lang,
-              }}
-              lang={lang}
-            />
+            <div className="mt-2">{tabsNode}</div>
           </div>
-
-          {/* 活动导航：单行横向滚动，点击直接切换中间内容 */}
-          <div
-            ref={tablistRef}
-            role="tablist"
-            aria-label="学案活动导航"
-            className="scrollbar-none -mx-1 mt-3 flex snap-x snap-proximity items-center gap-1 overflow-x-auto scroll-px-1 px-1 pb-1"
-          >
-            {data.blocks.length > 0 && (
-              <ActivityNavTab
-                selected={currentItem === 'home'}
-                label={lang === 'zh' ? '学案首页' : 'Overview'}
-                onClick={() => setActiveItem('home')}
-              />
-            )}
-            {data.activities.map((activity, index) => {
-              const progress = data.progressByActivity[activity.id];
-              const done =
-                progress && (progress.status === 'graded' || (progress.verified && progress.status === 'submitted'));
-              return (
-                <ActivityNavTab
-                  key={activity.id}
-                  selected={currentItem === activity.id}
-                  index={index + 1}
-                  label={activity.title}
-                  done={Boolean(done)}
-                  active={progress?.status === 'in_progress'}
-                  onClick={() => setActiveItem(activity.id)}
-                />
-              );
-            })}
+        ) : (
+          <div className="flex w-full items-center gap-3 px-5 py-2 sm:px-6">
+            {tabsNode}
+            {progressNode}
           </div>
-        </div>
+        )}
       </div>
 
-      <div className="w-full flex-1 px-5 py-6 sm:px-6">
-        {currentItem === 'home' && data.blocks.length > 0 ? (
-          <section aria-label="学案首页" className="space-y-3">
-            {[...data.blocks]
-              .sort((a, b) => {
-                // 学案首页始终置顶，其余块沿用 order_index。
-                if (a.block_type === 'xuean_home') return -1;
-                if (b.block_type === 'xuean_home') return 1;
-                return a.order_index - b.order_index;
-              })
-              .map((b) => (
-                <BlockCard key={b.id} block={b} />
-              ))}
-            <ExtensionPointRenderer
-              slot="xuean.home.block"
-              slotProps={{ lessonId: data.lessonId, blocks: data.blocks, lang }}
+      {/* 两栏：左侧当前内容（限宽可读），右侧导读栏（大屏才出现）。
+          学案首页本身就在展示这些块，此时不再并排重复一份。 */}
+      <div
+        className={`grid min-h-0 flex-1 grid-cols-1 ${
+          currentItem === 'home' ? '' : 'xl:grid-cols-[minmax(0,1fr)_280px]'
+        }`}
+      >
+        <div className="min-h-0 overflow-y-auto">
+          <div className="mx-auto w-full max-w-5xl px-5 py-5 sm:px-6">
+            {currentItem === 'home' && data.blocks.length > 0 ? (
+              <section aria-label="学案首页" className="space-y-3">
+                {[...data.blocks]
+                  .sort((a, b) => {
+                    // 学案首页始终置顶，其余块沿用 order_index。
+                    if (a.block_type === 'xuean_home') return -1;
+                    if (b.block_type === 'xuean_home') return 1;
+                    return a.order_index - b.order_index;
+                  })
+                  .map((b) => (
+                    <BlockCard key={b.id} block={b} />
+                  ))}
+                <ExtensionPointRenderer
+                  slot="xuean.home.block"
+                  slotProps={{ lessonId: data.lessonId, blocks: data.blocks, lang }}
+                  lang={lang}
+                />
+              </section>
+            ) : currentItem ? (
+              (() => {
+                const index = data.activities.findIndex((activity) => activity.id === currentItem);
+                if (index < 0) return null;
+                const activity = data.activities[index];
+                return (
+                  <section aria-label={`活动 ${index + 1}：${activity.title}`} className="space-y-4">
+                    <ActivityItem
+                      index={index}
+                      activity={activity}
+                      progress={data.progressByActivity[activity.id]}
+                      lang={lang}
+                      // 活动名与本环节同名时不再重复一遍（顶栏与活动导航已经给出）。
+                      hideTitle={activity.title.trim() === (lessonTitle ?? '').trim()}
+                      hasAddon={hasActivityAddon}
+                      onProgressUpdated={refresh}
+                      onActivityProgressReported={onActivityProgressReported}
+                    />
+                    {data.activities.length > 1 && (
+                      <div className="flex items-center justify-between gap-3 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => setActiveItem(data.activities[index - 1]?.id ?? currentItem)}
+                          disabled={index === 0}
+                          className="px-3 py-1.5 text-xs rounded-lg border border-theme text-main hover:bg-surface-secondary disabled:opacity-30 disabled:cursor-not-allowed"
+                        >
+                          ← {lang === 'zh' ? '上一活动' : 'Previous'}
+                        </button>
+                        <span className="text-[11px] text-muted">
+                          {index + 1} / {data.activities.length}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setActiveItem(data.activities[index + 1]?.id ?? currentItem)}
+                          disabled={index === data.activities.length - 1}
+                          className="px-3 py-1.5 text-xs rounded-lg border border-theme text-main hover:bg-surface-secondary disabled:opacity-30 disabled:cursor-not-allowed"
+                        >
+                          {lang === 'zh' ? '下一活动' : 'Next'} →
+                        </button>
+                      </div>
+                    )}
+                  </section>
+                );
+              })()
+            ) : (
+              <div className="text-center text-muted py-16 border-2 border-dashed border-theme rounded-xl text-sm">
+                {lang === 'zh' ? '教师尚未编排活动' : 'No activities yet'}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* 导读栏：活动页常驻，小屏隐藏（活动导航仍可完成全部切换） */}
+        {currentItem === 'home' ? null : (
+          <aside
+            aria-label={lang === 'zh' ? '学案导读' : 'Study guide'}
+            className="hidden min-h-0 overflow-y-auto border-l border-theme bg-surface-secondary/20 px-4 py-5 xl:block"
+          >
+            <XueanGuideRail
+              blocks={data.blocks}
+              activities={data.activities}
+              progressByActivity={data.progressByActivity}
               lang={lang}
             />
-          </section>
-        ) : currentItem ? (
-          (() => {
-            const index = data.activities.findIndex((activity) => activity.id === currentItem);
-            if (index < 0) return null;
-            const activity = data.activities[index];
-            return (
-              <section aria-label={`活动 ${index + 1}：${activity.title}`} className="space-y-4">
-                <ActivityItem
-                  index={index}
-                  activity={activity}
-                  progress={data.progressByActivity[activity.id]}
-                  lang={lang}
-                  onProgressUpdated={refresh}
-                  onActivityProgressReported={onActivityProgressReported}
-                />
-                {data.activities.length > 1 && (
-                  <div className="flex items-center justify-between gap-3 pt-1">
-                    <button
-                      type="button"
-                      onClick={() => setActiveItem(data.activities[index - 1]?.id ?? currentItem)}
-                      disabled={index === 0}
-                      className="px-3 py-1.5 text-xs rounded-lg border border-theme text-main hover:bg-surface-secondary disabled:opacity-30 disabled:cursor-not-allowed"
-                    >
-                      ← {lang === 'zh' ? '上一活动' : 'Previous'}
-                    </button>
-                    <span className="text-[11px] text-muted">
-                      {index + 1} / {data.activities.length}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => setActiveItem(data.activities[index + 1]?.id ?? currentItem)}
-                      disabled={index === data.activities.length - 1}
-                      className="px-3 py-1.5 text-xs rounded-lg border border-theme text-main hover:bg-surface-secondary disabled:opacity-30 disabled:cursor-not-allowed"
-                    >
-                      {lang === 'zh' ? '下一活动' : 'Next'} →
-                    </button>
-                  </div>
-                )}
-              </section>
-            );
-          })()
-        ) : (
-          <div className="text-center text-muted py-16 border-2 border-dashed border-theme rounded-xl text-sm">
-            {lang === 'zh' ? '教师尚未编排活动' : 'No activities yet'}
-          </div>
+          </aside>
         )}
       </div>
     </div>
@@ -376,6 +432,158 @@ function ActivityNavTab({
   );
 }
 
+/** 完成进度圆环：替代原来那条占满整行、内容却只有一个数字的细进度条。 */
+function CompletionRing({ percent }: { percent: number }) {
+  const value = Math.max(0, Math.min(100, percent));
+  return (
+    <svg viewBox="0 0 36 36" className="h-4 w-4 -rotate-90" aria-hidden="true">
+      <circle cx="18" cy="18" r="15.5" fill="none" strokeWidth="5" className="stroke-surface-secondary" />
+      <circle
+        cx="18"
+        cy="18"
+        r="15.5"
+        fill="none"
+        strokeWidth="5"
+        strokeLinecap="round"
+        pathLength={100}
+        strokeDasharray={`${value} 100`}
+        className="stroke-emerald-500 transition-[stroke-dasharray] duration-300"
+      />
+    </svg>
+  );
+}
+
+/** 侧栏只读这几个「导读类」首页块；xuean_home / 课件 / 自由 HTML 仍留在首页正文。 */
+const GUIDE_BLOCK_TYPES = new Set(['learning_goals', 'key_points', 'resources', 'operation_tips']);
+
+function toItemText(value: unknown): string {
+  if (typeof value === 'string') return value.trim();
+  if (value && typeof value === 'object') {
+    const record = value as Record<string, unknown>;
+    for (const key of ['text', 'title', 'label', 'name']) {
+      const v = record[key];
+      if (typeof v === 'string' && v.trim()) return v.trim();
+    }
+  }
+  return '';
+}
+
+/** 首页块内容没有统一 schema（数组 / {goals:[…]} / 纯文本都出现过），这里收敛成条目列表。 */
+function blockItems(raw: string): string[] {
+  let content: unknown;
+  try {
+    content = JSON.parse(raw);
+  } catch {
+    return raw.trim() ? [raw.trim()] : [];
+  }
+  if (typeof content === 'string') {
+    return content
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean);
+  }
+  if (Array.isArray(content)) return content.map(toItemText).filter(Boolean);
+  if (content && typeof content === 'object') {
+    const items: string[] = [];
+    for (const value of Object.values(content as Record<string, unknown>)) {
+      if (Array.isArray(value)) items.push(...value.map(toItemText).filter(Boolean));
+      else if (typeof value === 'string' && value.trim()) items.push(value.trim());
+    }
+    return items;
+  }
+  return [];
+}
+
+/**
+ * 学案导读栏：活动进度 + 学习目标 / 重难点 / 资源。
+ * 只读展示（切换活动仍由顶部导航负责），避免与活动导航形成两套互相打脸的导航语义。
+ */
+function XueanGuideRail({
+  blocks,
+  activities,
+  progressByActivity,
+  lang,
+}: {
+  blocks: Block[];
+  activities: Activity[];
+  progressByActivity: Record<string, Progress>;
+  lang: 'zh' | 'en';
+}) {
+  const zh = lang === 'zh';
+  const guideBlocks = blocks
+    .filter((b) => GUIDE_BLOCK_TYPES.has(b.block_type))
+    .sort((a, b) => a.order_index - b.order_index)
+    .map((b) => ({
+      id: b.id,
+      label: BLOCK_TYPE_LABELS[b.block_type] ?? b.block_type,
+      items: blockItems(b.content_json),
+    }))
+    .filter((b) => b.items.length > 0);
+
+  return (
+    <div className="space-y-5">
+      {activities.length > 0 ? (
+        <section>
+          <h3 className="mb-2 text-[11px] font-bold uppercase tracking-wider text-muted">
+            {zh ? '活动进度' : 'Progress'}
+          </h3>
+          <ul className="space-y-1.5">
+            {activities.map((activity, index) => {
+              const progress = progressByActivity[activity.id];
+              const status = progress?.status ?? 'not_started';
+              const done = status === 'graded' || Boolean(progress?.verified && status === 'submitted');
+              const statusLabel = STATUS_LABELS[status];
+              return (
+                <li key={activity.id} className="flex items-center gap-2 text-xs">
+                  <span
+                    aria-hidden="true"
+                    className={`grid h-4 w-4 shrink-0 place-items-center rounded-full border text-[9px] font-bold tabular-nums ${
+                      done ? 'border-emerald-500 bg-emerald-500 text-white' : 'border-theme text-muted'
+                    }`}
+                  >
+                    {done ? '✓' : index + 1}
+                  </span>
+                  <span
+                    className={`min-w-0 flex-1 truncate ${done ? 'text-muted' : 'text-main'}`}
+                    title={activity.title}
+                  >
+                    {activity.title}
+                  </span>
+                  <span className={`shrink-0 rounded border px-1 py-0.5 text-[10px] ${statusLabel.cls}`}>
+                    {statusLabel.text}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      ) : null}
+
+      {guideBlocks.map((block) => (
+        <section key={block.id}>
+          <h3 className="mb-2 text-[11px] font-bold uppercase tracking-wider text-primary-theme">{block.label}</h3>
+          <ul className="space-y-1 text-xs leading-relaxed text-main">
+            {block.items.map((item, index) => (
+              <li key={index} className="flex gap-1.5">
+                <span aria-hidden="true" className="shrink-0 text-muted">
+                  ·
+                </span>
+                <span className="min-w-0 break-words">{item}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ))}
+
+      {guideBlocks.length === 0 ? (
+        <p className="text-xs leading-relaxed text-muted">
+          {zh ? '教师尚未填写学习目标 / 重难点。' : 'No learning goals or key points yet.'}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 function BlockCard({ block }: { block: Block }) {
   let content: unknown;
   try {
@@ -448,7 +656,8 @@ function BlockCard({ block }: { block: Block }) {
           <div className="grid gap-3">
             {keys.map((k) => (
               <div key={k}>
-                <div className="text-[10px] font-bold uppercase text-muted mb-1">{k}</div>
+                {/* 只有一个数组键时，块类型标题已经说明了它是什么，不再把 schema 键名（GOALS / POINTS…）露给学生 */}
+                {keys.length > 1 ? <div className="text-[10px] font-bold uppercase text-muted mb-1">{k}</div> : null}
                 <ul className="space-y-1 text-sm text-main">
                   {(record[k] as unknown[]).map((item, i) => (
                     <li key={i} className="flex gap-2">
@@ -484,6 +693,8 @@ function ActivityItem({
   activity,
   progress,
   lang = 'zh',
+  hideTitle = false,
+  hasAddon = false,
   onProgressUpdated,
   onActivityProgressReported,
 }: {
@@ -491,6 +702,10 @@ function ActivityItem({
   activity: Activity;
   progress?: Progress;
   lang?: 'zh' | 'en';
+  /** 活动名与当前环节同名时省略标题，避免同一句话在一屏里出现三次。 */
+  hideTitle?: boolean;
+  /** 无插件贡献 addon 时省掉底部那条空分隔线。 */
+  hasAddon?: boolean;
   onProgressUpdated: () => void;
   onActivityProgressReported?: (info: { activityId: string; status: string }) => void;
 }) {
@@ -534,19 +749,21 @@ function ActivityItem({
           slotProps={{ activity, activityType: activity.type, lessonId: activity.lesson_id }}
           fallback={<p className="text-[11px] text-amber-600">插件未加载，暂时无法显示此活动。</p>}
         />
-        <div className="pt-2 mt-2 border-t border-theme">
-          <ExtensionPointRenderer
-            slot="xuean.activity.student.addon"
-            slotProps={{
-              activity,
-              activityType: activity.type,
-              lessonId: activity.lesson_id,
-              progress: progress ?? null,
-              lang,
-            }}
-            lang={lang}
-          />
-        </div>
+        {hasAddon ? (
+          <div className="pt-2 mt-2 border-t border-theme">
+            <ExtensionPointRenderer
+              slot="xuean.activity.student.addon"
+              slotProps={{
+                activity,
+                activityType: activity.type,
+                lessonId: activity.lesson_id,
+                progress: progress ?? null,
+                lang,
+              }}
+              lang={lang}
+            />
+          </div>
+        ) : null}
       </div>
     );
   }
@@ -615,7 +832,7 @@ function ActivityItem({
                 </span>
               )}
             </div>
-            <p className="mt-1 text-sm font-semibold text-main">{activity.title}</p>
+            {hideTitle ? null : <p className="mt-1 text-sm font-semibold text-main">{activity.title}</p>}
 
             {activityModule}
 
@@ -644,31 +861,35 @@ function ActivityItem({
               </div>
             )}
 
-            {/* 进度条 */}
-            <div className="mt-2 h-1.5 rounded-full bg-surface-secondary overflow-hidden">
-              <div
-                className="h-full bg-primary-theme transition-all"
-                style={{ width: `${pct}%` }}
-                role="progressbar"
-                aria-valuenow={pct}
-                aria-valuemin={0}
-                aria-valuemax={100}
-              />
-            </div>
+            {/* 进度条：0% 时整条隐藏，否则空轨道会被读成一条多余的分隔线（状态已由顶部徽标给出） */}
+            {pct > 0 ? (
+              <div className="mt-2 h-1.5 rounded-full bg-surface-secondary overflow-hidden">
+                <div
+                  className="h-full bg-primary-theme transition-all"
+                  style={{ width: `${pct}%` }}
+                  role="progressbar"
+                  aria-valuenow={pct}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                />
+              </div>
+            ) : null}
 
-            <div className="pt-2 mt-2 border-t border-theme">
-              <ExtensionPointRenderer
-                slot="xuean.activity.student.addon"
-                slotProps={{
-                  activity,
-                  activityType: activity.type,
-                  lessonId: activity.lesson_id,
-                  progress: progress ?? null,
-                  lang,
-                }}
-                lang={lang}
-              />
-            </div>
+            {hasAddon ? (
+              <div className="pt-2 mt-2 border-t border-theme">
+                <ExtensionPointRenderer
+                  slot="xuean.activity.student.addon"
+                  slotProps={{
+                    activity,
+                    activityType: activity.type,
+                    lessonId: activity.lesson_id,
+                    progress: progress ?? null,
+                    lang,
+                  }}
+                  lang={lang}
+                />
+              </div>
+            ) : null}
           </div>
         </div>
       </div>

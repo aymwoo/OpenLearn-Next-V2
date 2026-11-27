@@ -19,8 +19,6 @@ const TOOLS: Array<{ id: ToolId; label: string }> = [
 
 export function WhiteboardStudentClassroom({
   props,
-  topic,
-  lessonTitle,
   contentSegmentId,
   blockSegmentContent,
   classId,
@@ -30,8 +28,6 @@ export function WhiteboardStudentClassroom({
   extraSurface,
 }: {
   props: StudentLessonViewProps;
-  topic: string;
-  lessonTitle: string;
   contentSegmentId: string | null;
   blockSegmentContent: boolean;
   classId: string | null;
@@ -46,23 +42,10 @@ export function WhiteboardStudentClassroom({
 
   return (
     <div data-testid="student-whiteboard-classroom" className="flex min-h-0 flex-1 flex-col gap-3">
-      <header className="flex items-end justify-between gap-4">
-        <div className="min-w-0">
-          <p className="text-xs font-medium tracking-wide text-gray-500">白板课堂</p>
-          <h1
-            data-testid="student-learning-topic"
-            className="truncate text-2xl font-semibold tracking-tight text-gray-900"
-          >
-            {topic}
-          </h1>
-          {topic !== lessonTitle ? <p className="truncate text-sm text-gray-500">{lessonTitle}</p> : null}
-        </div>
-      </header>
-
       <div className="flex min-h-0 flex-1 gap-3">
         <main
           data-testid="student-whiteboard-canvas"
-          className="relative flex min-h-[16rem] min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-gray-200 bg-white"
+          className="relative flex min-h-[16rem] min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-theme bg-surface"
         >
           {primarySurface ?? (
             <StudentLessonInteractionPanel
@@ -125,7 +108,7 @@ export function WhiteboardStudentClassroom({
           aria-expanded={menuOpen}
           aria-controls="student-whiteboard-tool-menu"
           onClick={() => setMenuOpen((open) => !open)}
-          className="rounded-full px-3 py-1.5 text-sm font-medium cursor-pointer bg-white text-gray-800 border border-gray-200"
+          className="rounded-full px-3 py-1.5 text-sm font-medium cursor-pointer bg-surface text-main border border-theme"
         >
           工具
         </button>
@@ -149,7 +132,9 @@ export function WhiteboardStudentClassroom({
                     setMenuOpen(false);
                   }}
                   className={`rounded-full px-3 py-1.5 text-sm font-medium cursor-pointer ${
-                    tool === item.id ? 'bg-gray-900 text-white' : 'bg-white text-gray-700 border border-gray-200'
+                    tool === item.id
+                      ? 'bg-primary-theme text-white'
+                      : 'bg-surface text-main border border-theme hover:bg-surface-secondary'
                   }`}
                 >
                   {item.label}

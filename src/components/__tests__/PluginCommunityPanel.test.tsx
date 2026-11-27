@@ -436,7 +436,7 @@ describe('PluginCommunityPanel', () => {
 
     it('surfaces the server error when 403 carries a specific error code such as COMMUNITY_INSTALL_DISABLED', async () => {
       const disabledMsg =
-        '社区安装已被关闭。请由管理员在「站点信息设置 → 运行时策略」或插件中心「社区」页开启「允许从社区注册表安装」。';
+        '社区安装已被关闭。请由管理员在「站点设置 → 运行时策略」或插件中心「社区」页开启「允许从社区注册表安装」。';
       const { fetcher } = makeFetcher([
         (url) => (url.startsWith('/api/plugins/community') ? json(registryBody()) : undefined),
         (url) =>
@@ -456,7 +456,7 @@ describe('PluginCommunityPanel', () => {
 
     it('handles 403 code distinction properly during browser upload fallback', async () => {
       const disabledMsg =
-        '社区安装已被关闭。请由管理员在「站点信息设置 → 运行时策略」或插件中心「社区」页开启「允许从社区注册表安装」。';
+        '社区安装已被关闭。请由管理员在「站点设置 → 运行时策略」或插件中心「社区」页开启「允许从社区注册表安装」。';
       const { fetcher } = makeFetcher([
         (url) => (url.startsWith('/api/plugins/community') ? json(registryBody()) : undefined),
         (url) =>

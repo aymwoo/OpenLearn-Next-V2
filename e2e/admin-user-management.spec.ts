@@ -71,7 +71,7 @@ test.describe('管理后台：教工与管理员账号生命周期治理 E2E 测
       await adminNavBtn.click();
 
       // 3. 验证管理后台头部与标题挂载
-      await expect(page.getByText('系统管理与教职后台')).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByText('系统管理')).toBeVisible({ timeout: 15_000 });
       await expect(page.getByText('超级管理员').first()).toBeVisible();
 
       // 4. 点击「添加教职账户」按钮展开抽屉表单

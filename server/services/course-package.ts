@@ -22,12 +22,23 @@
  */
 import { z } from 'zod';
 import { buildSamplePdfBuffer, buildSamplePptxBuffer, PACKAGE_ASSET_TYPES } from './course-package-assets.js';
+import {
+  COURSE_DELIVERY_MODES,
+  type CourseDeliveryMode,
+} from '../../packages/core/plugin-host/course-delivery-mode.js';
+import { BUILTIN_XUEAN_MODE_PACK_ID } from '../../packages/core/plugin-host/mode-pack.js';
 
 /** 课程包格式标识。 */
 export const COURSE_PACKAGE_FORMAT = 'openlearn.course-package';
 
-/** 当前课程包格式版本。 */
-export const COURSE_PACKAGE_VERSION = 2;
+/**
+ * 当前课程包格式版本。
+ *
+ * - v2：`learning_surface` 原生承载 Surface 内容引用；
+ * - v3：`lesson.deliveryMode` / `modePackId` 区分白板课与学案课，
+ *   学案课额外承载 `activities` / `blocks`（学案活动与首页块）。
+ */
+export const COURSE_PACKAGE_VERSION = 3;
 
 /**
  * 课程包文件体积上限（字节）—— 前端导入框对教师的承诺是「最大不超过 20MB」。
@@ -91,6 +102,33 @@ const ElementSchema = z.object({
   data: z.record(z.string(), z.unknown()).default({}),
 });
 
+/**
+ * 学案活动（对应 `lesson_activities` 一行）。
+ *
+ * 与导入端 `/api/lessons/:lessonId/xuean/import` 的字段口径一致，但用
+ * camelCase + 结构化 JSON：`config` / `rubric` 在导入时序列化进 `config_json` /
+ * `rubric_json`，避免课程包里出现「JSON 字符串里再套 JSON 字符串」。
+ */
+const ActivitySchema = z.object({
+  type: z.string().min(1),
+  title: z.string().min(1),
+  config: z.record(z.string(), z.unknown()).optional(),
+  required: z.boolean().optional(),
+  visible: z.boolean().optional(),
+  peerReview: z.boolean().optional(),
+  groupMode: z.string().optional(),
+  submissionType: z.string().nullable().optional(),
+  rubric: z.record(z.string(), z.unknown()).optional(),
+  releaseAt: z.number().int().nonnegative().nullable().optional(),
+  dueAt: z.number().int().nonnegative().nullable().optional(),
+});
+
+/** 学案首页块（对应 `lesson_activity_blocks` 一行）。 */
+const BlockSchema = z.object({
+  blockType: z.string().min(1),
+  content: z.record(z.string(), z.unknown()).optional(),
+});
+
 const CoursePackageSchema = z.object({
   format: z.literal(COURSE_PACKAGE_FORMAT),
   version: z.number().int().positive(),
@@ -115,6 +153,19 @@ const CoursePackageSchema = z.object({
     content: z.string().default(''),
     progressMode: z.string().default('manual'),
     timeline: z.array(SegmentSchema).default([]),
+    /**
+     * 课程交付模式。
+     *
+     * v3 新增：`whiteboard`（互动白板，缺省，兼容 v1/v2 旧包）或 `xuean`（学案）。
+     * 与门户 `teachingModeId` 无关，落库到 `lessons.delivery_mode`。
+     */
+    deliveryMode: z.enum(COURSE_DELIVERY_MODES).default('whiteboard'),
+    /** 课时绑定的模式包 id（可选）；学案包缺省回落内置学案包。 */
+    modePackId: z.string().min(1).nullable().optional(),
+    /** 学案活动；`deliveryMode === 'xuean'` 且缺省时导入端按 timeline 自动生成。 */
+    activities: z.array(ActivitySchema).default([]),
+    /** 学案首页块（简介 / 自由内容等）。 */
+    blocks: z.array(BlockSchema).default([]),
   }),
   assets: z.array(AssetSchema).default([]),
   elements: z.array(ElementSchema).default([]),
@@ -123,6 +174,8 @@ const CoursePackageSchema = z.object({
 export type CoursePackageSegment = z.infer<typeof SegmentSchema>;
 export type CoursePackageAsset = z.infer<typeof AssetSchema>;
 export type CoursePackageElement = z.infer<typeof ElementSchema>;
+export type CoursePackageActivity = z.infer<typeof ActivitySchema>;
+export type CoursePackageBlock = z.infer<typeof BlockSchema>;
 export type CoursePackage = z.infer<typeof CoursePackageSchema>;
 
 /** 课程包解析结果。 */
@@ -258,7 +311,18 @@ const PAGE = {
 } as const;
 
 /**
- * 构建内置课程模板（测试样例课）。
+ * 构建内置课程模板。
+ *
+ * @param mode 交付模式：`whiteboard`（缺省）返回覆盖全部预设组件的白板样例课；
+ *   `xuean` 返回「预习-研读-练习」学案样例课（含活动与首页块）。
+ */
+export async function buildTemplateCoursePackage(mode: CourseDeliveryMode = 'whiteboard'): Promise<CoursePackage> {
+  if (mode === 'xuean') return buildXueanTemplateCoursePackage();
+  return buildWhiteboardTemplateCoursePackage();
+}
+
+/**
+ * 构建内置白板课程模板（测试样例课）。
  *
  * 覆盖：
  * - 5 个教学环节（准备 / 讲授 / 练习 / 测验 / 总结）—— 对齐 SEGMENT_TYPES；
@@ -266,7 +330,7 @@ const PAGE = {
  * - PALETTE_ITEMS 里的 8 个预设组件 + 3 个基础图元；
  * - 2 个真实附件（PDF 讲义 + PPTX 课件），走「课件演示」组件的 PDF / PPTX 分支。
  */
-export async function buildTemplateCoursePackage(): Promise<CoursePackage> {
+async function buildWhiteboardTemplateCoursePackage(): Promise<CoursePackage> {
   const pdf = buildSamplePdfBuffer();
   const pptx = await buildSamplePptxBuffer();
 
@@ -280,7 +344,7 @@ export async function buildTemplateCoursePackage(): Promise<CoursePackage> {
         '代码沙箱、数学函数、交互网页课件、作业提交、随机点名、问候插件，以及基础画布图元。' +
         '用于验证课程导入链路是否完整保留时间线、白板元素与课件附件。',
       author: 'OpenLearn',
-      tags: ['模板', '测试样例', '全部预设组件'],
+      tags: ['模板', '测试样例', '全部预设组件', '白板'],
     },
     lesson: {
       title: '【样例】OpenLearn 预设组件全览',
@@ -320,6 +384,9 @@ export async function buildTemplateCoursePackage(): Promise<CoursePackage> {
         '- 使用「作业提交」组件提交一份本节课的组件截图笔记。',
       ].join('\n'),
       progressMode: 'manual',
+      deliveryMode: 'whiteboard',
+      activities: [],
+      blocks: [],
       timeline: [
         {
           id: SEG.intro,
@@ -657,5 +724,128 @@ export async function buildTemplateCoursePackage(): Promise<CoursePackage> {
         },
       },
     ],
+  };
+}
+
+/** 学案模板的环节 id。 */
+const XUEAN_SEG = {
+  preview: 'seg-xuean-preview',
+  study: 'seg-xuean-study',
+  drill: 'seg-xuean-drill',
+} as const;
+
+/**
+ * 构建内置学案课程模板。
+ *
+ * 学案课不是「白板课加几个字段」：课堂按活动推进，因此模板显式携带
+ * - `deliveryMode: 'xuean'` + `modePackId`（内置学案包）；
+ * - 3 个学案环节（预习 `xuean:preview` / 研读 `xuean` / 练习 `xuean:drill`）；
+ * - 3 个可直接作答的活动（阅读 / 作品提交 / 讨论）；
+ * - 1 个学案首页块（`xuean_home`，简介文字）。
+ *
+ * 不携带白板元素与附件：学案的课堂载体是活动，不是白板组件。
+ */
+function buildXueanTemplateCoursePackage(): CoursePackage {
+  return {
+    format: COURSE_PACKAGE_FORMAT,
+    version: COURSE_PACKAGE_VERSION,
+    meta: {
+      name: 'OpenLearn 学案模板 · 预习-研读-练习',
+      description:
+        '学案式课程样例：预习、研读、练习三个环节，配阅读、作品提交与讨论三个活动，' +
+        '以及一段学案首页简介。导入后课堂按活动推进，而不是白板中栏。',
+      author: 'OpenLearn',
+      tags: ['模板', '学案', '预习-研读-练习'],
+    },
+    lesson: {
+      title: '【样例】学案 · 预习-研读-练习',
+      content: [
+        '## 🎯 教学目标',
+        '',
+        '- 体验学案课的推进方式：预习 → 研读 → 练习；',
+        '- 验证课程导入后**交付模式、教学环节、学案活动**三者均完整落库；',
+        '',
+        '## 🧭 学案结构',
+        '',
+        '1. 预习：阅读导学材料，标记已读；',
+        '2. 研读：提交一段阅读收获；',
+        '3. 练习：参与课堂讨论。',
+      ].join('\n'),
+      progressMode: 'manual',
+      deliveryMode: 'xuean',
+      modePackId: BUILTIN_XUEAN_MODE_PACK_ID,
+      timeline: [
+        {
+          id: XUEAN_SEG.preview,
+          title: '预习',
+          type: 'xuean:preview',
+          duration: '10m',
+          notes: '阅读导学材料，标出不懂的概念。',
+        },
+        {
+          id: XUEAN_SEG.study,
+          title: '研读',
+          type: 'xuean',
+          duration: '20m',
+          notes: '精读材料并提交阅读收获。',
+        },
+        {
+          id: XUEAN_SEG.drill,
+          title: '练习',
+          type: 'xuean:drill',
+          duration: '15m',
+          notes: '围绕关键问题展开课堂讨论。',
+        },
+      ],
+      activities: [
+        {
+          type: 'reading',
+          title: '预习：阅读导学材料',
+          config: {
+            content: [
+              '# 导学材料',
+              '',
+              '学案课以活动为单位推进：每个活动完成后，学生与教师都能看到进度。',
+              '',
+              '- 活动可以要求提交文字、链接或参与讨论；',
+              '- 活动进度与课堂门禁相互独立，不会自动推进环节。',
+            ].join('\n'),
+            url: '',
+          },
+          required: true,
+        },
+        {
+          type: 'submission',
+          title: '研读：提交阅读收获',
+          submissionType: 'text',
+          config: {
+            instructions: '用 2-3 句话写下本节材料最重要的一个观点，以及你的疑问。',
+            acceptText: true,
+            acceptLink: true,
+          },
+          required: true,
+        },
+        {
+          type: 'discussion',
+          title: '练习：课堂讨论',
+          config: {
+            prompt: '学案活动与白板组件各适合什么样的课堂场景？请结合本节例子说明。',
+            allowReplies: true,
+          },
+          required: false,
+        },
+      ],
+      blocks: [
+        {
+          blockType: 'xuean_home',
+          content: {
+            intro: '欢迎来到学案课：按「预习 → 研读 → 练习」完成活动，教师会实时看到你的进度。',
+            backgroundImage: '',
+          },
+        },
+      ],
+    },
+    assets: [],
+    elements: [],
   };
 }

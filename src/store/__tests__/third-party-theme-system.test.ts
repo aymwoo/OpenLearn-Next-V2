@@ -162,6 +162,38 @@ describe('useThemeStore third-party lifecycle, isolation & failsafe recovery (Is
     expect(document.getElementById('openlearn-thirdparty-theme')).toBeNull();
   });
 
+  it('applies global dialog appearance overrides on built-in and third-party themes', () => {
+    const dialogOverrides = { dialogBackgroundColor: '#fff7ed', dialogBorderRadius: 'pill' as const };
+
+    // 内置主题：覆盖落到 :root 内联变量，并写入匿名浏览器快照
+    useThemeStore.setState({ appearanceOverrides: dialogOverrides });
+    useThemeStore.getState().setTheme('light');
+    const rootStyle = document.documentElement.style;
+    expect(rootStyle.getPropertyValue('--ol-dialog-bg')).toBe('#fff7ed');
+    expect(rootStyle.getPropertyValue('--ol-dialog-radius')).toBe('1.5rem');
+    expect(rootStyle.getPropertyValue('--ol-dialog-header-bg')).toBe('transparent');
+    expect(rootStyle.getPropertyValue('--ol-dialog-footer-bg')).toBe('transparent');
+    expect(rootStyle.getPropertyValue('--ol-dialog-surface-image')).toBe('none');
+    const stored = JSON.parse(localStorage.getItem(BROWSER_APPEARANCE_STORAGE_KEY) || '{}');
+    expect(stored.appearanceOverrides).toMatchObject(dialogOverrides);
+
+    // 第三方主题：覆盖写入运行时主题 CSS 的有效令牌
+    useThemeStore.getState().startPreview({
+      themeId: 'campus-atelier',
+      bundle: sampleBundle,
+      mode: 'light',
+      appearanceOverrides: dialogOverrides,
+    });
+    const css = document.getElementById('openlearn-thirdparty-theme')?.textContent || '';
+    expect(css).toContain('--ol-dialog-bg: #fff7ed');
+    expect(css).toContain('--ol-dialog-radius: 1.5rem');
+    expect(css).toContain('--ol-dialog-header-bg: transparent');
+    expect(css).toContain('--ol-dialog-footer-bg: transparent');
+    expect(css).toContain('--ol-dialog-surface-image: none');
+
+    useThemeStore.getState().cancelPreview();
+  });
+
   it('supports live preview & cancelPreview without losing committed state, plus one-click resetToSafeDefault', async () => {
     useThemeStore.getState().setTheme('eyecare');
 

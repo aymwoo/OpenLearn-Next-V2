@@ -1,6 +1,6 @@
 # OpenLearnV2 插件开发完全指南
 
-> 📅 **最后更新**：2026-10-27（§8.1.1 改为 Inline 与隔离模式对比，覆盖 Worker Thread 与子进程两种隔离运行时）
+> 📅 **最后更新**：2026-11-27（§2.8 补充 SkillHub 三合一 Skill 入口；§8.1.1 已改为 Inline 与隔离模式对比）
 >
 > 本文档描述 Worker Thread / 子进程隔离模式与 Inline 模式的 API 差异。第三方 ZIP 插件会被强制落到 `process` 模式，请务必阅读 [§8.1.1 Inline 与隔离模式 API 差异](#inline-mode-api)。
 
@@ -404,6 +404,8 @@ npx skills add https://gitee.com/aymwoo/openlearn-skills.git
 **官方 Skill 资源与存储库**：GitHub [github.com/aymwoo/openlearn-skills](https://github.com/aymwoo/openlearn-skills) ｜ Gitee 镜像 [gitee.com/aymwoo/openlearn-skills](https://gitee.com/aymwoo/openlearn-skills)
 
 > 💡 **提示**：在开发复杂插件时，直接使用 AI Skill 生成的基础代码天然遵循平台的 5 阶段启动流水线、DI Token 依赖注入与沙箱隔离规范，可提升 5~10 倍的开发效率。
+
+> 🧩 **SkillHub 上的三合一合集**：若还需要顺带处理部署启动，或以外部贡献者身份 Fork 后提 PR，可安装 [openlearn-next-skill](https://skillhub.cn/skills/user_37fa416d/openlearn-next-skill)（含「部署与启动」「插件开发与仓库协作」「外部贡献者 Fork 贡献」三个子技能）。安装方式见[安装使用指南](../getting-started/installation-guide.md)「方式五」，贡献流程见[贡献者指南](../contributing/contributing.md)。本节的 `openlearn-next-plugin-dev` Skill 更专注插件开发本身，两者按需选用。
 
 ## 3. 插件结构详解
 
@@ -2349,4 +2351,4 @@ export default {
 ---
 
 > 本文档基于 OpenLearnV2 最新代码库（`main` 分支），通过 Codegraph 知识图谱分析生成。
-> 最后更新：2026-09-25
+> 最后更新：2026-11-27

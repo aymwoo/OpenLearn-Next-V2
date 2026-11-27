@@ -53,6 +53,35 @@ describe('ImportLessonsModal', () => {
     expect(screen.getByTestId('download-course-package-template-btn')).toBeTruthy();
   });
 
+  it('offers both whiteboard and guided-study course templates', () => {
+    render(<ImportLessonsModal {...makeProps()} />);
+    expect(screen.getByTestId('download-course-package-template-btn')).toBeTruthy();
+    expect(screen.getByTestId('download-xuean-course-package-template-btn')).toBeTruthy();
+  });
+
+  it('labels the package delivery mode and activity count in the preview', () => {
+    render(
+      <ImportLessonsModal
+        {...makeProps({
+          importStatus: 'parsing',
+          packagePreview: {
+            fileName: 'openlearn-xuean-course-template.json',
+            title: '【样例】学案 · 预习-研读-练习',
+            metaName: 'OpenLearn 学案模板',
+            deliveryMode: 'xuean',
+            segments: 3,
+            elements: 0,
+            activities: 3,
+            assets: 0,
+            componentTypes: [],
+          },
+        })}
+      />,
+    );
+    expect(screen.getByText('Guided Study')).toBeTruthy();
+    expect(screen.getByText('Activities')).toBeTruthy();
+  });
+
   it('labels the CSV channel as a quick import so teachers do not expect segments/assets (审计尾巴)', () => {
     // CSV 通道只有两列；此前文案只说「支持 CSV 与课程包」，教师会把「导入了 CSV」
     // 误当成「导入了完整课程」，再去白板上找不到任何组件。徽标把边界摆在明面上。

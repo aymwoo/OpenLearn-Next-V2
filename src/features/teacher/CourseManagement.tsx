@@ -196,16 +196,29 @@ export function CourseManagement() {
             </button>
             <button
               id="download-course-template-btn"
-              onClick={() => void downloadCourseTemplate()}
+              onClick={() => void downloadCourseTemplate('whiteboard')}
               title={
                 lang === 'zh'
-                  ? '下载自包含的课程模板（教学环节 + 全部预设组件 + PDF/PPTX 课件附件）'
-                  : 'Download a self-contained course template (segments + every preset component + PDF/PPTX assets)'
+                  ? '下载白板课程模板（教学环节 + 全部预设组件 + PDF/PPTX 课件附件）'
+                  : 'Download a whiteboard course template (segments + every preset component + PDF/PPTX assets)'
               }
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 font-semibold rounded-lg shadow-3xs transition-all hover:shadow-xs hover:-translate-y-0.5 cursor-pointer"
             >
               <FileJson size={14} />
-              {lang === 'zh' ? '下载课程模板' : 'Course Template'}
+              {lang === 'zh' ? '白板模板' : 'Whiteboard Template'}
+            </button>
+            <button
+              id="download-xuean-template-btn"
+              onClick={() => void downloadCourseTemplate('xuean')}
+              title={
+                lang === 'zh'
+                  ? '下载学案课程模板（预习-研读-练习 + 学案活动 + 首页块）'
+                  : 'Download a guided-study course template (preview/study/practice + activities + home block)'
+              }
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-teal-50 hover:bg-teal-100 text-teal-700 border border-teal-200 font-semibold rounded-lg shadow-3xs transition-all hover:shadow-xs hover:-translate-y-0.5 cursor-pointer"
+            >
+              <FileJson size={14} />
+              {lang === 'zh' ? '学案模板' : 'Guided-Study Template'}
             </button>
             <button
               id="add-course-wizard-btn"

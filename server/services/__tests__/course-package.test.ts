@@ -91,6 +91,41 @@ describe('course package template', () => {
   });
 });
 
+describe('guided-study (xuean) course package template', () => {
+  it('carries the xuean delivery mode, activities and home block', async () => {
+    const template = await buildTemplateCoursePackage('xuean');
+    expect(template.format).toBe(COURSE_PACKAGE_FORMAT);
+    expect(template.version).toBe(COURSE_PACKAGE_VERSION);
+    expect(template.lesson.deliveryMode).toBe('xuean');
+    expect(template.lesson.modePackId).toBe('@openlearn/mode-xuean');
+    expect(template.lesson.timeline.map((s) => s.type)).toEqual(['xuean:preview', 'xuean', 'xuean:drill']);
+    expect(template.lesson.activities.map((a) => a.type)).toEqual(['reading', 'submission', 'discussion']);
+    expect(template.lesson.blocks.map((b) => b.blockType)).toEqual(['xuean_home']);
+    // 学案的课堂载体是活动，不是白板组件
+    expect(template.elements).toHaveLength(0);
+    expect(template.assets).toHaveLength(0);
+  });
+
+  it('passes the package validator', async () => {
+    const template = await buildTemplateCoursePackage('xuean');
+    const parsed = parseCoursePackage(template);
+    expect(parsed.ok).toBe(true);
+  });
+
+  it('stores activity configs as structured objects, not nested JSON strings', async () => {
+    const template = await buildTemplateCoursePackage('xuean');
+    const reading = template.lesson.activities.find((activity) => activity.type === 'reading');
+    expect(reading?.config).toBeTypeOf('object');
+    expect(String(reading?.config?.content)).toContain('导学材料');
+  });
+
+  it('keeps whiteboard as the default template', async () => {
+    const template = await buildTemplateCoursePackage();
+    expect(template.lesson.deliveryMode).toBe('whiteboard');
+    expect(template.elements.length).toBeGreaterThan(0);
+  });
+});
+
 describe('parseCoursePackage', () => {
   it('rejects a non-package payload', () => {
     const result = parseCoursePackage({ hello: 'world' });

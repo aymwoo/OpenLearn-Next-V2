@@ -15,6 +15,10 @@ export interface AccessibleDialogProps extends Omit<
   closedBy?: DialogClosedBy;
   /** 语义变体：供主题按变体定制标题栏、图标与强调色 */
   variant?: DialogVariant;
+  /** 自定义面板背景色；设置后标题栏/底栏改为透明，整个面板统一使用该底色 */
+  backgroundColor?: string;
+  /** 自定义面板圆角；标题栏与底栏的内角同步跟随 */
+  borderRadius?: string;
   className?: string;
   children: React.ReactNode;
 }
@@ -48,7 +52,10 @@ export default function AccessibleDialog({
   ariaLabel,
   closedBy = 'closerequest',
   variant = 'default',
+  backgroundColor,
+  borderRadius,
   className = '',
+  style,
   children,
   ...rest
 }: AccessibleDialogProps) {
@@ -181,15 +188,22 @@ export default function AccessibleDialog({
 
   const closedByProps: Record<string, string> = closedBy ? { closedby: closedBy } : {};
 
+  // 单实例外观覆盖：写在面板自身的 CSS 变量上，标题栏/底栏通过继承同步内角圆角
+  const surfaceOverrides: Record<string, string> = {};
+  if (backgroundColor) surfaceOverrides['--ol-dialog-bg'] = backgroundColor;
+  if (borderRadius) surfaceOverrides['--ol-dialog-radius'] = borderRadius;
+
   return (
     <dialog
       ref={dialogRef}
       {...rest}
+      style={{ ...style, ...(surfaceOverrides as React.CSSProperties) }}
       aria-labelledby={ariaLabelledBy}
       aria-label={ariaLabel}
       {...closedByProps}
       data-dialog=""
       data-dialog-variant={variant}
+      data-dialog-surface={backgroundColor ? 'custom' : undefined}
       className={`openlearn-dialog ${className}`.trim()}
     >
       {children}

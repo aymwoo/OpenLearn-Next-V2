@@ -25,7 +25,10 @@ import { checkLessonOwnership } from './lessons.js';
 import type { ServerContext } from '../context.js';
 
 /** 模板下载文件名（Content-Disposition 用）。 */
-const TEMPLATE_FILENAME = 'openlearn-course-template.json';
+const TEMPLATE_FILENAMES = {
+  whiteboard: 'openlearn-course-template.json',
+  xuean: 'openlearn-xuean-course-template.json',
+} as const;
 
 /**
  * 课程包内附件的**解码后**总体积上限（字节）。
@@ -44,13 +47,18 @@ export function registerCoursePackageRoutes(ctx: ServerContext) {
    *
    * 模板是**自包含**的单个 JSON：附件以 base64 内联，导入时再落盘，
    * 因此文件可以在任意实例之间搬运（不依赖导出方机器上的 /uploads 目录）。
+   *
+   * `?mode=xuean` 返回学案模板（活动 + 首页块），缺省 `whiteboard` 返回
+   * 覆盖全部预设组件的白板样例课。
    */
-  app.get('/api/course-packages/template', requireAuth('teacher', 'administrator'), async (_req, res) => {
+  app.get('/api/course-packages/template', requireAuth('teacher', 'administrator'), async (req, res) => {
     try {
-      const template = await buildTemplateCoursePackage();
+      const mode =
+        String((req.query as Record<string, unknown>)?.mode ?? '').toLowerCase() === 'xuean' ? 'xuean' : 'whiteboard';
+      const template = await buildTemplateCoursePackage(mode);
       const body = JSON.stringify(template, null, 2);
       res.setHeader('Content-Type', 'application/json; charset=utf-8');
-      res.setHeader('Content-Disposition', `attachment; filename="${TEMPLATE_FILENAME}"`);
+      res.setHeader('Content-Disposition', `attachment; filename="${TEMPLATE_FILENAMES[mode]}"`);
       res.send(body);
     } catch (e: any) {
       sendSafeError(res, e);

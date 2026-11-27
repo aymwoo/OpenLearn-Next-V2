@@ -34,11 +34,14 @@ import {
   isSupportedElementType,
   parseCoursePackage,
   type CoursePackage,
+  type CoursePackageActivity,
   type CoursePackageAsset,
+  type CoursePackageBlock,
   type CoursePackageElement,
   type CoursePackageSegment,
 } from './course-package.js';
 import { isTextAssetType, PACKAGE_ASSET_TYPES, type PackageAssetType } from './course-package-assets.js';
+import { resolveLessonModePackDeliveryMode } from '../../packages/core/plugin-host/course-delivery-mode.js';
 
 /** 导出失败的业务错误（路由据此返回对应的 HTTP 状态）。 */
 export class CoursePackageExportError extends Error {
@@ -95,6 +98,29 @@ interface LessonRow {
   progress_mode: string | null;
   creator_id: string | null;
   source_package_id: string | null;
+  delivery_mode: string | null;
+  mode_pack_id: string | null;
+}
+
+/** 学案活动行（导出到 `lesson.activities`）。 */
+interface ActivityRow {
+  type: string;
+  title: string;
+  config_json: string | null;
+  required: number;
+  visible: number;
+  peer_review: number;
+  group_mode: string | null;
+  submission_type: string | null;
+  rubric_json: string | null;
+  release_at: number | null;
+  due_at: number | null;
+}
+
+/** 学案首页块行（导出到 `lesson.blocks`）。 */
+interface BlockRow {
+  block_type: string;
+  content_json: string;
 }
 
 /** 白板元素行。 */
@@ -153,7 +179,8 @@ export async function exportLessonAsCoursePackage(
 
   const lesson = db
     .prepare(
-      'SELECT id, title, content, timeline, progress_mode, creator_id, source_package_id FROM lessons WHERE id = ?',
+      'SELECT id, title, content, timeline, progress_mode, creator_id, source_package_id, delivery_mode, mode_pack_id ' +
+        'FROM lessons WHERE id = ?',
     )
     .get(lessonId) as LessonRow | undefined;
   if (!lesson) {
@@ -170,6 +197,50 @@ export async function exportLessonAsCoursePackage(
 
   const rawTimeline = safeJsonParse(lesson.timeline);
   const { timeline, idRemap } = normalizeTimeline(rawTimeline);
+
+  const deliveryMode = resolveLessonModePackDeliveryMode(lesson.mode_pack_id, lesson.delivery_mode);
+
+  // 学案活动 / 首页块：白板课通常为空，导出时按空数组省略即可（schema 默认 []）。
+  const activityRows = db
+    .prepare(
+      `SELECT type, title, config_json, required, visible, peer_review, group_mode,
+              submission_type, rubric_json, release_at, due_at
+         FROM lesson_activities WHERE lesson_id = ? ORDER BY order_index ASC, created_at ASC`,
+    )
+    .all(lessonId) as ActivityRow[];
+  const blockRows = db
+    .prepare('SELECT block_type, content_json FROM lesson_activity_blocks WHERE lesson_id = ? ORDER BY order_index ASC')
+    .all(lessonId) as BlockRow[];
+
+  const activities: CoursePackageActivity[] = activityRows.map((row) => {
+    const activity: CoursePackageActivity = { type: row.type, title: row.title };
+    const config = safeJsonParse(row.config_json);
+    if (config && typeof config === 'object' && !Array.isArray(config)) {
+      activity.config = config as Record<string, unknown>;
+    }
+    if (row.required === 0) activity.required = false;
+    if (row.visible === 0) activity.visible = false;
+    if (row.peer_review === 1) activity.peerReview = true;
+    if (row.group_mode && row.group_mode !== 'none') activity.groupMode = row.group_mode;
+    if (row.submission_type) activity.submissionType = row.submission_type;
+    const rubric = safeJsonParse(row.rubric_json);
+    if (rubric && typeof rubric === 'object' && !Array.isArray(rubric)) {
+      activity.rubric = rubric as Record<string, unknown>;
+    }
+    if (typeof row.release_at === 'number') activity.releaseAt = row.release_at;
+    if (typeof row.due_at === 'number') activity.dueAt = row.due_at;
+    return activity;
+  });
+
+  const blocks: CoursePackageBlock[] = blockRows.map((row) => {
+    const content = safeJsonParse(row.content_json);
+    return {
+      blockType: row.block_type,
+      ...(content && typeof content === 'object' && !Array.isArray(content)
+        ? { content: content as Record<string, unknown> }
+        : {}),
+    };
+  });
 
   const stats: ExportCoursePackageResult['stats'] = { assets: 0, skipped: [], skippedElements: 0 };
 
@@ -215,10 +286,17 @@ export async function exportLessonAsCoursePackage(
     });
   }
 
-  // ── 2. 收集正文与元素里引用的 /uploads 与 /api/files 附件 ────────────────────
+  // ── 2. 收集正文、元素与学案活动/首页块里引用的 /uploads 与 /api/files 附件 ──────
   const referenced = new Set<string>();
   collectUploadReferences(lesson.content ?? '', referenced);
   for (const element of elements) collectUploadReferences(element.data, referenced);
+  for (const activity of activities) {
+    if (activity.config) collectUploadReferences(activity.config, referenced);
+    if (activity.rubric) collectUploadReferences(activity.rubric, referenced);
+  }
+  for (const block of blocks) {
+    if (block.content) collectUploadReferences(block.content, referenced);
+  }
 
   // ── 3. 读盘/存储层 + 内联（base64），并记录可替换的占位符 ──────────────────
   const pending: PendingAsset[] = [];
@@ -333,6 +411,24 @@ export async function exportLessonAsCoursePackage(
     };
   });
 
+  const resolvedActivities = activities.map((activity) => {
+    const next: CoursePackageActivity = { ...activity };
+    if (activity.config) {
+      next.config = replaceUploadReferences(activity.config, placeholderByRefKey) as Record<string, unknown>;
+    }
+    if (activity.rubric) {
+      next.rubric = replaceUploadReferences(activity.rubric, placeholderByRefKey) as Record<string, unknown>;
+    }
+    return next;
+  });
+  const resolvedBlocks = blocks.map((block) => {
+    const next: CoursePackageBlock = { blockType: block.blockType };
+    if (block.content) {
+      next.content = replaceUploadReferences(block.content, placeholderByRefKey) as Record<string, unknown>;
+    }
+    return next;
+  });
+
   const assets: CoursePackageAsset[] = pending.map((asset) => ({
     id: asset.id,
     filename: asset.filename,
@@ -349,15 +445,22 @@ export async function exportLessonAsCoursePackage(
       // 改了标题再导出，身份不变（导入端去重仍然认得「同一个包」）。
       id: lesson.source_package_id || lesson.id,
       name: lesson.title,
-      description: `由 OpenLearn 课程「${lesson.title}」导出：包含教学环节、白板元素与 ${assets.length} 个内联附件。`,
+      description:
+        `由 OpenLearn 课程「${lesson.title}」导出：包含教学环节、` +
+        (deliveryMode === 'xuean' ? '学案活动与首页块' : '白板元素') +
+        `与 ${assets.length} 个内联附件。`,
       author: lesson.creator_id ?? '',
-      tags: ['导出', '课程包'],
+      tags: ['导出', '课程包', deliveryMode === 'xuean' ? '学案' : '白板'],
     },
     lesson: {
       title: lesson.title,
       content,
       progressMode: lesson.progress_mode || 'manual',
       timeline,
+      deliveryMode,
+      ...(lesson.mode_pack_id ? { modePackId: lesson.mode_pack_id } : {}),
+      activities: resolvedActivities,
+      blocks: resolvedBlocks,
     },
     assets,
     elements: resolvedElements,

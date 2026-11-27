@@ -3,7 +3,11 @@ import type { Dispatch, SetStateAction } from 'react';
 import type { Lesson, ClassType, VFSNode } from '../types/app';
 import type { WizardSegment } from '../features/modals/CourseWizardModal';
 import type { ImportRow, ImportStatus } from '../features/modals/ImportLessonsModal';
-import type { CoursePackagePreview, CoursePackageDuplicate } from '../services/coursePackageService';
+import type {
+  CoursePackagePreview,
+  CoursePackageDuplicate,
+  CourseDeliveryMode,
+} from '../services/coursePackageService';
 import type { useCourseWizard } from '../hooks/useCourseWizard';
 import type { useQuizGenerator } from '../hooks/useQuizGenerator';
 import type { useClassBatchOperations } from '../hooks/useClassBatchOperations';
@@ -92,7 +96,7 @@ export interface AppModalsProps {
   handleCSVFileChange?: (file: File) => void;
   handleImportFileChange?: (file: File) => void;
   downloadCsvTemplate?: () => void;
-  downloadCourseTemplate?: () => void;
+  downloadCourseTemplate?: (mode: CourseDeliveryMode) => void;
   packagePreview?: CoursePackagePreview | null;
   handlePackageImportSubmit?: (allowDuplicate?: boolean) => void;
   packageDuplicate?: CoursePackageDuplicate | null;

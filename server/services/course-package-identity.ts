@@ -89,6 +89,12 @@ function canonicalContent(pkg: CoursePackage): unknown {
       content: pkg.lesson.content,
       progressMode: pkg.lesson.progressMode,
       timeline: pkg.lesson.timeline,
+      // v3：交付模式与学案活动同样影响落库结果，必须参与身份判定 ——
+      // 否则「白板版」与「学案版」同内容会被误判为同一个包。
+      deliveryMode: pkg.lesson.deliveryMode,
+      modePackId: pkg.lesson.modePackId ?? null,
+      activities: pkg.lesson.activities,
+      blocks: pkg.lesson.blocks,
     },
     elements: pkg.elements,
     assets: pkg.assets.map((asset) => ({

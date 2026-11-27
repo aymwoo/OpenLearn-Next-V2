@@ -272,7 +272,9 @@
 | GET  | `/api/site-settings` | 公开                           | 读站点信息与外观 / 学年配置 |
 | PUT  | `/api/site-settings` | `requireAuth('administrator')` | 写站点信息与外观 / 学年配置 |
 
-接口字段：`siteName`、`slogan`、`logoUrl`、`uploadMaxFileMb`（1–90，整数）、`currentAcademicYear`、`academicStartMonth`、`logoutClearSiteData`（登出时下发 `Clear-Site-Data`）、`defaultThemeId`（全站默认主题）。文件存储配置不在此接口内，见 §5.5。
+接口字段：`siteName`、`slogan`、`logoUrl`、`uploadMaxFileMb`（1–90，整数）、`apiBodyLimitMb`（普通 API 请求体上限，1–50，整数，默认 2，保存后即时生效）、`currentAcademicYear`、`academicStartMonth`、`logoutClearSiteData`（登出时下发 `Clear-Site-Data`）、`defaultThemeId`（全站默认主题）。文件存储配置不在此接口内，见 §5.5。
+
+![站点信息设置中的「API 请求体上限」](../_static/images/admin/api-body-limit-setting.png)
 
 功能开关不走环境变量，也不走上面的公开接口。管理员打开「站点信息设置 → 运行时策略」：
 

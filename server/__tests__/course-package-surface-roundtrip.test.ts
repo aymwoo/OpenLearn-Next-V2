@@ -3,6 +3,7 @@ import { randomUUID } from 'crypto';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
 import { exportLessonAsCoursePackage } from '../services/course-package-export.js';
 import { importCoursePackage } from '../services/course-package-import.js';
+import { COURSE_PACKAGE_VERSION } from '../services/course-package.js';
 
 /**
  * 课程包 v2：Surface 原生往返。
@@ -43,7 +44,7 @@ describe('课程包 v2 Surface 往返', () => {
     );
 
     const exported = await exportLessonAsCoursePackage(lessonId, { db });
-    expect(exported.package.version).toBe(2);
+    expect(exported.package.version).toBe(COURSE_PACKAGE_VERSION);
 
     const surfaceElement = exported.package.elements.find((element) => element.type === 'learning_surface');
     expect(surfaceElement).toBeDefined();

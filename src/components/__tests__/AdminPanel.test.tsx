@@ -147,8 +147,8 @@ describe('AdminPanel (管理后台页面样式规范化与标签切换)', () => 
   it('renders modern segmented pill tabs and switches active tabs', () => {
     render(<AdminPanel {...defaultProps} />);
 
-    // Default tab: 教职及系统配置
-    expect(screen.getByText('学校教职及系统配置')).toBeTruthy();
+    // Default tab: 用户管理
+    expect(screen.getByText('用户管理')).toBeTruthy();
     expect(screen.getByPlaceholderText('检索姓名、教工用户名...')).toBeTruthy();
 
     // Switch to AI Config tab
@@ -163,10 +163,25 @@ describe('AdminPanel (管理后台页面样式规范化与标签切换)', () => 
     expect(screen.getByText('SQLite引擎状况')).toBeTruthy();
 
     // Switch to Site Settings tab
-    const siteSettingsTab = screen.getByText('站点信息设置');
+    const siteSettingsTab = screen.getByText('站点设置');
     fireEvent.click(siteSettingsTab);
     expect(screen.getByText('平台站点信息（名称 / 口号 / Logo）')).toBeTruthy();
     expect(screen.getByText('运行时策略（管理员）')).toBeTruthy();
+  });
+
+  it('实体表行数字典默认展开，点击标题后折叠', () => {
+    const { container } = render(<AdminPanel {...defaultProps} />);
+
+    fireEvent.click(screen.getByText('系统监控'));
+
+    const toggle = screen.getByRole('button', { name: /SQLite 数据库实体列表与行数字典/ });
+    const region = container.querySelector('#admin-sqlite-table-region');
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    expect(region?.hasAttribute('hidden')).toBe(false);
+
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    expect(region?.hasAttribute('hidden')).toBe(true);
   });
 
   it('管理员看到自动生成密钥的警告，警告里没有密钥材料', async () => {
@@ -242,7 +257,7 @@ describe('AdminPanel (管理后台页面样式规范化与标签切换)', () => 
 
     render(<AdminPanel {...defaultProps} />);
 
-    fireEvent.click(screen.getByText('站点信息设置'));
+    fireEvent.click(screen.getByText('站点设置'));
     const checkbox = await screen.findByLabelText(/登出时下发 Clear-Site-Data/);
     expect((checkbox as HTMLInputElement).checked).toBe(false);
 
@@ -286,7 +301,7 @@ describe('AdminPanel (管理后台页面样式规范化与标签切换)', () => 
 
     render(<AdminPanel {...defaultProps} />);
 
-    fireEvent.click(screen.getByText('站点信息设置'));
+    fireEvent.click(screen.getByText('站点设置'));
     const checkbox = (await screen.findByLabelText(/允许学生端登录页公开查询学号/)) as HTMLInputElement;
     expect(checkbox.checked).toBe(true);
 
@@ -298,5 +313,54 @@ describe('AdminPanel (管理后台页面样式规范化与标签切换)', () => 
       expect(putCalls).toHaveLength(1);
     });
     expect(putCalls[0].body.allowPublicStudentLookup).toBe(false);
+  });
+
+  it('renders and persists apiBodyLimitMb setting in Site Settings tab', async () => {
+    const putCalls: Array<{ url: string; body: Record<string, unknown> }> = [];
+    global.fetch = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+      if (url === '/api/users') {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+      }
+      if (url === '/api/admin/runtime-policies') {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(runtimePolicyResponse) });
+      }
+      if (url === '/api/site-settings' && init?.method === 'PUT') {
+        putCalls.push({ url, body: JSON.parse(String(init.body || '{}')) });
+        return Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              ok: true,
+              siteInfo: {
+                siteName: 'OpenLearn Next',
+                slogan: 'Next-Gen Educational OS',
+                logoUrl: null,
+              },
+            }),
+        });
+      }
+      if (url === '/api/site-settings') {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ apiBodyLimitMb: 6 }),
+        });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+    });
+
+    render(<AdminPanel {...defaultProps} />);
+
+    fireEvent.click(screen.getByText('站点设置'));
+    const input = (await screen.findByLabelText(/API 请求体上限/)) as HTMLInputElement;
+    expect(input.value).toBe('6');
+    expect(input.min).toBe('1');
+    expect(input.max).toBe('50');
+
+    fireEvent.change(input, { target: { value: '8' } });
+    fireEvent.click(screen.getByRole('button', { name: /保存站点信息/ }));
+    await vi.waitFor(() => {
+      expect(putCalls).toHaveLength(1);
+    });
+    expect(putCalls[0].body.apiBodyLimitMb).toBe(8);
   });
 });

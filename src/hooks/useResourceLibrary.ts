@@ -7,9 +7,11 @@
 import { useEffect, useState } from 'react';
 import {
   downloadCSVTemplate as downloadCSVTemplateService,
+  downloadLessonCSVTemplate,
   parseAndImportClassesOrStudents,
   parseLessonCSV,
   submitCSVLessons,
+  type ParsedLessonRow,
 } from '../services/bulkImportService';
 import { fetchLibraryResources as fetchLibraryResourcesApi } from '../services/sessionService.js';
 import {
@@ -20,6 +22,7 @@ import {
   formatMegabytes,
   COURSE_PACKAGE_MAX_FILE_BYTES,
   COURSE_PACKAGE_MAX_FILE_MB,
+  type CourseDeliveryMode,
   type CoursePackagePreview,
   type CoursePackageDuplicate,
 } from '../services/coursePackageService.js';
@@ -84,7 +87,7 @@ export function useResourceLibrary(deps: {
   const [importProgress, setImportProgress] = useState(0);
   const [importProgressTotal, setImportProgressTotal] = useState(0);
   const [importErrorMsg, setImportErrorMsg] = useState('');
-  const [previewImportData, setPreviewImportData] = useState<{ title: string; content: string }[]>([]);
+  const [previewImportData, setPreviewImportData] = useState<ParsedLessonRow[]>([]);
   const [isDraggingImport, setIsDraggingImport] = useState(false);
 
   // ── 课程包（Course Package）导入 ──
@@ -101,7 +104,9 @@ export function useResourceLibrary(deps: {
   const [packageDuplicate, setPackageDuplicate] = useState<CoursePackageDuplicate | null>(null);
 
   const downloadCsvTemplate = () => {
-    downloadCSVTemplateService('class', lang);
+    // 课程导入弹窗要的是「课程 CSV 模板」（title / content / mode），
+    // 此前误接到班级批量导入模板，教师下载后拖回来必然解析失败。
+    downloadLessonCSVTemplate(lang);
   };
 
   const handleCSVFileChange = async (file: File) => {
@@ -171,19 +176,20 @@ export function useResourceLibrary(deps: {
     await handleCSVFileChange(file);
   };
 
-  /** 下载内置课程模板（JSON，自包含附件）。 */
-  const downloadCourseTemplate = async () => {
-    const result = await downloadCourseTemplateApi();
+  /** 下载内置课程模板（JSON，自包含附件）。`mode` 区分白板 / 学案模板。 */
+  const downloadCourseTemplate = async (mode: CourseDeliveryMode = 'whiteboard') => {
+    const result = await downloadCourseTemplateApi(mode);
     if (!result.ok) {
       setImportStatus('error');
       setImportErrorMsg(result.error || (lang === 'zh' ? '模板下载失败' : 'Failed to download template'));
       return;
     }
+    const filename = mode === 'xuean' ? 'openlearn-xuean-course-template.json' : 'openlearn-course-template.json';
     addToast(
       lang === 'zh' ? '模板已下载' : 'Template downloaded',
       lang === 'zh'
-        ? 'openlearn-course-template.json 可直接拖回导入框完成导入。'
-        : 'Drag openlearn-course-template.json back into the import dialog to finish.',
+        ? `${filename} 可直接拖回导入框完成导入。`
+        : `Drag ${filename} back into the import dialog to finish.`,
       'success',
     );
   };
@@ -233,11 +239,20 @@ export function useResourceLibrary(deps: {
       setImportStatus('success');
       setPackageDuplicate(null);
       await fetchLessons();
+      const summary = result.result;
+      const activityPart =
+        summary.deliveryMode === 'xuean'
+          ? lang === 'zh'
+            ? `${summary.activities ?? 0} 个学案活动、${summary.blocks ?? 0} 个首页块`
+            : `${summary.activities ?? 0} activities, ${summary.blocks ?? 0} home blocks`
+          : lang === 'zh'
+            ? `${summary.elements} 个白板元素`
+            : `${summary.elements} whiteboard elements`;
       addToast(
         lang === 'zh' ? '课程包导入成功' : 'Course package imported',
         lang === 'zh'
-          ? `已导入「${result.result.title}」：${result.result.segments} 个教学环节、${result.result.elements} 个白板元素、${result.result.assets} 份课件附件。`
-          : `Imported "${result.result.title}": ${result.result.segments} segments, ${result.result.elements} elements, ${result.result.assets} assets.`,
+          ? `已导入「${summary.title}」：${summary.segments} 个教学环节、${activityPart}、${summary.assets} 份课件附件。`
+          : `Imported "${summary.title}": ${summary.segments} segments, ${activityPart}, ${summary.assets} assets.`,
         'success',
       );
       return;

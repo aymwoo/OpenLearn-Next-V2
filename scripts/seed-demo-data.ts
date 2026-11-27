@@ -2,12 +2,12 @@
  * scripts/seed-demo-data.ts — 演示与测试数据一键播种/清理脚本
  *
  * 用法：
- *   pnpm db:seed           # 播种演示数据（教师、班级、12名学生、课程与课表）
+ *   pnpm db:seed           # 播种演示数据（2 教师、3 班级、24 学生、2 机房、4 课程、8 课表及闭环）
  *   pnpm db:seed --reset   # 清理旧演示数据并重新播种
  *   pnpm db:clean-demo     # 清理全部演示数据，还原纯净环境
  */
 import { db } from '../packages/core/db/index.js';
-import { seedDemoData, cleanupDemoData, getDemoDataStatus, DEMO_TEACHER } from '../server/services/demo-data.js';
+import { seedDemoData, cleanupDemoData, DEMO_TEACHER, DEMO_TEACHER_B } from '../server/services/demo-data.js';
 
 const args = process.argv.slice(2);
 const isReset = args.includes('--reset');
@@ -31,11 +31,17 @@ try {
 
   console.log('✓ 演示测试数据注入成功！');
   console.log('───────────────────────────────────────────────────────');
-  console.log(`• 演示教师账号: ${DEMO_TEACHER.username} / 密码: ${DEMO_TEACHER.password}`);
-  console.log(`• 演示课程 ID:   ${status.demo.lessonId} (初中信息技术·第一单元)`);
-  console.log(`• 演示班级数:   ${status.demo.classIds.length} 个 (口令: 1001, 1002)`);
-  console.log(`• 演示学生数:   ${status.demo.studentIds.length} 名 (DEMO-S01 ~ DEMO-S12)`);
-  console.log(`• 关联课表 ID:   ${status.demo.scheduleId}`);
+  console.log(
+    `• 演示教师:     ${DEMO_TEACHER.username}（主讲）/ ${DEMO_TEACHER_B.username}（协同） / 密码: ${DEMO_TEACHER.password}`,
+  );
+  console.log(`• 演示学生:     ${status.demo.studentIds.length} 名（DEMO-S01 ~ DEMO-S24，学号即登录名，同一密码）`);
+  console.log(
+    `• 机房 / 班级: ${status.demo.labIds.length} 间 6×4 机房 / ${status.demo.classIds.length} 个班（口令 1001/1002/1003）`,
+  );
+  console.log(`• 白板课 ×2:   ${status.demo.whiteboardLessonIds.join(', ')}（探秘二进制 / 玩转排序）`);
+  console.log(`• 学案课 ×2:   ${status.demo.xueanLessonIds.join(', ')}（网络安全小卫士 / 智能红绿灯）`);
+  console.log(`• 课表:        ${status.demo.scheduleIds.length} 节`);
+  console.log(`• 演示记录:    ${status.total} 条（含教学环节 / Surface / 作业 / 测评 / 成绩 / 考勤 / 积分等闭环）`);
   console.log('───────────────────────────────────────────────────────');
   console.log('提示：测试完成后，可运行 pnpm db:clean-demo 快速恢复纯净环境。');
 } catch (err: any) {

@@ -41,8 +41,14 @@ function recordImport(body: any) {
 async function purgeTestRows() {
   for (const id of importedLessonIds) {
     db.prepare('DELETE FROM whiteboard_elements WHERE lesson_id = ?').run(id);
+    db.prepare('DELETE FROM lesson_activities WHERE lesson_id = ?').run(id);
+    db.prepare('DELETE FROM lesson_activity_blocks WHERE lesson_id = ?').run(id);
   }
   db.prepare('DELETE FROM whiteboard_elements WHERE lesson_id NOT IN (SELECT id FROM lessons)').run();
+  db.prepare('DELETE FROM lesson_activities WHERE lesson_id NOT IN (SELECT id FROM lessons)').run();
+  db.prepare('DELETE FROM lesson_activity_blocks WHERE lesson_id NOT IN (SELECT id FROM lessons)').run();
+  db.prepare('DELETE FROM learning_surface_attempts WHERE lesson_id NOT IN (SELECT id FROM lessons)').run();
+  db.prepare('DELETE FROM learning_surfaces WHERE lesson_id NOT IN (SELECT id FROM lessons)').run();
   db.prepare("DELETE FROM lessons WHERE title LIKE '【CPKG-TEST】%'").run();
   importedLessonIds.length = 0;
   const fileStorage = getFileStorageService();
@@ -123,8 +129,234 @@ describe('course package routes', () => {
     const body = await res.json();
     expect(body.format).toBe(COURSE_PACKAGE_FORMAT);
     expect(body.lesson.title).toBeTruthy();
+    expect(body.lesson.deliveryMode).toBe('whiteboard');
     expect(body.elements.length).toBeGreaterThan(0);
     expect(body.assets.length).toBe(2);
+  });
+
+  it('serves a guided-study (xuean) template with activities and a home block', async () => {
+    const res = await fetch(baseUrl + '/api/course-packages/template?mode=xuean', { headers: cookie(teacherToken) });
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-disposition')).toContain('openlearn-xuean-course-template.json');
+    const body = await res.json();
+    expect(body.format).toBe(COURSE_PACKAGE_FORMAT);
+    expect(body.lesson.deliveryMode).toBe('xuean');
+    expect(body.lesson.modePackId).toBe('@openlearn/mode-xuean');
+    expect((body.lesson.timeline as Array<{ type: string }>).map((s) => s.type)).toEqual([
+      'xuean:preview',
+      'xuean',
+      'xuean:drill',
+    ]);
+    expect((body.lesson.activities as Array<{ type: string }>).map((a) => a.type)).toEqual([
+      'reading',
+      'submission',
+      'discussion',
+    ]);
+    expect(body.lesson.blocks).toHaveLength(1);
+    expect(body.lesson.blocks[0].blockType).toBe('xuean_home');
+  });
+
+  it('imports a guided-study package with delivery mode, activities and home blocks', async () => {
+    const template = await buildTemplateCoursePackage('xuean');
+    template.lesson.title = '【CPKG-TEST】学案导入';
+
+    const res = await fetch(baseUrl + '/api/course-packages/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...cookie(teacherToken) },
+      body: JSON.stringify({ package: template }),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    recordImport(body);
+    expect(body.result.deliveryMode).toBe('xuean');
+    expect(body.result.activities).toBe(template.lesson.activities.length);
+    expect(body.result.blocks).toBe(1);
+    const lessonId = body.result.lessonId as string;
+
+    const lesson = db
+      .prepare('SELECT delivery_mode, mode_pack_id, timeline FROM lessons WHERE id = ?')
+      .get(lessonId) as { delivery_mode: string; mode_pack_id: string; timeline: string };
+    expect(lesson.delivery_mode).toBe('xuean');
+    expect(lesson.mode_pack_id).toBe('@openlearn/mode-xuean');
+    expect(JSON.parse(lesson.timeline)).toHaveLength(template.lesson.timeline.length);
+
+    const activities = db
+      .prepare('SELECT type, title FROM lesson_activities WHERE lesson_id = ? ORDER BY order_index ASC')
+      .all(lessonId) as Array<{ type: string; title: string }>;
+    expect(activities.map((a) => a.type)).toEqual(['reading', 'submission', 'discussion']);
+
+    const blocks = db
+      .prepare('SELECT block_type, content_json FROM lesson_activity_blocks WHERE lesson_id = ?')
+      .all(lessonId) as Array<{ block_type: string; content_json: string }>;
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0].block_type).toBe('xuean_home');
+    expect(JSON.parse(blocks[0].content_json).intro).toBeTruthy();
+  });
+
+  it('derives xuean activities from the timeline when the package omits them', async () => {
+    const template = await buildTemplateCoursePackage('xuean');
+    template.lesson.title = '【CPKG-TEST】学案自动活动';
+    template.lesson.activities = [];
+
+    const res = await fetch(baseUrl + '/api/course-packages/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...cookie(teacherToken) },
+      body: JSON.stringify({ package: template }),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    recordImport(body);
+    expect(body.result.activities).toBe(template.lesson.timeline.length);
+
+    const activities = db
+      .prepare('SELECT type, config_json FROM lesson_activities WHERE lesson_id = ? ORDER BY order_index ASC')
+      .all(body.result.lessonId) as Array<{ type: string; config_json: string | null }>;
+    // 与课程向导的环节→活动映射一致：预习→阅读、研读→作品提交、练习→测验
+    expect(activities.map((a) => a.type)).toEqual(['reading', 'submission', 'quiz']);
+    // 学生端不渲染 lessons.content：自动生成的阅读活动必须带上课程正文
+    expect(JSON.parse(String(activities[0].config_json)).content).toContain('## 🎯 教学目标');
+  });
+
+  it('binds an interactive courseware block to a lesson-block surface on import', async () => {
+    const template = await buildTemplateCoursePackage('xuean');
+    template.lesson.title = '【CPKG-TEST】学案互动课件块';
+    template.lesson.blocks = [
+      {
+        blockType: 'interactive_courseware',
+        content: { coursewareUuid: 'cw-demo-1', title: '互动课件', surplus: 'drop-me' },
+      },
+    ];
+
+    const res = await fetch(baseUrl + '/api/course-packages/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...cookie(teacherToken) },
+      body: JSON.stringify({ package: template }),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    recordImport(body);
+    const lessonId = body.result.lessonId as string;
+
+    const block = db
+      .prepare(
+        'SELECT id, content_json, surface_id FROM lesson_activity_blocks ' +
+          "WHERE lesson_id = ? AND block_type = 'interactive_courseware'",
+      )
+      .get(lessonId) as { id: string; content_json: string; surface_id: string | null };
+    // 与路由 parseBlock 同口径：只保留三个字段
+    expect(JSON.parse(block.content_json)).toEqual({
+      coursewareUuid: 'cw-demo-1',
+      resourceId: null,
+      title: '互动课件',
+    });
+    // 学生端只认 surface_id：没有 Surface 的互动课件块会退化成原始 JSON
+    expect(block.surface_id).toBeTruthy();
+
+    const surface = db
+      .prepare('SELECT kind, owner_id, content_ref_json FROM learning_surfaces WHERE id = ?')
+      .get(block.surface_id) as { kind: string; owner_id: string; content_ref_json: string };
+    expect(surface.kind).toBe('lesson_block');
+    expect(surface.owner_id).toBe(block.id);
+    expect(JSON.parse(surface.content_ref_json)).toMatchObject({
+      rendererId: 'html_courseware',
+      source: { kind: 'courseware', id: 'cw-demo-1' },
+    });
+  });
+
+  it('resolves asset placeholders inside xuean activity configs and re-inlines them on export', async () => {
+    const template = await buildTemplateCoursePackage('xuean');
+    template.lesson.title = '【CPKG-TEST】学案活动附件';
+    template.meta = { ...template.meta, id: 'cpkg-xuean-activity-asset' };
+    template.assets = [
+      {
+        id: 'reading-note',
+        filename: '阅读材料.md',
+        contentType: 'md',
+        base64: Buffer.from('# 阅读材料\n\n正文').toString('base64'),
+      },
+    ];
+    const reading = template.lesson.activities.find((activity) => activity.type === 'reading')!;
+    reading.config = { content: '# 阅读材料\n\n![示意图](${asset:reading-note})', url: '' };
+    // 首页块背景图必须与路由同口径收敛：只接受本实例上传文件 URL
+    template.lesson.blocks = [
+      { blockType: 'xuean_home', content: { intro: '首页简介', backgroundImage: 'javascript:alert(1)' } },
+    ];
+
+    const res = await fetch(baseUrl + '/api/course-packages/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...cookie(teacherToken) },
+      body: JSON.stringify({ package: template }),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    recordImport(body);
+    const lessonId = body.result.lessonId as string;
+
+    const activity = db
+      .prepare("SELECT config_json FROM lesson_activities WHERE lesson_id = ? AND type = 'reading'")
+      .get(lessonId) as { config_json: string };
+    const activityConfig = JSON.parse(activity.config_json);
+    expect(activityConfig.content).toContain('/api/files/');
+    expect(activityConfig.content).not.toContain('${asset:');
+
+    const block = db
+      .prepare("SELECT content_json FROM lesson_activity_blocks WHERE lesson_id = ? AND block_type = 'xuean_home'")
+      .get(lessonId) as { content_json: string };
+    expect(JSON.parse(block.content_json).backgroundImage).toBe('');
+
+    // 导出必须把 /api/files URL 逆向换回占位符并内联附件，否则学案包换实例就坏
+    const exported = await fetch(baseUrl + '/api/lessons/' + lessonId + '/export-package', {
+      headers: cookie(teacherToken),
+    });
+    expect(exported.status).toBe(200);
+    const pkg = await exported.json();
+    const exportedReading = (pkg.lesson.activities as Array<{ type: string; config?: { content?: string } }>).find(
+      (item) => item.type === 'reading',
+    );
+    expect(exportedReading?.config?.content).toContain('${asset:');
+    expect((pkg.assets as Array<{ filename: string }>).some((asset) => asset.filename === '阅读材料.md')).toBe(true);
+  });
+
+  it('round-trips a guided-study lesson through export and re-import', async () => {
+    const template = await buildTemplateCoursePackage('xuean');
+    template.lesson.title = '【CPKG-TEST】学案导出往返';
+
+    const imported = await fetch(baseUrl + '/api/course-packages/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...cookie(teacherToken) },
+      body: JSON.stringify({ package: template }),
+    });
+    expect(imported.status).toBe(200);
+    const importedBody = await imported.json();
+    recordImport(importedBody);
+
+    const exported = await fetch(baseUrl + '/api/lessons/' + importedBody.result.lessonId + '/export-package', {
+      headers: cookie(teacherToken),
+    });
+    expect(exported.status).toBe(200);
+    const pkg = await exported.json();
+    expect(pkg.lesson.deliveryMode).toBe('xuean');
+    expect(pkg.lesson.modePackId).toBe('@openlearn/mode-xuean');
+    expect(pkg.lesson.activities).toHaveLength(template.lesson.activities.length);
+    expect(pkg.lesson.blocks).toHaveLength(1);
+
+    pkg.lesson.title = '【CPKG-TEST】学案导出往返副本';
+    const reimported = await fetch(baseUrl + '/api/course-packages/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...cookie(teacherToken) },
+      body: JSON.stringify({ package: pkg }),
+    });
+    expect(reimported.status).toBe(200);
+    const reimportedBody = await reimported.json();
+    recordImport(reimportedBody);
+    const lesson = db.prepare('SELECT delivery_mode FROM lessons WHERE id = ?').get(reimportedBody.result.lessonId) as {
+      delivery_mode: string;
+    };
+    expect(lesson.delivery_mode).toBe('xuean');
+    const count = db
+      .prepare('SELECT COUNT(*) AS n FROM lesson_activities WHERE lesson_id = ?')
+      .get(reimportedBody.result.lessonId) as { n: number };
+    expect(count.n).toBe(template.lesson.activities.length);
   });
 
   it('imports a package into lesson + timeline + whiteboard elements + assets', async () => {

@@ -39,7 +39,14 @@ export function ReadingActivityCard({
           {content}
         </div>
       ) : (
-        <p className="text-xs text-muted">{zh ? '教师尚未填写阅读材料。' : 'No reading content yet.'}</p>
+        <div className="rounded-lg border border-dashed border-theme bg-surface-secondary/30 p-4">
+          <p className="text-sm font-semibold text-main">{zh ? '本环节还没有阅读材料' : 'No reading material yet'}</p>
+          <p className="mt-1 text-xs leading-relaxed text-muted">
+            {zh
+              ? '可以先看「本课学习目标」和右侧导读，再点「标记为已读」；老师补充材料后这里会自动刷新。'
+              : 'Review the lesson goals and the guide rail first, then mark this activity as read. It refreshes once the teacher adds material.'}
+          </p>
+        </div>
       )}
       {url ? (
         <a

@@ -31,6 +31,9 @@ export function formatMegabytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
 }
 
+/** 课程交付模式（与服务端 `lessons.delivery_mode` 对齐）。 */
+export type CourseDeliveryMode = 'whiteboard' | 'xuean';
+
 /** 课程包预览信息（导入框里展示给教师看）。 */
 export interface CoursePackagePreview {
   /** 选中的文件名。 */
@@ -39,10 +42,14 @@ export interface CoursePackagePreview {
   title: string;
   /** 模板元信息里的名称。 */
   metaName: string;
+  /** 交付模式（v3 起；旧包按白板处理）。 */
+  deliveryMode?: CourseDeliveryMode;
   /** 教学环节数。 */
   segments: number;
   /** 白板元素数。 */
   elements: number;
+  /** 学案活动数。 */
+  activities?: number;
   /** 内嵌附件数。 */
   assets: number;
   /** 覆盖的组件类型（去重）。 */
@@ -53,8 +60,14 @@ export interface CoursePackagePreview {
 export interface CoursePackageImportResult {
   lessonId: string;
   title: string;
+  /** 落库的交付模式。 */
+  deliveryMode?: CourseDeliveryMode;
   segments: number;
   elements: number;
+  /** 写入的学案活动数。 */
+  activities?: number;
+  /** 写入的学案首页块数。 */
+  blocks?: number;
   assets: number;
   assetFiles: Array<{ filename: string; fileUrl: string; fileType: string; slideCount: number }>;
   /** 本次导入的课程包去重键。 */
@@ -91,10 +104,15 @@ export interface CoursePackageDuplicate {
  *
  * 走 fetch + blob 而不是直接开新窗口：端点要求教师会话鉴权，
  * 同源 fetch 会自动带上会话 cookie。
+ *
+ * @param mode `whiteboard`（缺省，预设组件全览）或 `xuean`（预习-研读-练习学案）
  */
-export async function downloadCourseTemplate(): Promise<{ ok: boolean; error?: string }> {
+export async function downloadCourseTemplate(
+  mode: CourseDeliveryMode = 'whiteboard',
+): Promise<{ ok: boolean; error?: string }> {
+  const query = mode === 'xuean' ? '?mode=xuean' : '';
   try {
-    const res = await fetch('/api/course-packages/template');
+    const res = await fetch(`/api/course-packages/template${query}`);
     if (!res.ok) {
       let detail = '';
       try {
@@ -106,7 +124,7 @@ export async function downloadCourseTemplate(): Promise<{ ok: boolean; error?: s
       return { ok: false, error: detail || `模板下载失败（HTTP ${res.status}）` };
     }
     const blob = await res.blob();
-    saveBlob(blob, 'openlearn-course-template.json');
+    saveBlob(blob, mode === 'xuean' ? 'openlearn-xuean-course-template.json' : 'openlearn-course-template.json');
     return { ok: true };
   } catch (err: any) {
     return { ok: false, error: err?.message || String(err) };
@@ -226,6 +244,9 @@ export async function readCoursePackageFile(
 
   const elements: any[] = Array.isArray(parsed.elements) ? parsed.elements : [];
   const componentTypes = Array.from(new Set(elements.map((el) => String(el?.type || '')).filter(Boolean))).sort();
+  const activities: unknown[] = Array.isArray(parsed?.lesson?.activities) ? parsed.lesson.activities : [];
+  const timeline: unknown[] = Array.isArray(parsed?.lesson?.timeline) ? parsed.lesson.timeline : [];
+  const deliveryMode: CourseDeliveryMode = parsed?.lesson?.deliveryMode === 'xuean' ? 'xuean' : 'whiteboard';
 
   return {
     ok: true,
@@ -234,8 +255,11 @@ export async function readCoursePackageFile(
       fileName: file.name,
       title: String(parsed?.lesson?.title || '(未命名课程)'),
       metaName: String(parsed?.meta?.name || ''),
-      segments: Array.isArray(parsed?.lesson?.timeline) ? parsed.lesson.timeline.length : 0,
+      deliveryMode,
+      segments: timeline.length,
       elements: elements.length,
+      // 学案包未声明活动时，导入端会按 timeline 自动生成 —— 预览按导入后的实际结果展示。
+      activities: activities.length > 0 ? activities.length : deliveryMode === 'xuean' ? timeline.length : 0,
       assets: Array.isArray(parsed?.assets) ? parsed.assets.length : 0,
       componentTypes,
     },

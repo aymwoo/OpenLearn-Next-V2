@@ -90,7 +90,11 @@ import { ROUTE_SCOPE_WHITELIST } from './server/security/route-scope-whitelist.j
 import { buildHostHelmetOptions } from './server/security/host-helmet.js';
 import { getNetworkIps, openBrowser, formatTerminalHyperlink } from './server/utils/host-network.js';
 import { getUploadsDir, getPluginsDir } from './server/utils/paths.js';
-import { mountLargeBodyParsers } from './server/middleware/body-limits.js';
+import {
+  mountLargeBodyParsers,
+  mountConfigurableBodyParsers,
+  resolveApiBodyLimitMb,
+} from './server/middleware/body-limits.js';
 import { PLUGIN_SANDBOX_FRAME_HTML } from './server/utils/plugin-sandbox-frame.js';
 import { PLUGIN_VIEW_CSP, PLUGIN_VIEW_BRIDGE_JS } from './server/utils/plugin-view-bridge.js';
 import { ServerBootstrapAdapter } from './packages/core/bootstrap/index.js';
@@ -297,9 +301,9 @@ async function startServer() {
   //    装配细节（白名单、各端点上限、超限错误文案）见 server/middleware/body-limits.ts。
   mountLargeBodyParsers(app);
 
-  // 3. 全局 JSON 体积收紧为安全默认值 2MB，杜绝非上传业务端点的内存放大 DoS 风险
-  app.use(express.json({ limit: '2mb' }));
-  app.use(express.urlencoded({ limit: '2mb', extended: true }));
+  // 3. 全局 JSON 体积默认收紧为安全默认值 2MB，杜绝非上传业务端点的内存放大 DoS 风险；
+  //    管理员可在「站点信息设置 → API 请求体上限」调整，每次解析前读取，保存后即时生效。
+  mountConfigurableBodyParsers(app, () => resolveApiBodyLimitMb(kernelContainer.db));
   // Phase B1 CSRF: 全局写请求跨站来源门控（Sec-Fetch-Site/Dest 判定 + 豁免清单，
   // 见 server/middleware/csrf.ts 判定表；SameSite=Lax cookie 兜底）
   app.use(csrfGuard);

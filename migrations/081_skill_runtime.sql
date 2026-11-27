@@ -1,5 +1,5 @@
 -- UP
--- 079_skill_runtime.sql
+-- 081_skill_runtime.sql
 -- Skill 运行时 P1/P2：管理员设置、运行记录与配置变更回滚。
 --
 -- skill_settings：管理员对内置 / 插件技能的启停与场景覆盖（未设置 = 沿用 manifest 声明）。

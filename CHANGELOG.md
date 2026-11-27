@@ -12,13 +12,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Features
 
+- **学案页两栏布局 + 导读侧栏**：`StudentXueanView` 头部由三行（标题 / 独立细进度条 / 活动导航）收成两行（标题 + 完成圆环 `0/3` + 活动导航），进度语义仍由 `role="progressbar"` 暴露；正文改为 `xl:grid-cols-[minmax(0,1fr)_280px]`（1280px 起才出现右栏，1024 及以下单栏全宽），左栏限宽 `max-w-5xl` 居中便于长文阅读，右栏「学案导读」常驻展示活动进度（只读状态徽标）与 `learning_goals` / `key_points` / `resources` / `operation_tips` 首页块——块内容兼容数组、`{goals:[…]}` 与纯文本三种历史形态；1024 及以下隐藏右栏，切换仍走顶部活动导航。阅读活动没有材料时由一行灰字改为空态引导卡。学生课堂里外层顶栏已显示环节名，卡内标题与 `学案式学习` 标记不再重复（头部收成「活动导航 + 进度」单行）；学案首页本身就在展示这些块，此时不并排重复导读栏；0% 进度条与无插件贡献的空 addon 分隔块不再渲染，块内 schema 键名（`GOALS` / `POINTS`…）也不再直接露给学生。
+
+- **课程导入与模板支持学案 / 白板双模式**：课程包格式升级到 v3，`lesson` 新增 `deliveryMode` / `modePackId` / `activities` / `blocks`；导入把交付模式写入 `lessons.delivery_mode` / `mode_pack_id`，并在同一事务内写入学案活动与首页块（学案包缺省时按 timeline 自动生成活动）。导出会带出真实交付模式与活动；`GET /api/course-packages/template?mode=xuean` 返回「预习-研读-练习」学案模板，课程管理工具栏与导入弹窗提供白板 / 学案两个模板下载入口。CSV 批量导入新增可选 `mode` 列（`whiteboard` / `xuean`，兼容「白板」/「学案」），学案行自动补齐默认三环节与活动；课程 CSV 模板改为真正的课程表头（此前误用班级模板）。
+- **Dialog 账号级全局主题覆盖**：`ThemeAppearanceOverrides` 新增 `dialogBackgroundColor` 与 `dialogBorderRadius`，主题中心的「当前账号基础外观覆盖」增加「弹窗背景色覆盖」与「弹窗圆角」控件。覆盖值随账号主题偏好持久化并按 `principal_key` 隔离：内置主题写入 `:root` 的 `--ol-dialog-bg` / `--ol-dialog-radius`，第三方主题由 `buildRuntimeThemeCss` 合并进有效令牌；自定义底色下自动将标题栏/底栏置为透明并移除主题光晕，与单实例 `backgroundColor` 行为一致。服务端 `sanitizeAppearanceOverrides` 对色值做十六进制校验、圆角档位做枚举收敛；契约见 `docs/architecture/theming-system.md` §7.1.2。
+- **Dialog 单实例背景色与圆角**：`AccessibleDialog` 新增 `backgroundColor` 与 `borderRadius` props，分别写入面板的 `--ol-dialog-bg` / `--ol-dialog-radius`，标题栏与底栏内角自动跟随；`backgroundColor` 生效时面板标记 `[data-dialog-surface="custom"]`，移除主题预置光晕并让标题栏/底栏透明，整块面板统一使用自定义底色。调用方原有的 `style` 保持不变，主题级 `--ol-dialog-*` 覆盖方式继续可用；契约见 `docs/architecture/theming-system.md` §7.1.1。
+- **Dialog 默认视觉升级与居中收敛**：`dialog.openlearn-dialog` 显式使用 `position: fixed; inset: 0; margin: auto` 与 `height: fit-content` 钉在视口正中，内容超高时由 `max-height: 100dvh - 2rem` 收敛并在正文区滚动；新增 `--ol-dialog-max-width`（默认 `34rem`）避免未传 `max-w-*` 的弹窗在桌面端横跨整屏，调用方工具类仍可覆盖。视觉层新增 `--ol-dialog-inset-highlight` / `--ol-dialog-header-image`，面板顶部加入极淡主色光晕与内高光，标题栏改为柔和渐变、标题提至 `1.0625rem`，正文/底栏内边距与图标尺寸收紧，主按钮与危险按钮增加渐变高光、按下位移与更细腻投影；入场动效由纯缩放改为 `translateY(0.5rem) + scale(0.97)`，遮罩补充轻微饱和度提升，`prefers-reduced-motion` 下保持降级。四套内置主题自动跟随，第三方主题仍可用任意 `--ol-dialog-*` 覆盖；契约同步更新至 `docs/architecture/theming-system.md` §7。
+- **普通 API 请求体上限改为管理后台可配置**：新增迁移 `079_api_body_limit_mb.sql`（`site_settings.api_body_limit_mb`，NULL = 默认 2MB），管理后台「站点信息设置」新增「API 请求体上限 (MB)」，范围 1–50，保存后无需重启即时生效。此前全局 `express.json` 固定 2MB，教师提交 2.6MB 左右的正常业务请求（大教案、内联图片、白板快照等）会被裸 413 拒绝；现在可调高上限，课件上传等专用端点仍按各自的 30/110MB 上限解析。`GET/PUT /api/site-settings` 新增 `apiBodyLimitMb` 字段（PUT 校验整数与范围，省略字段保留原值）。
 - **Skill 运行时 P0（备课场景）**：`ai.skill.provider` 从「工具声明」扩展为技能包，新增 `whenToUse` / `instructions` / `surfaces` / `roles` / `tools` / `outputKind` / `latencyClass` / `maxTurns` 等可选字段，旧条目保持兼容。新增 `server/skill-registry.ts` 与 `GET /api/skills`、`POST /api/skills/:id/run`；Agent 选定技能时只挂载该技能声明的工具，并真正消费 `requiresConfirm`（返回 `pendingConfirmations`，不再自主执行写操作）。备课编辑器新增「技能」入口，内置 `lesson.plan.generate` 生成教学环节，预览确认后经既有 `lesson.update_timeline` 命令落库。
-- **Skill 运行时 P1（设置场景）**：新增迁移 `079_skill_runtime.sql`（`skill_settings` / `skill_runs` / `skill_config_rollbacks`）。管理后台「AI 配置」新增技能管理面板：启停技能、查看运行记录；内置 `admin.settings.review` 生成受控 `config_patch`，仅允许运行时策略白名单字段，管理员确认后应用并保存旧值快照，支持一键回滚（`POST /api/admin/skill-runs/:runId/rollback`）。新增 `GET/PATCH /api/admin/skills`、`GET /api/admin/skill-runs`、`POST /api/skills/:id/apply-config`。
+- **Skill 运行时 P1（设置场景）**：新增迁移 `081_skill_runtime.sql`（`skill_settings` / `skill_runs` / `skill_config_rollbacks`）。管理后台「AI 配置」新增技能管理面板：启停技能、查看运行记录；内置 `admin.settings.review` 生成受控 `config_patch`，仅允许运行时策略白名单字段，管理员确认后应用并保存旧值快照，支持一键回滚（`POST /api/admin/skill-runs/:runId/rollback`）。新增 `GET/PATCH /api/admin/skills`、`GET /api/admin/skill-runs`、`POST /api/skills/:id/apply-config`。
 - **Skill 运行时 P2（课堂场景）**：内置 `classroom.lesson_summary` 生成 `classroom_card`，课堂顶栏新增「技能」入口；教师预览确认后经既有 `whiteboardService.drawElement` 将卡片投屏到当前环节白板，并广播 `skill:card` / `skill:run` 课堂事件。运行按 `surface` 鉴权：备课校验课节归属、设置仅管理员、课堂校验班级 staff 权限。
 - **脚本类技能沙箱**：插件可在 `ai.skill.provider` 条目声明内联 `script`（JavaScript），由 `server/skill-script-sandbox.ts` 在 `node:vm` 新上下文中确定性执行，禁用 eval/Function/WebAssembly，不暴露 require/process/文件系统/网络；源码 ≤32KB、硬超时 50–3000ms、输出 ≤64KB。脚本技能不经过大模型，需获批新增能力 `skill:script`，未获批时脚本被剥离。
-- **Skill 细粒度绑定**：新增迁移 `080_skill_bindings.sql`，按 `(skill, surface, scope_type, scope_id)` 支持全局 / 班级 / 课节三级覆盖，解析优先级 lesson > class > global > 全局启停；管理端新增 `GET/PUT/DELETE /api/admin/skills/:id/bindings`，技能面板可就地添加/解除绑定，`/api/agent/chat` 同步支持 `classId` 作用域。
-- **Skill 绑定角色维度**：新增迁移 `081_skill_binding_roles.sql`，`skill_bindings.roles_json` 支持在单个绑定内收窄可用角色（NULL = 跟随技能声明）。绑定角色只可收窄、不可扩大，最终角色 = 声明 ∩ 绑定；未声明 `roles` 的技能默认 `teacher + administrator`，绑定写 `student` 时交集为空并 fail-closed。管理端绑定表单新增角色多选，审计记录同步写入角色集合。
-
+- **Skill 细粒度绑定**：新增迁移 `082_skill_bindings.sql`，按 `(skill, surface, scope_type, scope_id)` 支持全局 / 班级 / 课节三级覆盖，解析优先级 lesson > class > global > 全局启停；管理端新增 `GET/PUT/DELETE /api/admin/skills/:id/bindings`，技能面板可就地添加/解除绑定，`/api/agent/chat` 同步支持 `classId` 作用域。
+- **Skill 绑定角色维度**：新增迁移 `083_skill_binding_roles.sql`，`skill_bindings.roles_json` 支持在单个绑定内收窄可用角色（NULL = 跟随技能声明）。绑定角色只可收窄、不可扩大，最终角色 = 声明 ∩ 绑定；未声明 `roles` 的技能默认 `teacher + administrator`，绑定写 `student` 时交集为空并 fail-closed。管理端绑定表单新增角色多选，审计记录同步写入角色集合。
 - **教师端实时作答看板**：已发布测评的每条班级记录新增「实时进度」入口，展示全班应交 / 作答中 / 已交卷 / 未开始人数、平均分，以及逐生的答题进度（已答/总题数）、最近活动时间、监考异常次数与得分，可按状态筛选。学生开考、自动保存、交卷或触发监考事件时，服务端向 `assessment-<assignmentId>` 房间推送 `assessment:progress_updated`（仅教师与管理员可加入，学生不可订阅），面板收到信号立即重拉快照；无 socket 时退化为「作答中 3 秒 / 其他 10 秒」自适应轮询，标签页回到前台自动补拉。进度快照同步补充 `answeredCount` / `itemCount` / `progressPercent` / `lastActivityAt` / `startedAt` / `deadlineAt` / `proctorCounts` 与顶层 `itemCount`。
 - **学案编排与学习过程新增 7 个扩展槽**：`xuean.editor.toolbar`、`xuean.activity.card.action`、`xuean.activity.card.badge`、`xuean.activity.editor.footer`、`xuean.activity.student.addon`、`xuean.progress.summary`、`xuean.home.block`。其中 `xuean.activity.editor.footer` / `xuean.activity.student.addon` 与既有活动槽位一样按 `activityType` 精确分发；`ExtensionSlot` 成员数增至 161。
 - **声明式题型 UI（`assessment.question_type`）**：远程 ZIP 插件可通过 manifest 声明 `editorView` / `answerView` / `reviewView`，由宿主包装成题型编辑器、作答组件与结果页复盘组件。新增 `window.OpenLearnPluginBridge.question`（`getState` / `onUpdate` / `setConfig` / `setAnswerKey` / `setValue`）与 `question.update` 下行消息；`answerView` 永不接收 `answerKey`，`reviewView` 只读，回写 payload 限制 64KB。内联插件仍可用 `ctx.ui.registerAssessmentQuestionType`，同 type 时 inline 优先，插件停用后回退 manifest 版本。
@@ -28,12 +34,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixes
 
+- **学生课堂顶栏压成一行、暗色主题课题恢复可读**：学案 / 白板两种课堂不再各自渲染「学案课堂 / 白板课堂 + 课题 + 课节」标题块，改由 `StudentLessonHeader` 单行顶栏统一承载「离开 / 专注锁定 + 课节 › 环节 + 环节位置 + 心情打卡」，顶部 chrome 由两行（约 110–130px）收到 56px。两处标题块写死的浅色（`text-stone-900` / `text-gray-900` / `bg-white` / `border-stone-200`）改为主题令牌，暗色主题下课题不再几乎不可见；活动名与当前环节同名时，卡片内不再重复第三遍。
+- **学案课程包正文不可见 / 活动附件失效**：自动派生的阅读活动会携带课程正文（学案学生端不渲染 `lessons.content`）；课程包导入会解析 `activities[].config` / `activities[].rubric` / `blocks[].content` 中的 `${asset:<id>}`，导出时逆向替换并内联附件；`xuean_home` 背景图按块路由同一口径收敛为上传文件 URL；CSV 学案导入把正文写入阅读活动。
+- **学案互动课件块导入后退化成原始 JSON**：导入 `interactive_courseware` 首页块时按块路由同一口径收敛为 `{ coursewareUuid, resourceId, title }`，并在同一事务内创建 `lesson_block` 类型的 LearningSurface 回写 `surface_id`；此前只写 `lesson_activity_blocks`，学生端因缺少 Surface 而无法渲染课件。
 - **学案插件编辑器 / 学生视图上下文丢失**：`xuean.activity.editor/student` 分发现在会把调用点传入的 `activityType` / `activity` / `lessonId` / `onSaved` 合并进组件 props，远程 view 同时收到 `sandboxContext`（学案槽位预算放宽到 64KB），修复「保存回调 undefined、插件活动视图空白」。
 - **manifest 顶层字段不生效**：`requiresSensitive` 与 `placement` 现在会提升到扩展配置顶层，声明式注册与命令式注册行为一致。
 - **发布前检查永久阻断**：preflight 结果在班级、题量或总分变化时自动失效，并支持 `onClear` 主动清除。
 - **学生端可见性策略覆盖不全**：作答工具条、逐题附加区、结果页逐题区现在同样遵守 `hiddenPlugins` / `hiddenExtensions`。
 - **测评统计分布泄露主观题作答**：`getAssignmentStats` 只对单选 / 多选 / 判断题输出 `distribution`，填空、简答与未知插件题型不再以作答原文作为分布键。
 - **题型注册表订阅失效**：`useAssessmentQuestionTypes()` 使用稳定快照，插件题型激活后能立即出现在题库/组卷下拉与作答页。
+
+### Refactor / Performance
+
+- **学生首页只保留默认布局**：移除「模块化自适应栅格工作台」工具条（作业攻坚 / 学情大屏 / 双列紧凑三种预设、恢复默认、窄屏「自定义布局」开关）以及每个组件头部的尺寸切换（1/3、1/2、2/3、Full）、前后移动、折叠展开与拖拽排序控件。`StudentDashboardPanel` 不再读写 `student_dashboard_layout_v4_<studentId>` 本地布局，组件顺序与宽度固定取自 `DEFAULT_WIDGET_LAYOUT`（教师可见性策略仍在渲染层过滤）；栅格容器 `#student-dashboard-modular-grid` 更名为 `#student-dashboard-grid`，`student-ui-policy` 移除失效的 `section.layout-toolbar` 功能 ID，`StudentQuickActionsFloatingMenu` 去掉 `onExpandWidget`，`docs/workspace/student-home-layout.md` 同步更新。
+- **插件中心移除「显示系统核心插件」开关**：发现页不再提供该系统核心插件显隐切换，插件列表始终展示全部已安装插件（含 `@openlearn/*` 核心插件），ZIP 安装入口保持不变。
 
 ### Breaking Changes
 

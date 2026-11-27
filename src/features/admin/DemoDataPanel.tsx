@@ -19,6 +19,16 @@ export interface DemoDataCounts {
   class: number;
   lesson: number;
   user: number;
+  lab?: number;
+  seat?: number;
+  group?: number;
+  whiteboard_element?: number;
+  activity?: number;
+  surface?: number;
+  assignment?: number;
+  assessment?: number;
+  attendance?: number;
+  point_log?: number;
 }
 
 export interface DemoDataStatus {
@@ -33,6 +43,13 @@ export interface DemoDataStatus {
     studentIds: string[];
     teacherUsername: string;
     scheduleId: string;
+    lessonIds?: string[];
+    whiteboardLessonIds?: string[];
+    xueanLessonIds?: string[];
+    labIds?: string[];
+    scheduleIds?: string[];
+    teacherUsernames?: string[];
+    courseIds?: string[];
   };
   credentials?: {
     username: string;
@@ -62,9 +79,18 @@ const COUNT_FIELDS: Array<{ key: keyof DemoDataCounts; zh: string; en: string }>
   { key: 'lesson', zh: '课程', en: 'Lessons' },
   { key: 'class', zh: '班级', en: 'Classes' },
   { key: 'student', zh: '学生', en: 'Students' },
-  { key: 'class_student', zh: '班级关系', en: 'Enrollments' },
-  { key: 'schedule', zh: '课表', en: 'Schedules' },
   { key: 'user', zh: '账号', en: 'Accounts' },
+  { key: 'lab', zh: '机房', en: 'Labs' },
+  { key: 'seat', zh: '座位', en: 'Seats' },
+  { key: 'group', zh: '分组', en: 'Groups' },
+  { key: 'schedule', zh: '课表', en: 'Schedules' },
+  { key: 'whiteboard_element', zh: '白板组件', en: 'Whiteboard Items' },
+  { key: 'activity', zh: '学案活动', en: 'Activities' },
+  { key: 'surface', zh: '互动 Surface', en: 'Surfaces' },
+  { key: 'assignment', zh: '作业', en: 'Assignments' },
+  { key: 'assessment', zh: '测评', en: 'Assessments' },
+  { key: 'attendance', zh: '考勤', en: 'Attendance' },
+  { key: 'class_student', zh: '班级关系', en: 'Enrollments' },
 ];
 
 export function DemoDataPanel({ lang }: DemoDataPanelProps) {
@@ -144,8 +170,8 @@ export function DemoDataPanel({ lang }: DemoDataPanelProps) {
     // 危险操作确认：与本文件其它删除操作保持一致，使用原生 confirm
     const confirmMsg =
       lang === 'zh'
-        ? '确定要清理演示数据吗？\n\n只删除演示数据（演示教师、演示课程/班级/学生/课表），系统本身的数据不受影响，管理员账号不会被删除。'
-        : 'Purge demo data?\n\nOnly demo records (demo teacher, demo lesson/class/student/schedule) are removed. Your own data and administrator accounts are never touched.';
+        ? '确定要清理演示数据吗？\n\n只删除演示数据（演示教师/机房/班级/学生/课程/课表及作业测评等闭环记录），系统本身的数据不受影响，管理员账号不会被删除。'
+        : 'Purge demo data?\n\nOnly demo records (teachers, labs, classes, students, lessons, schedules and related activity data) are removed. Your own data and administrator accounts are never touched.';
     if (!confirm(confirmMsg)) return;
 
     try {
@@ -205,8 +231,8 @@ export function DemoDataPanel({ lang }: DemoDataPanelProps) {
             </h3>
             <p className="text-xs text-gray-400 mt-0.5">
               {lang === 'zh'
-                ? '一键生成一套完整的演示课程 / 班级 / 学生 / 课表，便于快速体验与验收；清理时不影响系统本身的数据。'
-                : 'One-click generation of a full demo lesson / class / student / schedule set for quick evaluation. Purging never touches real data.'}
+                ? '一键铺好演示教师 / 机房 / 班级 / 学生 / 白板课与学案课 / 课表及完整教学闭环，便于快速体验与验收；清理时不影响系统本身的数据。'
+                : 'One-click setup of demo teachers, labs, classes, students, whiteboard & xuean lessons, schedules and full teaching loops. Purging never touches real data.'}
             </p>
           </div>
           <button
@@ -273,21 +299,31 @@ export function DemoDataPanel({ lang }: DemoDataPanelProps) {
             <div className="rounded-lg border border-amber-100 bg-amber-50/60 px-3 py-2.5 space-y-1.5">
               <div className="flex items-center gap-1.5 text-xs font-bold text-amber-700">
                 <KeyRound size={13} />
-                {lang === 'zh' ? '演示教师账号（可用于登录体验）' : 'Demo teacher account (for sign-in testing)'}
+                {lang === 'zh' ? '演示教师账号（可用于登录体验）' : 'Demo teacher accounts (for sign-in testing)'}
               </div>
               <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-amber-800">
-                <span>
-                  {lang === 'zh' ? '姓名' : 'Name'}: <span className="font-semibold">{status.credentials.name}</span>
-                </span>
-                <span>
-                  {lang === 'zh' ? '用户名' : 'Username'}:{' '}
-                  <span className="font-mono font-bold">{status.credentials.username}</span>
-                </span>
                 <span>
                   {lang === 'zh' ? '密码' : 'Password'}:{' '}
                   <span className="font-mono font-bold">{status.credentials.password}</span>
                 </span>
+                {(status.demo?.teacherUsernames ?? [status.credentials.username]).map((username) => (
+                  <span key={username}>
+                    {username === status.credentials!.username
+                      ? lang === 'zh'
+                        ? '主讲'
+                        : 'Lead'
+                      : lang === 'zh'
+                        ? '协同'
+                        : 'Co-teacher'}
+                    : <span className="font-mono font-bold">{username}</span>
+                  </span>
+                ))}
               </div>
+              <p className="text-[11px] text-amber-700/80">
+                {lang === 'zh'
+                  ? '24 名学生亦可用学号 DEMO-S01~S24 与同一密码登录学生端。'
+                  : 'All 24 students can also sign in with DEMO-S01~S24 and the same password.'}
+              </p>
             </div>
           )}
 

@@ -124,7 +124,7 @@ flowchart TB
 | 安全头         | L211      | `helmet`（CSP / X-Frame-Options / HSTS 由 `ENABLE_HSTS` 控制）                     |
 | 写请求限流     | L287      | `writeLimiter`；`/api/classroom/sessions/:id/view-state` 走独立 `viewStateLimiter` |
 | 大体积解析     | L~300     | `mountLargeBodyParsers(app)`，必须在全局 parser **之前**                           |
-| 全局 parser    | L303-304  | `express.json({ limit: '2mb' })` + urlencoded                                      |
+| 全局 parser    | L303      | `mountConfigurableBodyParsers`：上限由站点设置决定（默认 2MB，1–50MB）             |
 | CSRF           | L307      | `csrfGuard`（`Sec-Fetch-Site/Dest` 判定 + 豁免清单）                               |
 | 可观测         | L308      | `requestObservability()`（请求 id、慢请求、日志）                                  |
 | 静态资源       | L312/L338 | `/uploads` 需 session；`/plugins` 需 token                                         |

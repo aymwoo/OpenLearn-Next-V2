@@ -57,7 +57,6 @@ describe('StudentQuickActionsFloatingMenu', () => {
     setSelectedAssignment: vi.fn(),
     addToast: vi.fn(),
     lang: 'zh' as const,
-    onExpandWidget: vi.fn(),
   };
 
   const activeSessionFixture = {
@@ -142,16 +141,14 @@ describe('StudentQuickActionsFloatingMenu', () => {
     );
   });
 
-  it('triggers onExpandWidget and locates assignment on clicking View Latest Assignments', () => {
-    const onExpandWidget = vi.fn();
-
+  it('locates the assignments widget on clicking View Latest Assignments', () => {
     // Create a dummy widget in document
     const dummyWidget = document.createElement('div');
     dummyWidget.id = 'widget-upcoming-assignments';
     dummyWidget.scrollIntoView = vi.fn();
     document.body.appendChild(dummyWidget);
 
-    render(<StudentQuickActionsFloatingMenu {...defaultProps} onExpandWidget={onExpandWidget} />);
+    render(<StudentQuickActionsFloatingMenu {...defaultProps} />);
 
     const fab = document.getElementById('student-quick-actions-fab-btn')!;
     fireEvent.click(fab);
@@ -159,7 +156,6 @@ describe('StudentQuickActionsFloatingMenu', () => {
     const assignmentsAction = document.getElementById('qa-action-view-assignments')!;
     fireEvent.click(assignmentsAction);
 
-    expect(onExpandWidget).toHaveBeenCalledWith('upcoming-assignments');
     expect(dummyWidget.scrollIntoView).toHaveBeenCalled();
 
     document.body.removeChild(dummyWidget);

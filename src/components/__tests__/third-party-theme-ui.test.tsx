@@ -188,6 +188,9 @@ describe('Third-Party Theme UI Layouts, Theme Center, Bridge Payload & Recovery 
     expect(screen.getByTestId('theme-upgrade-confirm')).toBeTruthy();
     expect(screen.getByTestId('theme-catalog-card-layout-theme')).toBeTruthy();
     expect(screen.getByRole('button', { name: '停用' })).toBeTruthy();
+    // 全局 Dialog 外观覆盖入口
+    expect(screen.getByLabelText('弹窗背景色覆盖')).toBeTruthy();
+    expect(screen.getByText('弹窗圆角')).toBeTruthy();
   });
 
   it('forwards unified themeMeta payload in PluginSandboxIframeView init postMessage', () => {

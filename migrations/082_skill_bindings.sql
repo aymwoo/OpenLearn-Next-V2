@@ -1,5 +1,5 @@
 -- UP
--- 080_skill_bindings.sql
+-- 082_skill_bindings.sql
 -- Skill 细粒度绑定：按「全局 / 班级 / 课节」覆盖技能的可用性。
 --
 -- 解析优先级（最具体者胜出）：lesson > class > global > skill_settings/manifest。
