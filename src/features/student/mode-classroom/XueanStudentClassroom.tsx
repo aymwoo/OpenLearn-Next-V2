@@ -33,6 +33,20 @@ export function XueanStudentClassroom({
 }) {
   return (
     <div data-testid="student-xuean-classroom" className="flex min-h-0 flex-1 flex-col">
+      {/* 学生端随堂工具：与白板壳共用 `student.lesson.tool`，学案课也有跨活动的常驻工具位。
+          无插件贡献时容器为空（empty:hidden），不占布局高度。 */}
+      <div className="flex shrink-0 items-center justify-end gap-2 px-1 pb-1 empty:hidden">
+        <ExtensionPointRenderer
+          slot="student.lesson.tool"
+          slotProps={{
+            lessonId: props.selectedLesson,
+            studentId: props.activeStudentId,
+            activeSegmentId: segment.id,
+            lang: props.lang,
+          }}
+          locked={blockSegmentContent}
+        />
+      </div>
       <main className="flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-theme bg-surface">
         {blockSegmentContent ? (
           <div

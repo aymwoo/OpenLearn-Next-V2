@@ -5,7 +5,7 @@
 > 审计范围：`ExtensionPointRenderer` 扩展点体系在「学案（xuean）/ 白板（whiteboard）」两种课堂交付模式下，教师侧与学生侧的接线、可见性、上下文与回退行为
 > 不包含：`assessment.*` / `teacher.dashboard.*` / 后台管理类槽位（仅在涉及共性问题时引用）
 
-> **实施状态（2026-11-27）**：P0 四项已落地——`rolesAllowed` 渲染期过滤、学案活动槽 fallback、学案学生主工作区接入 `student_main`、学案门禁兜底 `gate_fallback`。P1 已落地 3.5 / 3.6 / 3.7（`student_main` 补 `studentId`/`studentName`、活动主槽补 `progress`/`studentId`/`classId`、白板选中与右键槽补 `readOnly`/`userRole`）；3.8 / 3.9 未做。P2 仅修复 3.11（`adopt` 事件映射）；3.10 / 3.12 / 3.13 未做。
+> **实施状态（2026-11-27）**：P0 四项已落地——`rolesAllowed` 渲染期过滤、学案活动槽 fallback、学案学生主工作区接入 `student_main`、学案门禁兜底 `gate_fallback`。P1 全部落地：3.5 / 3.6 / 3.7（补 `studentId`/`studentName`、活动主槽上下文、白板选中与右键槽 `readOnly`/`userRole`）、3.8（学案学生壳复用 `student.lesson.tool`）、3.9（新增 `xuean.activity.teacher`，`ExtensionSlot` 增至 162）。P2 落地 3.10（内置白板页列表 / 学案大纲追加渲染 `classroom.outline`；`classroom.prep` 维持仅第三方模式包并在文档注明）、3.11（`adopt` 事件映射）、3.12（只读态按视口挂载插件渲染器）、3.13（学案课默认 `segment_main`）。
 
 ---
 

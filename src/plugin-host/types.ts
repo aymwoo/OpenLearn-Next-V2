@@ -289,6 +289,7 @@ export type ExtensionSlot =
   | 'xuean.activity.type' // 声明新的学案活动类型（并进入教师端活动类型下拉）
   | 'xuean.activity.editor' // 该类型活动的教师端编辑器（按 activityType 分发）
   | 'xuean.activity.student' // 该类型活动的学生端渲染器（按 activityType 分发）
+  | 'xuean.activity.teacher' // 该类型活动的教师课中实时视图（讨论内容 / 调查结果 / 实时状态）
   // ── 学案编排与学习过程扩展槽位 ──
   | 'xuean.editor.toolbar' // 教师活动编排器工具栏（批量导入 / AI 生成活动 / 模板）
   | 'xuean.activity.card.action' // 教师活动卡片操作区（复制 / 导出 / 预览）
@@ -1473,6 +1474,25 @@ export interface XueanActivityEditorFooterSlotProps {
   /** 保存成功后通知宿主刷新列表；插件不实现保存时可不调用。 */
   onSaved?: () => void | Promise<void>;
   commandPayload?: { activityId?: string; lessonId: string; activityType: string };
+}
+
+/** Props passed to xuean.activity.teacher extensions（教师课中活动实时视图） */
+export interface XueanActivityTeacherSlotProps {
+  activity: {
+    id: string;
+    lesson_id: string;
+    type: string;
+    title: string;
+    order_index?: number;
+    [key: string]: unknown;
+  };
+  activityType: string;
+  lessonId: string;
+  classId: string | null;
+  /** 活动完成概览（已交 / 应交 / 待处理），宿主聚合后注入，插件无需自行统计。 */
+  summary?: { total: number; done: number; pending: number } | null;
+  /** 展开状态：学生明细表是否展开，插件可据此决定是否渲染重型内容。 */
+  expanded?: boolean;
 }
 
 /** Props passed to xuean.activity.student extensions（插件活动的学生端主渲染器） */

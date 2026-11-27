@@ -6,7 +6,9 @@ import type { WhiteboardPageItem } from '../../whiteboard/InteractiveWhiteboard'
 
 // Mock ExtensionPointRenderer to avoid complex plugin-host dependencies
 vi.mock('../../../plugin-host/extension-point-renderer', () => ({
-  ExtensionPointRenderer: () => <div data-testid="extension-point-renderer" />,
+  ExtensionPointRenderer: (props: { slot: string }) => (
+    <div data-testid="extension-point-renderer" data-slot={props.slot} />
+  ),
 }));
 
 describe('ClassroomTimelineSidebar', () => {
@@ -151,6 +153,18 @@ describe('ClassroomTimelineSidebar', () => {
   it('未选择课节时展示引导文案', () => {
     render(<ClassroomTimelineSidebar {...defaultProps} selectedLesson={null} />);
     expect(screen.getByText('请选择一个课节加载流程表')).toBeTruthy();
+  });
+
+  it('内置白板页面大纲也渲染 classroom.outline，供插件追加条目', () => {
+    render(<ClassroomTimelineSidebar {...defaultProps} />);
+
+    // 内置页列表仍在
+    expect(screen.getByText('白板页面大纲')).toBeTruthy();
+    // 追加区走的是同一个槽位，插件无需依赖第三方 Mode Pack 才能插入条目
+    const outlineSlots = screen
+      .getAllByTestId('extension-point-renderer')
+      .filter((el) => el.getAttribute('data-slot') === 'classroom.outline');
+    expect(outlineSlots.length).toBeGreaterThan(0);
   });
 
   describe('stripHtml 工具函数', () => {

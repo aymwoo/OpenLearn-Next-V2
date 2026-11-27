@@ -33,6 +33,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - **题库槽位能力补齐**：`assessment.bank.import.source` / `assessment.bank.toolbar.action` 新增 `refresh`；`assessment.bank.filter` 支持 `tags` 与难度区间并真正生效；`assessment.publish.preflight` 新增 `onClear(code?)`，插件可在条件恢复后解除发布阻断。
 - **学案学生端接入环节扩展与门禁兜底**：`XueanStudentClassroom` 新增 `primarySurface` / `extraSurface` / `segmentAccess`，学生端 `classroom.active_segment.student_main` 的 primary 贡献可替代内置学案工作区、其余贡献与其并列渲染（此前学案学生端硬编码绕过该槽位）；环节未解锁时渲染 `student.segment.gate_fallback`，与白板模式对齐。
 - **扩展槽上下文补齐**：`classroom.active_segment.student_main` 注入 `studentId` / `studentName`；`xuean.activity.student` 注入 `progress` / `studentId` / `classId` / `lang`（此前插件活动主视图拿不到进度与学生身份，只能重复请求接口）；`whiteboard.selection.toolbar` 与 `whiteboard.context_menu` 注入 `readOnly` / `userRole`（此前插件在只读画布上无法判断能否给出删除/改写入口）。新增字段均为可选，不破坏既有插件。
+- **新增 `xuean.activity.teacher`（教师课中活动实时视图）**：教师在进度面板展开某个活动时，该活动类型的插件可渲染实时内容（讨论、调查结果、活动状态）。props `{ activity, activityType, lessonId, classId, summary, expanded }`；`ExtensionSlot` 成员数增至 162。
+- **学案学生端常驻工具位**：`XueanStudentClassroom` 复用 `student.lesson.tool`，学案课也有跨活动的常驻工具（笔记本 / 计算器 / 求助），不再只能靠每个活动的 `.student.addon`。
+- **内置模式也能扩展中大纲**：`classroom.outline` 在内置白板页列表与学案活动大纲里改为**追加**渲染（此前仅第三方 Mode Pack 消费）；`classroom.prep` 仍只服务第三方模式包，文档已注明。
+- **学案课默认进入「环节工作区」**：课时交付模式为 `xuean` 且 mode pack 开启时，进入课堂默认 `segment_main`，不必再手动切换；白板课与未声明交付模式的旧课保持原默认，且每个课节只自动决定一次，不覆盖教师的手动切换。
 
 ### Fixes
 
@@ -54,6 +58,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 - **学生首页只保留默认布局**：移除「模块化自适应栅格工作台」工具条（作业攻坚 / 学情大屏 / 双列紧凑三种预设、恢复默认、窄屏「自定义布局」开关）以及每个组件头部的尺寸切换（1/3、1/2、2/3、Full）、前后移动、折叠展开与拖拽排序控件。`StudentDashboardPanel` 不再读写 `student_dashboard_layout_v4_<studentId>` 本地布局，组件顺序与宽度固定取自 `DEFAULT_WIDGET_LAYOUT`（教师可见性策略仍在渲染层过滤）；栅格容器 `#student-dashboard-modular-grid` 更名为 `#student-dashboard-grid`，`student-ui-policy` 移除失效的 `section.layout-toolbar` 功能 ID，`StudentQuickActionsFloatingMenu` 去掉 `onExpandWidget`，`docs/workspace/student-home-layout.md` 同步更新。
 - **插件中心移除「显示系统核心插件」开关**：发现页不再提供该系统核心插件显隐切换，插件列表始终展示全部已安装插件（含 `@openlearn/*` 核心插件），ZIP 安装入口保持不变。
+- **只读白板按视口挂载插件渲染器**：`whiteboard.renderer` 的每个图元都会创建插件前端实例（含 iframe），全班专注锁定的只读演示态下这些实例原本全量挂载。新增 `DeferredMountWhenVisible`：可编辑态仍立即挂载（首屏零延迟），只读态改为进入视口（含 800px 预取边距）后才挂载且挂载后不再卸载；环境无 `IntersectionObserver` 时回退为立即挂载。
 
 ### Breaking Changes
 
