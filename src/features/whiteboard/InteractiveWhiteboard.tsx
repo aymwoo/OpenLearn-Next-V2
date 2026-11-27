@@ -73,6 +73,7 @@ import { HelloWorldWrapper } from './widgets/HelloWorldWrapper';
 import { LearningSurfaceHost } from '../learning-surface/LearningSurfaceHost';
 import { isTypingTarget } from '../learning-surface/keyboard';
 import { WhiteboardToolbar } from './components/WhiteboardToolbar';
+import { DeferredMountWhenVisible } from './components/DeferredMountWhenVisible';
 import { WhiteboardPageBar } from './components/WhiteboardPageBar';
 import { WhiteboardDialog } from './components/WhiteboardDialog';
 import { AssignmentSubmitDialog } from './components/AssignmentSubmitDialog';
@@ -3282,35 +3283,39 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                       className={`wb-widget-container flex-1 overflow-hidden relative min-h-0 ${isFrameless ? '' : 'bg-white'}`}
                       style={{ pointerEvents: readOnly ? 'none' : 'auto' }}
                     >
-                      <ExtensionPointRenderer
-                        slot="whiteboard.renderer"
-                        slotProps={{
-                          element: el,
-                          elementId: el.id,
-                          elementType: extTargetType,
-                          data,
-                          width: displayWidth,
-                          height: displayHeight,
-                          isSelected: isThisSelected,
-                          readOnly,
-                          userRole,
-                          lessonId,
-                          classId,
-                          onElementUpdate: onElementUpdate
-                            ? async (id: string, updatedData: any) => {
-                                await onElementUpdate(id, updatedData);
-                                frontendEventBus.publish({
-                                  id: uuidv7(),
-                                  type: 'whiteboard.element_updated',
-                                  source: 'whiteboard',
-                                  payload: { lessonId },
-                                  timestamp: Date.now(),
-                                  correlationId: lessonId,
-                                });
-                              }
-                            : undefined,
-                        }}
-                      />
+                      {/* 只读演示态才做「进视口再挂载」：可编辑态保持首屏零延迟，
+                          只读态下绝大多数图元不在视口内，避免无谓的插件 iframe 实例。 */}
+                      <DeferredMountWhenVisible enabled={readOnly}>
+                        <ExtensionPointRenderer
+                          slot="whiteboard.renderer"
+                          slotProps={{
+                            element: el,
+                            elementId: el.id,
+                            elementType: extTargetType,
+                            data,
+                            width: displayWidth,
+                            height: displayHeight,
+                            isSelected: isThisSelected,
+                            readOnly,
+                            userRole,
+                            lessonId,
+                            classId,
+                            onElementUpdate: onElementUpdate
+                              ? async (id: string, updatedData: any) => {
+                                  await onElementUpdate(id, updatedData);
+                                  frontendEventBus.publish({
+                                    id: uuidv7(),
+                                    type: 'whiteboard.element_updated',
+                                    source: 'whiteboard',
+                                    payload: { lessonId },
+                                    timestamp: Date.now(),
+                                    correlationId: lessonId,
+                                  });
+                                }
+                              : undefined,
+                          }}
+                        />
+                      </DeferredMountWhenVisible>
                     </div>
                   )}
                   {readOnly && <ReadOnlyLockCover />}
@@ -3862,6 +3867,8 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                       data: selectedToolbarData,
                       lessonId,
                       classId,
+                      readOnly,
+                      userRole,
                       onElementUpdate,
                       onOpenProperties: () => setActivePropertiesElementId(selectedToolbarEl.id),
                       onDelete: handleElementDelete,
@@ -3997,6 +4004,8 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                         point: { x: contextMenu.x, y: contextMenu.y },
                         lessonId,
                         classId,
+                        readOnly,
+                        userRole,
                         onElementUpdate,
                         onClose: () => setContextMenu(null),
                       }}

@@ -15,6 +15,7 @@ import {
   unregisterXueanModePack,
   type WhiteboardHostBridgeValue,
 } from '../features/classroom/mode-pack';
+import { shouldAutoSelectSegmentMain } from '../features/classroom/mode-pack/initialMiddleTab';
 import { getOptionalSocket, onSocketInstance } from '../services/socket-service';
 import { buildShowcaseDiffCandidateWorks } from '../features/classroom/showcase-diff/build-diff-works';
 import { useErrorStore } from '../store/errorStore';
@@ -350,6 +351,16 @@ export function LiveClassroomView({
   });
 
   const [middleTab, setMiddleTab] = useState<TeacherMiddleTab>('whiteboard');
+  // 学案课默认落在「环节工作区」：每个课节只自动决定一次，之后尊重教师的手动切换。
+  const autoMiddleTabLessonRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!selectedLesson || autoMiddleTabLessonRef.current === selectedLesson) return;
+    autoMiddleTabLessonRef.current = selectedLesson;
+    const lesson = lessons.find((item) => item.id === selectedLesson);
+    if (shouldAutoSelectSegmentMain(lesson, isModePacksEnabled())) {
+      setMiddleTab('segment_main');
+    }
+  }, [lessons, selectedLesson]);
   // 白板课「课堂工具」面板：按钮在顶栏，面板挂在 Cockpit 内，共用这一份展开状态。
   const [classroomToolsOpen, setClassroomToolsOpen] = useState(false);
   // 进入白板授课视图时先弹出功能开关设置；同一课节确认一次。

@@ -23,13 +23,22 @@ vi.mock('../AssessmentActivityCard', () => ({
 vi.mock('../../../../plugin-host/extension-point-renderer', () => ({
   ExtensionPointRenderer: (props: {
     slot: string;
-    slotProps?: { activityType?: string; activity?: { id: string } };
+    slotProps?: {
+      activityType?: string;
+      activity?: { id: string };
+      progress?: { status: string } | null;
+      studentId?: string | null;
+      classId?: string | null;
+    };
   }) => (
     <div
       data-testid="plugin-activity-slot"
       data-slot={props.slot}
       data-activity-type={props.slotProps?.activityType}
       data-activity-id={props.slotProps?.activity?.id}
+      data-progress-status={props.slotProps?.progress?.status ?? 'none'}
+      data-student-id={props.slotProps?.studentId ?? 'none'}
+      data-class-id={props.slotProps?.classId ?? 'none'}
     />
   ),
 }));
@@ -136,6 +145,41 @@ describe('StudentXueanView', () => {
     expect(slot.getAttribute('data-activity-type')).toBe('@acme/lab:experiment');
     expect(slot.getAttribute('data-activity-id')).toBe('a1');
     expect(slots.some((el) => el.getAttribute('data-slot') === 'xuean.activity.student.addon')).toBe(true);
+  });
+
+  it('插件活动主槽收到进度与学生身份上下文', async () => {
+    getXuean.mockResolvedValue({
+      ok: true,
+      data: {
+        lessonId: 'lesson-1',
+        blocks: [],
+        activities: [{ ...baseActivity, id: 'a1', type: '@acme/lab:experiment', title: '虚拟实验' }],
+        progressByActivity: {
+          a1: {
+            id: 'p1',
+            activity_id: 'a1',
+            student_id: 'stu-7',
+            status: 'in_progress',
+            progress_percent: 40,
+          },
+        },
+      },
+    });
+
+    render(
+      <PluginHostProvider host={{ getExtensions: () => [] } as unknown as FrontendPluginHost}>
+        <StudentXueanView lessonId="lesson-1" classId="cls-9" studentId="stu-7" />
+      </PluginHostProvider>,
+    );
+
+    expect(await screen.findByLabelText('活动 1：虚拟实验')).toBeTruthy();
+    const slot = screen
+      .getAllByTestId('plugin-activity-slot')
+      .find((el) => el.getAttribute('data-slot') === 'xuean.activity.student')!;
+    // 插件主视图此前拿不到进度/学生/班级，只能自己再请求一次接口
+    expect(slot.getAttribute('data-progress-status')).toBe('in_progress');
+    expect(slot.getAttribute('data-student-id')).toBe('stu-7');
+    expect(slot.getAttribute('data-class-id')).toBe('cls-9');
   });
 
   it('没有插件贡献附加区时不再输出空的 addon 分隔块', async () => {

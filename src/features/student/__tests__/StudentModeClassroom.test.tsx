@@ -255,4 +255,23 @@ describe('学案学生壳的环节扩展与门禁兜底', () => {
     });
     expect(screen.queryByTestId('mode-xuean-workspace')).toBeNull();
   });
+
+  it('学案壳复用 student.lesson.tool 作为跨活动常驻工具位', async () => {
+    const factory = () => Promise.resolve({ default: () => <div data-testid="xuean-tool">计算器</div> });
+    (factory as unknown as { __isLazyFactory?: boolean }).__isLazyFactory = true;
+    usePluginHostStore.getState().registerExtensionPoint('student.lesson.tool', {
+      id: 'xuean-tool',
+      label: '学案随堂工具',
+      pluginId: 'ext-tool',
+      component: factory,
+    });
+
+    renderXuean();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('xuean-tool')).toBeTruthy();
+    });
+    // 工具位与学案工作区同时存在：不是替代关系
+    expect(await screen.findByTestId('mode-xuean-workspace')).toBeTruthy();
+  });
 });

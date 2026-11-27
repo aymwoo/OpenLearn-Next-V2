@@ -775,11 +775,10 @@ export function useClassroomSocket(options: UseClassroomSocketOptions) {
       ingestQuizAnswered(data);
     });
 
-    // 课件提交（plugin submitScore / LMS Bridge 双路径汇合点）→ ingest 到 WhiteboardEventSlot
-    // 服务端在 server/routes/courseware.ts:242 (log) / 311 (submit) / 504 (promote) 都会
-    // 广播 courseware-attempt-updated，并附带 attemptId。汶取详情需二次拉取 attempts 表，
-    // 这里以最小 payload（仅 attemptId）先入槽，让 TeacherPanel / 调试面板看到“这条 attempt
-    // 被处理了”，详细成绩与学生名在面板层再调 attempts API 补全。
+    // 课件 attempt 状态变更（plugin submitScore / LMS Bridge 双路径汇合点）→ ingest 到 WhiteboardEventSlot
+    // 服务端由 courseware-service 的 publishAttemptUpdated 广播，类型固定为 log | submit | adopt。
+    // 注意 `adopt` 是「student 认领无主 attempt」而不是「课件完成」：`courseware.finished`
+    // 只由 iframe 的 LMS_FINISH 消息产生（见 CoursewareHost），这里不能混用。
     socket.on('courseware-attempt-updated', (data: any) => {
       try {
         if (!data || typeof data.attemptId !== 'string') return;
@@ -788,8 +787,8 @@ export function useClassroomSocket(options: UseClassroomSocketOptions) {
             ? 'courseware.event_logged'
             : data.type === 'submit'
               ? 'courseware.submitted'
-              : data.type === 'promote'
-                ? 'courseware.finished'
+              : data.type === 'adopt'
+                ? 'courseware.adopted'
                 : 'courseware.event_logged';
         whiteboardEventSlot.ingest({
           source: 'iframe.bridge',

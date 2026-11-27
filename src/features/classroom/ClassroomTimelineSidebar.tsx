@@ -331,6 +331,17 @@ export function ClassroomTimelineSidebar({
                                   ? '本环节活动列表由学案 Mode Pack 提供（见备课面 / ProgressPanel）'
                                   : 'Activities are provided by the Xuean Mode Pack (prep / ProgressPanel).'}
                               </div>
+                              {/* 内置学案大纲也接受插件贡献（追加，不替换内置内容） */}
+                              <ExtensionPointRenderer
+                                slot="classroom.outline"
+                                slotProps={{
+                                  packId: 'xuean',
+                                  outlineContributionId: outline.outlineContributionId,
+                                  segment: seg,
+                                  lessonId: selectedLesson,
+                                  lang,
+                                }}
+                              />
                             </div>
                           );
                         }
@@ -418,6 +429,17 @@ export function ClassroomTimelineSidebar({
                                 {lang === 'zh' ? '本环节暂无独立页面' : 'No pages for this segment'}
                               </div>
                             )}
+                            {/* 内置白板页面大纲也接受插件贡献（追加，不替换页列表） */}
+                            <ExtensionPointRenderer
+                              slot="classroom.outline"
+                              slotProps={{
+                                packId: 'whiteboard',
+                                outlineContributionId: outline.outlineContributionId,
+                                segment: seg,
+                                lessonId: selectedLesson,
+                                lang,
+                              }}
+                            />
                           </div>
                         );
                       })()}

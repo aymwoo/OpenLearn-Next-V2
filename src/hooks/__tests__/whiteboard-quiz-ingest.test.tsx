@@ -249,22 +249,34 @@ describe('useClassroomSocket — courseware-attempt-updated → WhiteboardEventS
     whiteboardEventSlot.clear();
   });
 
-  it('maps submit → courseware.submitted, log → courseware.event_logged, promote → courseware.finished', () => {
+  it('maps submit → courseware.submitted, log → courseware.event_logged, adopt → courseware.adopted', () => {
     renderHook(() => useClassroomSocket(baseOptions));
 
     act(() => {
       mockSocket.fire('courseware-attempt-updated', { attemptId: 'a1', type: 'submit' });
       mockSocket.fire('courseware-attempt-updated', { attemptId: 'a2', type: 'log' });
-      mockSocket.fire('courseware-attempt-updated', { attemptId: 'a3', type: 'promote' });
+      mockSocket.fire('courseware-attempt-updated', { attemptId: 'a3', type: 'adopt' });
     });
 
     const submitted = whiteboardEventSlot.query({ types: ['courseware.submitted'] });
     const logged = whiteboardEventSlot.query({ types: ['courseware.event_logged'] });
-    const finished = whiteboardEventSlot.query({ types: ['courseware.finished'] });
+    const adopted = whiteboardEventSlot.query({ types: ['courseware.adopted'] });
     expect(submitted.map((e) => e.attemptId)).toEqual(['a1']);
     expect(logged.map((e) => e.attemptId)).toEqual(['a2']);
-    expect(finished.map((e) => e.attemptId)).toEqual(['a3']);
+    expect(adopted.map((e) => e.attemptId)).toEqual(['a3']);
     expect(submitted[0].source).toBe('iframe.bridge');
+  });
+
+  it('已下线的 promote 不再被当成课件完成', () => {
+    renderHook(() => useClassroomSocket(baseOptions));
+
+    act(() => {
+      mockSocket.fire('courseware-attempt-updated', { attemptId: 'a9', type: 'promote' });
+    });
+
+    // 服务端只发 log | submit | adopt；`courseware.finished` 只来自 iframe 的 LMS_FINISH
+    expect(whiteboardEventSlot.query({ types: ['courseware.finished'] })).toHaveLength(0);
+    expect(whiteboardEventSlot.query({ types: ['courseware.event_logged'] }).map((e) => e.attemptId)).toEqual(['a9']);
   });
 
   it('drops payloads without a string attemptId', () => {

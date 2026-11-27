@@ -41,6 +41,8 @@ export function XueanModeWorkspace(props: ClassroomActiveSegmentMainSlotProps & 
               lang={lang === 'en' ? 'en' : 'zh'}
               // 学生课堂的环节名已由 StudentLessonHeader 单行顶栏承载，卡内不再重复。
               showTitle={false}
+              classId={classId ?? null}
+              studentId={props.studentId ?? null}
               onActivityProgressReported={(info) => {
                 void flow
                   .sendMessage({

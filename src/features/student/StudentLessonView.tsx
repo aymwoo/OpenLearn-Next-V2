@@ -317,6 +317,8 @@ export function StudentLessonView(props: StudentLessonViewProps) {
               classId: effectiveClassId,
               lang,
               flow: studentFlowController,
+              studentId: activeStudentId,
+              studentName,
             }}
           />
         </WhiteboardHostBridgeProvider>

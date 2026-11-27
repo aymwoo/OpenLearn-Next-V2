@@ -159,6 +159,7 @@
     "xuean.activity.editor.footer",
     "xuean.activity.student",
     "xuean.activity.student.addon",
+    "xuean.activity.teacher",
     "xuean.activity.type",
     "xuean.editor.toolbar",
     "xuean.home.block",
@@ -174,5 +175,5 @@
     "anchor:whiteboard-toolbar:presentation",
     "anchor:whiteboard-toolbar:rollcall"
   ],
-  "total": 161
+  "total": 162
 }

@@ -11,6 +11,7 @@ import {
   syncLessonActivityGrades,
 } from '../../../services/lessonActivitiesService.js';
 import { useOptionalAppData } from '../../../context/AppDataContext.js';
+import { ExtensionPointRenderer } from '../../../plugin-host/extension-point-renderer';
 import { Loader2, ChevronDown, ChevronRight, RefreshCw } from 'lucide-react';
 
 type PanelActivity = {
@@ -291,19 +292,34 @@ export function ProgressPanel() {
                 </div>
               </button>
 
-              {/* 展开：学生明细表格 */}
+              {/* 展开：插件活动实时视图 + 学生明细表格 */}
               {isOpen && (
-                <StudentTable
-                  activity={a}
-                  studentMap={studentMap}
-                  syncing={syncing}
-                  onVerify={(studentId) => setVerifying({ activityId: a.id, studentId })}
-                  onSync={(studentId) => handleSyncOne(a.id, studentId)}
-                  onNudge={async (studentId) => {
-                    await nudgeActivity(a.id, studentId);
-                    await refresh();
-                  }}
-                />
+                <>
+                  <div className="px-3 pt-2 empty:hidden">
+                    <ExtensionPointRenderer
+                      slot="xuean.activity.teacher"
+                      slotProps={{
+                        activity: a,
+                        activityType: a.type,
+                        lessonId: a.lesson_id || lessonId,
+                        classId: appData?.liveClassSelectedClassId ?? null,
+                        summary: a.summary,
+                        expanded: true,
+                      }}
+                    />
+                  </div>
+                  <StudentTable
+                    activity={a}
+                    studentMap={studentMap}
+                    syncing={syncing}
+                    onVerify={(studentId) => setVerifying({ activityId: a.id, studentId })}
+                    onSync={(studentId) => handleSyncOne(a.id, studentId)}
+                    onNudge={async (studentId) => {
+                      await nudgeActivity(a.id, studentId);
+                      await refresh();
+                    }}
+                  />
+                </>
               )}
             </div>
           );

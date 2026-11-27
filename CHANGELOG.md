@@ -32,11 +32,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - **学生结果 payload 增加题型 `config`**：供 `Review` 还原题面结构（不含标准答案）。
 - **题库槽位能力补齐**：`assessment.bank.import.source` / `assessment.bank.toolbar.action` 新增 `refresh`；`assessment.bank.filter` 支持 `tags` 与难度区间并真正生效；`assessment.publish.preflight` 新增 `onClear(code?)`，插件可在条件恢复后解除发布阻断。
 - **学案学生端接入环节扩展与门禁兜底**：`XueanStudentClassroom` 新增 `primarySurface` / `extraSurface` / `segmentAccess`，学生端 `classroom.active_segment.student_main` 的 primary 贡献可替代内置学案工作区、其余贡献与其并列渲染（此前学案学生端硬编码绕过该槽位）；环节未解锁时渲染 `student.segment.gate_fallback`，与白板模式对齐。
+- **扩展槽上下文补齐**：`classroom.active_segment.student_main` 注入 `studentId` / `studentName`；`xuean.activity.student` 注入 `progress` / `studentId` / `classId` / `lang`（此前插件活动主视图拿不到进度与学生身份，只能重复请求接口）；`whiteboard.selection.toolbar` 与 `whiteboard.context_menu` 注入 `readOnly` / `userRole`（此前插件在只读画布上无法判断能否给出删除/改写入口）。新增字段均为可选，不破坏既有插件。
+- **新增 `xuean.activity.teacher`（教师课中活动实时视图）**：教师在进度面板展开某个活动时，该活动类型的插件可渲染实时内容（讨论、调查结果、活动状态）。props `{ activity, activityType, lessonId, classId, summary, expanded }`；`ExtensionSlot` 成员数增至 162。
+- **学案学生端常驻工具位**：`XueanStudentClassroom` 复用 `student.lesson.tool`，学案课也有跨活动的常驻工具（笔记本 / 计算器 / 求助），不再只能靠每个活动的 `.student.addon`。
+- **内置模式也能扩展中大纲**：`classroom.outline` 在内置白板页列表与学案活动大纲里改为**追加**渲染（此前仅第三方 Mode Pack 消费）；`classroom.prep` 仍只服务第三方模式包，文档已注明。
+- **学案课默认进入「环节工作区」**：课时交付模式为 `xuean` 且 mode pack 开启时，进入课堂默认 `segment_main`，不必再手动切换；白板课与未声明交付模式的旧课保持原默认，且每个课节只自动决定一次，不覆盖教师的手动切换。
 
 ### Fixes
 
 - **`rolesAllowed` 声明后从不生效**：扩展点的角色门控此前只有类型声明、运行时不消费，任何插件写了都等于没写。现在由 `extension-point-renderer` 在**渲染期**按 `activeRole` 过滤，教师切换「学生视图」预览时即时生效。注意 `activeRole` 只有 `teacher` / `student`，只声明 `['admin']` 的扩展不会被渲染。
 - **空槽位吞掉调用点 fallback**：`ExtensionPointRenderer` 在槽位没有贡献、或活动槽未匹配到扩展时直接返回 `null`，调用点传入的 `fallback`（如学案活动「插件未加载」提示）永远不会出现，现改为 `fallback ?? null`。
+- **白板事件槽把认领当成完成**：`courseware-attempt-updated` 前端把 `promote` 映射为 `courseware.finished`，而服务端 `publishAttemptUpdated` 只发 `log | submit | adopt`，导致 `courseware.finished` 永不触发、`adopt`（学生认领无主 attempt）被降级成 `event_logged`。现改为 `adopt → courseware.adopted` 并删除 `promote` 分支；`courseware.finished` 只由 iframe 的 `LMS_FINISH` 产生。
 - **学生端白板环节锁定与大纲「当前」误标（Gitee IKYK90）**：全班指针指向本课 `timeline` 中不存在的环节（旧会话 / 历史种子残留）时视为失效，不再把学生锁在「请跟随课堂当前环节」；该分支明确返回 `followedClassSegment`，学生端据此把本地指针对齐到全班环节并隐藏锁定横幅，而不是停在一个无法自行解除的解锁提示上。教师端 socket 重连后重新广播一次当前环节，避免服务端保留上次演示的旧指针；该自动重播只对主讲教师 / 管理员生效，协同教师的陈旧本地指针不会覆盖全班。指针有效性同时兼容 mode pack 合成的环节（如 `xuean:study`），避免把学案课的全班指针误判为失效。教学环节进度表里共享页只在正在演示的环节上标「当前」（此前每个环节都复用同一个全局页码，五个环节同时显示「当前」），组件计数也改为只统计本环节可见的组件。演示课程把无效的 `allPreviousCompleted` 门禁换成内置 `quiz_completed`，课堂总结环节可正常通过随堂测验放行。
 - **学生课堂顶栏压成一行、暗色主题课题恢复可读**：学案 / 白板两种课堂不再各自渲染「学案课堂 / 白板课堂 + 课题 + 课节」标题块，改由 `StudentLessonHeader` 单行顶栏统一承载「离开 / 专注锁定 + 课节 › 环节 + 环节位置 + 心情打卡」，顶部 chrome 由两行（约 110–130px）收到 56px。两处标题块写死的浅色（`text-stone-900` / `text-gray-900` / `bg-white` / `border-stone-200`）改为主题令牌，暗色主题下课题不再几乎不可见；活动名与当前环节同名时，卡片内不再重复第三遍。
 - **学案课程包正文不可见 / 活动附件失效**：自动派生的阅读活动会携带课程正文（学案学生端不渲染 `lessons.content`）；课程包导入会解析 `activities[].config` / `activities[].rubric` / `blocks[].content` 中的 `${asset:<id>}`，导出时逆向替换并内联附件；`xuean_home` 背景图按块路由同一口径收敛为上传文件 URL；CSV 学案导入把正文写入阅读活动。
@@ -52,6 +58,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 - **学生首页只保留默认布局**：移除「模块化自适应栅格工作台」工具条（作业攻坚 / 学情大屏 / 双列紧凑三种预设、恢复默认、窄屏「自定义布局」开关）以及每个组件头部的尺寸切换（1/3、1/2、2/3、Full）、前后移动、折叠展开与拖拽排序控件。`StudentDashboardPanel` 不再读写 `student_dashboard_layout_v4_<studentId>` 本地布局，组件顺序与宽度固定取自 `DEFAULT_WIDGET_LAYOUT`（教师可见性策略仍在渲染层过滤）；栅格容器 `#student-dashboard-modular-grid` 更名为 `#student-dashboard-grid`，`student-ui-policy` 移除失效的 `section.layout-toolbar` 功能 ID，`StudentQuickActionsFloatingMenu` 去掉 `onExpandWidget`，`docs/workspace/student-home-layout.md` 同步更新。
 - **插件中心移除「显示系统核心插件」开关**：发现页不再提供该系统核心插件显隐切换，插件列表始终展示全部已安装插件（含 `@openlearn/*` 核心插件），ZIP 安装入口保持不变。
+- **只读白板按视口挂载插件渲染器**：`whiteboard.renderer` 的每个图元都会创建插件前端实例（含 iframe），全班专注锁定的只读演示态下这些实例原本全量挂载。新增 `DeferredMountWhenVisible`：可编辑态仍立即挂载（首屏零延迟），只读态改为进入视口（含 800px 预取边距）后才挂载且挂载后不再卸载；环境无 `IntersectionObserver` 时回退为立即挂载。
 
 ### Breaking Changes
 
