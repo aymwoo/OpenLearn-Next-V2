@@ -28,6 +28,8 @@ export type AgentChatRequest = {
   surface?: 'lesson_prep' | 'admin_settings' | 'classroom_live';
   /** P0 Skill 运行时：选定的技能 id（空 = 不启用技能收窄，保持旧行为） */
   skillId?: string | null;
+  /** 细粒度绑定：当前课节 / 班级（用于解析 lesson > class > global 的绑定） */
+  classId?: string | null;
   /** Prior conversation turns (oldest first) used to give the agent memory. */
   history?: AgentChatTurn[];
 };

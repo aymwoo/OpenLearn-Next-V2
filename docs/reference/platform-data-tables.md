@@ -587,7 +587,7 @@ MFE 远端登记。MFE 执行边界已移除，表保留作历史数据兼容。
 
 <!-- AUTO-GENERATED:table-inventory BEGIN -->
 
-共 **104** 张表（迁移 70 个，金样生成于 2026-11-19T14:57:57.433Z）。列清单为列名（类型与约束见迁移 SQL）：
+共 **112** 张表（迁移 81 个，金样生成于 2026-11-26T00:21:51.662Z）。列清单为列名（类型与约束见迁移 SQL）：
 
 - `_academic_year_backfill`: backfilled_at, id
 - `_class_passcode_encryption`: id, note
@@ -595,6 +595,7 @@ MFE 远端登记。MFE 执行边界已移除，表保留作历史数据兼容。
 - `_migrations`: applied_at, checksum, name
 - `activity_peer_reviews`: activity_id, comment, created_at, id, reviewee_id, reviewer_id, score
 - `activity_progress`: activity_id, graded_at, last_activity_at, nudge_count, nudged_at, progress_percent, score, self_eval_json, status, student_id, submission_json, verified
+- `activity_runs`: activity_id, actor_id, class_id, ended_at, id, lesson_id, payload_json, provider_id, started_at, state
 - `agent_conversations`: content, conv_key, created_at, id, role
 - `ai_persona_governance`: description_en, description_zh, enabled, persona_id, preferred_provider_id
 - `ai_personas`: base_policy, created_at, default_for_role_json, icon, id, instruction_en, instruction_zh, max_turns, mode, name_en, name_zh, plugin_id, source, tool_policy_json, updated_at, visibility_json
@@ -604,8 +605,8 @@ MFE 远端登记。MFE 执行边界已移除，表保留作历史数据兼容。
 - `assessment_attempts`: academic_year, anon_key, assignment_id, attempt_no, deadline_at, id, max_score, needs_manual_review, paper_json, proctor_json, score, started_at, status, student_id, submitted_at
 - `assessment_items`: answer_key_json, assessment_id, bank_item_id, config_json, id, max_score, section, sort_order, stem, type
 - `assessments`: academic_year, created_at, description, id, kind, owner_id, published_at, settings_json, status, title, updated_at
-- `assignment_grade_history`: actor_id, actor_role, assignment_id, created_at, id, new_score, new_source, new_status, old_content, old_score, old_source, old_status, reason, student_id
-- `assignment_submissions`: academic_year, assignment_id, content, feedback, graded_at, graded_by, score, source, status, student_id, submitted_at
+- `assignment_grade_history`: actor_id, actor_role, assignment_id, attempt_id, created_at, id, new_score, new_source, new_status, old_content, old_score, old_source, old_status, reason, student_id
+- `assignment_submissions`: academic_year, assignment_id, attempt_id, content, feedback, graded_at, graded_by, score, source, status, student_id, submitted_at
 - `assignments`: academic_year, class_id, content, created_at, description, id, lesson_id, title
 - `attendance`: academic_year, recorded_at, schedule_id, status, student_id
 - `class_grade_weights`: assignment_weight, attendance_weight, class_id, exam_weight, progress_weight, updated_at
@@ -644,6 +645,8 @@ MFE 远端登记。MFE 执行边界已移除，表保留作历史数据兼容。
 - `file_assets`: access_scope, author_id, blob_id, course_id, created_at, deleted_at, id, lesson_id, metadata_json, mime, original_name, purpose
 - `file_blobs`: backend_id, created_at, id, ref_count, sha256, size_bytes, storage_key
 - `icebreaker_checkins`: checkin_date, class_id, created_at, id, lesson_id, mood, scope_key, student_id, updated_at
+- `learning_surface_attempts`: attempt_no, auto_score, completion, created_at, graded_at, graded_by, id, is_preview, lesson_id, max_score, renderer_id, score, state_json, status, student_id, submitted_at, surface_id, updated_at
+- `learning_surfaces`: content_ref_json, created_at, deleted_at, id, kind, lesson_id, owner_id, updated_at
 - `lesson_activities`: config_json, created_at, descriptor_version, due_at, group_mode, id, lesson_id, order_index, peer_review, provider_id, release_at, required, rubric_json, submission_type, surface_id, title, type, updated_at, visible
 - `lesson_activity_blocks`: block_type, content_json, created_at, id, lesson_id, order_index, surface_id, updated_at
 - `lesson_checkins`: checked_in_at, lesson_id, student_id
@@ -654,19 +657,19 @@ MFE 远端登记。MFE 执行边界已移除，表保留作历史数据兼容。
 - `mfe_remotes`: created_at, entry, meta, name, updated_at
 - `pending_commands`: actor_id, command_type, created_at, id, payload
 - `pending_side_effects`: attempts, biz_key, correlation_id, created_at, id, last_error, max_attempts, next_retry_at, op, origin_actor_id, payload, resolved_at, source, status, updated_at
-- `plugin_assignment_files`: asset_id, assignment_id, deleted_at, id, mime, original_name, sha256, size, stored_path, student_id, submission_id, uploaded_at, version_id
+- `plugin_assignment_files`: asset_id, assignment_id, attempt_id, deleted_at, id, mime, original_name, sha256, size, stored_path, student_id, submission_id, uploaded_at, version_id
 - `plugin_assignments`: allow_late, allow_link, allow_text, allowed_ext, class_id, created_at, created_by, description, due_at, element_id, id, instructions, lesson_id, max_file_size, max_files, peer_review_count, peer_review_due_at, peer_review_mode, peer_weight, status, teacher_weight, title, updated_at
 - `plugin_capability_grants`: approved_at, capability, plugin_key
 - `plugin_config`: key, plugin_id, scope_id, scope_type, updated_at, value
-- `plugin_grades`: assignment_id, calculated_final_score, graded_at, graded_by, id, peer_average_score, peer_weight, published_at, source, status, submission_id, teacher_comment, teacher_score, teacher_weight
+- `plugin_grades`: assignment_id, attempt_id, calculated_final_score, graded_at, graded_by, id, peer_average_score, peer_weight, published_at, source, status, submission_id, teacher_comment, teacher_score, teacher_weight
 - `plugin_network_grants`: approved_at, host, plugin_key
 - `plugin_orphan_data`: last_export_path, manifest_id, migration_version, plugin_id, plugin_name, plugin_version, row_count, storage_keys, table_names, table_prefixes, uninstalled_at
-- `plugin_peer_review_tasks`: anonymous, assignment_id, created_at, due_at, id, reviewer_id, status, submission_id
-- `plugin_peer_reviews`: anonymous, assignment_id, comment, created_at, id, reviewer_id, score, status, submission_id, task_id, updated_at
+- `plugin_peer_review_tasks`: anonymous, assignment_id, attempt_id, created_at, due_at, id, reviewer_id, status, submission_id
+- `plugin_peer_reviews`: anonymous, assignment_id, attempt_id, comment, created_at, id, reviewer_id, score, status, submission_id, task_id, updated_at
 - `plugin_public_routes`: approved_at, method, path, plugin_key
 - `plugin_storage`: key, plugin_id, updated_at, value
-- `plugin_submission_versions`: assignment_id, files_json, id, is_late, link_url, student_id, submission_id, submitted_at, text_content, version
-- `plugin_submissions`: assignment_id, created_at, file_path, id, lesson_id, student_id, updated_at, version
+- `plugin_submission_versions`: assignment_id, attempt_id, files_json, id, is_late, link_url, student_id, submission_id, submitted_at, text_content, version
+- `plugin_submissions`: assignment_id, attempt_id, created_at, file_path, id, lesson_id, student_id, updated_at, version
 - `plugins`: created_at, execution_mode, file_path, id, loader_version, manifest, name, source_code, status, updated_at, version, zip_package
 - `processes`: created_at, id, logs, name, payload, plugin_id, state, status, task_type, updated_at
 - `question_bank_items`: answer_key_json, config_json, created_at, difficulty, id, owner_id, stem, tags_json, type, updated_at, visibility
@@ -676,12 +679,17 @@ MFE 远端登记。MFE 执行边界已移除，表保留作历史数据兼容。
 - `segment_gate_overrides`: actor_id, created_at, lesson_id, reason, segment_id, student_id
 - `segment_visits`: entered_at, id, left_at, lesson_id, segment_id, student_id
 - `site_settings`: academic_start_month, allow_public_student_lookup, allow_unsigned_plugins, bridge_hook_telemetry, community_install_enabled, community_registry_url, current_academic_year, default_theme_id, file_storage_config, http_access_log_ignore, http_access_log_mode, http_slow_ms, id, logo_url, logout_clear_site_data, mode_pack_show_xuean_tab, mode_packs_enabled, site_name, slogan, upload_max_file_mb
+- `skill_bindings`: enabled, id, scope_id, scope_type, skill_id, surface, updated_at, updated_by
+- `skill_config_rollbacks`: applied_by, created_at, id, patch_json, previous_json, rolled_back_at, rolled_back_by, run_id
+- `skill_runs`: actor_id, artifact_kind, created_at, error, finished_at, id, scope_json, skill_id, status, surface
+- `skill_settings`: enabled, skill_id, surfaces_json, updated_at, updated_by
 - `student_lesson_progress`: academic_year, assigned_at, completed, completed_segments, lesson_id, progress_percent, student_id, verified, verified_progress_percent
 - `student_point_logs`: class_id, created_at, delta_points, dimension_id, id, plugin_id, reason, student_id
 - `student_read_notifications`: created_at, notification_id, student_id
 - `student_rollcalls`: class_id, difficulty, id, lesson_id, picked_time, rating, reward_coins, score, student_id
 - `student_seats`: class_id, col_idx, lab_id, row_idx, student_id
 - `student_semester_reports`: academic_year, ai_evaluation, assignment_score, attendance_score, class_id, created_at, dimension_scores, exam_score, grade_level, id, progress_score, semester_name, student_id, teacher_evaluation, total_score, updated_at
+- `student_ui_policies`: id, policy_json, scope_id, scope_type, updated_at, updated_by
 - `students`: avatar, created_at, email, gender, id, lock_mode, lock_target, locked_lesson_id, name, password, private_notes, student_number
 - `submission_raw`: attempt_id, created_at, event_type, id, payload_json
 - `submission_result`: attempt_id, comment, completion, extra_json, id, score

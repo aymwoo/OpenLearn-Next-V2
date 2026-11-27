@@ -103,6 +103,10 @@ export const CAP = {
   STUDENT_DATA_WRITE: CAP_STUDENT_DATA_WRITE,
   ASSESSMENT_READ: CAP_ASSESSMENT_READ,
 
+  // ── AI 扩展 ─────────────────────────────────────────────────────────
+  // 允许插件为技能提供沙箱脚本（sandbox 内执行，不接触宿主进程与文件系统）。
+  SKILL_SCRIPT: 'skill:script',
+
   // ── 平台内部 ─────────────────────────────────────────────────────────
   // 片段命令（segment gate）用，插件片段可声明；不在 AI 工具箱里。
   SEGMENT_GATE_EVAL: 'segment:gate_eval',

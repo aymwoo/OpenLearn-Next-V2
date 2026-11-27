@@ -516,11 +516,14 @@ export const runOpenAIAgentChat = async (provider: StoredAIProvider, request: Ag
     history,
     surface,
     skillId,
+    classId,
   } = request;
   const rawPersona = getAIPersona(request.personaId);
   const persona = rawPersona && rawPersona.enabled !== false ? rawPersona : undefined;
   // fail-closed：技能必须在当前场景与角色下可见，否则忽略 skillId（不注入指令、不注入工具）。
-  const requestedSkill = skillId ? getSkillDescriptor(skillId) : undefined;
+  const requestedSkill = skillId
+    ? getSkillDescriptor(skillId, { surface, lessonId: currentLessonId, classId })
+    : undefined;
   const selectedSkill =
     requestedSkill && isSkillVisible(requestedSkill, surface, callerRole) ? requestedSkill : undefined;
   const pluginContextSlices = callerRole === 'student' ? [] : collectAIContextSlices(currentLessonId ?? null);
@@ -541,6 +544,8 @@ export const runOpenAIAgentChat = async (provider: StoredAIProvider, request: Ag
     // 传「请求的 id」而不是解析后的 selectedSkill：请求了不可见技能时必须收敛为空，
     // 不能回退到「全量插件技能」。
     skillId: request.skillId ?? null,
+    lessonId: currentLessonId,
+    classId,
   });
   const {
     tools,

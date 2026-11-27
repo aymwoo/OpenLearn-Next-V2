@@ -2,11 +2,13 @@ import { describe, expect, it } from 'vitest';
 import {
   buildSkillToolBindings,
   isSkillVisible,
+  normalizeConfigPatch,
   normalizeLessonSegments,
   parseManifestSkills,
   parseSkillArtifact,
   type SkillDescriptor,
 } from '../skill-registry.js';
+import { resolveBindingEnabled, type SkillBinding } from '../skill-store.js';
 
 /**
  * P0 Skill 注册表回归：manifest → 描述符、场景/角色过滤、产物解析。
@@ -86,6 +88,7 @@ describe('isSkillVisible', () => {
     roles: ['teacher'],
     tools: [],
     latencyClass: 'interactive',
+    enabled: true,
   };
 
   it('按场景过滤', () => {
@@ -144,17 +147,23 @@ describe('parseSkillArtifact', () => {
     tools: [],
     outputKind: 'lesson_segments',
     latencyClass: 'interactive',
+    enabled: true,
   };
 
   it('解析裸 JSON 与代码围栏 JSON', () => {
     const raw = '{"segments":[{"title":"导入","duration":"5m","type":"intro"}]}';
-    expect(parseSkillArtifact(skill, raw)?.segments[0].title).toBe('导入');
-    expect(parseSkillArtifact(skill, `\`\`\`json\n${raw}\n\`\`\``)?.segments).toHaveLength(1);
+    const first = parseSkillArtifact(skill, raw);
+    expect(first?.kind).toBe('lesson_segments');
+    expect(first?.kind === 'lesson_segments' ? first.segments[0].title : '').toBe('导入');
+
+    const fenced = parseSkillArtifact(skill, `\`\`\`json\n${raw}\n\`\`\``);
+    expect(fenced?.kind === 'lesson_segments' ? fenced.segments : []).toHaveLength(1);
   });
 
   it('混入解释文字时提取首个 JSON 对象', () => {
     const text = '好的，以下是结果：\n{"segments":[{"title":"练习","duration":"10m","type":"practice"}]}\n请查收。';
-    expect(parseSkillArtifact(skill, text)?.segments[0]).toEqual({
+    const artifact = parseSkillArtifact(skill, text);
+    expect(artifact?.kind === 'lesson_segments' ? artifact.segments[0] : null).toEqual({
       title: '练习',
       duration: '10m',
       type: 'practice',
@@ -163,11 +172,113 @@ describe('parseSkillArtifact', () => {
 
   it('无法解析时回退为单个环节', () => {
     const artifact = parseSkillArtifact(skill, '# 开场导入\n讲解新课');
-    expect(artifact?.segments).toHaveLength(1);
-    expect(artifact?.segments[0]).toMatchObject({ title: '开场导入', duration: '15m', type: 'lecture' });
+    const segments = artifact?.kind === 'lesson_segments' ? artifact.segments : [];
+    expect(segments).toHaveLength(1);
+    expect(segments[0]).toMatchObject({ title: '开场导入', duration: '15m', type: 'lecture' });
   });
 
   it('非 lesson_segments 产物直接返回 null', () => {
     expect(parseSkillArtifact({ ...skill, outputKind: undefined }, 'anything')).toBeNull();
+  });
+});
+
+describe('config_patch', () => {
+  const skill: SkillDescriptor = {
+    id: 'admin.settings.review',
+    source: 'builtin',
+    name: '运行时设置体检',
+    description: 'demo',
+    surfaces: ['admin_settings'],
+    roles: ['administrator'],
+    tools: [],
+    outputKind: 'config_patch',
+    latencyClass: 'interactive',
+    enabled: true,
+  };
+
+  it('只保留白名单字段并校验取值', () => {
+    const patch = normalizeConfigPatch({
+      changes: {
+        modePacksEnabled: true,
+        httpAccessLogMode: 'all',
+        httpSlowMs: 1200,
+        unknownKey: 'x',
+        httpAccessLogMode2: 'nope',
+      },
+    });
+    expect(patch).toEqual({ modePacksEnabled: true, httpAccessLogMode: 'all', httpSlowMs: 1200 });
+  });
+
+  it('非法取值被丢弃，全部非法时返回空对象', () => {
+    expect(normalizeConfigPatch({ changes: { httpSlowMs: 10, httpAccessLogMode: 'verbose' } })).toEqual({});
+    expect(normalizeConfigPatch(null)).toBeNull();
+  });
+
+  it('从模型文本解析 config_patch', () => {
+    const artifact = parseSkillArtifact(skill, '```json\n{"changes":{"modePacksEnabled":false}}\n```');
+    expect(artifact?.kind).toBe('config_patch');
+    expect(artifact?.kind === 'config_patch' ? artifact.changes : null).toEqual({ modePacksEnabled: false });
+  });
+});
+
+describe('classroom_card', () => {
+  const skill: SkillDescriptor = {
+    id: 'classroom.lesson_summary',
+    source: 'builtin',
+    name: '课堂小结卡片',
+    description: 'demo',
+    surfaces: ['classroom_live'],
+    roles: ['teacher'],
+    tools: [],
+    outputKind: 'classroom_card',
+    latencyClass: 'interactive',
+    enabled: true,
+  };
+
+  it('解析结构化卡片', () => {
+    const artifact = parseSkillArtifact(skill, '{"title":"本课小结","body":"要点一\\n要点二"}');
+    expect(artifact?.kind).toBe('classroom_card');
+    expect(artifact?.kind === 'classroom_card' ? artifact.card : null).toEqual({
+      title: '本课小结',
+      body: '要点一\n要点二',
+    });
+  });
+
+  it('非 JSON 输出回退为标题 + 正文', () => {
+    const artifact = parseSkillArtifact(skill, '# 本课小结\n要点一\n要点二');
+    const card = artifact?.kind === 'classroom_card' ? artifact.card : null;
+    expect(card?.title).toBe('本课小结');
+    expect(card?.body).toContain('要点一');
+  });
+});
+
+describe('resolveBindingEnabled', () => {
+  const binding = (scopeType: SkillBinding['scopeType'], scopeId: string, enabled: boolean): SkillBinding => ({
+    id: `bind-${scopeType}-${scopeId}`,
+    skillId: 'demo.skill',
+    surface: 'lesson_prep',
+    scopeType,
+    scopeId,
+    enabled,
+    updatedAt: 0,
+  });
+
+  it('按 lesson > class > global 取最具体的绑定', () => {
+    const bindings = [binding('global', '', true), binding('class', 'c1', false), binding('lesson', 'l1', true)];
+    expect(
+      resolveBindingEnabled(bindings, { skillId: 'demo.skill', surface: 'lesson_prep', lessonId: 'l1', classId: 'c1' }),
+    ).toBe(true);
+    expect(
+      resolveBindingEnabled(bindings, { skillId: 'demo.skill', surface: 'lesson_prep', lessonId: 'l2', classId: 'c1' }),
+    ).toBe(false);
+    expect(
+      resolveBindingEnabled(bindings, { skillId: 'demo.skill', surface: 'lesson_prep', lessonId: 'l2', classId: 'c2' }),
+    ).toBe(true);
+  });
+
+  it('没有绑定时返回 undefined（回落到全局设置）', () => {
+    expect(
+      resolveBindingEnabled([], { skillId: 'demo.skill', surface: 'lesson_prep', lessonId: 'l1', classId: 'c1' }),
+    ).toBeUndefined();
   });
 });

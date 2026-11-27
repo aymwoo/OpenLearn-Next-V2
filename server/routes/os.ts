@@ -396,7 +396,7 @@ export function registerOsRoutes(ctx: ServerContext, runService?: ActivityRunSer
 
   app.post('/api/agent/chat', requireScopedAuth('self'), aiLimiter, async (req, res) => {
     try {
-      let { message, lang = 'zh', currentLessonId, attachments, providerId } = req.body as AgentChatRequest;
+      let { message, lang = 'zh', currentLessonId, attachments, providerId, classId } = req.body as AgentChatRequest;
 
       if (typeof message !== 'string' || !message.trim()) {
         return res.status(400).json({
@@ -524,6 +524,7 @@ export function registerOsRoutes(ctx: ServerContext, runService?: ActivityRunSer
         actorId,
         history,
         personaId: effectivePersonaId,
+        classId: typeof classId === 'string' && classId.trim() ? classId.trim() : null,
       });
 
       // Persist this exchange so the kernel assistant remembers it next time

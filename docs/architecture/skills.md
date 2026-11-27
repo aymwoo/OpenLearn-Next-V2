@@ -11,14 +11,14 @@ Skill 不是新的执行通道，也不新建第二套 AI 链路。它是 `ai.sk
 
 概念边界：
 
-| 概念         | 回答的问题             | 载体                                       |
-| ------------ | ---------------------- | ------------------------------------------ |
-| Plugin       | 谁交付、怎么装、有何权限 | `manifest` + `capabilitiesProposed`        |
-| Persona      | 以什么身份/风格说       | `server/ai-persona-registry.ts`            |
-| **Skill**    | 做什么、怎么做、产出什么 | `ai.skill.provider` + `server/skill-registry.ts` |
-| Action       | 原子操作               | `actionRegistry` / `commandBus`            |
-| Surface      | 在哪用、自主度多高       | `lesson_prep` / `admin_settings` / `classroom_live` |
-| Artifact     | 产物与落地             | P0：`lesson_segments`                      |
+| 概念      | 回答的问题               | 载体                                                |
+| --------- | ------------------------ | --------------------------------------------------- |
+| Plugin    | 谁交付、怎么装、有何权限 | `manifest` + `capabilitiesProposed`                 |
+| Persona   | 以什么身份/风格说        | `server/ai-persona-registry.ts`                     |
+| **Skill** | 做什么、怎么做、产出什么 | `ai.skill.provider` + `server/skill-registry.ts`    |
+| Action    | 原子操作                 | `actionRegistry` / `commandBus`                     |
+| Surface   | 在哪用、自主度多高       | `lesson_prep` / `admin_settings` / `classroom_live` |
+| Artifact  | 产物与落地               | P0：`lesson_segments`                               |
 
 ## 注册表
 
@@ -54,12 +54,84 @@ Skill 不是新的执行通道，也不新建第二套 AI 链路。它是 `ai.sk
 - 选定技能时，宿主仅挂载技能声明的命令；技能未声明工具时不挂载任何宿主工具。
 - 产物写库仍走既有 REST + commandBus 路径，技能运行时本身不直接写业务表。
 
-## P0 范围
+## 场景接入
 
-- 场景：`lesson_prep`（备课编辑器头部的「技能」按钮）。
-- 内置技能：`lesson.plan.generate`（课时教案生成 → `lesson_segments`）。
-- 接口：`GET /api/skills?surface=`、`POST /api/skills/:id/run`。
-- 未实现（P1/P2）：技能管理与绑定、`config_patch` 产物、课堂快捷技能、运行记录持久化。
+| 场景             | 入口                           | 上下文                         | 产物              | 落地方式                                     |
+| ---------------- | ------------------------------ | ------------------------------ | ----------------- | -------------------------------------------- |
+| `lesson_prep`    | 备课编辑器头部「技能」按钮     | 课节标题 / 已有环节 / 内容摘要 | `lesson_segments` | 教师确认后走 `PUT /api/lessons/:id/timeline` |
+| `admin_settings` | 管理后台「AI 配置 → 技能管理」 | 运行时策略快照                 | `config_patch`    | 管理员确认后 `setRuntimePolicies` + 旧值快照 |
+| `classroom_live` | 课堂顶栏「技能」按钮           | 课节 / 班级 / 阶段 / 当前环节  | `classroom_card`  | 教师确认后 `whiteboardService.drawElement`   |
+
+## 运行时接口
+
+- `GET /api/skills?surface=`：当前角色可见的技能目录（已过滤停用技能）。
+- `POST /api/skills/:id/run`：运行技能，返回 `runId`、文本与结构化产物；
+  按 `surface` 做鉴权：备课校验课节归属、设置仅管理员、课堂校验班级 staff 权限。
+- `POST /api/skills/:id/apply-card`：课堂卡片投屏（白板文本元素）。
+- `POST /api/skills/:id/apply-config`：应用 `config_patch`；只接受白名单字段，
+  写入前保存旧值快照。
+- `GET/PATCH /api/admin/skills`：技能目录与启停 / 场景覆盖。
+- `GET /api/admin/skill-runs`、`POST /api/admin/skill-runs/:runId/rollback`：
+  运行审计与配置回滚。
+
+## 数据表
+
+| 表                       | 用途                                           |
+| ------------------------ | ---------------------------------------------- |
+| `skill_settings`         | 管理员启停与场景覆盖（未设置 = 沿用 manifest） |
+| `skill_runs`             | 每次运行的状态、产物类型、操作者与作用域       |
+| `skill_config_rollbacks` | `config_patch` 的旧值快照与应用/回滚记录       |
+
+## 关键约束
+
+- `requiresConfirm: true` 的工具不会被 Agent 自主执行，而是进入 `pendingConfirmations`。
+- 选定技能时，宿主仅挂载技能声明的命令；技能未声明工具时不挂载任何宿主工具。
+- `config_patch` 只能写受控字段（`hookTelemetryEnabled` / `httpAccessLog*` /
+  `httpSlowMs` / `allowUnsignedByDefault` / `modePacks*`），模型给出的其他字段会被丢弃。
+- 所有产物写库都复用既有 REST + commandBus / service 路径，技能运行时本身不直写业务表。
+
+## 脚本类技能沙箱
+
+插件可在 `ai.skill.provider` 条目中声明内联脚本：
+
+```json
+{
+  "id": "@scope/demo:focus-card",
+  "outputKind": "classroom_card",
+  "surfaces": ["classroom_live"],
+  "script": { "source": "return { title: '专注提醒', body: '请回到任务' }", "timeoutMs": 200 }
+}
+```
+
+- **能力门禁**：插件必须在 `capabilitiesProposed` 声明并获得 `skill:script`；未获批时脚本被剥离，技能退化为普通技能。
+- **隔离**：`node:vm` 新上下文 + 禁用 `eval`/`Function`/WebAssembly；不暴露 `require`、`process`、文件系统与网络。
+- **预算**：源码 ≤32KB、同步执行硬超时 50–3000ms（默认 800ms）、输出 ≤64KB、日志 ≤20 条 / 4KB。
+- **执行**：脚本返回对象按 `outputKind` 归一化（`lesson_segments` / `config_patch` / `classroom_card`），非法输出直接失败。
+- **定位**：当前实现面向「可信插件 + 管理员批准」场景；需要进程级隔离的脚本应等待后续 worker 沙箱。
+
+## 细粒度绑定
+
+`skill_bindings` 按 `(skill, surface, scope_type, scope_id)` 覆盖技能可用性：
+
+| 维度       | 取值                                                         |
+| ---------- | ------------------------------------------------------------ |
+| scope_type | `global`（scope_id 为空）/ `class` / `lesson`                |
+| 解析优先级 | lesson > class > global > `skill_settings`                   |
+| 作用       | 最具体的绑定会覆盖全局启停（可用于「全局关闭、单节课开启」） |
+
+管理端接口：
+
+- `GET /api/admin/skills/:id/bindings`
+- `PUT /api/admin/skills/:id/bindings`（`{ surface, scopeType, scopeId, enabled }`）
+- `DELETE /api/admin/skills/:id/bindings?surface=&scopeType=&scopeId=`
+
+运行时目录与运行接口都会带上 `lessonId` / `classId` 解析绑定；`/api/agent/chat` 同样接受 `classId`。
+
+## 状态
+
+- **P0 / P1 / P2 已完成**：备课环节生成、管理端启停与配置体检、课堂卡片投屏。
+- **脚本沙箱与细粒度绑定已完成**：`skill:script` 能力门禁 + `node:vm` 隔离执行；`skill_bindings` 支持全局 / 班级 / 课节三级覆盖。
+- 待办：技能市场导入、进程级（worker）脚本隔离、按角色的绑定维度。
 
 ## 相关文档
 

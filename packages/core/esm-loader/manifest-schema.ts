@@ -225,6 +225,13 @@ const aiSkillToolSchema = z.object({
   requiresConfirm: z.boolean().optional(),
 });
 
+const aiSkillScriptSchema = z.object({
+  language: z.literal('javascript').optional(),
+  /** 沙箱内执行的函数体；必须 `return` 与 outputKind 匹配的 JSON 产物。 */
+  source: z.string().min(1).max(32768),
+  timeoutMs: z.number().int().min(50).max(3000).optional(),
+});
+
 /**
  * `ai.skill.provider` 条目。
  *
@@ -246,6 +253,7 @@ const aiSkillProviderSchema = z.object({
   scopes: z.array(z.string().min(1)).optional(),
   roles: z.array(aiSkillRoleSchema).optional(),
   tools: z.array(aiSkillToolSchema).optional(),
+  script: aiSkillScriptSchema.optional(),
   outputKind: z.string().optional(),
   latencyClass: z.enum(['interactive', 'background']).optional(),
   maxTurns: z.number().int().min(1).max(20).optional(),

@@ -28,6 +28,7 @@
     "process:read",
     "process:write",
     "segment:gate_eval",
+    "skill:script",
     "student-data:read",
     "student-data:write",
     "student:read",
