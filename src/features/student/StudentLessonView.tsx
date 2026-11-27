@@ -362,6 +362,9 @@ export function StudentLessonView(props: StudentLessonViewProps) {
         <XueanStudentClassroom
           {...shellProps}
           flow={studentFlowController}
+          blockSegmentContent={blockSegmentContent}
+          primarySurface={primaryStudentWorkspace ? workspace : null}
+          extraSurface={!primaryStudentWorkspace && matchingStudentMain.length > 0 ? workspace : null}
           segment={segmentForWorkspace ?? { id: selectedLesson || 'xuean', type: 'xuean', title: topic }}
         />
       ) : (

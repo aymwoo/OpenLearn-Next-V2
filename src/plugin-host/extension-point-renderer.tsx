@@ -20,6 +20,7 @@ import { Loader2, ExternalLink, AlertTriangle, RefreshCw } from 'lucide-react';
 import { useOptionalPluginHost } from './plugin-host-context';
 import { usePluginHostStore } from './plugin-host-store';
 import { useAppStore } from '../store/appStore';
+import { useUIStore } from '../store/uiStore';
 import { PluginIconRenderer } from '../components/PluginIconRenderer';
 import { openTeacherTabInNewTab } from '../utils/teacherTabHash';
 import { translations, resolveLabel, type Language } from '../i18n';
@@ -486,9 +487,18 @@ export function ExtensionPointRenderer({
   const pluginErrors = usePluginHostStore((s) => s.pluginErrors);
   const selectedLesson = useAppStore((s) => s.selectedLesson);
   const liveClassSelectedClassId = useAppStore((s) => s.liveClassSelectedClassId);
+  const activeRole = useUIStore((s) => s.activeRole);
 
   if (!host) return fallback ?? null;
   let extensions = host.getExtensions(slot as ExtensionSlot);
+
+  // 角色可见性：`rolesAllowed` 在**渲染期**过滤，而不是注册期固化。
+  // 教师端可随时切换到学生视图预览（activeRole 会变），注册期求值会把预览渲染错。
+  // 注意：课堂壳只识别 teacher/student；声明 `admin` 的扩展不会出现在课堂运行时。
+  extensions = extensions.filter((ext) => {
+    const roles = ext.rolesAllowed;
+    return !roles || roles.length === 0 || roles.includes(activeRole);
+  });
 
   // 学生端可见性策略：在槽位分发前统一剔除被教师隐藏的插件/扩展。
   if (excludePluginIds && excludePluginIds.length > 0) {
@@ -560,7 +570,9 @@ export function ExtensionPointRenderer({
     }
   }
 
-  if (extensions.length === 0) return null;
+  // 槽位没有任何贡献时，优先渲染调用点传入的 fallback（例如学案活动“插件未加载”提示），
+  // 而不是统一返回空白。
+  if (extensions.length === 0) return fallback ?? null;
 
   const renderTabPanelContent = (
     activeExt: any,
@@ -1217,7 +1229,7 @@ export function ExtensionPointRenderer({
       const declared = (ext as { activityType?: string }).activityType ?? cfg.activityType ?? ext.targetType;
       return declared === wanted || ext.id === wanted;
     });
-    if (!activeExt) return null;
+    if (!activeExt) return fallback ?? null;
     // 调用点传入的是插件渲染所需的白名单上下文（activityType/lessonId/onSaved/lang），
     // 不能只交 activity —— 否则教师端编辑器的保存回调与学生端活动标识都会丢失。
     return renderTabPanelContent(activeExt, {}, '活动扩展加载失败', {
