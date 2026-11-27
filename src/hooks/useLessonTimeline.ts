@@ -122,8 +122,13 @@ export function useLessonTimeline(options: UseLessonTimelineOptions) {
         const isNewLesson = lastSelectedLessonRef.current !== selectedLesson;
         lastSelectedLessonRef.current = selectedLesson;
 
+        // activeSegmentId 是课堂会话的权威环节指针：服务端会把学生推进到备课
+        // timeline 之外的新环节（如 mode pack 的 xuean:study 等自定义类型）。
+        // lessons 每 2s 刷新一次，若在这里因「当前 id 不在本地 timeline」就回退，
+        // 会与 2.5s 会话轮询互相回写，形成学生端课时内容反复闪动。
+        // 仅当切换课时（或尚无环节）时才重置到第一段。
         if (segments.length > 0) {
-          if (isNewLesson || !segments.some((s: any) => s.id === activeSegmentId)) {
+          if (isNewLesson || activeSegmentId == null) {
             setActiveSegmentId(segments[0].id);
           }
         } else {
