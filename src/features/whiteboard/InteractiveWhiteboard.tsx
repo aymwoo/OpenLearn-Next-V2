@@ -3862,6 +3862,8 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                       data: selectedToolbarData,
                       lessonId,
                       classId,
+                      readOnly,
+                      userRole,
                       onElementUpdate,
                       onOpenProperties: () => setActivePropertiesElementId(selectedToolbarEl.id),
                       onDelete: handleElementDelete,
@@ -3997,6 +3999,8 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                         point: { x: contextMenu.x, y: contextMenu.y },
                         lessonId,
                         classId,
+                        readOnly,
+                        userRole,
                         onElementUpdate,
                         onClose: () => setContextMenu(null),
                       }}

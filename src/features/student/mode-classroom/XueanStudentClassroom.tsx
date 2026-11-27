@@ -62,6 +62,7 @@ export function XueanStudentClassroom({
                 classId={classId}
                 lang={props.lang}
                 flow={flow}
+                studentId={props.activeStudentId}
               />
             )}
             {extraSurface}

@@ -95,6 +95,9 @@ interface Props {
   showTitle?: boolean;
   /** Mode Pack 工作区可选：进度写库成功后通知（如 ClassroomMessage xuean:task） */
   onActivityProgressReported?: (info: { activityId: string; status: string }) => void;
+  /** 学生身份：透传给 `xuean.activity.student` 插件槽位，避免插件自行从全局 store 推断。 */
+  studentId?: string | null;
+  classId?: string | null;
 }
 
 export function StudentXueanView({
@@ -103,6 +106,8 @@ export function StudentXueanView({
   lang = 'zh',
   showTitle = true,
   onActivityProgressReported,
+  studentId = null,
+  classId = null,
 }: Props) {
   const [data, setData] = useState<XueanData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -303,6 +308,8 @@ export function StudentXueanView({
                       activity={activity}
                       progress={data.progressByActivity[activity.id]}
                       lang={lang}
+                      studentId={studentId ?? null}
+                      classId={classId ?? null}
                       // 活动名与本环节同名时不再重复一遍（顶栏与活动导航已经给出）。
                       hideTitle={activity.title.trim() === (lessonTitle ?? '').trim()}
                       hasAddon={hasActivityAddon}
@@ -697,6 +704,8 @@ function ActivityItem({
   hasAddon = false,
   onProgressUpdated,
   onActivityProgressReported,
+  studentId = null,
+  classId = null,
 }: {
   index: number;
   activity: Activity;
@@ -708,6 +717,8 @@ function ActivityItem({
   hasAddon?: boolean;
   onProgressUpdated: () => void;
   onActivityProgressReported?: (info: { activityId: string; status: string }) => void;
+  studentId?: string | null;
+  classId?: string | null;
 }) {
   const status = progress?.status ?? 'not_started';
   const pct = progress?.progress_percent ?? 0;
@@ -746,7 +757,15 @@ function ActivityItem({
         </div>
         <ExtensionPointRenderer
           slot="xuean.activity.student"
-          slotProps={{ activity, activityType: activity.type, lessonId: activity.lesson_id }}
+          slotProps={{
+            activity,
+            activityType: activity.type,
+            lessonId: activity.lesson_id,
+            progress: progress ?? null,
+            studentId,
+            classId,
+            lang,
+          }}
           fallback={<p className="text-[11px] text-amber-600">插件未加载，暂时无法显示此活动。</p>}
         />
         {hasAddon ? (

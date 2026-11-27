@@ -1412,6 +1412,10 @@ export interface ClassroomActiveSegmentMainSlotProps {
   lang?: string;
   flow: ClassroomFlowController;
   onRefresh?: () => void;
+  /** 学生端主工作区专用：当前学生身份（教师视角为 null）。 */
+  studentId?: string | null;
+  /** 学生端主工作区专用：当前学生姓名，便于插件直接展示而无需回查名单。 */
+  studentName?: string | null;
 }
 
 // ── 学案编排与学习过程扩展槽位 ──────────────────────────────────────
@@ -1469,6 +1473,31 @@ export interface XueanActivityEditorFooterSlotProps {
   /** 保存成功后通知宿主刷新列表；插件不实现保存时可不调用。 */
   onSaved?: () => void | Promise<void>;
   commandPayload?: { activityId?: string; lessonId: string; activityType: string };
+}
+
+/** Props passed to xuean.activity.student extensions（插件活动的学生端主渲染器） */
+export interface XueanActivityStudentSlotProps {
+  activity: {
+    id: string;
+    lesson_id: string;
+    type: string;
+    title: string;
+    config_json?: string | null;
+    [key: string]: unknown;
+  };
+  activityType: string;
+  lessonId: string;
+  /** 当前学生的活动进度；未开始或无记录时为 null。 */
+  progress?: {
+    status: string;
+    progress_percent: number;
+    score?: number | null;
+    verified?: boolean;
+  } | null;
+  /** 当前学生身份（宿主注入，插件不应自行从全局 store 推断）。 */
+  studentId?: string | null;
+  classId?: string | null;
+  lang?: string;
 }
 
 /** Props passed to xuean.activity.student.addon extensions */
