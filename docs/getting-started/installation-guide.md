@@ -163,6 +163,27 @@ open http://localhost:9000
 >
 > `dev.sh` 需有可执行位（`chmod +x dev.sh`）。
 
+### 方式四：GUI 助手部署（推荐教师与零命令行用户）
+
+不想敲命令？[openlearn-manager](https://gitee.com/aymwoo/openlearn-manager) 是面向教师的桌面 GUI 管理器，底层调用的仍是 `openlearn-next` CLI，不改变本指南的部署结果。
+
+- **下载**：从 Gitee Releases 获取 Windows x64 / macOS（Apple Silicon、Intel）/ Linux x64 安装包。Full 版内嵌 Node 24 LTS 开箱即用；Lite 版复用系统 Node；Windows 还有免安装绿色 zip，数据写在同级 `data/`，可放 U 盘带走。
+- **启动**：首页点「启动服务」，管理器先检查端口（默认 `9000`）占用，再拉起本地服务，就绪后可直接「打开浏览器」；日志页实时显示 `stdout` / `stderr`。
+- **运维**：备份页一键冷备与恢复（存在 `Documents/OpenLearn/backups`）；高级页内置 `doctor` 体检 / 修复、重置管理员密码、清理 npx 缓存，并可钉死 CLI 版本与切换 npm 镜像源。
+- **边界**：只绑定 `127.0.0.1`，适合单机教学与演示。公网 / 多校部署见[生产环境部署与运维指南](../deployment/production-guide.md)。
+
+### 方式五：AI Skill 辅助（部署 + 插件开发 + 提交贡献）
+
+想让 AI Agent 代为完成「跑起来」「写插件」「提 PR」，可安装 [openlearn-next-skill](https://skillhub.cn/skills/user_37fa416d/openlearn-next-skill)（SkillHub，v1.0.0）。把下面这句发给你的 AI Agent 即可安装：
+
+```text
+请根据 https://skillhub.cn/install/skillhub.md ，安装 @user_37fa416d/openlearn-next-skill 。
+```
+
+它包含三个子技能：**部署与启动**（Node 24 预检、`pnpm dev` / 生产构建、健康检查与 systemd / PM2 守护、启动失败排查）、**插件开发与仓库协作**（三种插件模板、manifest 与权限、测试护栏、issue / PR）、**外部贡献者 Fork 贡献**（Fork → upstream → 分支 → PR → 同步）。
+
+> 只想快速开发插件，也可用[插件开发完全指南](../tutorials/plugin-development-tutorial.md) §2.8 的 `openlearn-next-plugin-dev` Skill；Fork 流程见[贡献者指南](../contributing/contributing.md)。
+
 ---
 
 ## 3. 环境变量
@@ -375,6 +396,8 @@ AI Agent 是 OpenLearnV2 的智能助手，通过自然语言即可控制教学�
 
 ## 9. 生产部署
 
+> **另有两条路径**：面向教师的 GUI 助手、面向 AI Agent 的 Skill 合集见上文「方式四 / 方式五」；生产环境的完整边界与运维要点见[生产环境部署与运维指南](../deployment/production-guide.md) §2。
+
 ### 一键部署脚本
 
 项目提供 `deploy.sh` 脚本，自动完成构建和配置：
@@ -531,4 +554,4 @@ pnpm run dev
 ---
 
 > **相关文档**：[插件开发完全指南](../tutorials/plugin-development-tutorial.md) · [核心架构与设计](../architecture/platform-kernel.md) · [插件脚手架开发指南](../sdk/scaffold-cli.md)
-> 最后更新：2026-07-15
+> 最后更新：2026-11-27

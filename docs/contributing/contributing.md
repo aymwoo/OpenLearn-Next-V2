@@ -1,5 +1,7 @@
 # Contributing Guidelines 贡献者指南
 
+> 🧩 **AI Agent 辅助贡献**：以外部贡献者身份走 Fork → 配置 upstream → 建分支 → push → 发起 PR → 同步的完整流程，可安装 [openlearn-next-skill](https://skillhub.cn/skills/user_37fa416d/openlearn-next-skill) 的「外部贡献者 Fork 贡献」子技能（安装方式见[安装使用指南](../getting-started/installation-guide.md)「方式五」）。本指南规则对所有贡献方式同样适用。
+
 ## 1. 提交规范（Conventional Commits）
 
 ```
@@ -174,3 +176,7 @@ bash audit-tools/run.sh
 - **严禁自主合并**：AI Agent **不得自行合并任何 PR**。必须在人类维护者进行代码审查并给出明确指令后，方可执行合并。
 - **推荐 Squash Merge**：授权合并时推荐采用 `gitee pr merge <pr_number> --method squash --delete-branch`，保持主分支 git 历史扁平清晰。
 - **分支清理与对齐**：合并后及时切回 `main` 分支拉取最新代码，并清理已合入的本地临时分支。
+
+---
+
+> 最后更新：2026-11-27
