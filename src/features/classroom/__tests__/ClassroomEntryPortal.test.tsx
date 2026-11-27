@@ -745,4 +745,129 @@ describe('ClassroomEntryPortal（互动课堂起始门户）', () => {
       }),
     );
   });
+
+  describe('课堂进行中横幅 · 一键归档结束课程', () => {
+    /**
+     * 模拟「所选课节存在进行中会话（IN_CLASS_TEACHING）」的门户接口，
+     * 并记录归档接口的调用（url + init），用于断言一键归档的请求行为。
+     */
+    const activeSessionFetcher = (options: { archiveOk?: boolean; archiveStatus?: number } = {}) => {
+      const { archiveOk = true, archiveStatus = 200 } = options;
+      const archiveCalls: { url: string; init?: RequestInit }[] = [];
+      const fallback = okFetcher();
+      const fetcher = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url.endsWith('/archive')) {
+          archiveCalls.push({ url, init });
+          if (!archiveOk) {
+            return { ok: false, status: archiveStatus, json: async () => ({ error: 'boom' }) };
+          }
+          return { ok: true, status: 200, json: async () => ({ success: true }) };
+        }
+        if (url.includes('/api/classroom/sessions/')) {
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({
+              hasActiveSession: true,
+              stage: 'IN_CLASS_TEACHING',
+              session: { id: 'sess-live-1', class_id: 'cls-1' },
+            }),
+          };
+        }
+        return (fallback as unknown as (i: RequestInfo | URL, r?: RequestInit) => Promise<any>)(input, init);
+      });
+      return { fetcher: fetcher as unknown as typeof fetch, archiveCalls };
+    };
+
+    it('「课堂进行中」横幅同时提供「回到课堂」与「一键归档结束课程」入口', async () => {
+      const { fetcher } = activeSessionFetcher();
+      renderPortal({ fetcher, selectedLesson: 'les-1', liveClassSelectedClassId: 'cls-1' });
+
+      expect(await screen.findByTestId('active-session-banner')).toBeTruthy();
+      expect(screen.getByRole('button', { name: /回到课堂/ })).toBeTruthy();
+      const archiveBtn = screen.getByTestId('portal-active-session-archive-btn');
+      expect(archiveBtn).toBeTruthy();
+      expect(archiveBtn).toHaveProperty('disabled', false);
+    });
+
+    it('会话缺少 id 时归档按钮禁用，避免误发无效归档请求', async () => {
+      const fallback = okFetcher();
+      const fetcher = vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.includes('/api/classroom/sessions/')) {
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({
+              hasActiveSession: true,
+              stage: 'IN_CLASS_TEACHING',
+              session: { class_id: 'cls-1' },
+            }),
+          };
+        }
+        return fallback(input);
+      }) as unknown as typeof fetch;
+
+      renderPortal({ fetcher, selectedLesson: 'les-1', liveClassSelectedClassId: 'cls-1' });
+
+      expect(await screen.findByTestId('active-session-banner')).toBeTruthy();
+      expect(screen.getByTestId('portal-active-session-archive-btn')).toHaveProperty('disabled', true);
+    });
+
+    it('点击一键归档先弹确认框，取消则不发起归档请求', async () => {
+      const { fetcher, archiveCalls } = activeSessionFetcher();
+      renderPortal({ fetcher, selectedLesson: 'les-1', liveClassSelectedClassId: 'cls-1' });
+
+      fireEvent.click(await screen.findByTestId('portal-active-session-archive-btn'));
+
+      const dialog = await screen.findByRole('dialog');
+      expect(within(dialog).getByText(/一键归档结束课程？/)).toBeTruthy();
+
+      fireEvent.click(within(dialog).getByText('取消'));
+
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+      expect(archiveCalls).toHaveLength(0);
+      expect(screen.getByTestId('active-session-banner')).toBeTruthy();
+    });
+
+    it('确认归档：POST 归档接口、成功提示、横幅消失且班级锁定解除', async () => {
+      const { fetcher, archiveCalls } = activeSessionFetcher();
+      const addToast = vi.fn();
+      renderPortal({ fetcher, addToast, selectedLesson: 'les-1', liveClassSelectedClassId: 'cls-1' });
+
+      expect(await screen.findByTestId('portal-class-lock-hint')).toBeTruthy();
+      fireEvent.click(screen.getByTestId('portal-active-session-archive-btn'));
+
+      const dialog = await screen.findByRole('dialog');
+      fireEvent.click(within(dialog).getByRole('button', { name: /确认归档并结束/ }));
+
+      await waitFor(() => expect(archiveCalls).toHaveLength(1));
+      expect(archiveCalls[0].url).toBe('/api/classroom/sessions/sess-live-1/archive');
+      expect(archiveCalls[0].init?.method).toBe('POST');
+
+      await waitFor(() => expect(screen.queryByTestId('active-session-banner')).toBeNull());
+      expect(addToast).toHaveBeenCalledWith('归档成功', expect.stringContaining('已封存'), 'success');
+      // 班级锁定解除：锁定提示消失，其他班级卡片恢复可点
+      await waitFor(() => expect(screen.queryByTestId('portal-class-lock-hint')).toBeNull());
+      expect(screen.getByRole('button', { name: /初二 \(1\) 班/ })).toHaveProperty('disabled', false);
+    });
+
+    it('归档失败：错误提示且横幅保留，确认框可再次发起', async () => {
+      const { fetcher, archiveCalls } = activeSessionFetcher({ archiveOk: false, archiveStatus: 500 });
+      const addToast = vi.fn();
+      renderPortal({ fetcher, addToast, selectedLesson: 'les-1', liveClassSelectedClassId: 'cls-1' });
+
+      fireEvent.click(await screen.findByTestId('portal-active-session-archive-btn'));
+
+      const dialog = await screen.findByRole('dialog');
+      fireEvent.click(within(dialog).getByRole('button', { name: /确认归档并结束/ }));
+
+      await waitFor(() => expect(archiveCalls).toHaveLength(1));
+      await waitFor(() => expect(addToast).toHaveBeenCalledWith('归档失败', 'boom', 'error'));
+      // 失败不关闭确认框：教师可直接重试或取消
+      expect(screen.getByRole('dialog')).toBeTruthy();
+      expect(screen.getByTestId('active-session-banner')).toBeTruthy();
+    });
+  });
 });
