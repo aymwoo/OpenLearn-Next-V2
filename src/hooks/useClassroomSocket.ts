@@ -97,6 +97,7 @@ export function useClassroomSocket(options: UseClassroomSocketOptions) {
   const studentsRef = useRef(students);
   const addToastRef = useRef(addToast);
   const selectedLessonRef = useRef(selectedLesson);
+  const activeSegmentIdRef = useRef(activeSegmentId);
   const selectedAssignmentRef = useRef<any>(null);
   const studentViewStatusRef = useRef(studentViewStatus);
   // 抽人事件去重：key = `${studentId}:${pickedTime}` → 首次收到的时间戳。
@@ -137,6 +138,9 @@ export function useClassroomSocket(options: UseClassroomSocketOptions) {
   useEffect(() => {
     selectedLessonRef.current = selectedLesson;
   }, [selectedLesson]);
+  useEffect(() => {
+    activeSegmentIdRef.current = activeSegmentId;
+  }, [activeSegmentId]);
   useEffect(() => {
     studentViewStatusRef.current = studentViewStatus;
   }, [studentViewStatus]);
@@ -707,6 +711,16 @@ export function useClassroomSocket(options: UseClassroomSocketOptions) {
     socket.on('connect', () => {
       syncPresenceAndRooms();
       restoreInterruptedView();
+      // 教师端重连（或首次连上）时把本地当前环节重新广播一次：期间服务端可能
+      // 保留着旧会话 / 上次演示的指针，学生会一直停在「请跟随课堂当前环节」。
+      if (activeRoleRef.current === 'teacher' && selectedLessonRef.current && activeSegmentIdRef.current) {
+        socket.emit('teacher-broadcast-segment', {
+          lessonId: selectedLessonRef.current,
+          activeSegmentId: activeSegmentIdRef.current,
+          // 标记为自动重播：服务端只允许主讲教师覆盖全班指针（协同教师不生效）。
+          reconnect: true,
+        });
+      }
       // v0.6.1 审计 R-4：锁定状态来源是 students[].locked_lesson_id，断线
       // 期间错过的「全班锁定」广播不会因重连自动恢复 —— 重连即重拉学生
       // 状态，使断网/刷新间隙发起的锁定对恢复连接的学生立即生效。

@@ -11,6 +11,9 @@ export function SegmentGateBanner({ access, lang }: { access: SegmentAccessState
     );
   }
   if (access.status !== 'locked') return null;
+  // 「请跟随课堂当前环节」不是门禁拒绝：学生端会立即把指针对齐到全班环节，
+  // 这里不再渲染锁定横幅，避免学生看到无法自行解除的解锁提示。
+  if (access.followedClassSegment) return null;
   const failed = access.gates.filter((gate) => !gate.allowed);
   return (
     <div

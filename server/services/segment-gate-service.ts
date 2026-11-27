@@ -10,7 +10,9 @@
  * （后者由现有 registerHandler 桥接），因此 #21 未合入时同样可用。
  */
 import { kernelContainer } from '../../packages/core/kernel/index.js';
+import { modePackCoversSegmentType } from '../../packages/core/plugin-host/mode-pack.js';
 import { resolvePluginCommandType } from '../../packages/core/plugin-host/plugin-namespace.js';
+import { listModePacks, type ModePackDescriptor } from './mode-pack-catalog.js';
 import { setActiveSegment, lessonActiveSegments } from '../shared-state.js';
 import { CLASSROOM_EVENTS, publishClassroomEvent } from '../classroom-events.js';
 import { randomId } from '../utils/id.js';
@@ -33,6 +35,58 @@ const SYSTEM_ACTOR = 'system:segment-gate';
 const GATE_CAPABILITY = 'segment:gate_eval';
 const ARCHIVED = 'ARCHIVED_REPORT';
 
+/** mode-pack 目录缓存：避免每个学生每 2.5s 的 segment-access 都重新解析插件 manifest。 */
+const MODE_PACK_CACHE_TTL_MS = 30_000;
+let modePackCache: { at: number; packs: ModePackDescriptor[] } | null = null;
+
+/**
+ * 全班指针是否被某个已注册 mode pack 认领。
+ *
+ * 服务端 `current_segment_id` 允许指向备课 timeline 之外的合成环节
+ * （如 `xuean:study`，见 useLessonTimeline 的回归用例），这类指针同样权威，
+ * 不能当作陈旧数据忽略。
+ */
+function isModePackSegmentId(segmentId: string): boolean {
+  const now = Date.now();
+  if (!modePackCache || now - modePackCache.at > MODE_PACK_CACHE_TTL_MS) {
+    try {
+      modePackCache = { at: now, packs: listModePacks() };
+    } catch {
+      return false;
+    }
+  }
+  return modePackCache.packs.some((pack) => modePackCoversSegmentType(pack, segmentId));
+}
+
+/** 失效指针告警去重：同一课节 + 同一指针最多每分钟提示一次。 */
+const stalePointerWarnedAt = new Map<string, number>();
+function warnStaleClassSegment(lessonId: string, segmentId: string): void {
+  const key = `${lessonId}:${segmentId}`;
+  const now = Date.now();
+  const last = stalePointerWarnedAt.get(key);
+  if (last && now - last < 60_000) return;
+  if (stalePointerWarnedAt.size > 500) stalePointerWarnedAt.clear();
+  stalePointerWarnedAt.set(key, now);
+  console.warn(`[SegmentGate] 忽略本课 timeline 与 mode pack 之外的失效全班指针：${key}`);
+}
+
+/**
+ * 教师 socket 重连时是否允许重播本地环节。
+ *
+ * 重播会覆盖全班指针，因此只允许主讲教师（会话 `teacher_id`）或管理员执行；
+ * 协同教师的陈旧本地指针不应把全班拉回去。显式点击「广播」不受此限制。
+ */
+export function shouldApplyReconnectBroadcast(
+  sessionTeacherId: string | null | undefined,
+  userId: string | null | undefined,
+  role: string | null | undefined,
+): boolean {
+  if (role === 'administrator') return true;
+  const owner = typeof sessionTeacherId === 'string' ? sessionTeacherId.trim() : '';
+  if (!owner || owner === 'teacher') return true;
+  return !!userId && owner === userId;
+}
+
 export interface SegmentAccessResult {
   allowed: boolean;
   reason?: string;
@@ -44,6 +98,8 @@ export interface SegmentAccessResult {
   classSegmentId: string | null;
   /** 未放行时，学生仍应看到的上一环节（便于补齐条件）。没有则为 null。 */
   visibleSegmentId: string | null;
+  /** 学生请求的环节与全班当前环节不一致，应把本地指针对齐到 visibleSegmentId。 */
+  followedClassSegment?: boolean;
   usedDeprecatedProgressConditions?: boolean;
 }
 
@@ -132,6 +188,17 @@ export class SegmentGateService {
     return row?.id || null;
   }
 
+  /** 重连自动重播是否生效：仅主讲教师或管理员，避免协同教师覆盖全班指针。 */
+  public canApplyReconnectBroadcast(lessonId: string, userId: string | null, role: string | null): boolean {
+    const row = kernelContainer.db
+      .prepare(
+        `SELECT teacher_id AS teacherId FROM classroom_sessions
+         WHERE lesson_id = ? AND stage != ? ORDER BY created_at DESC LIMIT 1`,
+      )
+      .get(lessonId, ARCHIVED) as { teacherId: string | null } | undefined;
+    return shouldApplyReconnectBroadcast(row?.teacherId, userId, role);
+  }
+
   /** 教师推进全班环节：写入内存与会话列，并冻结其他环节上仍打开的停留。 */
   public setClassSegment(lessonId: string, segmentId: string): void {
     setActiveSegment(lessonId, segmentId);
@@ -197,6 +264,20 @@ export class SegmentGateService {
 
   public async evaluate(input: EvaluateSegmentAccessInput): Promise<SegmentAccessResult> {
     const classSegmentId = this.readClassSegmentId(input.lessonId);
+    const lesson = kernelContainer.db
+      .prepare('SELECT timeline, progress_mode, progress_conditions FROM lessons WHERE id = ?')
+      .get(input.lessonId) as
+      { timeline: string | null; progress_mode: string | null; progress_conditions: string | null } | undefined;
+    const segments = parseTimeline(lesson?.timeline);
+    // 全班指针可能是旧会话 / 历史种子残留的失效 id。只有真实存在于本课 timeline
+    // 或被已注册 mode pack 认领的环节才可作权威指针，否则学生会被告知「跟随」
+    // 一个根本不存在的环节并一直锁定。
+    const knownClassSegmentId =
+      classSegmentId && (segments.some((s) => s.id === classSegmentId) || isModePackSegmentId(classSegmentId));
+    if (classSegmentId && !knownClassSegmentId) {
+      warnStaleClassSegment(input.lessonId, classSegmentId);
+    }
+    const validClassSegmentId = knownClassSegmentId ? classSegmentId : null;
     const base = {
       segmentId: input.targetSegmentId,
       classSegmentId,
@@ -208,23 +289,16 @@ export class SegmentGateService {
       return { ...base, allowed: true, bypass: true };
     }
 
-    if (input.enforceClassSegment) {
-      const expected = classSegmentId;
-      if (expected && input.targetSegmentId !== expected) {
-        return {
-          ...base,
-          allowed: false,
-          reason: '请跟随课堂当前环节',
-          visibleSegmentId: expected,
-        };
-      }
+    if (input.enforceClassSegment && validClassSegmentId && input.targetSegmentId !== validClassSegmentId) {
+      return {
+        ...base,
+        allowed: false,
+        reason: '请跟随课堂当前环节',
+        followedClassSegment: true,
+        visibleSegmentId: validClassSegmentId,
+      };
     }
 
-    const lesson = kernelContainer.db
-      .prepare('SELECT timeline, progress_mode, progress_conditions FROM lessons WHERE id = ?')
-      .get(input.lessonId) as
-      { timeline: string | null; progress_mode: string | null; progress_conditions: string | null } | undefined;
-    const segments = parseTimeline(lesson?.timeline);
     const index = segments.findIndex((s) => s.id === input.targetSegmentId);
     const segment = index >= 0 ? segments[index] : null;
     const previousSegmentId = index > 0 ? segments[index - 1].id : null;
