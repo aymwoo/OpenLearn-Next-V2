@@ -274,4 +274,29 @@ describe('学案学生壳的环节扩展与门禁兜底', () => {
     // 工具位与学案工作区同时存在：不是替代关系
     expect(await screen.findByTestId('mode-xuean-workspace')).toBeTruthy();
   });
+
+  it('学案壳渲染 student.segment.badge 并注入当前环节上下文', async () => {
+    const captured: { props?: Record<string, unknown> } = {};
+    const Badge = (props: Record<string, unknown>) => {
+      captured.props = props;
+      return <div data-testid="xuean-segment-badge">探究</div>;
+    };
+    usePluginHostStore.getState().registerExtensionPoint('student.segment.badge', {
+      id: 'xuean-badge',
+      label: '环节徽标',
+      pluginId: 'ext-badge',
+      component: Badge,
+    });
+
+    renderXuean();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('xuean-segment-badge')).toBeTruthy();
+    });
+    expect(captured.props?.segment).toMatchObject({ id: 'seg-1' });
+    expect(captured.props?.isActive).toBe(true);
+    expect(captured.props?.isLocked).toBe(false);
+    expect(captured.props?.studentId).toBe('s1');
+    expect(captured.props?.lessonId).toBe('l1');
+  });
 });

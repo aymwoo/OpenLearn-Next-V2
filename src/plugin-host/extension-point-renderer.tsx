@@ -488,16 +488,25 @@ export function ExtensionPointRenderer({
   const selectedLesson = useAppStore((s) => s.selectedLesson);
   const liveClassSelectedClassId = useAppStore((s) => s.liveClassSelectedClassId);
   const activeRole = useUIStore((s) => s.activeRole);
+  const sessionSubRole = useAppStore((s) => s.session?.subRole);
+  const sessionRole = useAppStore((s) => s.session?.role);
 
   if (!host) return fallback ?? null;
   let extensions = host.getExtensions(slot as ExtensionSlot);
 
   // 角色可见性：`rolesAllowed` 在**渲染期**过滤，而不是注册期固化。
   // 教师端可随时切换到学生视图预览（activeRole 会变），注册期求值会把预览渲染错。
-  // 注意：课堂壳只识别 teacher/student；声明 `admin` 的扩展不会出现在课堂运行时。
+  // `activeRole` 只有 teacher / student —— 管理员在会话里是 `role: 'teacher'` +
+  // `subRole: 'administrator'`，因此额外把 `'admin'` 并入可匹配集合，
+  // 否则声明 `rolesAllowed: ['admin']` 的扩展永远不会渲染。
+  // 学生视图预览（activeRole='student'）是给学生看的，管理员也只按 student 匹配，
+  // 不能把 admin-only 扩展渲染进预览。
+  const isAdministrator = sessionSubRole === 'administrator' || (sessionRole as string | undefined) === 'administrator';
+  const matchesAdmin = isAdministrator && activeRole !== 'student';
   extensions = extensions.filter((ext) => {
     const roles = ext.rolesAllowed;
-    return !roles || roles.length === 0 || roles.includes(activeRole);
+    if (!roles || roles.length === 0) return true;
+    return roles.includes(activeRole) || (matchesAdmin && roles.includes('admin'));
   });
 
   // 学生端可见性策略：在槽位分发前统一剔除被教师隐藏的插件/扩展。

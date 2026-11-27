@@ -155,13 +155,13 @@ route（ext.route ?? 渲染器 route）
 
 ## 5. 显示与安全门控
 
-| 门控                                                         | 求值时机   | 语义                                                                     |
-| ------------------------------------------------------------ | ---------- | ------------------------------------------------------------------------ |
-| `rolesAllowed: ('admin'\|'teacher'\|'student')[]`            | **渲染时** | 不匹配当前 `activeRole` 的扩展点不渲染；课堂壳只识别 `teacher`/`student` |
-| `position?: number`                                          | 渲染排序   | 升序                                                                     |
-| `group?: 'teaching'\|'management'\|'analytics'\|'extension'` | 导航分组   | 仅 `teacher.tab` 类                                                      |
-| `badge?: number \| string`                                   | 渲染       | 角标                                                                     |
-| 熔断                                                         | 渲染抛错时 | 3 次 / 5 分钟 → 摘除该扩展点                                             |
+| 门控                                                         | 求值时机   | 语义                                                                                          |
+| ------------------------------------------------------------ | ---------- | --------------------------------------------------------------------------------------------- |
+| `rolesAllowed: ('admin'\|'teacher'\|'student')[]`            | **渲染时** | 不匹配当前角色的扩展点不渲染；`activeRole` 为 `teacher`/`student`，管理员会话额外匹配 `admin` |
+| `position?: number`                                          | 渲染排序   | 升序                                                                                          |
+| `group?: 'teaching'\|'management'\|'analytics'\|'extension'` | 导航分组   | 仅 `teacher.tab` 类                                                                           |
+| `badge?: number \| string`                                   | 渲染       | 角标                                                                                          |
+| 熔断                                                         | 渲染抛错时 | 3 次 / 5 分钟 → 摘除该扩展点                                                                  |
 
 `rolesAllowed` **不是**权限系统：它只过滤可见性，真正的鉴权在服务端每个端点。
 

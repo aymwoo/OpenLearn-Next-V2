@@ -269,6 +269,7 @@ export type ExtensionSlot =
   | 'classroom.active_segment.student_main' // 学生端对称的活跃环节主工作区接管（与教师端按 segment.type 路由，学案/Moodle 学生视图）
   | 'classroom.prep' // 第三方 Mode Pack 的备课面（按 prepContributionId / segment.type 分发）
   | 'classroom.outline' // 第三方 Mode Pack 的课中侧栏大纲（按 outlineContributionId / segment.type 分发）
+  | 'classroom.outline.page_action' // 课中侧栏白板页大纲的行级操作（页备注 / 页级工具等）
   // ── 学生端学业对比扩展槽位 ──
   | 'student.academic_year.metric_card' // 学生端多学年综合学业对比自定义指标卡扩展
   // ── 环节节点与学生端徽标微扩展槽位 ──
@@ -807,6 +808,27 @@ export interface WhiteboardPageDrawerActionSlotProps {
   currentPage: number;
   activeSegmentId?: string | null;
   onCloseDrawer: () => void;
+  dispatcher?: IHostActionDispatcher;
+}
+
+/** Props passed to classroom.outline.page_action extensions */
+export interface ClassroomOutlinePageActionSlotProps {
+  /** 该页在本环节大纲中的白板页对象 */
+  page: {
+    id: string;
+    title: string;
+    order: number;
+    segmentId?: string | null;
+    excludedSegmentIds?: string[];
+  };
+  /** 全局页序号（从 0 开始），与 `whiteboard.pagebar.action` 的 `currentPage` 同口径 */
+  pageIndex: number;
+  /** 该页是否正在演示（当前环节 + 当前页） */
+  isActive: boolean;
+  /** 该页所属/正在展示的环节 */
+  segment: { id: string; title?: string; type?: string };
+  lessonId: string | null;
+  lang?: string;
   dispatcher?: IHostActionDispatcher;
 }
 

@@ -33,6 +33,21 @@ export function XueanStudentClassroom({
 }) {
   return (
     <div data-testid="student-xuean-classroom" className="flex min-h-0 flex-1 flex-col">
+      {/* 当前环节徽标：与白板端 `student.segment.badge` 对称，学案壳没有环节胶囊列表，
+          因此把当前环节的徽标放在工具行上方（无贡献时 empty:hidden，不占高度）。 */}
+      <div className="flex shrink-0 items-center gap-1.5 px-1 empty:hidden">
+        <ExtensionPointRenderer
+          slot="student.segment.badge"
+          slotProps={{
+            segment,
+            isActive: true,
+            isLocked: blockSegmentContent,
+            studentId: props.activeStudentId,
+            lessonId: props.selectedLesson,
+            lang: props.lang,
+          }}
+        />
+      </div>
       {/* 学生端随堂工具：与白板壳共用 `student.lesson.tool`，学案课也有跨活动的常驻工具位。
           无插件贡献时容器为空（empty:hidden），不占布局高度。 */}
       <div className="flex shrink-0 items-center justify-end gap-2 px-1 pb-1 empty:hidden">

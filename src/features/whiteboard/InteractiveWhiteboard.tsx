@@ -3283,9 +3283,9 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                       className={`wb-widget-container flex-1 overflow-hidden relative min-h-0 ${isFrameless ? '' : 'bg-white'}`}
                       style={{ pointerEvents: readOnly ? 'none' : 'auto' }}
                     >
-                      {/* 只读演示态才做「进视口再挂载」：可编辑态保持首屏零延迟，
-                          只读态下绝大多数图元不在视口内，避免无谓的插件 iframe 实例。 */}
-                      <DeferredMountWhenVisible enabled={readOnly}>
+                      {/* 可编辑态与只读演示态都「进视口再挂载」：画布上的图元多数不在视口内，
+                          懒挂载可省下大量插件 iframe 实例；已在视口内的图元在首帧同步挂载，不闪空。 */}
+                      <DeferredMountWhenVisible>
                         <ExtensionPointRenderer
                           slot="whiteboard.renderer"
                           slotProps={{
