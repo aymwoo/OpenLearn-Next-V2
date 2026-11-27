@@ -262,7 +262,14 @@
 
 除前端 UI 插槽外，`contributes` 还支持三类由服务端解析的 AI 扩展槽位：
 
-- **`ai.skill.provider`**: 声明式 AI 工具/技能描述（`id`, `name`, `description`, `commandType`, `parametersSchema?`, `requiresConfirm?`）。
+- **`ai.skill.provider`**: 声明式 AI 工具/技能描述。旧条目只需 `id`, `name`, `description`, `commandType`, `parametersSchema?`，等价于「单工具技能」；新增可选字段把条目升级为技能包：
+  - `whenToUse` / `instructions`：技能适用场景与分步指令（运行时注入 system instruction）；
+  - `surfaces`：`lesson_prep` | `admin_settings` | `classroom_live`，缺省表示三处都可用；
+  - `scopes` / `roles`：绑定范围与可见角色；未声明 `roles` 时默认排除 `student`（SEC-01）；
+  - `tools`：`[{ commandType, requiresConfirm? }]`；`requiresConfirm: true` 的工具不会被 Agent 自主执行，而是返回 `pendingConfirmations` 等待人工确认；
+  - `script`：`{ language?: 'javascript', source: string, timeoutMs?: 50..3000 }`，沙箱内确定性执行、不经过大模型；需要获批 `skill:script` 能力，否则脚本被剥离；
+  - `outputKind`：产物类型（`lesson_segments` / `config_patch` / `classroom_card`）；
+  - `latencyClass` / `maxTurns`：交互类（课堂）与后台类的执行预算。
 - **`ai.prompt.template`**: 声明式提示词模板（`id`, `name`, `template`, `variables?`）。
 - **`ai.persona.provider`**: 声明式内核 AI 助手机器人/角色定义。插件激活时由 `PluginHostLifecycle` 自动注册至 AI Persona 注册表并纳入 `ResourceTracker` 生命周期管理；**要求插件已在 `capabilitiesProposed` 中声明并获批 `ai:persona` 能力**。支持字段：
   - `id` (`string`, 必填): Persona 唯一标识符（建议带插件命名空间前缀，如 `"@myteam/prep/coach"`；不可覆盖宿主内置或管理员创建的 Persona）

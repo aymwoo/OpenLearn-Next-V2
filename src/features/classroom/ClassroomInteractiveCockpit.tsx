@@ -25,6 +25,7 @@ import {
   X,
 } from 'lucide-react';
 import { ExtensionPointRenderer } from '../../plugin-host/extension-point-renderer';
+import { ClassroomSkillLauncher } from './ClassroomSkillLauncher';
 import { StageDisplayModal } from './StageDisplayModal';
 import { useStageDisplayWindow } from './stage-display/useStageDisplayWindow';
 import { PacingDashboardModal } from './PacingDashboardModal';
@@ -716,6 +717,13 @@ export function ClassroomInteractiveCockpit({
             />
 
             {/* 扩展卡槽：第三方插件注册顶栏操作 */}
+            <ClassroomSkillLauncher
+              lessonId={lessonId}
+              classId={classId}
+              stage={currentStage}
+              lang={lang}
+              addToast={addToast}
+            />
             <ExtensionPointRenderer
               slot="classroom.topbar.action"
               slotProps={{

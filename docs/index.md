@@ -49,6 +49,7 @@ architecture/learning-surface
 architecture/assignment
 architecture/assessment-model
 architecture/assessment-extension-slots-proposal
+architecture/skills
 architecture/plugin-worker-isolation-l1-proposal
 architecture/file-storage-extension-design
 ```

@@ -13,6 +13,13 @@ import { resolvePluginCommandType } from '../packages/core/plugin-host/plugin-na
 import { lessonActiveSegments } from './shared-state.js';
 import { collectAIContextSlices } from './ai-context-registry.js';
 import {
+  buildSkillInstructionBlock,
+  buildSkillToolBindings,
+  getSkillDescriptor,
+  isSkillVisible,
+  resolvePluginSkillTools,
+} from './skill-registry.js';
+import {
   DEFAULT_PERSONA_TURNS,
   MAX_PERSONA_TURNS,
   getAIPersona,
@@ -215,6 +222,7 @@ export function resolveToolsForPersona(
   callerRole?: string,
   persona?: Pick<AIPersona, 'toolPolicy'>,
   explicitPluginSkills?: PluginSkillTool[],
+  allowedSkillCommandTypes?: Set<string>,
 ) {
   // SEC-01: 若为学生身份，插件贡献的高危技能不注入工具列表
   const rawSkills = callerRole === 'student' ? [] : (explicitPluginSkills ?? loadActivePluginSkills());
@@ -235,6 +243,10 @@ export function resolveToolsForPersona(
       return false;
     }
     if (action && !isActionAllowedForRole(action, callerRole)) {
+      return false;
+    }
+    // 选定技能时：只允许技能显式声明的命令（技能未声明工具 ⇒ 不挂载任何宿主工具）。
+    if (allowedSkillCommandTypes && (!action || !allowedSkillCommandTypes.has(action.commandType))) {
       return false;
     }
     return true;
@@ -280,6 +292,8 @@ export interface PluginSkillTool {
   /** 贡献插件的内核 actor —— 拥有该插件 capabilitiesProposed 授予的能力 */
   pluginActorId: string;
   pluginId: string;
+  /** 执行前是否需要显式人工确认（Skill 运行时消费） */
+  requiresConfirm?: boolean;
 }
 
 export const SKILL_TOOL_PREFIX = 'pskill_';
@@ -492,9 +506,26 @@ export const runGeminiAgentChat = async (request: AgentChatRequest) => {
 };
 
 export const runOpenAIAgentChat = async (provider: StoredAIProvider, request: AgentChatRequest) => {
-  const { message, lang = 'zh', currentLessonId, attachments, callerRole, actorId, history } = request;
+  const {
+    message,
+    lang = 'zh',
+    currentLessonId,
+    attachments,
+    callerRole,
+    actorId,
+    history,
+    surface,
+    skillId,
+    classId,
+  } = request;
   const rawPersona = getAIPersona(request.personaId);
   const persona = rawPersona && rawPersona.enabled !== false ? rawPersona : undefined;
+  // fail-closed：技能必须在当前场景与角色下可见，否则忽略 skillId（不注入指令、不注入工具）。
+  const requestedSkill = skillId
+    ? getSkillDescriptor(skillId, { surface, lessonId: currentLessonId, classId })
+    : undefined;
+  const selectedSkill =
+    requestedSkill && isSkillVisible(requestedSkill, surface, callerRole) ? requestedSkill : undefined;
   const pluginContextSlices = callerRole === 'student' ? [] : collectAIContextSlices(currentLessonId ?? null);
   const systemInstruction = buildAgentSystemInstruction(
     lang,
@@ -506,7 +537,26 @@ export const runOpenAIAgentChat = async (provider: StoredAIProvider, request: Ag
   const finalMessage = buildAgentFinalMessage(message, attachments);
 
   // ai.skill.provider + persona.toolPolicy + SEC-01 学生裁剪
-  const { tools, filteredSkills: pluginSkills, allowedToolNames } = resolveToolsForPersona(callerRole, persona);
+  // P0：选定技能时只注入该技能声明的工具（渐进披露）；未选定时保持旧的「全量插件技能」行为。
+  const scopedPluginSkills = resolvePluginSkillTools({
+    surface,
+    callerRole,
+    // 传「请求的 id」而不是解析后的 selectedSkill：请求了不可见技能时必须收敛为空，
+    // 不能回退到「全量插件技能」。
+    skillId: request.skillId ?? null,
+    lessonId: currentLessonId,
+    classId,
+  });
+  const {
+    tools,
+    filteredSkills: pluginSkills,
+    allowedToolNames,
+  } = resolveToolsForPersona(
+    callerRole,
+    persona,
+    scopedPluginSkills,
+    selectedSkill ? new Set(buildSkillToolBindings(selectedSkill).map((binding) => binding.commandType)) : undefined,
+  );
 
   const chatUrl = buildOpenAIChatUrl(provider.api_url);
   const headers: Record<string, string> = {
@@ -524,11 +574,15 @@ export const runOpenAIAgentChat = async (provider: StoredAIProvider, request: Ag
     tool_call_id?: string;
   };
   const historyMessages: ChatMessage[] = (history || []).map((h) => ({ role: h.role, content: h.content }));
-  const systemInstructionWithSkills = pluginSkills.length
-    ? systemInstruction +
+  let systemInstructionWithSkills = systemInstruction;
+  if (selectedSkill) {
+    systemInstructionWithSkills += `\n\n${buildSkillInstructionBlock(selectedSkill, lang)}`;
+  }
+  if (pluginSkills.length) {
+    systemInstructionWithSkills +=
       '\n\n[Plugin Skills · 插件贡献技能]\n' +
-      pluginSkills.map((s) => `- ${s.skillName} (${s.toolName}): ${s.description || s.commandType}`).join('\n')
-    : systemInstruction;
+      pluginSkills.map((s) => `- ${s.skillName} (${s.toolName}): ${s.description || s.commandType}`).join('\n');
+  }
   const messages: ChatMessage[] = [
     { role: 'system', content: systemInstructionWithSkills },
     ...historyMessages,
@@ -536,8 +590,10 @@ export const runOpenAIAgentChat = async (provider: StoredAIProvider, request: Ag
   ];
 
   const allExecutedTools: AgentToolExecution[] = [];
+  const pendingConfirmations: Array<{ toolName: string; commandType: string }> = [];
   let finalResponseText = '';
-  const MAX_LOOPS = resolvePersonaMaxTurns(persona?.maxTurns);
+  const personaTurns = resolvePersonaMaxTurns(persona?.maxTurns);
+  const MAX_LOOPS = selectedSkill?.maxTurns ? Math.min(personaTurns, selectedSkill.maxTurns) : personaTurns;
   let loopCount = 0;
 
   while (loopCount < MAX_LOOPS) {
@@ -612,6 +668,18 @@ export const runOpenAIAgentChat = async (provider: StoredAIProvider, request: Ag
       }
 
       const skill = findSkillByToolName(pluginSkills, toolName);
+      // P0：requiresConfirm 真正生效 —— 声明了人工确认的写操作不允许 Agent 自主执行。
+      if (skill?.requiresConfirm && callerRole !== 'administrator') {
+        const confirmError = `Tool "${toolName}" requires explicit confirmation before execution.`;
+        pendingConfirmations.push({ toolName, commandType: skill.commandType });
+        allExecutedTools.push({ callName: toolName, success: false, error: confirmError });
+        messages.push({
+          role: 'tool',
+          tool_call_id: call.id,
+          content: JSON.stringify({ error: 'REQUIRES_CONFIRMATION', message: confirmError }),
+        });
+        continue;
+      }
       const actionResult = skill
         ? await executePluginSkillToolCall(skill, parsedArgs, allExecutedTools)
         : await executeAgentToolCall(toolName, parsedArgs, allExecutedTools, callerRole, currentLessonId, actorId);
@@ -633,5 +701,7 @@ export const runOpenAIAgentChat = async (provider: StoredAIProvider, request: Ag
   return {
     agentText: finalResponseText,
     toolResults: allExecutedTools,
+    pendingConfirmations,
+    skillUsedId: selectedSkill?.id ?? null,
   };
 };

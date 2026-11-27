@@ -15,6 +15,7 @@ import {
 import { PasswordInput } from '../../components/PasswordInput';
 import { AccessibleTableRegion } from '../../components/AccessibleTableRegion';
 import { AiPersonasSection } from './AiPersonasSection';
+import { AiSkillsSection } from './AiSkillsSection';
 import { formatAiProviderUrlError, validateAiProviderUrl } from '../../../packages/core/ai/utils/redirect-guard.js';
 
 export interface AIProvider {
@@ -417,6 +418,7 @@ export function AiProvidersPanel({
           </div>
         </div>
         {currentUserRole === 'administrator' && <AiPersonasSection lang={lang} aiProviders={aiProviders} />}
+        {currentUserRole === 'administrator' && <AiSkillsSection lang={lang} />}
       </div>
 
       {isAIProviderModalOpen && (

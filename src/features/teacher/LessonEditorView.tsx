@@ -15,6 +15,7 @@ import { useWhiteboardAutoSave } from '../whiteboard/services/useWhiteboardAutoS
 import type { WhiteboardPageItem, WhiteboardDragState } from '../whiteboard/InteractiveWhiteboard';
 import { ExtensionPointRenderer } from '../../plugin-host/extension-point-renderer';
 import { useOptionalPluginHost } from '../../plugin-host/plugin-host-context';
+import { SkillLauncher } from '../skills/SkillLauncher';
 import { isModePacksEnabled } from '../classroom/mode-pack/flags';
 import { routePrepDrop } from '../classroom/mode-pack/prepDropRouter';
 
@@ -375,6 +376,13 @@ export function LessonEditorView() {
           </div>
 
           {/* 备课编辑器头部动作扩展（导入教案库 / AI 合规审查 / 导出 PDF 等） */}
+          <SkillLauncher
+            lessonId={selectedLesson}
+            lang={lang}
+            disabled={isReadOnly}
+            existingSegments={timelineSegments}
+            onSaveTimeline={saveTimeline}
+          />
           <ExtensionPointRenderer
             slot="editor.header.action"
             slotProps={{
