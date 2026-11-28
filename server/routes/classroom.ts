@@ -246,7 +246,7 @@ export function registerClassroomRoutes(
 
   const applyCountdownAction = (
     lessonId: string,
-    action: 'start' | 'pause' | 'resume' | 'reset' | 'add_time' | 'set',
+    action: 'start' | 'pause' | 'resume' | 'reset' | 'add_time' | 'set' | 'close',
     params: { duration?: number; addSeconds?: number; label?: string } = {},
   ): ActiveCountdownState => {
     const current = getCountdownForLesson(lessonId);
@@ -261,6 +261,7 @@ export function registerClassroomRoutes(
         current.endsAt = now + duration * 1000;
         current.isRunning = true;
         current.isPaused = false;
+        current.dismissed = false;
         current.label = label;
         publishCountdownEvent('classroom.countdown.started', {
           lessonId,
@@ -289,6 +290,7 @@ export function registerClassroomRoutes(
         current.endsAt = now + remaining * 1000;
         current.isRunning = true;
         current.isPaused = false;
+        current.dismissed = false;
         publishCountdownEvent('classroom.countdown.resumed', {
           lessonId,
           timeRemaining: remaining,
@@ -316,6 +318,17 @@ export function registerClassroomRoutes(
           addSeconds: add,
           timeRemaining: current.timeRemaining,
         });
+        break;
+      }
+      case 'close': {
+        // 教师主动关闭倒计时：停表并回退到开始之前的展示态，同时标记 dismissed，
+        // 学生端据此隐藏横幅（持久化后重连 / 刷新也不会重新弹出）。
+        current.isRunning = false;
+        current.isPaused = false;
+        current.timeRemaining = current.totalDuration;
+        current.endsAt = null;
+        current.dismissed = true;
+        publishCountdownEvent('classroom.countdown.closed', { lessonId });
         break;
       }
       case 'set': {

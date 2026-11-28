@@ -33,6 +33,8 @@ export interface ActiveCountdownState {
   endsAt: number | null;
   updatedAt: number;
   lessonId?: string;
+  /** 教师已关闭倒计时：学生端据此隐藏横幅，直至重新 start / resume */
+  dismissed?: boolean;
 }
 
 const MAX_ACTIVE_COUNTDOWNS = 500;

@@ -127,6 +127,102 @@ describe('Classroom Countdown Timer & Sync (Teacher & Student)', () => {
     });
   });
 
+  it('关闭倒计时后教师端回到开始前的就绪态，学生端横幅同步消失', async () => {
+    render(
+      <>
+        <ClassroomCountdownWidget
+          variant="header"
+          lessonId="les-test-101"
+          lang="zh"
+          syncChannel={mockSyncChannel}
+          onlineStudentCount={30}
+        />
+        <StudentCountdownBanner lessonId="les-test-101" lang="zh" syncChannel={mockSyncChannel} />
+      </>,
+    );
+
+    const studentBanner = () => document.getElementById('student-classroom-countdown-banner');
+
+    fireEvent.click(screen.getByRole('button', { name: '开始倒计时' }));
+    await waitFor(() => {
+      expect(studentBanner()).not.toBeNull();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: '关闭倒计时' }));
+
+    await waitFor(() => {
+      expect(studentBanner()).toBeNull();
+    });
+    // 教师端回到开始之前的展示态：剩余时间等于总时长、无运行态，关闭按钮随之隐藏
+    expect(screen.getByText('05:00')).toBeDefined();
+    expect(screen.queryByRole('button', { name: '关闭倒计时' })).toBeNull();
+    expect(mockSyncChannel.broadcastCountdown).toHaveBeenLastCalledWith(
+      expect.objectContaining({ dismissed: true, isRunning: false, isPaused: false, endsAt: null }),
+    );
+  });
+
+  it('暂停后关闭同样回到就绪态，重新开始后学生端横幅恢复', async () => {
+    render(
+      <>
+        <ClassroomCountdownWidget lessonId="les-test-101" lang="zh" syncChannel={mockSyncChannel} />
+        <StudentCountdownBanner lessonId="les-test-101" lang="zh" syncChannel={mockSyncChannel} />
+      </>,
+    );
+
+    const studentBanner = () => document.getElementById('student-classroom-countdown-banner');
+
+    fireEvent.click(screen.getByRole('button', { name: /开始倒计时/ }));
+    await waitFor(() => expect(studentBanner()).not.toBeNull());
+
+    // 暂停后关闭：学生端先看到「老师已暂停」，关闭后横幅消失
+    fireEvent.click(screen.getByRole('button', { name: /暂停计时/ }));
+    await waitFor(() => expect(screen.getByText(/老师已暂停计时/)).toBeDefined());
+
+    fireEvent.click(document.getElementById('classroom-countdown-card-close-btn') as HTMLElement);
+    await waitFor(() => expect(studentBanner()).toBeNull());
+    expect(screen.queryByText(/老师已暂停计时/)).toBeNull();
+
+    // 关闭后重新开始：dismissed 被清除，学生端横幅重新出现
+    fireEvent.click(screen.getByRole('button', { name: /开始倒计时/ }));
+    await waitFor(() => expect(studentBanner()).not.toBeNull());
+    expect(mockSyncChannel.broadcastCountdown).toHaveBeenLastCalledWith(
+      expect.objectContaining({ dismissed: false, isRunning: true }),
+    );
+  });
+
+  it('大屏投影内的关闭按钮会退出投影并同步隐藏学生端横幅', async () => {
+    render(
+      <>
+        <ClassroomCountdownWidget
+          variant="header"
+          lessonId="les-test-101"
+          lang="zh"
+          syncChannel={mockSyncChannel}
+          onlineStudentCount={30}
+        />
+        <StudentCountdownBanner lessonId="les-test-101" lang="zh" syncChannel={mockSyncChannel} />
+      </>,
+    );
+
+    const studentBanner = () => document.getElementById('student-classroom-countdown-banner');
+
+    fireEvent.click(screen.getByRole('button', { name: '开始倒计时' }));
+    await waitFor(() => expect(studentBanner()).not.toBeNull());
+
+    // 打开设置浮层 → 进入大屏投影
+    fireEvent.click(screen.getByTitle(/倒计时设置与大屏投放/));
+    fireEvent.click(screen.getByTitle(/大屏全屏投放/));
+    expect(document.getElementById('classroom-countdown-projector-modal')).not.toBeNull();
+
+    fireEvent.click(document.getElementById('classroom-countdown-projector-close-btn') as HTMLElement);
+
+    await waitFor(() => {
+      expect(document.getElementById('classroom-countdown-projector-modal')).toBeNull();
+      expect(studentBanner()).toBeNull();
+    });
+    expect(screen.queryByRole('button', { name: '关闭倒计时' })).toBeNull();
+  });
+
   it('renders topbar variant header pill and toggles settings popover', async () => {
     render(
       <ClassroomCountdownWidget
