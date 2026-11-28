@@ -858,6 +858,11 @@ export const CORE_EXTENSION_POINTS = [
     removedIn: '0.8.0',
     replacement: "Use 'quiz.answered' instead",
   },
+  { id: 'lab.created', kind: 'event', since: '0.8.0' },
+  { id: 'lab.updated', kind: 'event', since: '0.8.0' },
+  { id: 'lab.deleted', kind: 'event', since: '0.8.0' },
+  { id: 'seat.saved', kind: 'event', since: '0.8.0' },
+  { id: 'seat.cleared', kind: 'event', since: '0.8.0' },
 
   // ── UI Slots ─────────────────────────────────────────────────────────────
   { id: 'teacher.tab', kind: 'slot', since: '0.1.0' },

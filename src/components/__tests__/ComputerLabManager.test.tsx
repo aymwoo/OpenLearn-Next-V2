@@ -2,6 +2,9 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, cleanup, within } from '@testing-library/react';
 import React from 'react';
 import { ComputerLabManager } from '../ComputerLabManager';
+import { FrontendPluginHost, NullExtensionComponent } from '../../plugin-host/plugin-host';
+import { PluginHostProvider } from '../../plugin-host/plugin-host-context';
+import { usePluginHostStore } from '../../plugin-host/plugin-host-store';
 
 describe('ComputerLabManager (Unified Computer Lab Seating)', () => {
   const mockLabs = [
@@ -393,6 +396,219 @@ describe('ComputerLabManager (拖拽调座与交换逻辑)', () => {
     await waitFor(() => {
       expect(seatEl(container, '0_0').textContent).toContain('张小华');
       expect(seatEl(container, '0_1').textContent).toContain('李明');
+    });
+  });
+});
+
+// ── 排座保存校验钩子（computer_lab.seating.save_hook，Issue IKYMRY）────────
+describe('ComputerLabManager (排座保存校验钩子 save_hook)', () => {
+  const mockLabs = [{ id: 'lab_1', room_number: '305综合机房', rows: 2, cols: 3, created_at: 1000 }];
+  const mockClasses = [{ id: 'class_1', name: '高一(1)班', lab_id: 'lab_1' }];
+  const mockStudents = [
+    { id: 'st_1', name: '张小华', student_number: '20260101' },
+    { id: 'st_2', name: '李明', student_number: '20260102' },
+    { id: 'st_3', name: '王敏', student_number: '20260103' },
+  ];
+  const mockSeats = [
+    {
+      class_id: 'class_1',
+      student_id: 'st_1',
+      lab_id: 'lab_1',
+      row_idx: 0,
+      col_idx: 0,
+      student_name: '张小华',
+      student_number: '20260101',
+    },
+  ];
+
+  let host: FrontendPluginHost;
+  let fetchMock: ReturnType<
+    typeof vi.fn<(url: string, init?: RequestInit) => Promise<{ ok: boolean; json: () => Promise<unknown> }>>
+  >;
+  /** execute-command 端点按用例可变的应答 */
+  let hookResponse: Record<string, unknown>;
+
+  const seatsPostCalls = () =>
+    fetchMock.mock.calls.filter(
+      ([url, init]) =>
+        init?.method === 'POST' && String(url).includes('/api/classes/') && String(url).includes('/seats'),
+    );
+
+  const commandCalls = () => fetchMock.mock.calls.filter(([url]) => String(url) === '/api/plugins/execute-command');
+
+  const registerSaveHook = (overrides: Record<string, unknown> = {}) => {
+    usePluginHostStore.getState().registerExtensionPoint('computer_lab.seating.save_hook', {
+      id: 'hook-1',
+      pluginId: 'ext-hook',
+      label: '视力保护校验',
+      // 纯声明式钩子：标记为非渲染组件（与 manifest 声明条目入库形态一致）
+      component: NullExtensionComponent,
+      slotProps: { commandType: 'ext-hook:validate_seating', ...overrides },
+    });
+  };
+
+  /** 前置：加载班级座位后用一键排座制造 isDirty，返回就绪的容器 */
+  async function setupDirtyManager() {
+    const rendered = render(
+      <PluginHostProvider host={host}>
+        <ComputerLabManager computerLabs={mockLabs} onRefresh={vi.fn()} lang="zh" classes={mockClasses} />
+      </PluginHostProvider>,
+    );
+    await waitFor(() => {
+      expect(screen.getAllByText('一键排座').length).toBeGreaterThanOrEqual(1);
+    });
+    fireEvent.click(screen.getAllByText('一键排座')[0].closest('button')!);
+    await waitFor(() => {
+      expect(screen.getByText(/保存排座/)).toBeTruthy();
+    });
+    return rendered;
+  }
+
+  beforeEach(() => {
+    host = new FrontendPluginHost();
+    usePluginHostStore.setState({ activePlugins: [], extensionPoints: new Map(), pluginErrors: new Map() });
+    hookResponse = { success: true, result: { ok: true } };
+
+    fetchMock = vi.fn((url: string, init?: RequestInit) => {
+      if (url === '/api/plugins/execute-command') {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(hookResponse) });
+      }
+      if (url.startsWith('/api/classes') && !url.includes('/seats') && !url.includes('/students')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ data: mockClasses, total: mockClasses.length, page: 1, pageSize: 50 }),
+        });
+      }
+      if (url === '/api/classes/class_1/seats') {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ lab_id: 'lab_1', seats: mockSeats }),
+        });
+      }
+      if (url === '/api/classes/class_1/students') {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(mockStudents) });
+      }
+      if (url.includes('/api/classes/') && url.includes('/seats') && init?.method === 'POST') {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ success: true }) });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+    });
+    global.fetch = fetchMock as unknown as typeof fetch;
+    window.fetch = fetchMock as unknown as typeof fetch;
+  });
+
+  afterEach(() => {
+    cleanup();
+    usePluginHostStore.setState({ activePlugins: [], extensionPoints: new Map(), pluginErrors: new Map() });
+    vi.restoreAllMocks();
+  });
+
+  it('钩子 result.ok=false 时否决保存并展示 message，不发起保存 POST', async () => {
+    registerSaveHook();
+    hookResponse = { success: true, result: { ok: false, message: '第一排不适合安排戴眼镜学生' } };
+
+    await setupDirtyManager();
+    fireEvent.click(screen.getByText(/保存排座/).closest('button')!);
+
+    await waitFor(() => {
+      expect(screen.getByText(/第一排不适合安排戴眼镜学生/)).toBeTruthy();
+    });
+    expect(seatsPostCalls().length).toBe(0);
+  });
+
+  it('钩子命令执行失败（success=false）时否决保存并展示 error', async () => {
+    registerSaveHook();
+    hookResponse = { success: false, error: 'handler crashed' };
+
+    await setupDirtyManager();
+    fireEvent.click(screen.getByText(/保存排座/).closest('button')!);
+
+    await waitFor(() => {
+      expect(screen.getByText(/排座校验未通过（视力保护校验）：handler crashed/)).toBeTruthy();
+    });
+    expect(seatsPostCalls().length).toBe(0);
+  });
+
+  it('全部钩子通过时保存照常发起', async () => {
+    registerSaveHook();
+    hookResponse = { success: true, result: { ok: true } };
+
+    await setupDirtyManager();
+    fireEvent.click(screen.getByText(/保存排座/).closest('button')!);
+
+    await waitFor(() => {
+      expect(seatsPostCalls().length).toBeGreaterThanOrEqual(1);
+    });
+    await waitFor(() => {
+      expect(screen.getByText(/统一机房排座已成功持久化/)).toBeTruthy();
+    });
+  });
+
+  it('已熔断/加载失败的钩子插件被跳过，不阻塞保存', async () => {
+    registerSaveHook();
+    usePluginHostStore.getState().setPluginError('ext-hook', '前端加载失败');
+
+    await setupDirtyManager();
+    fireEvent.click(screen.getByText(/保存排座/).closest('button')!);
+
+    await waitFor(() => {
+      expect(seatsPostCalls().length).toBeGreaterThanOrEqual(1);
+    });
+    // 被跳过的钩子命令不应被派发
+    expect(commandCalls().length).toBe(0);
+  });
+
+  it('插件经 setAssignedSeats 修改座位后保存按钮亮起（isDirty 联动，审计 P1）', async () => {
+    usePluginHostStore.getState().registerExtensionPoint('computer_lab.seating.toolbar', {
+      id: 'ext-seating-tool',
+      pluginId: 'ext-seating',
+      label: '排座助手',
+      component: (props: {
+        assignedSeats: Array<Record<string, unknown>>;
+        setAssignedSeats: (next: Array<Record<string, unknown>>) => void;
+      }) =>
+        React.createElement(
+          'button',
+          {
+            'data-testid': 'plugin-place-stu2',
+            onClick: () =>
+              props.setAssignedSeats([
+                ...props.assignedSeats,
+                { student_id: 'st_2', row_idx: 0, col_idx: 1, student_name: '李明', student_number: '20260102' },
+              ]),
+          },
+          '插件排座李明',
+        ),
+    });
+
+    render(
+      <PluginHostProvider host={host}>
+        <ComputerLabManager computerLabs={mockLabs} onRefresh={vi.fn()} lang="zh" classes={mockClasses} />
+      </PluginHostProvider>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('plugin-place-stu2')).toBeTruthy();
+    });
+
+    // 插件修改前保存按钮处于「已保存」禁用态
+    expect(screen.getByText('已保存')).toBeTruthy();
+
+    fireEvent.click(screen.getByTestId('plugin-place-stu2'));
+
+    // 插件修改后 isDirty 亮起，保存按钮文案切换
+    await waitFor(() => {
+      expect(screen.getByText(/保存排座/)).toBeTruthy();
+    });
+    fireEvent.click(screen.getByText(/保存排座/).closest('button')!);
+
+    await waitFor(() => {
+      expect(seatsPostCalls().length).toBeGreaterThanOrEqual(1);
+      const call = seatsPostCalls()[0]!;
+      const body = JSON.parse(String(call[1]!.body)) as {
+        seats: Array<{ student_id: string; row_idx: number; col_idx: number }>;
+      };
+      expect(body.seats.some((s) => s.student_id === 'st_2' && s.row_idx === 0 && s.col_idx === 1)).toBe(true);
     });
   });
 });

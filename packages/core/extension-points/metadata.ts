@@ -157,6 +157,37 @@ export const CORE_EXTENSION_POINTS: ReadonlyArray<ExtensionPointMetadata> = [
     removedIn: '0.8.0',
     replacement: "Use 'quiz.answered' instead",
   },
+  {
+    id: 'lab.created',
+    kind: 'event',
+    description: 'Fired after a computer lab is created (payload: labId, roomNumber, rows, cols)',
+    since: '0.8.0',
+  },
+  {
+    id: 'lab.updated',
+    kind: 'event',
+    description: 'Fired after an existing computer lab is updated (payload: labId, roomNumber, rows, cols)',
+    since: '0.8.0',
+  },
+  {
+    id: 'lab.deleted',
+    kind: 'event',
+    description:
+      'Fired after a computer lab is deleted, with cascaded cleanup counts (payload: labId, roomNumber, affectedClasses, clearedSeats)',
+    since: '0.8.0',
+  },
+  {
+    id: 'seat.saved',
+    kind: 'event',
+    description: 'Fired after class seating is persisted (payload: classId, labId, seatCount)',
+    since: '0.8.0',
+  },
+  {
+    id: 'seat.cleared',
+    kind: 'event',
+    description: 'Fired after class seating is cleared or the class is unbound from its lab (payload: classId, labId)',
+    since: '0.8.0',
+  },
 
   // ── UI Slots ─────────────────────────────────────────────────────────────
   {

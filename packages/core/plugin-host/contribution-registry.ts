@@ -836,6 +836,20 @@ export interface ComputerLabSeatingSidebarConfig {
   icon?: string;
 }
 
+/**
+ * A contribution to the computer_lab.seating.save_hook slot（Issue IKYMRY）。
+ *
+ * 纯声明式校验钩子：保存排座前宿主逐个派发 commandType 命令
+ * （payload 含 labId / classId / seats），result.ok === false 即否决保存。
+ * 该槽位不渲染任何 UI。
+ */
+export interface ComputerLabSeatingSaveHookConfig {
+  id: string;
+  label: string;
+  /** 必填：保存前派发的 namespaced 命令类型 */
+  commandType: string;
+}
+
 /** A contribution to the student.dashboard.hero_widget slot. */
 export interface StudentDashboardHeroWidgetConfig {
   id: string;
@@ -1087,6 +1101,7 @@ export type ContributionConfig =
   | ComputerLabSeatingToolbarConfig
   | ComputerLabUnassignedItemConfig
   | ComputerLabSeatingSidebarConfig
+  | ComputerLabSeatingSaveHookConfig
   | StudentDashboardHeroWidgetConfig
   | StudentAssignmentToolbarActionConfig
   | StudentLessonNotesAddonConfig

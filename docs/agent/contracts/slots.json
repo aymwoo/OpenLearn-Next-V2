@@ -84,6 +84,7 @@
     "classroom.topbar.pill",
     "command_palette.item",
     "computer_lab.seat.overlay",
+    "computer_lab.seating.save_hook",
     "computer_lab.seating.sidebar",
     "computer_lab.seating.toolbar",
     "computer_lab.toolbar.action",
@@ -178,5 +179,5 @@
     "anchor:whiteboard-toolbar:presentation",
     "anchor:whiteboard-toolbar:rollcall"
   ],
-  "total": 165
+  "total": 166
 }

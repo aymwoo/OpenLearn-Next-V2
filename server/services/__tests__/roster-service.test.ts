@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import bcrypt from 'bcryptjs';
 import { kernelContainer } from '../../../packages/core/kernel/index.js';
 import { runStartupMigrations } from '../../bootstrap-db.js';
@@ -709,6 +709,128 @@ describe('RosterService 领域服务单元测试 (E3 深化)', () => {
       expect(missing?.status).toBe(404);
 
       service.deleteClassCascade(clsId);
+    });
+  });
+
+  describe('7. 机房与排座领域事件发布（Issue IKYMRY）', () => {
+    const received: Array<{ type: string; source: string; payload: unknown; correlationId?: string }> = [];
+    let unsubscribe: (() => void) | null = null;
+
+    /** 事件 payload 按未知对象读取（发布方是结构化的，断言前收窄一次） */
+    const payloadOf = (event?: { payload: unknown }): Record<string, unknown> =>
+      (event?.payload ?? {}) as Record<string, unknown>;
+
+    const findEvt = (type: string, key?: string, value?: unknown) =>
+      received.find(
+        (e) => e.type === type && (key === undefined || (payloadOf(e) as Record<string, unknown>)[key] === value),
+      );
+
+    beforeAll(() => {
+      // '*' 通配订阅：收集本块触发的全部平台事件供断言
+      unsubscribe = kernelContainer.eventBus.subscribe(
+        '*',
+        (event) => {
+          received.push(event);
+        },
+        'kernel.test',
+      );
+    });
+
+    afterAll(() => {
+      unsubscribe?.();
+    });
+
+    /** 事件发布是 fire-and-forget，让出一个宏任务等待订阅者收集完成 */
+    const flushEvents = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+    beforeEach(() => {
+      received.length = 0;
+    });
+
+    it('createLab 应发布 lab.created（payload 携带机房规格）', async () => {
+      const lab = service.createLab({ room_number: '事件机房A', rows: 3, cols: 3 });
+      await flushEvents();
+
+      const evt = findEvt('lab.created', 'labId', lab.id);
+      expect(evt).toBeDefined();
+      expect(evt!.source).toBe('server.roster');
+      expect(evt!.correlationId).toBe(lab.id);
+      expect(payloadOf(evt)).toMatchObject({ labId: lab.id, roomNumber: '事件机房A', rows: 3, cols: 3 });
+
+      db.prepare('DELETE FROM computer_labs WHERE id = ?').run(lab.id);
+    });
+
+    it('updateLab 命中时发布 lab.updated；机房不存在时不发', async () => {
+      const lab = service.createLab({ room_number: '事件机房B', rows: 2, cols: 2 });
+      await flushEvents();
+      received.length = 0;
+
+      service.updateLab(lab.id, { room_number: '事件机房B-改', rows: 4, cols: 4 });
+      await flushEvents();
+      const updated = findEvt('lab.updated', 'labId', lab.id);
+      expect(updated).toBeDefined();
+      expect(payloadOf(updated)).toMatchObject({ roomNumber: '事件机房B-改', rows: 4, cols: 4 });
+
+      received.length = 0;
+      service.updateLab('lab-not-exist-xyz', { room_number: '幻影机房', rows: 1, cols: 1 });
+      await flushEvents();
+      expect(findEvt('lab.updated')).toBeUndefined();
+
+      // 清理（走 deleteLab，顺带覆盖 lab.deleted 断言）
+      received.length = 0;
+      service.deleteLab(lab.id);
+      await flushEvents();
+      const deleted = findEvt('lab.deleted', 'labId', lab.id);
+      expect(deleted).toBeDefined();
+      expect(payloadOf(deleted).roomNumber).toBe('事件机房B-改');
+    });
+
+    it('deleteLab 应携带级联清理计数（affectedClasses / clearedSeats）', async () => {
+      const lab = service.createLab({ room_number: '级联机房', rows: 2, cols: 2 });
+      const clsId = service.createClass('级联事件班');
+      const stu = service.createStudent({ name: '级联事件学生' });
+      service.saveClassSeats(clsId, lab.id, [{ student_id: stu.id, row_idx: 0, col_idx: 0 }]);
+      await flushEvents();
+      received.length = 0;
+
+      service.deleteLab(lab.id);
+      await flushEvents();
+
+      const evt = findEvt('lab.deleted', 'labId', lab.id);
+      expect(evt).toBeDefined();
+      expect(payloadOf(evt)).toMatchObject({ roomNumber: '级联机房', affectedClasses: 1, clearedSeats: 1 });
+
+      service.deleteClassCascade(clsId);
+      service.deleteStudentCascade(stu.id);
+    });
+
+    it('saveClassSeats 有座位发 seat.saved；清空发 seat.cleared', async () => {
+      const clsId = service.createClass('排座事件班');
+      const stu = service.createStudent({ name: '排座事件学生' });
+
+      service.saveClassSeats(clsId, testLabId, [{ student_id: stu.id, row_idx: 2, col_idx: 2 }]);
+      await flushEvents();
+      const saved = findEvt('seat.saved', 'classId', clsId);
+      expect(saved).toBeDefined();
+      expect(payloadOf(saved)).toMatchObject({ classId: clsId, labId: testLabId, seatCount: 1 });
+
+      received.length = 0;
+      service.saveClassSeats(clsId, testLabId, []);
+      await flushEvents();
+      const cleared = findEvt('seat.cleared', 'classId', clsId);
+      expect(cleared).toBeDefined();
+      expect(payloadOf(cleared)).toMatchObject({ classId: clsId, labId: testLabId });
+
+      received.length = 0;
+      // 解绑机房（labId=null）同样视为清空
+      service.saveClassSeats(clsId, null, []);
+      await flushEvents();
+      const unbound = findEvt('seat.cleared', 'classId', clsId);
+      expect(unbound).toBeDefined();
+      expect(payloadOf(unbound).labId).toBeNull();
+
+      service.deleteClassCascade(clsId);
+      service.deleteStudentCascade(stu.id);
     });
   });
 });

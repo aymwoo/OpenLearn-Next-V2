@@ -4,7 +4,7 @@
  * 由 packages/plugin-sdk/generate-dts.mts 从 packages/core/ 源码抽取。
  * 手写契约请改 openlearn.d.ts —— 本文件会在 build 时被覆盖。
  *
- * 覆盖符号：301 个（入口导出但手写 d.ts 未声明的 301 项及其类型引用闭包）
+ * 覆盖符号：302 个（入口导出但手写 d.ts 未声明的 302 项及其类型引用闭包）
  */
 
 /** @see packages/core/analytics-engine/types.ts */
@@ -554,6 +554,21 @@ interface ComputerLabSeatOverlayConfig {
     id: string;
     label?: string;
     icon?: string;
+}
+
+/** @see packages/core/plugin-host/contribution-registry.ts */
+/**
+ * A contribution to the computer_lab.seating.save_hook slot（Issue IKYMRY）。
+ *
+ * 纯声明式校验钩子：保存排座前宿主逐个派发 commandType 命令
+ * （payload 含 labId / classId / seats），result.ok === false 即否决保存。
+ * 该槽位不渲染任何 UI。
+ */
+interface ComputerLabSeatingSaveHookConfig {
+    id: string;
+    label: string;
+    /** 必填：保存前派发的 namespaced 命令类型 */
+    commandType: string;
 }
 
 /** @see packages/core/plugin-host/contribution-registry.ts */
@@ -2715,6 +2730,7 @@ export type {
   CommandMetadata,
   CommandPaletteItemConfig,
   ComputerLabSeatOverlayConfig,
+  ComputerLabSeatingSaveHookConfig,
   ComputerLabSeatingSidebarConfig,
   ComputerLabSeatingToolbarConfig,
   ComputerLabToolbarActionConfig,
