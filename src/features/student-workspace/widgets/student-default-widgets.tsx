@@ -34,7 +34,8 @@ const panelBase: React.CSSProperties = {
 // ── Whiteboard ───────────────────────────────────────────────────────────
 export const StudentWhiteboardWidget: React.FC = () => (
   <div style={{ width: '100%', height: '100%' }}>
-    <LazyWhiteboard />
+    {/* 工作台占位：真实课堂数据由宿主桥注入；这里只保留空画布，避免无 props 挂载。 */}
+    <LazyWhiteboard lessonId="" elements={[]} onElementAdd={async () => {}} />
   </div>
 );
 

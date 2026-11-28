@@ -53,9 +53,12 @@ export interface CanvasObject<T = Record<string, unknown>> {
 | 类别     | 取值                                                                                                                      |
 | -------- | ------------------------------------------------------------------------------------------------------------------------- |
 | 绘图     | `pen`（自由画笔）、`highlighter`（荧光笔）、`rectangle`、`circle`、`shape`（`data.shape` 区分 `rect` / `circle`）、`text` |
-| 教学组件 | `quiz`、`assignment`、`rollcall`、`code-sandbox`、`math-graph`、`presentation`、`html-applet`、`hello-world`              |
-| 扩展     | `plugin`（`PluginCardRenderer`）、`page_meta`（页面配置元数据，非可见元素）                                               |
+| 教学组件 | `quiz`、`assignment`、`rollcall`、`code-sandbox`、`math-graph`、`presentation`、`learning_surface`、`hello-world`         |
+| 扩展     | `plugin`（`PluginCardRenderer`）、`whiteboard.renderer`（插件自定义图元）、`page_meta`（页面配置元数据，非可见元素）      |
+| 存量兼容 | `html-applet`（已废弃，见下方说明）                                                                                       |
 
-> ⚠️ **不存在**的取值（勿凭直觉捏造）：`custom`、`geogebra-widget`、`timer` 在代码中零命中。历史上曾提及的 `path` / `image` 并非合法 `type` 取值。新增 `type` 取值需同时补上 `buildElementData` 的 `switch` 分支与 `renderElement` 的渲染分支。
+> `html-applet` 已废弃：新建时服务端会把 `whiteboard.draw` 的 `html-applet` 统一转换成 `learning_surface` 并写入 Surface 记录。客户端保留它的渲染分支，仅用于历史课节 / 导入课程包里的存量元素，避免它们变成空白卡片。
 
-渲染/工具栏侧的组件能力对照见 [whiteboard-runtime.md](whiteboard-runtime.md) §白板组件类型。
+> ⚠️ **不存在**的取值（勿凭直觉捏造）：`custom`、`geogebra-widget`。`timer` 没有宿主内置渲染分支，只能由插件通过 `whiteboard.renderer` 渲染，不要当成内置类型使用。历史上曾提及的 `path` / `image` 并非合法 `type` 取值。
+
+新增 `type` 取值时，除 `renderElement` 的渲染分支外，还必须同步登记 `src/features/whiteboard/core/element-capabilities.ts` —— 默认尺寸、自动平铺、可见性、全屏只读交互与属性侧栏的尺寸形态都以这张表为单一真源（见 [whiteboard-runtime.md](whiteboard-runtime.md#白板组件类型)）。若该类型需要创建时默认值，还要补 `useWhiteboardDrop.buildElementData` 的对应分支。插件类型不改宿主分支，走 `whiteboard.renderer` 扩展点。

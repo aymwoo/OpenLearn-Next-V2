@@ -1,6 +1,7 @@
 import React, { useEffect, type ComponentProps, type RefObject } from 'react';
 import { Presentation, ChevronRight, Activity, AlertTriangle, Trophy, Sparkles } from 'lucide-react';
 import { LazyWhiteboard } from '../../components/LazyWhiteboard';
+import { buildTeacherWhiteboardHostProps } from '../whiteboard/host/whiteboard-host-contract';
 import type { WhiteboardHandle } from '../whiteboard/InteractiveWhiteboard';
 import { TeacherAssignmentGradePanel } from '../../components/TeacherAssignmentGradePanel';
 import { TopPerformersWidget } from '../teacher/TopPerformersWidget';
@@ -282,25 +283,23 @@ export function LiveClassroomMiddleWorkspace(props: LiveClassroomMiddleWorkspace
                 ) : (
                   <LazyWhiteboard
                     ref={whiteboardRef}
-                    lessonId={selectedLesson}
-                    classId={liveClassSelectedClassId}
-                    userRole={'teacher'}
-                    initialPage={restoredCurrentPage}
-                    isEditMode={false}
-                    broadcastFullscreen
-                    fullscreenBroadcastClassId={liveClassSelectedClassId}
-                    onFullscreenSync={onFullscreenSync}
-                    elements={elements}
-                    activeSegmentId={activeSegmentId}
-                    onSegmentSync={onSegmentSync}
-                    classroomTools={classroomTools}
-                    onExecuteTool={onExecuteTool}
-                    hidePageBar={true}
-                    onPagesStateChange={onPagesStateChange}
-                    onElementAdd={onElementAdd}
-                    onElementUpdate={onElementUpdate}
-                    onElementDelete={onElementDelete}
-                    onRefresh={onWhiteboardRefresh}
+                    {...buildTeacherWhiteboardHostProps({
+                      lessonId: selectedLesson,
+                      classId: liveClassSelectedClassId,
+                      initialPage: restoredCurrentPage,
+                      onFullscreenSync,
+                      elements,
+                      activeSegmentId,
+                      onSegmentSync,
+                      classroomTools,
+                      onExecuteTool,
+                      hidePageBar: true,
+                      onPagesStateChange,
+                      onElementAdd,
+                      onElementUpdate,
+                      onElementDelete,
+                      onRefresh: onWhiteboardRefresh,
+                    })}
                     toolbarExtras={toolbarExtras}
                   />
                 )}

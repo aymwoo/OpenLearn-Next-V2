@@ -5,6 +5,8 @@
  * 消除测试体自证式重复代码，确保环节（segment）隔离与切页逻辑被严格覆盖。
  */
 
+import { isVisibleElementType } from '../core/element-capabilities';
+
 export interface WhiteboardPageItem {
   id: string;
   title: string;
@@ -34,7 +36,7 @@ export interface WhiteboardElementLike {
  * 判断元素是否属于指定页面
  */
 export function belongsToPage(el: WhiteboardElementLike, targetPage: number, pages: WhiteboardPageItem[]): boolean {
-  if (el.type === 'page_meta') return false;
+  if (!isVisibleElementType(el.type)) return false;
   try {
     const data = JSON.parse(el.data);
     const elPage = data.page ?? 0;
@@ -282,7 +284,7 @@ export function selectElementsOnPage<T extends WhiteboardElementLike>(
 ): T[] {
   const { activeSegmentId, mode } = options;
   return elements.filter((el) => {
-    if (el.type === 'page_meta') return false;
+    if (!isVisibleElementType(el.type)) return false;
     const fields = readElementPageFields(el.data);
     if (fields.corrupt) {
       return mode === 'remove' && pageIndex === 0 && !activeSegmentId;

@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { resolveDeferredInitialPage, resolveInitialPageIndex } from '../core/view-model';
 import { parseElementData } from '../utils/element-cache';
 import {
   belongsToPage,
@@ -67,23 +68,9 @@ export function useWhiteboardPages<T extends WhiteboardElementLike>({
     return DEFAULT_WHITEBOARD_PAGES;
   });
 
-  const [currentPage, setCurrentPage] = useState<number>(() => {
-    const target = Number(initialPage);
-    if (Number.isFinite(target) && target >= 0) {
-      return target;
-    }
-    if (activeSegmentId) {
-      const metaEl = (Array.isArray(elements) ? elements : []).find((el) => el.type === 'page_meta');
-      const parsed = metaEl ? parseElementData(metaEl) : null;
-      const candidatePages =
-        Array.isArray(parsed?.pages) && parsed.pages.length > 0 ? parsed.pages : DEFAULT_WHITEBOARD_PAGES;
-      const targetIdx = candidatePages.findIndex((p: WhiteboardPageItem) => p.segmentId === activeSegmentId);
-      if (targetIdx !== -1) {
-        return targetIdx;
-      }
-    }
-    return 0;
-  });
+  const [currentPage, setCurrentPage] = useState<number>(() =>
+    resolveInitialPageIndex({ initialPage, activeSegmentId, pages }),
+  );
 
   const [showPageDrawer, setShowPageDrawer] = useState(false);
   const [editingPageIdx, setEditingPageIdx] = useState<number | null>(null);
@@ -118,11 +105,10 @@ export function useWhiteboardPages<T extends WhiteboardElementLike>({
   const initialPageAppliedRef = useRef(Number.isFinite(Number(initialPage)) && Number(initialPage) >= 0);
   useEffect(() => {
     if (initialPageAppliedRef.current) return;
-    if (!Array.isArray(pages) || pages.length === 0) return;
-    if (initialPage === undefined || initialPage === null) return;
-    const target = Number(initialPage);
-    if (Number.isFinite(target) && target > 0 && target < pages.length) {
-      setCurrentPage(target);
+    const resolution = resolveDeferredInitialPage({ initialPage, pages });
+    if (!resolution.applied) return;
+    if (resolution.targetPage !== null) {
+      setCurrentPage(resolution.targetPage);
     }
     initialPageAppliedRef.current = true;
   }, [pages, initialPage]);

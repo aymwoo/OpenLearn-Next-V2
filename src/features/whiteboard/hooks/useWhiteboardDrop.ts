@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react';
 import { v7 as uuidv7 } from 'uuid';
 import { frontendEventBus } from '../../../services/event-bus';
 import { paletteItemRegistry } from '../../teacher/lesson-editor/palette-item-registry';
+import { getElementCapability } from '../core/element-capabilities';
 import type { ExtensionPointConfig } from '../../../plugin-host/types';
 
 export interface UseWhiteboardDropOptions {
@@ -70,35 +71,13 @@ export function useWhiteboardDrop({
       const slotProps = (extRenderer as unknown as { slotProps?: { defaultData?: Record<string, unknown> } })
         ?.slotProps;
       const rendererDefaults = slotProps?.defaultData || {};
-      switch (type) {
-        case 'code-sandbox':
-          return { ...base, code: content.code ?? "console.log('Hello Sandbox!');" };
-        case 'math-graph':
-          return { ...base, equation: content.equation ?? 'Math.sin(x)' };
-        case 'presentation':
-          return {
-            ...base,
-            markdown: content.markdown ?? '# Title Slide\n---\n## Slide 2',
-            width: 600,
-            height: 400,
-            slideX: 0,
-            slideY: 0,
-          };
-        case 'quiz':
-          return {
-            ...base,
-            question: content.question ?? 'New Quiz',
-            options: Array.isArray(content.options) ? content.options : ['A', 'B', 'C', 'D'],
-          };
-        case 'assignment':
-          return { ...base, title: content.title ?? 'New Assignment', description: content.description ?? '' };
-        case 'hello-world':
-          return base;
-        case 'rollcall':
-          return { ...base, allStudents: [] };
-        default:
-          return { ...base, ...pluginDefaults, ...rendererDefaults, ...content };
+      // 内置类型的创建默认值统一登记在能力表；这里只负责把「定位字段 + 默认值」
+      // 拼起来，不再维护第二份按类型分派的 switch。
+      const createDefaults = getElementCapability(type).createDefaults;
+      if (createDefaults) {
+        return { ...base, ...createDefaults(content) };
       }
+      return { ...base, ...pluginDefaults, ...rendererDefaults, ...content };
     },
     [currentPage, activeSegmentId, whiteboardRenderers],
   );

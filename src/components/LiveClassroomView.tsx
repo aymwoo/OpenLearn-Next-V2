@@ -4,6 +4,7 @@ import { uiStore } from '../store/uiStore';
 import { liveClassStore } from '../store/liveClassStore';
 import { useAppData } from '../context/AppDataContext';
 import type { WhiteboardPageItem, WhiteboardHandle } from '../features/whiteboard/InteractiveWhiteboard';
+import { buildTeacherWhiteboardHostProps } from '../features/whiteboard/host/whiteboard-host-contract';
 import { extensionCoversSegmentType, normalizeSegmentType } from '../../packages/core/plugin-host/mode-pack';
 import { resolveLessonModePackDeliveryMode } from '../../packages/core/plugin-host/course-delivery-mode';
 import { useOptionalPluginHost } from '../plugin-host/plugin-host-context';
@@ -986,14 +987,10 @@ export function LiveClassroomView({
   const teacherWhiteboardBridge = useMemo<WhiteboardHostBridgeValue>(
     () => ({
       whiteboardRef,
-      canvasProps: {
+      canvasProps: buildTeacherWhiteboardHostProps({
         lessonId: selectedLesson,
         classId: liveClassSelectedClassId,
-        userRole: 'teacher',
         initialPage: restoredCurrentPage,
-        isEditMode: false,
-        broadcastFullscreen: true,
-        fullscreenBroadcastClassId: liveClassSelectedClassId,
         onFullscreenSync: handleFullscreenSync,
         elements,
         activeSegmentId,
@@ -1006,7 +1003,7 @@ export function LiveClassroomView({
         onElementUpdate: handleElementUpdate,
         onElementDelete: handleElementDelete,
         onRefresh: handleWhiteboardRefresh,
-      },
+      }),
     }),
     [
       selectedLesson,

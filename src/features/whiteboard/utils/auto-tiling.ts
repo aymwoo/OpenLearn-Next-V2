@@ -20,6 +20,8 @@
  * 的所有入参出参都是同一套容器像素，无需任何缩放换算。
  */
 
+import { NON_TILEABLE_ELEMENT_TYPES } from '../core/element-capabilities';
+
 export interface TilingRect {
   x: number;
   y: number;
@@ -97,7 +99,7 @@ export const DEFAULT_TILING_PADDING = 8;
  *  - pen / highlighter ：自由手绘折线，坐标存在 points 数组里（绝对舞台坐标），
  *    没有 x/y/width/height 概念，强行平铺会把手写笔迹拉成方块
  */
-export const NON_TILEABLE_TYPES: readonly string[] = ['page_meta', 'pen', 'highlighter'];
+export const NON_TILEABLE_TYPES: readonly string[] = NON_TILEABLE_ELEMENT_TYPES;
 
 export function isTileableType(type: string): boolean {
   return !NON_TILEABLE_TYPES.includes(type);

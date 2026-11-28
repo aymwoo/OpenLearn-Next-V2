@@ -3,6 +3,7 @@ import { BrowserFullscreenHost, BROWSER_FULLSCREEN_PADDING } from '../widgets/Br
 import { WidgetFullscreenStage } from '../widgets/WidgetFullscreenStage';
 import { FullscreenOverlay } from '../fullscreen/FullscreenRendererRegistry';
 import { parseElementData } from '../utils/element-cache';
+import { findElementCapability } from '../core/element-capabilities';
 
 export interface WhiteboardFullscreenOverlayProps {
   containerSize: { width: number; height: number };
@@ -21,17 +22,7 @@ export interface WhiteboardFullscreenOverlayProps {
   children: React.ReactNode;
 }
 
-const TYPE_LABEL: Record<string, string> = {
-  quiz: '📝 随堂测验',
-  timer: '⏱ 计时器',
-  assignment: '📋 作业',
-  'code-sandbox': '💻 代码沙箱',
-  'html-applet': '🌐 交互课件',
-  rollcall: '🎲 随机点名',
-  presentation: '📽 演示文稿',
-  'math-graph': '📐 数学图形',
-  text: '📝 文本',
-};
+const fullscreenTitle = (type: string): string => findElementCapability(type)?.label ?? type;
 
 export const WhiteboardFullscreenOverlay: React.FC<WhiteboardFullscreenOverlayProps> = ({
   containerSize,
@@ -110,7 +101,7 @@ export const WhiteboardFullscreenOverlay: React.FC<WhiteboardFullscreenOverlayPr
     return (
       <FullscreenOverlay
         type={fsEl.type}
-        title={TYPE_LABEL[fsEl.type] || fsEl.type}
+        title={fullscreenTitle(fsEl.type)}
         data={fsData}
         containerSize={containerSize}
         dismissible={isFullscreenDismissible}

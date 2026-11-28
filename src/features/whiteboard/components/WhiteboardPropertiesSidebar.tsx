@@ -4,27 +4,10 @@ import { AssignmentBindingField } from './AssignmentBindingField';
 import { AssignmentPeerProgressPanel } from './AssignmentPeerProgressPanel';
 import { LearningSurfaceBindingPanel } from './LearningSurfaceBindingPanel';
 import { propertyEditorRegistry } from '../properties/PropertyEditorRegistry';
+import { getElementCapability } from '../core/element-capabilities';
 import { buildQuizAnswerFields, resolveCorrectIndex } from '../../../../packages/core/whiteboard/quiz-answer.js';
 import { paletteItemRegistry } from '../../teacher/lesson-editor/palette-item-registry';
 import { ExtensionPointRenderer } from '../../../plugin-host/extension-point-renderer';
-
-/**
- * 系统内置的组件类元素类型（与图形/手绘区分）。
- *
- * 判定用途：组件在画布上以「窗口卡片」渲染，尺寸由拖拽缩放与自动平铺决定，
- * 因此属性编辑器不再为它们提供宽高输入；图形类（rect / text / circle ...）保留尺寸编辑。
- */
-const WIDGET_ELEMENT_TYPES = [
-  'plugin',
-  'hello-world',
-  'rollcall',
-  'quiz',
-  'assignment',
-  'learning_surface',
-  'code-sandbox',
-  'math-graph',
-  'presentation',
-];
 
 /**
  * 属性保存的结果。
@@ -128,8 +111,10 @@ export const WhiteboardPropertiesSidebar: React.FC<WhiteboardPropertiesSidebarPr
     feedbackTimer.current = setTimeout(() => setSaveFeedback(null), kind === 'failed' ? 5000 : 2500);
   };
 
-  // 窗体类小组件仅在用户显式点击标题栏“属性图标”或右键菜单“配置组件属性”时展开侧栏
-  const isWidget = WIDGET_ELEMENT_TYPES.includes(selectedEl.type) || paletteItemRegistry.has(selectedEl.type);
+  // 组件类元素（quiz / assignment / 课件 / 插件组件等）的宽高、尺寸输入形态
+  // 统一由能力表决定（见 core/element-capabilities.ts），这里不再维护类型清单。
+  const capability = getElementCapability(selectedEl.type);
+  const isWidget = capability.sidebarCard || paletteItemRegistry.has(selectedEl.type);
   if (isWidget && activePropertiesElementId !== selectedShapeId) {
     return null;
   }
@@ -223,13 +208,13 @@ export const WhiteboardPropertiesSidebar: React.FC<WhiteboardPropertiesSidebarPr
         </div>
 
         {/* 通用属性: 尺寸（位置仅通过画布拖动调整，不再提供 X/Y 坐标输入 —— Issue #97）
-            组件类元素（quiz / assignment / rollcall / 课件 / 插件组件等）的宽高由画布拖拽缩放与自动平铺决定，
-            属性栏不再提供宽高输入，避免手填数值与平铺布局互相打架。 */}
-        {!isWidget && (
+            尺寸输入形态由 core/element-capabilities.ts 的 sizeInput 决定：
+            组件卡片由画布拖拽 / 自动平铺控制宽高，图形按宽高或半径编辑。 */}
+        {!isWidget && capability.sizeInput !== 'none' && (
           <div className="bg-surface p-3 rounded-xl border border-theme shadow-sm space-y-3">
             <h4 className="font-bold text-main text-xs border-b border-theme pb-1.5 flex items-center gap-1.5">尺寸</h4>
 
-            {selectedEl.type !== 'pen' && selectedEl.type !== 'circle' && (
+            {capability.sizeInput === 'width-height' && (
               <div className="grid grid-cols-2 gap-2 mt-2">
                 <div>
                   <label className="block text-xs text-muted font-semibold mb-1">宽度 (Width)</label>
@@ -256,7 +241,7 @@ export const WhiteboardPropertiesSidebar: React.FC<WhiteboardPropertiesSidebarPr
               </div>
             )}
 
-            {selectedEl.type === 'circle' && (
+            {capability.sizeInput === 'radius' && (
               <div className="mt-2">
                 <label className="block text-xs text-muted font-semibold mb-1">半径 (Radius)</label>
                 <input

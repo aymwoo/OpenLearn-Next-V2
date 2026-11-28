@@ -8,6 +8,7 @@ describe('WhiteboardService 领域服务单元测试 (E3 深化)', () => {
   const db = kernelContainer.db;
 
   const testLessonId = 'les-test-wb-01';
+  const appletLessonId = 'les-test-wb-applet';
   const testAssignmentWbId = 'assignment-test-wb-01';
   const testElementId = 'elem-wb-01';
 
@@ -37,6 +38,11 @@ describe('WhiteboardService 领域服务单元测试 (E3 深化)', () => {
       testAssignmentWbId,
       'les-test-wb-nosnap',
     );
+    db.prepare('DELETE FROM learning_surfaces WHERE lesson_id = ?').run(appletLessonId);
+    // Surface 创建会校验课时存在，先种一条课件链路测试用的课时
+    db.prepare(
+      'INSERT OR IGNORE INTO lessons (id, title, content, creator_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
+    ).run(appletLessonId, '白板课件链路测试', '', 'test', now, now);
 
     // 种子元素
     db.prepare('INSERT INTO whiteboard_elements (id, lesson_id, type, data, created_at) VALUES (?, ?, ?, ?, ?)').run(
@@ -282,6 +288,105 @@ describe('WhiteboardService 领域服务单元测试 (E3 深化)', () => {
       });
       const stored = JSON.parse(commandLog.at(-1).payload.data);
       expect(stored).toEqual({ slideX: 0 });
+    });
+  });
+
+  describe('5. html-applet 创建链路（服务端转 learning_surface）', () => {
+    const readSurface = (surfaceId: string) =>
+      db.prepare('SELECT * FROM learning_surfaces WHERE id = ?').get(surfaceId) as any;
+
+    it('coursewareUuid 转成 learning_surface，并建立 Surface 记录', async () => {
+      await service.drawElement({
+        lessonId: appletLessonId,
+        type: 'html-applet',
+        data: { coursewareUuid: 'cw-legacy-1', title: '旧课件', x: 10, y: 20 },
+        actorId: 'teacher-01',
+      });
+
+      const cmd = commandLog.at(-1);
+      expect(cmd.type).toBe('whiteboard.draw');
+      expect(cmd.payload.type).toBe('learning_surface');
+      expect(cmd.payload.elementId).toBeTruthy();
+
+      const data = JSON.parse(cmd.payload.data);
+      expect(data.surfaceId).toBeTruthy();
+      expect(data.title).toBe('旧课件');
+      // 旧的课程源字段不应再留在元素 data 上
+      expect(data.coursewareUuid).toBeUndefined();
+      expect(data.resourceId).toBeUndefined();
+      expect(data.code).toBeUndefined();
+
+      const surface = readSurface(data.surfaceId);
+      expect(surface.lesson_id).toBe(appletLessonId);
+      expect(surface.kind).toBe('whiteboard_element');
+      // Surface.owner_id 必须与预生成的元素 id 一致
+      expect(surface.owner_id).toBe(cmd.payload.elementId);
+      expect(JSON.parse(surface.content_ref_json)).toMatchObject({
+        rendererId: 'html_courseware',
+        source: { kind: 'courseware', id: 'cw-legacy-1' },
+        config: { title: '旧课件' },
+      });
+    });
+
+    it('resourceId 映射为 resource 内容源', async () => {
+      await service.drawElement({
+        lessonId: appletLessonId,
+        type: 'html-applet',
+        data: { resourceId: 'res-legacy-1' },
+        actorId: 'teacher-01',
+      });
+
+      const data = JSON.parse(commandLog.at(-1).payload.data);
+      const surface = readSurface(data.surfaceId);
+      expect(JSON.parse(surface.content_ref_json)).toMatchObject({
+        rendererId: 'html_courseware',
+        source: { kind: 'resource', id: 'res-legacy-1' },
+      });
+    });
+
+    it('仅有 code 时落库内联资源并转成 learning_surface', async () => {
+      const code = '<div>inline courseware</div>';
+      await service.drawElement({
+        lessonId: appletLessonId,
+        type: 'html-applet',
+        data: { code },
+        actorId: 'teacher-01',
+      });
+
+      const data = JSON.parse(commandLog.at(-1).payload.data);
+      const contentRef = JSON.parse(readSurface(data.surfaceId).content_ref_json);
+      expect(contentRef.source.kind).toBe('courseware');
+      expect(contentRef.source.id).toMatch(/^inline-/);
+
+      const resource = db.prepare('SELECT content FROM system_resources WHERE id = ?').get(contentRef.source.id) as any;
+      expect(resource.content).toBe(code);
+    });
+
+    it('data 为 JSON 字符串时同样能解析', async () => {
+      await service.drawElement({
+        lessonId: appletLessonId,
+        type: 'html-applet',
+        data: JSON.stringify({ resourceId: 'res-string-1' }),
+        actorId: 'teacher-01',
+      });
+
+      const data = JSON.parse(commandLog.at(-1).payload.data);
+      expect(JSON.parse(readSurface(data.surfaceId).content_ref_json)).toMatchObject({
+        source: { kind: 'resource', id: 'res-string-1' },
+      });
+    });
+
+    it('没有任何内容源时返回 400，不写半成品命令', async () => {
+      const before = commandLog.length;
+      await expect(
+        service.drawElement({
+          lessonId: appletLessonId,
+          type: 'html-applet',
+          data: { title: '空课件' },
+          actorId: 'teacher-01',
+        }),
+      ).rejects.toMatchObject({ status: 400 });
+      expect(commandLog.length).toBe(before);
     });
   });
 });
