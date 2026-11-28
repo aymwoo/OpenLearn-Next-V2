@@ -11,7 +11,7 @@
  * same-origin requests — no manual cookie management needed.
  */
 
-import type { IFrontendAPI } from '../plugin-host/types';
+import type { FrontendApiResponse, IFrontendAPI } from '../plugin-host/types';
 
 export class FrontendAPIService implements IFrontendAPI {
   private baseUrl: string;
@@ -20,23 +20,19 @@ export class FrontendAPIService implements IFrontendAPI {
     this.baseUrl = baseUrl;
   }
 
-  async get<T = any>(path: string): Promise<{ success: boolean; result?: T; error?: string }> {
+  async get<T = any>(path: string): Promise<FrontendApiResponse<T>> {
     return this.request<T>('GET', path);
   }
 
-  async post<T = any>(path: string, body?: any): Promise<{ success: boolean; result?: T; error?: string }> {
+  async post<T = any>(path: string, body?: any): Promise<FrontendApiResponse<T>> {
     return this.request<T>('POST', path, body);
   }
 
-  async del<T = any>(path: string): Promise<{ success: boolean; result?: T; error?: string }> {
+  async del<T = any>(path: string): Promise<FrontendApiResponse<T>> {
     return this.request<T>('DELETE', path);
   }
 
-  private async request<T>(
-    method: string,
-    path: string,
-    body?: any,
-  ): Promise<{ success: boolean; result?: T; error?: string }> {
+  private async request<T>(method: string, path: string, body?: any): Promise<FrontendApiResponse<T>> {
     try {
       const url = `${this.baseUrl}${path}`;
       const options: RequestInit = {
@@ -52,8 +48,13 @@ export class FrontendAPIService implements IFrontendAPI {
       }
 
       const response = await fetch(url, options);
-      const data = await response.json();
-      return data as { success: boolean; result?: T; error?: string };
+      const data = (await response.json()) as FrontendApiResponse<T>;
+      // HTTP 状态码不随 JSON body 返回；不透传的话插件只能看到 body 里的
+      // success/error，无法区分「参数错（400）」「权限不足（403）」「服务端故障（500）」。
+      if (typeof response.status === 'number') {
+        return { ...data, status: response.status };
+      }
+      return data;
     } catch (err: any) {
       return {
         success: false,

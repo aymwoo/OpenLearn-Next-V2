@@ -46,7 +46,7 @@ commandBus.execute(cmd)
             ├─ 找到 ──────────────────────────────┐
             └─ 找不到 → throw 403 COMMAND_NOT_REGISTERED   ← default-deny（审计 H-1）
        2. inputSchema 存在 → validateJsonSchema(payload, schema)
-            └─ errors.length > 0 → throw [PayloadValidationError] ...（**无 status，落到 500**）
+            └─ errors.length > 0 → throw [PayloadValidationError] ...（400 + COMMAND_PAYLOAD_INVALID）
        3. isAdmin 判定（内联，非委托 CapabilityGuard）
        4. capabilityRequired && !isAdmin
             └─ capabilityGuard.check(actorId, cap) === false
@@ -91,8 +91,12 @@ commandBus.execute(cmd)
 ```typescript
 if (action.inputSchema) {
   const errors = validateJsonSchema(command.payload, action.inputSchema);
-  if (errors.length > 0)
-    throw new Error(`[PayloadValidationError] Invalid command payload for ${command.type}: ${errors.join('; ')}`);
+  if (errors.length > 0) {
+    const err = new Error(`[PayloadValidationError] Invalid command payload for ${command.type}: ${errors.join('; ')}`);
+    err.status = 400;
+    err.code = 'COMMAND_PAYLOAD_INVALID';
+    throw err;
+  }
 }
 ```
 
@@ -423,7 +427,7 @@ TS 会拦你，但 `as any` / JS 插件会绕过 ——
 | ----------------------------------------------------------------------------- | --------------------------------------- | ------------------------------------------------------------ |
 | 403 `COMMAND_NOT_REGISTERED`                                                  | 只注册了 handler，没注册 descriptor     | 补 `ctx.services.actionRegistry.register(...)`               |
 | 403 `COMMAND_CAPABILITY_DENIED`                                               | 能力未声明，或声明了但管理员未批准      | 核对 manifest + 批准表；`ctx.services.capability.check` 自检 |
-| `[PayloadValidationError] ...`（HTTP 500）                                    | `inputSchema` 与实际 payload 不符       | 注意只支持 5 种 `type`                                       |
+| `400 COMMAND_PAYLOAD_INVALID`（`[PayloadValidationError] ...`）               | `inputSchema` 与实际 payload 不符       | 注意只支持 5 种 `type`                                       |
 | `[Security] ... requires human approval`（500）                               | `isHighRisk: true` + 插件 actor         | 预期行为；去审批页批准后由**审批人身份**执行                 |
 | 审批页点批准后仍失败并 410                                                    | 插件已卸载 / 命令已注销                 | 重新注册后需重新发起                                         |
 | `Plugin "x" denied: 写入学生数据需要 'student-data:write' 能力`               | `pointsLedger` 写入缺能力               | manifest 加 `student-data:write`                             |
@@ -460,7 +464,7 @@ TS 会拦你，但 `as any` / JS 插件会绕过 ——
 | 拦截器整体结构与顺序                                               | ``packages/core/kernel/index.ts`→`infrastructureRefs`（L302–L402）                                 |
 | default-deny 原文与审计 H-1、`scripts/plugin-command-audit.mjs`    | `packages/core/kernel/index.ts`（L374–L391）                                                       |
 | `COMMAND_NOT_REGISTERED` 消息逐字                                  | `packages/core/kernel/index.ts`（L393–L399）                                                       |
-| `[PayloadValidationError]` 消息与无 status                         | `packages/core/kernel/index.ts`（L307–L314）                                                       |
+| `[PayloadValidationError]` 消息与 400/code                         | `packages/core/kernel/index.ts`（L400–L415）                                                       |
 | `validateJsonSchema` 仅 5 种 type                                  | ``docs/reference/plugin-capability-matrix.md`（L269） 段（同上代码）                               |
 | `isAdmin` 内联判定逐字、v0.6.1 C-3 与 `plugin:@evil:admin`         | `kernel/index.ts` L84239–84254                                                                     |
 | 能力拒绝消息与 403/code                                            | `docs/reference/plugin-capability-matrix.md`（L61845–L61857）                                      |

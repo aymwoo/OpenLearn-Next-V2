@@ -99,7 +99,7 @@ const result = await Promise.race([
    └─ 查不到 → 403 COMMAND_NOT_REGISTERED（default-deny，L392-399）
 
 ② action.inputSchema 存在 → validateJsonSchema(payload, schema)
-   └─ 有错 → 抛 [PayloadValidationError]（无 status/code → 走 500）
+   └─ 有错 → 抛 [PayloadValidationError]（400 + code=COMMAND_PAYLOAD_INVALID）
       注意：只认全大写 'OBJECT'/'ARRAY'/'STRING'/'NUMBER'/'BOOLEAN'，小写等于不校验
 
 ③ action.capabilityRequired 且 actor 非管理员 → capabilityGuard.check(actorId, cap)
@@ -200,7 +200,7 @@ Socket 握手鉴权：`io.use(socketAuthMiddleware)`（`server.ts` L421），`mu
 接口返回 403 + code=COMMAND_CAPABILITY_DENIED → capabilitiesProposed 没声明，或该角色没被授予
 接口返回 403 无 code                           → csrfGuard / CORS / enforcePasswordChanged / 路由 requireAuth
 接口返回 429 → writeLimiter 或 AI 限流
-接口返回 500 且日志有 [PayloadValidationError] → inputSchema 与 payload 不匹配（或大小写混用导致反向行为）
+接口返回 400 + code=COMMAND_PAYLOAD_INVALID → inputSchema 与 payload 不匹配（或大小写混用导致反向行为）
 接口返回 500 且日志有 "requires human approval" → 高危命令进了 pending_commands，需人工批准
 接口返回 500 且日志有 "timed out after 10s"    → handler 挂死（常见于 process 插件 RPC 未回）
 接口 200 但前端不刷新                          → 事件没登记 SOCKET_ROUTES，或房间算错

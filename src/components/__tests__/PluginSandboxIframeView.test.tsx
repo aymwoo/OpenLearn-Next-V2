@@ -305,6 +305,50 @@ describe('PluginSandboxIframeView component', () => {
     );
   });
 
+  it('透传 command.invoke 的 HTTP 状态码与业务错误码（不再只剩 message）', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: false,
+      status: 403,
+      json: async () => ({ success: false, code: 'COMMAND_CAPABILITY_DENIED', error: '权限不足' }),
+    } as Response);
+    render(<PluginSandboxIframeView pluginId={PLUGIN_ID} view="dashboard.html" label="测试看板" />);
+
+    const iframe = screen.getByTitle('测试看板') as HTMLIFrameElement;
+    const postMessageSpy = vi.spyOn(iframe.contentWindow!, 'postMessage');
+
+    await act(async () => {
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: {
+            channel: PLUGIN_VIEW_CHANNEL,
+            type: 'call',
+            callId: 'call-cmd',
+            op: 'command.invoke',
+            args: ['ext-demo.do_something', { id: 1 }],
+          },
+          source: iframe.contentWindow,
+        }),
+      );
+    });
+
+    expect(fetchSpy).toHaveBeenCalledWith(
+      `/api/plugins/${encodeURIComponent(PLUGIN_ID)}/sandbox-command`,
+      expect.objectContaining({ method: 'POST' }),
+    );
+    expect(postMessageSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        channel: PLUGIN_VIEW_CHANNEL,
+        type: 'reply',
+        callId: 'call-cmd',
+        ok: false,
+        error: '权限不足',
+        status: 403,
+        code: 'COMMAND_CAPABILITY_DENIED',
+      }),
+      '*',
+    );
+  });
+
   it('handles storage get/set/delete operations', async () => {
     render(<PluginSandboxIframeView pluginId={PLUGIN_ID} view="dashboard.html" label="测试看板" />);
 

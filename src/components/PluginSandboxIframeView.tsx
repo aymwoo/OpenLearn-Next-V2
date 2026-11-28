@@ -326,18 +326,25 @@ export function PluginSandboxIframeView({
 
       if (data.type === 'call' && data.callId && data.op) {
         const { callId, op, args = [] } = data;
-        const reply = (ok: boolean, value?: unknown, error?: string) => {
-          iframe.contentWindow?.postMessage(
-            {
-              channel: PLUGIN_VIEW_CHANNEL,
-              type: 'reply',
-              callId,
-              ok,
-              value,
-              error,
-            },
-            '*',
-          );
+        /**
+         * 失败回包除 message 外还要带上 HTTP 状态码与业务错误码。
+         * 桥脚本（PLUGIN_VIEW_BRIDGE_JS）会把它们挂到 reject 的 Error 上，
+         * 插件才能区分未注册命令（404）、权限不足（403）与参数校验失败（400）。
+         */
+        const reply = (ok: boolean, value?: unknown, error?: string, meta?: { status?: number; code?: string }) => {
+          const message: Record<string, unknown> = {
+            channel: PLUGIN_VIEW_CHANNEL,
+            type: 'reply',
+            callId,
+            ok,
+            value,
+            error,
+          };
+          if (!ok) {
+            if (typeof meta?.status === 'number') message.status = meta.status;
+            if (typeof meta?.code === 'string' && meta.code) message.code = meta.code;
+          }
+          iframe.contentWindow?.postMessage(message, '*');
         };
 
         try {
@@ -376,9 +383,17 @@ export function PluginSandboxIframeView({
               credentials: 'include',
               body: JSON.stringify({ type: commandType, payload }),
             });
-            const json = await res.json();
+            const json = (await res.json().catch(() => ({}))) as {
+              success?: boolean;
+              result?: unknown;
+              error?: string;
+              code?: string;
+            };
             if (!res.ok || json.success === false) {
-              reply(false, undefined, json.error || `Command failed with HTTP ${res.status}`);
+              reply(false, undefined, json.error || `Command failed with HTTP ${res.status}`, {
+                status: res.status,
+                code: json.code,
+              });
             } else {
               reply(true, json.result);
             }

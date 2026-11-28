@@ -401,9 +401,16 @@ export class Kernel {
         if (action.inputSchema) {
           const errors = validateJsonSchema(command.payload, action.inputSchema);
           if (errors.length > 0) {
-            throw new Error(
+            // 参数校验失败是调用方 4xx 语义，不是服务端故障：
+            // 带上 status/code，让 /api/commands、sandbox-command 与插件桥接层
+            // 都能把「参数不合法」和 500 崩溃区分开（此前无 status → 落到 500，
+            // 生产环境文案还被替换成 Internal server error，前端无从归因）。
+            const err = new Error(
               `[PayloadValidationError] Invalid command payload for ${command.type}: ${errors.join('; ')}`,
-            );
+            ) as Error & { status?: number; code?: string };
+            err.status = 400;
+            err.code = 'COMMAND_PAYLOAD_INVALID';
+            throw err;
           }
         }
         // 管理员判定（v0.6.1 审计 C-3 加固）：废除裸后缀启发式。

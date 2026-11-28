@@ -2078,7 +2078,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
     try {
       const { type, payload } = req.body;
       if (!type) {
-        return res.status(400).json({ success: false, error: 'Missing command type' });
+        return res.status(400).json({ success: false, code: 'COMMAND_TYPE_REQUIRED', error: 'Missing command type' });
       }
 
       const targetId = decodeURIComponent(req.params.id);
@@ -2086,7 +2086,9 @@ export function registerPluginsRoutes(ctx: ServerContext) {
       const pluginId = host.resolvePluginUuid(targetId);
       const manifest = host.getPluginManifest(pluginId);
       if (!manifest) {
-        return res.status(404).json({ success: false, error: `Plugin "${targetId}" not found` });
+        return res
+          .status(404)
+          .json({ success: false, code: 'PLUGIN_NOT_FOUND', error: `Plugin "${targetId}" not found` });
       }
 
       const manifestId = manifest.id;
@@ -2098,6 +2100,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
         pluginLog.warn({ commandType: resolvedType }, '[sandbox-command] no handler for command type');
         return res.status(404).json({
           success: false,
+          code: 'COMMAND_HANDLER_NOT_REGISTERED',
           error: `No handler registered for command type "${resolvedType}".`,
         });
       }

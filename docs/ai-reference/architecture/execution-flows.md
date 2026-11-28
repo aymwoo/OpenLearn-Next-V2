@@ -99,6 +99,8 @@ sequenceDiagram
   B->>I: 拦截：查 ActionDescriptor
   alt 无描述符
     I-->>G: COMMAND_NOT_REGISTERED (403)
+  else inputSchema 校验失败
+    I-->>G: COMMAND_PAYLOAD_INVALID (400)
   else capabilityRequired 未授予
     I-->>G: COMMAND_CAPABILITY_DENIED (403)
   else 通过
@@ -110,9 +112,10 @@ sequenceDiagram
 | 环节       | 规则                                                              | 证据                                                          |
 | ---------- | ----------------------------------------------------------------- | ------------------------------------------------------------- |
 | 补前缀     | 已以 `${manifest.id}.` 开头 → 原样；UUID v7 前缀 → 原样；否则前置 | `plugin-namespace.ts → resolvePluginCommandType`（L62-67）    |
-| 无 handler | 404 `No handler registered for command type "<type>".`            | `server/routes/plugins.ts`（sandbox-command 分支）            |
-| 无描述符   | 403 `COMMAND_NOT_REGISTERED`                                      | default-deny 拦截器（`docs/agent` 与 `troubleshooting` 一致） |
-| 能力不足   | 403 `COMMAND_CAPABILITY_DENIED`                                   | 同上                                                          |
+| 无 handler | 404 + `COMMAND_HANDLER_NOT_REGISTERED`                            | `server/routes/plugins.ts`（sandbox-command 分支）            |
+| 无描述符   | 403 + `COMMAND_NOT_REGISTERED`                                    | default-deny 拦截器（`docs/agent` 与 `troubleshooting` 一致） |
+| 参数不合法 | 400 + `COMMAND_PAYLOAD_INVALID`                                   | 内核 `validateJsonSchema` 校验失败                            |
+| 能力不足   | 403 + `COMMAND_CAPABILITY_DENIED`                                 | 同上                                                          |
 | 执行期异常 | 500 + `sendSafeError` 脱敏                                        | `server/routes/plugins.ts`                                    |
 
 **四种位置的命令名语义**（写错不报错，只在运行期 403）：

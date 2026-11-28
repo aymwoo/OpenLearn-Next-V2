@@ -178,7 +178,8 @@ Content-Type: application/json
 - `403 { code: "COMMAND_CAPABILITY_DENIED" }` — 权限不足（CapabilityGuard 拦截 — 需 `student:write` capability）
 - `400 { error: "Invalid score: must be a finite number in [0, <raw_full_score>] ..." }` — 原始分越界
 - `400 { error: "Invalid completion: must be a finite number ratio or percentage" }` — 完成度不可解析
-- `500` — 内部错误（如 `PayloadValidationError` — 路由已剔空 `score`/`completion` 的显式 `null` 再组 payload，因为 `validateJsonSchema` 把 `null` 当作已提供值）
+- `400 { code: "COMMAND_PAYLOAD_INVALID" }` — `inputSchema` 校验失败（如 `PayloadValidationError`；路由已剔空 `score`/`completion` 的显式 `null` 再组 payload，因为 `validateJsonSchema` 把 `null` 当作已提供值）
+- `500` — 其他内部错误
 
 ---
 

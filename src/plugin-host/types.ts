@@ -390,10 +390,20 @@ export interface ExtensionPointConfig {
 
 // ── Frontend Service Interfaces ──────────────────────────────────────────
 
+export interface FrontendApiResponse<T = unknown> {
+  success: boolean;
+  result?: T;
+  error?: string;
+  /** 机器可读业务错误码（服务端 4xx 透传，如 `COMMAND_CAPABILITY_DENIED`）。 */
+  code?: string;
+  /** HTTP 状态码。此前被 fetch 包装层丢弃，插件无法区分 4xx / 5xx。 */
+  status?: number;
+}
+
 export interface IFrontendAPI {
-  get<T = any>(path: string): Promise<{ success: boolean; result?: T; error?: string }>;
-  post<T = any>(path: string, body?: any): Promise<{ success: boolean; result?: T; error?: string }>;
-  del<T = any>(path: string): Promise<{ success: boolean; result?: T; error?: string }>;
+  get<T = any>(path: string): Promise<FrontendApiResponse<T>>;
+  post<T = any>(path: string, body?: any): Promise<FrontendApiResponse<T>>;
+  del<T = any>(path: string): Promise<FrontendApiResponse<T>>;
 }
 
 export interface ISocketService {

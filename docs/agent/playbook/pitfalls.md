@@ -374,7 +374,7 @@ inputSchema: { type: 'OBJECT', properties: { id: { type: 'STRING' } }, required:
 ```{danger}
 这条是**静默失效**的典型：拦截器在权限检查之前先跑 schema 校验，
 你以为有校验，其实没有。校验失败时抛的是
-`[PayloadValidationError] Invalid command payload for <type>: <errors>`（HTTP 500 而非 403）。
+`[PayloadValidationError] Invalid command payload for <type>: <errors>`（HTTP 400 + `COMMAND_PAYLOAD_INVALID`，不是 403/500）。
 见 [能力与授权](../reference/capabilities.md) §1。
 ````
 

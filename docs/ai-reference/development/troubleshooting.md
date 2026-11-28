@@ -57,15 +57,15 @@
 
 ## 4. 运行期：命令派发
 
-| 现象                                                        | 归属      | 原因                                                            | 修法                                                                 |
-| ----------------------------------------------------------- | --------- | --------------------------------------------------------------- | -------------------------------------------------------------------- |
-| 403 `COMMAND_NOT_REGISTERED`                                | 插件      | 该 `commandType` 没有 `ActionDescriptor`（default-deny）        | 补 `actionRegistry.register({ commandType, capabilityRequired, … })` |
-| 403 `COMMAND_HANDLER_NOT_REGISTERED`                        | 插件      | 有描述符无 handler                                              | 补 `commandBus.registerHandler(type, { execute })`                   |
-| 403 `COMMAND_CAPABILITY_DENIED`                             | 插件/配置 | `capabilityRequired` 与授予集合不逐字相等                       | 用 19 条真值；管理员勾选授予                                         |
-| 404 `No handler registered for command type "<type>"`       | 插件      | 命令名不匹配（命名空间规则）                                    | 运行期 `slotProps.commandType` 必须全限定                            |
-| 500 `Cannot read properties of undefined (reading 'React')` | 插件      | 沙箱前端用了 React                                              | 改 `view`，或进 inline 白名单                                        |
-| `DataCloneError`                                            | 产品边界  | `process` 插件给 `registerExtensionPoint` 传了 `component` 函数 | 改数据型贡献或 `view`                                                |
-| `handler.execute is not a function`                         | 插件      | 传了裸函数                                                      | 改 `{ execute }` 对象                                                |
+| 现象                                                                                      | 归属      | 原因                                                            | 修法                                                                 |
+| ----------------------------------------------------------------------------------------- | --------- | --------------------------------------------------------------- | -------------------------------------------------------------------- |
+| 403 `COMMAND_NOT_REGISTERED`                                                              | 插件      | 该 `commandType` 没有 `ActionDescriptor`（default-deny）        | 补 `actionRegistry.register({ commandType, capabilityRequired, … })` |
+| 403 `COMMAND_HANDLER_NOT_REGISTERED`                                                      | 插件      | 有描述符无 handler                                              | 补 `commandBus.registerHandler(type, { execute })`                   |
+| 403 `COMMAND_CAPABILITY_DENIED`                                                           | 插件/配置 | `capabilityRequired` 与授予集合不逐字相等                       | 用 19 条真值；管理员勾选授予                                         |
+| 404 `COMMAND_HANDLER_NOT_REGISTERED`（`No handler registered for command type "<type>"`） | 插件      | 命令名不匹配（命名空间规则）                                    | 运行期 `slotProps.commandType` 必须全限定                            |
+| 500 `Cannot read properties of undefined (reading 'React')`                               | 插件      | 沙箱前端用了 React                                              | 改 `view`，或进 inline 白名单                                        |
+| `DataCloneError`                                                                          | 产品边界  | `process` 插件给 `registerExtensionPoint` 传了 `component` 函数 | 改数据型贡献或 `view`                                                |
+| `handler.execute is not a function`                                                       | 插件      | 传了裸函数                                                      | 改 `{ execute }` 对象                                                |
 
 ### 4.1 命名空间的三种写法（按位置）
 

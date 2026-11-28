@@ -39,6 +39,11 @@ describe('Plugin View Bridge', () => {
     expect(PLUGIN_VIEW_BRIDGE_JS).toContain("data.type === 'question.update'");
   });
 
+  it('失败回包把 status / code 挂到 reject 的 Error 上', () => {
+    expect(PLUGIN_VIEW_BRIDGE_JS).toContain('error.status = data.status');
+    expect(PLUGIN_VIEW_BRIDGE_JS).toContain('error.code = data.code');
+  });
+
   it('server.ts mounts /plugin-sandbox/view-bridge.js and enhances /plugins authentication', () => {
     const serverSrc = fs.readFileSync(SERVER_TS, 'utf-8');
     expect(serverSrc).toContain("app.get('/plugin-sandbox/view-bridge.js'");

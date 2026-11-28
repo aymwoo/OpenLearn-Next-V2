@@ -58,6 +58,21 @@ describe('FrontendAPIService', () => {
     expect(fetch).toHaveBeenCalledWith('/api/test/1', expect.objectContaining({ method: 'DELETE' }));
   });
 
+  it('透传 HTTP 状态码与业务错误码（此前只返回响应 body）', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      status: 403,
+      json: () => Promise.resolve({ success: false, code: 'COMMAND_CAPABILITY_DENIED', error: 'denied' }),
+    });
+
+    const result = await api.post('/api/plugins/x/sandbox-command', { type: 'x.y' });
+    expect(result).toEqual({
+      success: false,
+      code: 'COMMAND_CAPABILITY_DENIED',
+      error: 'denied',
+      status: 403,
+    });
+  });
+
   it('returns error object on network failure', async () => {
     globalThis.fetch = vi.fn().mockRejectedValue(new Error('Network error'));
 

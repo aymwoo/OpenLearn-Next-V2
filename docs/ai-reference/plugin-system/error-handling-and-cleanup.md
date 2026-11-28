@@ -59,24 +59,30 @@ Error
 { "success": false, "code": "COMMAND_NOT_REGISTERED", "error": "…" }
 ```
 
+**桥接层透传（Issue IKWCBU）**：HTTP 状态码不在 JSON body 里，因此
+`FrontendAPIService` 会把 `response.status` 合并进信封（`{ success, result, error, code, status }`）；
+`PluginSandboxIframeView` 的 view 通道在 reject 的 `Error` 上挂 `error.status` / `error.code`。
+插件前端不应再从本地化文案里做字符串嗅探。
+
 ### 2.2 插件相关错误码全集
 
-| code                                                                                             | HTTP          | 抛出点                                               | 含义 / 修法                                                          |
-| ------------------------------------------------------------------------------------------------ | ------------- | ---------------------------------------------------- | -------------------------------------------------------------------- |
-| `COMMAND_NOT_REGISTERED`                                                                         | 403           | 内核 default-deny（`packages/core/kernel/index.ts`） | 该 `commandType` 无 ActionDescriptor。补 `actionRegistry.register()` |
-| `COMMAND_HANDLER_NOT_REGISTERED`                                                                 | 403           | 同上                                                 | 有描述符但无 handler。补 `commandBus.registerHandler()`              |
-| `COMMAND_CAPABILITY_DENIED`                                                                      | 403           | `packages/core/kernel/index.ts`（L339）              | 能力不匹配。`capabilityRequired` 必须与授予集合逐字相等              |
-| `TOKEN_NOT_FOUND`                                                                                | 4xx           | DI 容器                                              | `manifest.requires` 漏声明，或 Token 名不在 31 条白名单              |
-| `HANDLER_ALREADY_EXISTS`                                                                         | 4xx           | CommandBus                                           | 同 `commandType` 重复注册；检查是否 `activate` 内注册两次            |
-| `Unsupported sandbox bridge op "x"`                                                              | —             | `src/plugin-host/plugin-host.ts`（L649）             | 前端用了 10 个 op 之外的调用                                         |
-| `Access to service token 'x' denied`                                                             | —             | `service-host.ts`（L238-241）                        | Barrier 1：Token 不在该插件白名单                                    |
-| `Capability denied … only 'get' methods allowed`                                                 | 500（激活期） | `service-host.ts`（L248-251）                        | Barrier 2：`capabilitiesProposed` 为空                               |
-| `Call denied for actor …`                                                                        | —             | `service-host.ts`（L266-270）                        | Barrier 3：方法/路径策略拒绝                                         |
-| `Plugin "x" activation failed: …`                                                                | 500           | `PluginActivateError`                                | `activate()` 抛错；看 `cause`                                        |
-| `Plugin "x" deactivate timed out after 5000ms`                                                   | —             | `PluginDeactivateTimeoutError`                       | `deactivate()` 里有同步阻塞或未 resolve                              |
-| `Plugin "x" requires Foo@^1.0.0, but host provides 2.0.0`                                        | 4xx           | `SemverMismatchError`                                | 改 `requires` 范围或升级宿主                                         |
-| `Plugin "x" attempted to register command "y" which belongs to another plugin's UUID namespace.` | —             | `context-builder.ts`                                 | 别用别人的 UUID 前缀注册命令                                         |
-| `Signature verification failed for "x" [CODE]: …`                                                | 4xx           | `PluginSignatureError`                               | 按 CODE 分支处理                                                     |
+| code                                                                                             | HTTP          | 抛出点                                               | 含义 / 修法                                                                             |
+| ------------------------------------------------------------------------------------------------ | ------------- | ---------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| `COMMAND_NOT_REGISTERED`                                                                         | 403           | 内核 default-deny（`packages/core/kernel/index.ts`） | 该 `commandType` 无 ActionDescriptor。补 `actionRegistry.register()`                    |
+| `COMMAND_HANDLER_NOT_REGISTERED`                                                                 | 403 / 404     | 内核；`sandbox-command` 预检（404）                  | 有描述符但无 handler（或沙箱命令通道找不到 handler）。补 `commandBus.registerHandler()` |
+| `COMMAND_PAYLOAD_INVALID`                                                                        | 400           | 内核 interceptor（`packages/core/kernel/index.ts`）  | `inputSchema` 校验失败。按 `payload` 报错修正字段/类型                                  |
+| `COMMAND_CAPABILITY_DENIED`                                                                      | 403           | `packages/core/kernel/index.ts`（L339）              | 能力不匹配。`capabilityRequired` 必须与授予集合逐字相等                                 |
+| `TOKEN_NOT_FOUND`                                                                                | 4xx           | DI 容器                                              | `manifest.requires` 漏声明，或 Token 名不在 31 条白名单                                 |
+| `HANDLER_ALREADY_EXISTS`                                                                         | 4xx           | CommandBus                                           | 同 `commandType` 重复注册；检查是否 `activate` 内注册两次                               |
+| `Unsupported sandbox bridge op "x"`                                                              | —             | `src/plugin-host/plugin-host.ts`（L649）             | 前端用了 10 个 op 之外的调用                                                            |
+| `Access to service token 'x' denied`                                                             | —             | `service-host.ts`（L238-241）                        | Barrier 1：Token 不在该插件白名单                                                       |
+| `Capability denied … only 'get' methods allowed`                                                 | 500（激活期） | `service-host.ts`（L248-251）                        | Barrier 2：`capabilitiesProposed` 为空                                                  |
+| `Call denied for actor …`                                                                        | —             | `service-host.ts`（L266-270）                        | Barrier 3：方法/路径策略拒绝                                                            |
+| `Plugin "x" activation failed: …`                                                                | 500           | `PluginActivateError`                                | `activate()` 抛错；看 `cause`                                                           |
+| `Plugin "x" deactivate timed out after 5000ms`                                                   | —             | `PluginDeactivateTimeoutError`                       | `deactivate()` 里有同步阻塞或未 resolve                                                 |
+| `Plugin "x" requires Foo@^1.0.0, but host provides 2.0.0`                                        | 4xx           | `SemverMismatchError`                                | 改 `requires` 范围或升级宿主                                                            |
+| `Plugin "x" attempted to register command "y" which belongs to another plugin's UUID namespace.` | —             | `context-builder.ts`                                 | 别用别人的 UUID 前缀注册命令                                                            |
+| `Signature verification failed for "x" [CODE]: …`                                                | 4xx           | `PluginSignatureError`                               | 按 CODE 分支处理                                                                        |
 
 ### 2.3 HTTP 状态码（网关侧，非插件代码可控）
 

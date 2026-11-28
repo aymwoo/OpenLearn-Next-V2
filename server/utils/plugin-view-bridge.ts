@@ -97,7 +97,12 @@ export const PLUGIN_VIEW_BRIDGE_JS = `(function () {
       if (data.ok) {
         waiter.resolve(data.value);
       } else {
-        waiter.reject(new Error(data.error || 'bridge call failed'));
+        const error = new Error(data.error || 'bridge call failed');
+        // 桥接层错误契约：HTTP 状态码与业务错误码必须随 Error 一起抛给插件，
+        // 否则前端只能显示 message（生产环境 5xx 文案还会被脱敏成「未知错误」）。
+        if (typeof data.status === 'number') error.status = data.status;
+        if (typeof data.code === 'string' && data.code) error.code = data.code;
+        waiter.reject(error);
       }
       return;
     }

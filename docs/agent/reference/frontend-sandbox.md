@@ -213,7 +213,7 @@ if (event.source !== frame.contentWindow || !isPluginFrameMessage(event.data)) r
 | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------- |
 | `api.get` / `api.post` / `api.del`               | 先 `checkMethodPolicy(FRONTEND_API_TOKEN, op.slice(4), args, ctx.caps)`，拒绝即 `throw new Error(denied)`；再走父页面 `fetch`（`credentials:'same-origin'`） | **返回整个 `{success, result, error}` 信封**，不拆包 |
 | `storage.get` / `storage.set` / `storage.delete` | key 拼成 `` `${ctx.manifest.id}:${String(args[0])}` `` 后交给宿主 `IStorageService`                                                                          | 落父页面 localStorage，见 §6                         |
-| `command.invoke`                                 | `ctx.frontendApi.post('/api/plugins/<pluginId>/sandbox-command', {type, payload})`                                                                           | 见 §7                                                |
+| `command.invoke`                                 | `ctx.frontendApi.post('/api/plugins/<pluginId>/sandbox-command', {type, payload})`                                                                           | 返回完整信封，含 `code` / `status`；见 §7            |
 | `ui.register`                                    | `registerExtensionPoint(slot, {...config, pluginId, origin:'runtime'})`                                                                                      | **只能注册数据型配置**，见 §8                        |
 | `ui.toast`                                       | `ctx.uiService?.showToast(message, message, 'info')`                                                                                                         | 标题与正文**是同一个字符串**，type 硬编码 `'info'`   |
 | `context.get`                                    | `{ lessonId: state.selectedLesson, classId: state.liveClassSelectedClassId }`                                                                                | 快照，**不推送变化**                                 |
@@ -385,7 +385,7 @@ scaffold 模板里也没有任何 `.html` 视图文件、没有那行 `<script s
 | 未登记 op | `Unsupported sandbox bridge op "<op>"` | `Unsupported op "<op>"` |
 | `api.*` 路径 | 原样透传 | 若不以 `api/plugins/` 开头，**自动前缀** `/api/plugins/<pluginId>/` |
 | `api.*` 凭证 | `credentials: 'same-origin'` | `credentials: 'include'` |
-| `command.invoke` 返回 | 整个 `{success,result,error}` 信封 | **拆包**：成功给 `json.result`，失败给 `json.error`，再兜底 `Command failed with HTTP <status>` |
+| `command.invoke` 返回 | 整个 `{success,result,error,code,status}` 信封 | **拆包**：成功给 `json.result`；失败 reject `Error`，并把 `status`（HTTP）与 `code`（业务错误码）挂到 Error 上 |
 | `storage.*` 落点 | `edu_os_plugin:__app__:<manifest.id>:<key>` | `ol_pv_<pluginId>_<key>` |
 | 能力门禁 | ✅ `checkMethodPolicy` | ❌ **完全没有** |
 | `ui.toast` type | 硬编码 `'info'` | 白名单 `success|warning|error`，否则 `'info'` |
@@ -444,12 +444,38 @@ POST /api/plugins/:id(*)/sandbox-command
 行为：`requireScopedAuth('authenticated')` → `pluginActorIdFor(manifestId, pluginId)` →
 `bus.createCommand(resolvedType, payload ?? {}, pluginActor)`。
 
-| 情况                 | 响应                                                                           |
-| -------------------- | ------------------------------------------------------------------------------ |
-| 缺 `type`            | `400 'Missing command type'`                                                   |
-| 插件行找不到         | `404 \`Plugin "<targetId>" not found\``                                        |
-| 命令类型没有 handler | `` 404 `No handler registered for command type "<resolvedType>".` ``           |
-| 能力不足             | 由内核 `ActionDescriptor.capabilityRequired` 裁决（见 {doc}`token-reference`） |
+| 情况                   | 响应                                                                                                                             |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| 缺 `type`              | `400 { success:false, code:'COMMAND_TYPE_REQUIRED', error:'Missing command type' }`                                              |
+| 插件行找不到           | `404 { success:false, code:'PLUGIN_NOT_FOUND', error:'Plugin "<targetId>" not found' }`                                          |
+| 命令类型没有 handler   | `404 { success:false, code:'COMMAND_HANDLER_NOT_REGISTERED', error:'No handler registered for command type "<resolvedType>".' }` |
+| 能力不足               | 由内核 `ActionDescriptor.capabilityRequired` 裁决：`403 COMMAND_CAPABILITY_DENIED`（见 {doc}`token-reference`）                  |
+| `inputSchema` 校验失败 | `400 COMMAND_PAYLOAD_INVALID`（内核抛错，`sendSafeError` 透传 code）                                                             |
+
+```{important}
+### 错误契约：插件前端能区分「未注册 / 权限不足 / 参数错」
+
+`/sandbox-command` 的错误响应统一带 **HTTP status + `code`**：
+
+- 4xx：`sendSafeError` 透传 `err.code`；
+- 5xx：生产环境不暴露内部 `code`，message 脱敏为 `Internal server error`。
+
+两条桥接通道都会把这些字段交给插件：
+
+- **frame 通道**（`ctx.invokeCommand`）：返回值仍是完整信封
+  `{ success, result, error, code, status }`，插件自己读 `code` / `status`；
+- **view 通道**（`OpenLearnPluginBridge.invokeCommand`）：失败时 reject 的 `Error`
+  上带 `error.status` 与 `error.code`，不再只剩 `message`。
+
+插件按 `err.code` 分支即可，不需要再嗅探本地化文案：
+
+| `err.code`                        | 含义                                  |
+| --------------------------------- | ------------------------------------- |
+| `COMMAND_HANDLER_NOT_REGISTERED`  | 命令名写错，或插件未激活 / 未注册     |
+| `COMMAND_CAPABILITY_DENIED`       | 插件能力未获批                        |
+| `COMMAND_PAYLOAD_INVALID`         | payload 不符合 `inputSchema`          |
+| —（`err.status >= 500`）          | 宿主故障，可重试                      |
+```
 
 ```{important}
 **actor 被强制覆写为 `plugin:<manifestId>`，与点击它的用户无关。**
