@@ -9,7 +9,7 @@ import type {
   FileProcessorStage,
   IFileStorageExtensionRegistry,
 } from '../../../packages/core/di/interfaces.js';
-import { countPdfPages } from '../course-package-assets.js';
+import { countPdfPages, countPptxSlides } from '../course-package-assets.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -132,6 +132,35 @@ export function createBuiltinPdfPageCountProcessor(): FileProcessor {
         } catch {
           // pdfinfo is optional; keep pure-JS page count fallback cleanly
         }
+      }
+      return { metadataPatch: { slideCount } };
+    },
+  };
+}
+
+/**
+ * Built-in fail-open processor that extracts PPTX slide counts (`metadata.slideCount`)
+ * by counting `ppt/slides/slideN.xml` zip entries (pure JS, jszip).
+ *
+ * 此前 `/api/upload` 对 PPTX 硬编码 `slideCount: 1`（IKYMW8 放大器）：前端 viewer
+ * 挂载后回报真实页数，`slideCount` 恒不匹配，必然触发一次多余的元素更新写。
+ * 与 PDF processor 同范式：解析失败不阻断存储（fail-open，回落 1）。
+ */
+export function createBuiltinPptxSlideCountProcessor(): FileProcessor {
+  return {
+    id: 'builtin:pptx-slide-count',
+    displayName: 'PPTX 页数解析',
+    stage: 'after-store',
+    priority: 10,
+    timeoutMs: 5_000,
+    match: {
+      extensions: ['.pptx'],
+      mimes: ['application/vnd.openxmlformats-officedocument.presentationml.presentation'],
+    },
+    async run(ctx: FileProcessorContext): Promise<FileProcessorResult> {
+      let slideCount = 1;
+      if (ctx.buffer) {
+        slideCount = Math.max(1, await countPptxSlides(ctx.buffer));
       }
       return { metadataPatch: { slideCount } };
     },

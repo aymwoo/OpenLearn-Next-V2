@@ -146,6 +146,32 @@ export function RevealPresentationWrapper({
   const isFullscreenForced = !!data.isFullscreenForced;
   const isContainerFullscreen = isFullscreen || (isStudent && isFullscreenSynced && isFullscreenForced);
 
+  // ── viewer 实例键（IKYMW8 护栏）────────────────────────────────────────
+  // 卡片 / 放映两个 viewer 互斥重挂载（key 含槽位与 fileUrl）。真实 viewer 在
+  // 解析完成前会先回报「解析起始页」且 getActiveSlideIndex() 也只反映 initialSlide，
+  // 两者都无法与「用户真实导航」区分 —— 只能用「该实例是否已回报过 slideCount」
+  // 标记解析完成：解析完成前的页码回报一律视为噪声，忽略并把目标页重推给它。
+  const activeViewerSlot = isContainerFullscreen ? 'fs' : 'card';
+  const activeViewerKey = `${fileUrl}#${activeViewerSlot}`;
+  const activeViewerSlotRef = useRef<'card' | 'fs'>('card');
+  activeViewerSlotRef.current = activeViewerSlot;
+  const activeViewerKeyRef = useRef(activeViewerKey);
+  activeViewerKeyRef.current = activeViewerKey;
+  /** 已完成解析（回报过 slideCount）的 viewer 实例键 */
+  const parsedViewerKeyRef = useRef<string | null>(null);
+  /** 护栏（pendingPptxTargetRef）挂靠的 viewer 实例键：实例切换时旧护栏作废 */
+  const pendingViewerKeyRef = useRef<string | null>(null);
+  const prevViewerKeyRef = useRef<string | null>(null);
+  if (prevViewerKeyRef.current !== activeViewerKey) {
+    // 实例切换（卡片 ↔ 放映、换课件）：**在渲染期**挂上目标页护栏 —— 子组件
+    // effect 先于父组件 effect 运行，护栏放 effect 里会被新实例的解析期回报
+    // 抢跑（实测：放映实例挂载 21ms 内回报解析起始页 0 并被采纳，全班跟随的
+    // 页码被拽回旧页）。护栏由 viewer 回报命中目标页时解除。
+    prevViewerKeyRef.current = activeViewerKey;
+    pendingPptxTargetRef.current = slideIndexRef.current;
+    pendingViewerKeyRef.current = activeViewerKey;
+  }
+
   // Parse slides
   const slides = markdown
     .split(/(?:\r?\n|^)---(?:\r?\n|$)/)
@@ -250,40 +276,71 @@ export function RevealPresentationWrapper({
 
   // Sync active slide index to PowerPointViewer instances
   useEffect(() => {
-    if (fileType === 'pptx') {
-      const activeRef = isContainerFullscreen ? pptxViewerFsRef.current : pptxViewerCardRef.current;
-      if (activeRef) {
-        try {
-          const currentIdx = activeRef.getActiveSlideIndex?.();
-          if (currentIdx !== undefined) {
-            if (currentIdx === slideIndex) {
-              // viewer 已经在目标页：程序化翻页完成，撤销护栏。
-              if (pendingPptxTargetRef.current === slideIndex) {
-                pendingPptxTargetRef.current = null;
-              }
-            } else {
-              activeRef.setActiveSlideIndex?.(slideIndex);
-            }
+    if (fileType !== 'pptx') return;
+    const activeRef = activeViewerSlotRef.current === 'fs' ? pptxViewerFsRef.current : pptxViewerCardRef.current;
+    if (!activeRef) return;
+    try {
+      const currentIdx = activeRef.getActiveSlideIndex?.();
+      if (currentIdx !== undefined) {
+        if (currentIdx === slideIndex) {
+          // 同实例已在目标页：程序化翻页完成，撤销护栏。仅当该实例已完成解析
+          // 时才可信 —— 解析前的 getActiveSlideIndex() 只反映 initialSlide。
+          if (
+            parsedViewerKeyRef.current === activeViewerKeyRef.current &&
+            pendingViewerKeyRef.current === activeViewerKeyRef.current &&
+            pendingPptxTargetRef.current === slideIndex
+          ) {
+            pendingPptxTargetRef.current = null;
           }
-        } catch (e) {
-          console.warn('[RevealPresentationWrapper] Failed to sync PPTX slide index:', e);
+        } else {
+          activeRef.setActiveSlideIndex?.(slideIndex);
         }
       }
+    } catch (e) {
+      console.warn('[RevealPresentationWrapper] Failed to sync PPTX slide index:', e);
     }
   }, [slideIndex, fileType, isContainerFullscreen]);
 
   // Handlers for PowerPointViewer callbacks
   const handlePptxActiveSlideChange = useCallback(
     (newIndex: number) => {
-      // 包装组件刚发起过程序化翻页：viewer 内部 state 会晚一帧才更新，
-      // 期间它回报的旧页码不能用来回写 slideIndex（否则来回闪动）。
+      const activeKey = activeViewerKeyRef.current;
+      const syncTarget = slideIndexRef.current;
+      const pushTarget = () => {
+        try {
+          (activeViewerSlotRef.current === 'fs' ? pptxViewerFsRef : pptxViewerCardRef).current?.setActiveSlideIndex?.(
+            syncTarget,
+          );
+        } catch {
+          // viewer 未就绪：由下一次回报或同步 effect 兜底
+        }
+      };
+
+      // 解析期噪声护栏（IKYMW8）：当前实例尚未完成首次解析（未回报过 slideCount）
+      // 时，任何页码回报都不是用户导航 —— 真实 viewer 解析完成前会先回报解析起始页
+      // （实测进放映 21ms 内即回报 0）。命中目标页视为同步确认；否则忽略并重推目标页。
+      if (parsedViewerKeyRef.current !== activeKey) {
+        if (newIndex !== syncTarget) {
+          pushTarget();
+        } else {
+          pendingPptxTargetRef.current = null;
+        }
+        return;
+      }
+
+      // 包装组件刚发起过程序化翻页（Issue #381）：viewer 内部 state 会晚一帧才更新，
+      // 期间它回报的旧页码不能用来回写 slideIndex（否则来回闪动）。重推目标页是
+      // 幂等的（指向同一页的 setActiveSlideIndex 无副作用）。
       const pendingTarget = pendingPptxTargetRef.current;
-      if (pendingTarget !== null) {
-        if (newIndex !== pendingTarget) return;
+      if (pendingTarget !== null && pendingViewerKeyRef.current === activeKey) {
+        if (newIndex !== pendingTarget) {
+          pushTarget();
+          return;
+        }
         pendingPptxTargetRef.current = null;
       }
 
-      if (newIndex === slideIndexRef.current) return;
+      if (newIndex === syncTarget) return;
 
       // viewer 内部真正换页（缩略图 / 键盘）：采纳并同步给其他人。
       slideIndexRef.current = newIndex;
@@ -291,10 +348,10 @@ export function RevealPresentationWrapper({
       onSlideChangeRef.current?.(newIndex, totalSlidesRef.current);
       const update = onElementUpdateRef.current;
       if (isTeacher && update) {
-        update(elementId, {
-          ...dataRef.current,
-          slideX: newIndex,
-        });
+        // 增量写（IKYMW8）：服务端按顶层浅合并落库，这里只上报真正变化的字段。
+        // 整包展开 `...dataRef.current` 会把渲染快照里的过期 slideX /
+        // isFullscreenForced 一起写回，静默回滚其它端刚写入的值。
+        update(elementId, { slideX: newIndex });
       }
     },
     // 不能依赖 slideIndex / onElementUpdate：回调身份变化会触发 viewer
@@ -304,12 +361,15 @@ export function RevealPresentationWrapper({
 
   const handlePptxSlideCountChange = useCallback(
     (count: number) => {
+      // 解析完成信号：无论数值是否变化，都标记当前实例「已解析」，
+      // 解除 handlePptxActiveSlideChange 的解析期噪声护栏。
+      parsedViewerKeyRef.current = activeViewerKeyRef.current;
       const update = onElementUpdateRef.current;
       if (count > 0 && isTeacher && update && dataRef.current.slideCount !== count) {
-        update(elementId, {
-          ...dataRef.current,
-          slideCount: count,
-        });
+        // 增量写（IKYMW8）：viewer 挂载回报页数总是晚于翻页/放映写，此处若整包
+        // 展开过期快照，会把刚写入的 slideX / isFullscreenForced 一并回滚 ——
+        // 学生端因此永远进不了同步放映。只上报 slideCount 一个字段。
+        update(elementId, { slideCount: count });
       }
     },
     [isTeacher, elementId],
@@ -380,7 +440,8 @@ export function RevealPresentationWrapper({
         const next = (prev + 1) % Math.max(1, slides.length);
         slideIndexRef.current = next;
         if (onElementUpdate) {
-          onElementUpdate(elementId, { ...dataRef.current, slideX: next });
+          // 增量写（IKYMW8）：只上报变化字段，避免过期快照回滚并发写入。
+          onElementUpdate(elementId, { slideX: next });
         }
         return next;
       });
@@ -439,19 +500,23 @@ export function RevealPresentationWrapper({
     slideIndexRef.current = validIndex;
     if (fileType === 'pptx') {
       // 记录目标页：在 viewer 追上之前忽略它回报的旧页码。
+      // 护栏挂靠当前实例：实例切换（旧护栏作废）不会误伤本次翻页的目标页。
       pendingPptxTargetRef.current = validIndex;
+      pendingViewerKeyRef.current = activeViewerKeyRef.current;
     }
     setSlideIndex(validIndex);
     onSlideChangeRef.current?.(validIndex, totalSlides);
     if (isTeacher && onElementUpdate) {
-      onElementUpdate(elementId, { ...data, slideX: validIndex });
+      // 增量写（IKYMW8）：翻页是全班实时跟随的高频写，只上报 slideX。
+      onElementUpdate(elementId, { slideX: validIndex });
     }
   };
 
   const handleMarkdownChange = (newMd: string) => {
     setMarkdown(newMd);
     if (onElementUpdate) {
-      onElementUpdate(elementId, { ...data, markdown: newMd });
+      // 增量写（IKYMW8）：markdown 与 slideX / 放映标志互不覆盖。
+      onElementUpdate(elementId, { markdown: newMd });
     }
   };
 
@@ -512,8 +577,8 @@ export function RevealPresentationWrapper({
         // v0.6.1 修复：服务端返回的是 fileUrl/fileType/slideCount，此前客户端
         // 读 url/type/pageCount —— 全部错位，上传成功后 fileUrl 也是 undefined，
         // 课件永远无法加载。
+        // 增量写（IKYMW8）：只上报本次上传真正要改的字段，其余交给服务端合并。
         await onElementUpdate(elementId, {
-          ...data,
           fileUrl: resData.fileUrl,
           fileName: file.name,
           fileType: resData.fileType,
@@ -537,8 +602,8 @@ export function RevealPresentationWrapper({
   const handleClearFile = () => {
     if (window.confirm('确定要清除已上传的课件并恢复为 Markdown 编辑模式吗？')) {
       if (onElementUpdate) {
+        // 增量写（IKYMW8）：清空字段按空值上报，由服务端合并，不整包覆盖。
         onElementUpdate(elementId, {
-          ...data,
           fileUrl: '',
           fileName: '',
           fileType: 'md',
@@ -556,17 +621,15 @@ export function RevealPresentationWrapper({
   const handleToggleFullscreen = (val: boolean) => {
     setIsFullscreen(val);
     if (isTeacher && onElementUpdate) {
-      onElementUpdate(elementId, {
-        ...data,
-        isFullscreenForced: val,
-      });
+      // 增量写（IKYMW8）：放映标志单独写，翻页与放映互不覆盖。
+      onElementUpdate(elementId, { isFullscreenForced: val });
     }
   };
 
   const handleToggleFullscreenSync = (val: boolean) => {
     if (onElementUpdate) {
+      // 增量写（IKYMW8）：同步开关与放映标志一起作为本字段对的增量上报。
       onElementUpdate(elementId, {
-        ...data,
         isFullscreenSynced: val,
         isFullscreenForced: val ? isFullscreen : false,
       });
@@ -646,8 +709,8 @@ export function RevealPresentationWrapper({
               onClick={(e) => {
                 e.stopPropagation();
                 if (window.confirm('确定要移除此附件引用吗？（不会删除已上传的文件）')) {
+                  // 增量写（IKYMW8）：移除引用只清空引用字段，不整包覆盖。
                   onElementUpdate(elementId, {
-                    ...data,
                     fileUrl: '',
                     fileName: '',
                     fileType: 'md',

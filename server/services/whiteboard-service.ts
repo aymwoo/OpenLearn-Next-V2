@@ -24,6 +24,37 @@ export interface ResetWhiteboardResult {
   message: string;
 }
 
+function isPlainJsonObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function parseMaybeJson(value: unknown): unknown {
+  if (typeof value !== 'string') return value;
+  try {
+    return JSON.parse(value) as unknown;
+  } catch {
+    return value;
+  }
+}
+
+/**
+ * 白板元素更新载荷合并（纯函数，供单测覆盖）。
+ *
+ * 规则见 {@link WhiteboardService.updateElement} 的合并写说明：双方均为普通对象时
+ * 顶层浅合并（incoming 优先）；任一方不是普通对象时保持旧的整包替换语义 ——
+ * 字符串原样透传，对象/数组序列化。
+ */
+export function mergeWhiteboardElementData(existingData: unknown, incomingData: unknown): string {
+  const existingValue = parseMaybeJson(existingData);
+  const incomingValue = parseMaybeJson(incomingData);
+
+  if (isPlainJsonObject(existingValue) && isPlainJsonObject(incomingValue)) {
+    return JSON.stringify({ ...existingValue, ...incomingValue });
+  }
+  if (typeof incomingData === 'string') return incomingData;
+  return JSON.stringify(incomingValue ?? {});
+}
+
 export class WhiteboardService {
   constructor(
     private readonly db: Database.Database = kernelContainer.db,
@@ -235,7 +266,24 @@ export class WhiteboardService {
   }
 
   /**
-   * 更新白板元素
+   * 更新白板元素（合并写）
+   *
+   * 两条浏览器持久化路径（授课视图直接 PUT、备课编辑器 800ms 防抖 autosave）都以
+   * 「组件内存里的元素数据快照」作为 PUT body。快照从写入到落库再到下次拉取之间存在
+   * 秒级窗口，期间任何**其它字段**的变化（如演示文稿翻页 `slideX`、放映同步
+   * `isFullscreenForced`）都会被下一发携带过期快照的整包 PUT 静默回滚 —— 表现为
+   * 「教师端已改、学生端卡在旧状态」（Issue IKYMW8：PPTX 进放映时 viewer 异步回报
+   * slideCount，其整包写把刚写入的页码与放映标志一起打掉）。
+   *
+   * 因此 HTTP 入口在此做**顶层浅合并**：incoming 是普通对象且库内现存 data 也是
+   * 普通对象时，按 `{...existing, ...incoming}` 合并落库，让浏览器写入天然成为
+   * 语义增量 —— 过期快照只更新它真正改动的字段，不再回滚并发字段。
+   *
+   * 语义边界：
+   * - 顶层键整体替换（数组、嵌套对象作为单键值原样覆盖），与既有「无删键语义」
+   *   的写入方完全兼容（清空字段均为空串写入，不依赖删除键）。
+   * - 任何一方不是普通对象（非法 JSON / 数组 / 标量）时保持旧的整包替换语义，
+   *   命令总线的 `whiteboard.update`（AI Agent 等程序化调用方）不经此处，仍是全量写。
    */
   public async updateElement(params: {
     lessonId: string;
@@ -244,12 +292,22 @@ export class WhiteboardService {
     actorId?: string;
   }): Promise<any> {
     const { lessonId, elementId, data, actorId = 'user-frontend' } = params;
+    let existingData: unknown;
+    try {
+      const row = this.db
+        .prepare('SELECT data FROM whiteboard_elements WHERE id = ? AND lesson_id = ?')
+        .get(elementId, lessonId) as { data?: string } | undefined;
+      existingData = row?.data;
+    } catch {
+      // 读取失败时退回整包替换，保持可用性优先
+      existingData = undefined;
+    }
     const cmd = this.commandBus.createCommand(
       'whiteboard.update',
       {
         lessonId,
         elementId,
-        data: typeof data === 'string' ? data : JSON.stringify(data),
+        data: mergeWhiteboardElementData(existingData, data),
       },
       actorId,
       { approved: true },

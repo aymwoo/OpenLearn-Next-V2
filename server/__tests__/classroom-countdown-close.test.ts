@@ -71,10 +71,7 @@ describe('课堂倒计时关闭动作（服务端持久化 + 广播）', () => {
 
     const app = express();
     app.use(express.json());
-    registerClassroomRoutes(
-      { app, io: fakeIo } as unknown as ServerContext,
-      new ClassroomRuntimeService(db),
-    );
+    registerClassroomRoutes({ app, io: fakeIo } as unknown as ServerContext, new ClassroomRuntimeService(db));
 
     await new Promise<void>((resolve) => {
       server = createServer(app).listen(0, () => resolve());

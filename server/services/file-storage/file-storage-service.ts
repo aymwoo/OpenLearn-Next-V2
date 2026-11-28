@@ -16,7 +16,11 @@ import {
   validateLayoutTemplate,
 } from './layout-policy.js';
 import { LocalFileStorage } from './local-backend.js';
-import { FileProcessorRunner, createBuiltinPdfPageCountProcessor } from './processors.js';
+import {
+  FileProcessorRunner,
+  createBuiltinPdfPageCountProcessor,
+  createBuiltinPptxSlideCountProcessor,
+} from './processors.js';
 import {
   DEFAULT_FILE_STORAGE_CONFIG,
   type FileAssetWithBlob,
@@ -107,6 +111,12 @@ export class FileStorageService {
         .find((entry) => entry.processor.id === 'builtin:pdf-page-count');
       if (!existing) {
         this.registry.registerProcessor('kernel:file-storage', createBuiltinPdfPageCountProcessor());
+      }
+      const existingPptx = this.registry
+        .listProcessors('after-store')
+        .find((entry) => entry.processor.id === 'builtin:pptx-slide-count');
+      if (!existingPptx) {
+        this.registry.registerProcessor('kernel:file-storage', createBuiltinPptxSlideCountProcessor());
       }
     }
     this.processorRunner = new FileProcessorRunner(this.registry);

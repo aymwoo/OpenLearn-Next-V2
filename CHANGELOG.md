@@ -51,6 +51,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 ### Fixes
 
 - **课堂倒计时无法关闭、学生端横幅残留**：互动白板工具栏 / 顶栏 / 大屏投影的倒计时新增「关闭」按钮（仅在教师发起过倒计时后出现）。关闭会停表并把剩余时间回退到总时长，双方一起回到开始之前的就绪态：教师端退出大屏投影与设置浮层；学生端横幅消失。服务端新增 `close` 动作并把 `dismissed` 一并持久化，因此学生刷新或重连后不会再弹出，直到教师重新开始（`start` / `resume` 自动清除该标记）。至此「重置」只回零、不再承担结束语义。
+- **PPTX 演示文稿放映时学生端翻页不同步（Gitee IKYMW8）**：白板演示文稿组件的元素更新此前是「整包展开渲染快照」写法，教师进 PPTX 放映时新挂载的全屏 viewer 异步回报真实页数，`onSlideCountChange` 的整包写把渲染快照里**过期的** `slideX` / `isFullscreenForced` 一并回写到服务端（实测在放映写后 8–21ms 覆盖），学生端因此永远进不了「同步学生全屏」的强制放映、页码被拽回旧页——表现为专注锁定下「教师播放下一页，学生端不跟随」。修复分三层：服务端 `whiteboard.update`（HTTP 路径）改为与库内数据**顶层浅合并**落库，过期快照不再能回滚并发字段，AI Agent 等程序化命令调用方保持全量语义；演示文稿组件全部改为**增量写**（翻页只报 `slideX`、放映只报 `isFullscreenForced`、页数只报 `slideCount`）；新增 **viewer 实例护栏**——卡片/放映 viewer 互斥重挂载时在渲染期挂上目标页护栏，解析完成（首次回报 slideCount）前的页码回报一律视为解析期噪声，忽略并幂等重推目标页（此前该回报会在放映后 21ms 被采纳为 `slideX: 0`）。另修复 `POST /api/upload` 对 PPTX 硬编码 `slideCount: 1`（现由文件存储的 PPTX 页数解析 processor 按 zip 内 `ppt/slides/slideN.xml` 计数），消除每次首挂载必然触发的多余元素更新写。
 - **`rolesAllowed` 声明后从不生效**：扩展点的角色门控此前只有类型声明、运行时不消费，任何插件写了都等于没写。现在由 `extension-point-renderer` 在**渲染期**按当前角色过滤，教师切换「学生视图」预览时即时生效。
 - **`rolesAllowed` 的 `admin` 角色永不命中**：`activeRole` 只有 `teacher` / `student`，管理员会话是 `role: 'teacher'` + `subRole: 'administrator'`，因此声明 `rolesAllowed: ['admin']` 的扩展此前在任何界面都不会渲染。现在渲染器会把管理员会话额外映射为 `'admin'`（普通教师 / 学生不受影响），并在渲染期随会话变化即时生效。
 - **空槽位吞掉调用点 fallback**：`ExtensionPointRenderer` 在槽位没有贡献、或活动槽未匹配到扩展时直接返回 `null`，调用点传入的 `fallback`（如学案活动「插件未加载」提示）永远不会出现，现改为 `fallback ?? null`。

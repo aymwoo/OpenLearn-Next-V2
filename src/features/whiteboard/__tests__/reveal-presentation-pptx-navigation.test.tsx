@@ -14,12 +14,19 @@ import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/re
  *   1. `initialSlide` 只在首次加载生效；
  *   2. `activeSlideIndex` 或 `onActiveSlideChange` 身份变化时回报当前页。
  */
-const viewerTrace = vi.hoisted(() => ({ callbacks: [] as number[] }));
+const viewerTrace = vi.hoisted(() => ({
+  callbacks: [] as number[],
+  /** 最近一次挂载的 FakeViewer props：供用例模拟 viewer 晚到的 slideCount 回报 */
+  lastProps: null as (FakeViewerProps & { onSlideCountChange?: (count: number) => void }) | null,
+  /** IKYMW8 时序模拟：新挂载实例无视 initialSlide，从解析起始页 0 开始 */
+  noiseMount: false,
+}));
 
 /** 与 `pptx-react-viewer` 交互所需的最小 props 形状（只取本用例用到的字段） */
 type FakeViewerProps = {
   initialSlide?: number;
   onActiveSlideChange?: (index: number) => void;
+  onSlideCountChange?: (count: number) => void;
 };
 
 /** `onElementUpdate` 的回写载荷形状：本用例只关心 `slideX` */
@@ -30,9 +37,11 @@ type ElementUpdateHandler = (id: string, data: UpdatedElementData) => Promise<vo
 vi.mock('pptx-react-viewer', () => {
   const FakeViewer = React.forwardRef<unknown, FakeViewerProps>((props, ref) => {
     const { initialSlide, onActiveSlideChange } = props;
-    const [idx, setIdx] = React.useState(initialSlide ?? 0);
+    // IKYMW8：noiseMount 模拟真实 viewer 解析期行为 —— initialSlide 未生效，先停在起始页
+    const [idx, setIdx] = React.useState(viewerTrace.noiseMount ? 0 : (initialSlide ?? 0));
     const idxRef = React.useRef(idx);
     idxRef.current = idx;
+    viewerTrace.lastProps = props as FakeViewerProps & { onSlideCountChange?: (count: number) => void };
 
     React.useImperativeHandle(
       ref,
@@ -52,6 +61,8 @@ vi.mock('pptx-react-viewer', () => {
       if (viewerTrace.callbacks.length > 50) {
         throw new Error('onActiveSlideChange 出现循环调用');
       }
+      // 与真实 viewer 对齐：解析完成先回报 slideCount，再回报当前页。
+      props.onSlideCountChange?.(5);
       onActiveSlideChange?.(idx);
     }, [idx, onActiveSlideChange]);
 
@@ -142,5 +153,131 @@ describe('RevealPresentationWrapper PPTX 翻页（Issue #381）', () => {
 
     await waitFor(() => expect(screen.getByTestId('fake-viewer').textContent).toBe('viewer-slide-3'));
     expect(slideXUpdates).toEqual([3]);
+  });
+});
+
+/**
+ * 回归：Issue IKYMW8 —— 教师进入 PPTX 放映时学生端翻页不同步。
+ *
+ * 根因：包装组件的元素更新是「整包展开渲染快照」的写法。教师进放映时全屏
+ * PowerPointViewer 实例重挂载并异步回报真实页数，`onSlideCountChange` 的
+ * 整包写把渲染快照里**过期的** slideX / isFullscreenForced 一起回写到服务端
+ * （实测在放映写后 8ms 覆盖），学生端因此永远进不了同步放映、页码被拽回旧页。
+ *
+ * 修复：包装组件全部改为**增量写**（服务端顶层浅合并落库）。本组用例锁定
+ * 每条写路径的载荷都必须是纯增量 —— 不携带任何未变化的字段。
+ */
+describe('RevealPresentationWrapper 增量写契约（Issue IKYMW8）', () => {
+  beforeEach(() => {
+    viewerTrace.callbacks.length = 0;
+    viewerTrace.lastProps = null;
+    viewerTrace.noiseMount = false;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        arrayBuffer: () => Promise.resolve(new ArrayBuffer(32)),
+      }),
+    );
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it('翻页写入只携带 slideX，不携带任何过期快照字段', async () => {
+    const payloads: Record<string, unknown>[] = [];
+    const onElementUpdate = vi.fn(async (_id: string, d: Record<string, unknown>) => {
+      payloads.push(d);
+    });
+
+    render(
+      <RevealPresentationWrapper
+        elementId="pres-delta"
+        data={{ fileUrl: '/uploads/deck.pptx', fileType: 'pptx', slideCount: 5, slideX: 1, isFullscreenSynced: true }}
+        userRole="teacher"
+        onElementUpdate={onElementUpdate}
+      />,
+    );
+    await waitFor(() => expect(screen.getByTestId('fake-viewer')).toBeTruthy());
+
+    const nextButton = screen.getAllByRole('button').find((button) => button.querySelector('svg.lucide-chevron-right'));
+    fireEvent.click(nextButton!);
+
+    await waitFor(() => expect(payloads.length).toBeGreaterThan(0));
+    expect(payloads).toEqual([{ slideX: 2 }]);
+  });
+
+  it('进放映后再回报 slideCount，三段写入互不覆盖（放映时序回归）', async () => {
+    const payloads: Record<string, unknown>[] = [];
+    const onElementUpdate = vi.fn(async (_id: string, d: Record<string, unknown>) => {
+      payloads.push(d);
+    });
+
+    render(
+      <RevealPresentationWrapper
+        elementId="pres-delta-fs"
+        data={{ fileUrl: '/uploads/deck.pptx', fileType: 'pptx', slideCount: 5, slideX: 1, isFullscreenSynced: true }}
+        userRole="teacher"
+        onElementUpdate={onElementUpdate}
+      />,
+    );
+    await waitFor(() => expect(screen.getByTestId('fake-viewer')).toBeTruthy());
+
+    // 1. 教师翻到第 3 页
+    const nextButton = screen.getAllByRole('button').find((button) => button.querySelector('svg.lucide-chevron-right'));
+    fireEvent.click(nextButton!);
+    await waitFor(() => expect(payloads).toEqual([{ slideX: 2 }]));
+
+    // 2. 教师进入全屏放映
+    const fsButton = screen.getAllByRole('button').find((button) => button.getAttribute('title') === '全屏放映');
+    expect(fsButton).toBeTruthy();
+    fireEvent.click(fsButton!);
+    await waitFor(() => expect(payloads).toEqual([{ slideX: 2 }, { isFullscreenForced: true }]));
+
+    // 3. 全屏 viewer 重挂载后异步回报页数（与服务端持久值不一致，真实课堂里
+    //    旧版 /api/upload 对 PPTX 硬编码 1，任何一次重解析都可能产生差异）
+    await waitFor(() => expect(viewerTrace.lastProps).toBeTruthy());
+    viewerTrace.lastProps!.onSlideCountChange?.(6);
+
+    // 关键断言：晚到的 slideCount 写是纯增量，不再把 slideX / isFullscreenForced 拽回旧值
+    await waitFor(() => expect(payloads).toEqual([{ slideX: 2 }, { isFullscreenForced: true }, { slideCount: 6 }]));
+  });
+
+  it('进放映时新挂载 viewer 回报解析起始页（0）不产生元素写（IKYMW8 时序回归）', async () => {
+    const payloads: Record<string, unknown>[] = [];
+    const onElementUpdate = vi.fn(async (_id: string, d: Record<string, unknown>) => {
+      payloads.push(d);
+    });
+
+    render(
+      <RevealPresentationWrapper
+        elementId="pres-fs-noise"
+        data={{ fileUrl: '/uploads/deck.pptx', fileType: 'pptx', slideCount: 5, slideX: 1, isFullscreenSynced: true }}
+        userRole="teacher"
+        onElementUpdate={onElementUpdate}
+      />,
+    );
+    await waitFor(() => expect(screen.getByTestId('fake-viewer')).toBeTruthy());
+
+    // 1. 教师翻到第 3 页
+    const nextButton = screen.getAllByRole('button').find((button) => button.querySelector('svg.lucide-chevron-right'));
+    fireEvent.click(nextButton!);
+    await waitFor(() => expect(payloads).toEqual([{ slideX: 2 }]));
+
+    // 2. 新挂载的放映实例解析期先停在起始页（真实 viewer：initialSlide 未生效）
+    viewerTrace.noiseMount = true;
+    const fsButton = screen.getAllByRole('button').find((button) => button.getAttribute('title') === '全屏放映');
+    fireEvent.click(fsButton!);
+    await waitFor(() => expect(payloads).toEqual([{ slideX: 2 }, { isFullscreenForced: true }]));
+
+    // 3. 护栏重推目标页后，放映实例被同步到第 3 页
+    await waitFor(() => expect(screen.getByTestId('fake-viewer').textContent).toBe('viewer-slide-2'));
+
+    // 关键断言：解析期页码回报被护栏拦截，没有产生任何 slideX=0 的元素写
+    expect(payloads).toEqual([{ slideX: 2 }, { isFullscreenForced: true }]);
   });
 });

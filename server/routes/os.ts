@@ -143,8 +143,12 @@ export function registerOsRoutes(ctx: ServerContext, runService?: ActivityRunSer
         },
       });
 
+      // PDF 页数由 builtin:pdf-page-count processor 解析；PPTX 页数由
+      // builtin:pptx-slide-count processor 解析（IKYMW8：此前 PPTX 硬编码 1，
+      // 前端 viewer 挂载回报真实页数后，slideCount 恒不匹配必然触发一次
+      // 多余的元素更新写）。
       const slideCount =
-        ext === '.pdf' && typeof stored.metadata?.slideCount === 'number' && stored.metadata.slideCount > 0
+        typeof stored.metadata?.slideCount === 'number' && stored.metadata.slideCount > 0
           ? stored.metadata.slideCount
           : 1;
 
