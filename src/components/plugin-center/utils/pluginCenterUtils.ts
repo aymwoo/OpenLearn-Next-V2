@@ -1,6 +1,19 @@
 import { parsePluginSource as extractStaticPluginSource } from '../../../utils/pluginParsers';
 
 /**
+ * 系统插件：内核启动时预加载的内置插件，id 统一落在 `@openlearn/` 命名空间。
+ * 它们随宿主生命周期注册与启停，不属于用户安装的扩展。
+ */
+export function isSystemPlugin(plugin: { id: string }): boolean {
+  return plugin.id.startsWith('@openlearn/');
+}
+
+/** 插件中心只展示用户安装的扩展，系统插件一律隐藏。 */
+export function excludeSystemPlugins<T extends { id: string }>(plugins: readonly T[]): T[] {
+  return plugins.filter((plugin) => !isSystemPlugin(plugin));
+}
+
+/**
  * 开发面板的实时预览。界面标注为静态解析，这里只调用 pluginParsers 的提取器，
  * 不在主线程执行编辑器文本。返回给 PluginDevPanel 的仍是 `{ manifest }`，
  * 字段与原先求值结果里的清单一致（id、name、version、author 等）。

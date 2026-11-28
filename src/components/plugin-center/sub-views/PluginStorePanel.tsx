@@ -18,6 +18,7 @@ import { usePluginHostStore } from '../../../plugin-host/plugin-host-store';
 import type { PluginType } from '../types';
 import type { Language } from '../../../i18n';
 import { sanitizeHref } from '../../../../packages/core/security/url-safety.js';
+import { isSystemPlugin } from '../utils/pluginCenterUtils';
 export interface PluginStorePanelProps {
   plugins: PluginType[];
   lang: Language;
@@ -149,7 +150,7 @@ export function PluginStorePanel({
               })()
             : '—';
 
-          const isSystem = plugin.id.startsWith('@openlearn/');
+          const isSystem = isSystemPlugin(plugin);
           const dashboardVisible = dashboardVisibilityMap.get(plugin.id) ?? true;
           const marketItem = marketMap.get(manifestInfo.manifestId || plugin.id);
           const hasUpdate = Boolean(marketItem?.hasUpdate);

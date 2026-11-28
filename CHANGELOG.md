@@ -64,7 +64,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 ### Refactor / Performance
 
 - **学生首页只保留默认布局**：移除「模块化自适应栅格工作台」工具条（作业攻坚 / 学情大屏 / 双列紧凑三种预设、恢复默认、窄屏「自定义布局」开关）以及每个组件头部的尺寸切换（1/3、1/2、2/3、Full）、前后移动、折叠展开与拖拽排序控件。`StudentDashboardPanel` 不再读写 `student_dashboard_layout_v4_<studentId>` 本地布局，组件顺序与宽度固定取自 `DEFAULT_WIDGET_LAYOUT`（教师可见性策略仍在渲染层过滤）；栅格容器 `#student-dashboard-modular-grid` 更名为 `#student-dashboard-grid`，`student-ui-policy` 移除失效的 `section.layout-toolbar` 功能 ID，`StudentQuickActionsFloatingMenu` 去掉 `onExpandWidget`，`docs/workspace/student-home-layout.md` 同步更新。
-- **插件中心移除「显示系统核心插件」开关**：发现页不再提供该系统核心插件显隐切换，插件列表始终展示全部已安装插件（含 `@openlearn/*` 核心插件），ZIP 安装入口保持不变。
+- **插件中心隐藏系统核心插件**：发现、社区、开发者三个子视图的已安装列表只保留用户自行安装的扩展，内核预加载的 `@openlearn/*` 核心插件（builtin / vfs / process / management / ai-planner 等）不再展示——它们随宿主启动注册，用户既不能停用也不能卸载；更新角标与旧格式迁移提示同步按可见插件统计。此前发现页的「显示系统核心插件」开关一并移除，ZIP 安装入口保持不变。
 - **只读白板按视口挂载插件渲染器**：`whiteboard.renderer` 的每个图元都会创建插件前端实例（含 iframe），全班专注锁定的只读演示态下这些实例原本全量挂载。新增 `DeferredMountWhenVisible`：可编辑态仍立即挂载（首屏零延迟），只读态改为进入视口（含 800px 预取边距）后才挂载且挂载后不再卸载；环境无 `IntersectionObserver` 时回退为立即挂载。
 
 ### Breaking Changes

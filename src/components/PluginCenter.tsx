@@ -25,6 +25,7 @@ import { PluginLogsPanel } from './plugin-center/sub-views/PluginLogsPanel';
 import { PluginDataPanel } from './plugin-center/sub-views/PluginDataPanel';
 import { PluginUninstallDialog } from './PluginUninstallDialog';
 import { PluginSnapshotRollbackModal } from './PluginSnapshotRollbackModal';
+import { excludeSystemPlugins } from './plugin-center/utils/pluginCenterUtils';
 import { sanitizeHref } from '../../packages/core/security/url-safety.js';
 export type { PluginType, PluginCenterProps } from './plugin-center/types';
 
@@ -59,6 +60,10 @@ export function PluginCenter({
   const [selectedZipFile, setSelectedZipFile] = useState<File | null>(null);
   const [updateTargetPluginId, setUpdateTargetPluginId] = useState<string | null>(null);
   const updateFileInputRef = useRef<HTMLInputElement>(null);
+
+  // 系统插件由宿主随启动预加载，既不能让用户停用/卸载，也不属于「已安装扩展」。
+  // 在入口统一过滤，发现 / 社区 / 开发者三个子视图都不再出现系统插件。
+  const visiblePlugins = useMemo(() => excludeSystemPlugins(plugins), [plugins]);
 
   // 卸载确认（Issue #141）：触发卸载前先弹出数据策略选择对话框
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string; manifestId: string } | null>(null);
@@ -155,7 +160,7 @@ export function PluginCenter({
     }
 
     let storeUpdates = 0;
-    for (const p of plugins) {
+    for (const p of visiblePlugins) {
       let manifestId = p.id;
       try {
         const parsed = JSON.parse(p.manifest);
@@ -171,7 +176,7 @@ export function PluginCenter({
       communityUpdateCount: communityUpdates,
       storeUpdateCount: storeUpdates,
     };
-  }, [communityPlugins, marketMap, plugins]);
+  }, [communityPlugins, marketMap, visiblePlugins]);
 
   // 社区插件安装完成后需要重新加载：插件的前端贡献点（导航/组件）是在
   // 启动时注册的，仅刷新列表不足以让新插件真正生效。与一键热更新保持一致。
@@ -293,7 +298,7 @@ export function PluginCenter({
     }
   };
 
-  const hasLegacyPlugins = plugins.some((p) => (p as any).execution_mode === 'legacy');
+  const hasLegacyPlugins = visiblePlugins.some((p) => (p as any).execution_mode === 'legacy');
 
   function MigrationPromptBanner() {
     return (
@@ -459,7 +464,7 @@ export function PluginCenter({
 
           {storeTab === 'store' ? (
             <PluginStorePanel
-              plugins={plugins}
+              plugins={visiblePlugins}
               lang={lang}
               isAdmin={isAdmin}
               marketMap={mergedMarketMap}
@@ -477,7 +482,7 @@ export function PluginCenter({
             />
           ) : storeTab === 'community' ? (
             <PluginCommunityPanel
-              installedPlugins={plugins}
+              installedPlugins={visiblePlugins}
               lang={lang}
               canConfigure={isAdmin}
               onInstalled={handleCommunityInstalled}
@@ -500,7 +505,7 @@ export function PluginCenter({
               lang={lang}
               pluginCode={pluginCode}
               setPluginCode={setPluginCode}
-              plugins={plugins}
+              plugins={visiblePlugins}
               installingPlugin={installingPlugin}
               onInstall={onInstall}
               onToggle={onToggle}

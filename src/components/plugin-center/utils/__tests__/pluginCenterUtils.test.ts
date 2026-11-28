@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { DEFAULT_PLUGIN, parsePluginSource } from '../pluginCenterUtils';
+import { DEFAULT_PLUGIN, excludeSystemPlugins, isSystemPlugin, parsePluginSource } from '../pluginCenterUtils';
 
 describe('parsePluginSource', () => {
   it('extracts id and name from a static manifest object', () => {
@@ -56,5 +56,21 @@ describe('parsePluginSource', () => {
 
   it('returns null for empty input', () => {
     expect(parsePluginSource('')).toBeNull();
+  });
+});
+
+describe('system plugin filtering', () => {
+  it('treats @openlearn/* ids as system plugins', () => {
+    expect(isSystemPlugin({ id: '@openlearn/plugin-builtin' })).toBe(true);
+    expect(isSystemPlugin({ id: 'ext-community-plugin' })).toBe(false);
+  });
+
+  it('keeps only user-installed plugins', () => {
+    const plugins = [
+      { id: '@openlearn/plugin-vfs' },
+      { id: 'ext-homework-hub' },
+      { id: '@openlearn/plugin-management' },
+    ];
+    expect(excludeSystemPlugins(plugins)).toEqual([{ id: 'ext-homework-hub' }]);
   });
 });
