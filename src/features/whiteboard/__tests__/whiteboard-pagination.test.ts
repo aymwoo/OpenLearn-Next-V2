@@ -13,6 +13,7 @@ import {
   isPageVisibleInSegment,
   planDeleteSegmentPage,
   selectElementsOnPage,
+  planElementPageRemap,
 } from '../utils/pagination-utils';
 
 describe('Interactive Whiteboard Pagination System', () => {
@@ -296,6 +297,89 @@ describe('Interactive Whiteboard Pagination System', () => {
       ];
       expect(filterCurrentPageElements(elements, 0, pages, 'seg-a')).toEqual([]);
       expect(filterCurrentPageElements(elements, 0, pages, 'seg-b').map((el) => el.id)).toEqual(['b-p1']);
+    });
+  });
+
+  describe('planElementPageRemap (IKW19P ① 结构性页操作后的存量元素重映射)', () => {
+    it('remove：删页后后续页缺 pageId 的元素下标整体前移并回填 pageId', () => {
+      const pages: WhiteboardPageItem[] = [
+        { id: 'a-0', title: 'A-1', order: 0, segmentId: 'seg-a' },
+        { id: 'b-0', title: 'B-1', order: 1, segmentId: 'seg-b' },
+        { id: 'b-1', title: 'B-2', order: 2, segmentId: 'seg-b' },
+      ];
+      const nextPages: WhiteboardPageItem[] = [
+        { id: 'b-0', title: 'B-1', order: 0, segmentId: 'seg-b' },
+        { id: 'b-1', title: 'B-2', order: 1, segmentId: 'seg-b' },
+      ];
+      const elements: WhiteboardElementLike[] = [
+        { id: 'pen-B1', type: 'pen', data: JSON.stringify({ page: 1, segmentId: 'seg-b' }) },
+        { id: 'pen-B2', type: 'pen', data: JSON.stringify({ page: 2, segmentId: 'seg-b' }) },
+      ];
+      const remaps = planElementPageRemap(elements, { type: 'remove', removedIndex: 0 }, nextPages);
+      expect(remaps).toEqual([
+        { element: elements[0], nextPage: 0, nextPageId: 'b-0' },
+        { element: elements[1], nextPage: 1, nextPageId: 'b-1' },
+      ]);
+    });
+
+    it('remove：被删页上的元素与更前方的元素不参与重映射', () => {
+      const pages: WhiteboardPageItem[] = [{ id: 'p1', title: 'P2', order: 0 }];
+      const elements: WhiteboardElementLike[] = [
+        { id: 'on-removed', type: 'pen', data: JSON.stringify({ page: 1 }) },
+        { id: 'before', type: 'pen', data: JSON.stringify({ page: 0 }) },
+      ];
+      expect(planElementPageRemap(elements, { type: 'remove', removedIndex: 1 }, pages)).toEqual([]);
+    });
+
+    it('swap：被交换两页上的元素互换归属，其它页不动', () => {
+      const pages: WhiteboardPageItem[] = [
+        { id: 'b-1', title: 'B-2', order: 0, segmentId: 'seg-b' },
+        { id: 'b-0', title: 'B-1', order: 1, segmentId: 'seg-b' },
+      ];
+      const elements: WhiteboardElementLike[] = [
+        { id: 'pen-old-B1', type: 'pen', data: JSON.stringify({ page: 0 }) },
+        { id: 'pen-old-B2', type: 'pen', data: JSON.stringify({ page: 1 }) },
+        { id: 'pen-other', type: 'pen', data: JSON.stringify({ page: 2 }) },
+      ];
+      const remaps = planElementPageRemap(elements, { type: 'swap', from: 0, to: 1 }, pages);
+      expect(remaps.map(({ element, nextPage }) => ({ id: element.id, nextPage }))).toEqual([
+        { id: 'pen-old-B1', nextPage: 1 },
+        { id: 'pen-old-B2', nextPage: 0 },
+      ]);
+    });
+
+    it('insert：复制页插入点之后的元素下标整体后移，插入点之前不动', () => {
+      const pages: WhiteboardPageItem[] = [
+        { id: 'p0', title: 'P1', order: 0 },
+        { id: 'p0-dup', title: 'P1 (副本)', order: 1 },
+        { id: 'p1', title: 'P2', order: 2 },
+      ];
+      const elements: WhiteboardElementLike[] = [
+        { id: 'on-source', type: 'pen', data: JSON.stringify({ page: 0 }) },
+        { id: 'after-insert', type: 'pen', data: JSON.stringify({ page: 1 }) },
+      ];
+      const remaps = planElementPageRemap(elements, { type: 'insert', atIndex: 1 }, pages);
+      expect(remaps).toEqual([{ element: elements[1], nextPage: 2, nextPageId: 'p1' }]);
+    });
+
+    it('已有 pageId 的元素身份稳定，不参与重映射', () => {
+      const pages: WhiteboardPageItem[] = [
+        { id: 'b-0', title: 'B-1', order: 0, segmentId: 'seg-b' },
+        { id: 'b-1', title: 'B-2', order: 1, segmentId: 'seg-b' },
+      ];
+      const elements: WhiteboardElementLike[] = [
+        { id: 'stable', type: 'pen', data: JSON.stringify({ page: 1, pageId: 'b-1' }) },
+      ];
+      expect(planElementPageRemap(elements, { type: 'remove', removedIndex: 0 }, pages)).toEqual([]);
+    });
+
+    it('data 损坏与 page_meta 元素跳过', () => {
+      const pages: WhiteboardPageItem[] = [{ id: 'p0', title: 'P1', order: 0 }];
+      const elements: WhiteboardElementLike[] = [
+        { id: 'corrupt', type: 'pen', data: 'not-json{' },
+        { id: 'meta', type: 'page_meta', data: JSON.stringify({ pages: [] }) },
+      ];
+      expect(planElementPageRemap(elements, { type: 'remove', removedIndex: 0 }, pages)).toEqual([]);
     });
   });
 });

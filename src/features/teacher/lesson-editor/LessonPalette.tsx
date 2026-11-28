@@ -68,6 +68,12 @@ export function LessonPalette({
       .filter(({ page }) => isPageVisibleInSegment(page, activeSegmentId));
   }, [pages, activeSegmentId]);
 
+  // 折叠角标与大纲列表统一用「当前环节可见」口径计数（IKW19P ⑤）：
+  // 当前页恰好不在可见列表里（瞬态）时退回全局下标，避免显示 P0/0 这类假值
+  const currentVisibleIdx = visiblePages.findIndex(({ globalIdx }) => globalIdx === currentPage);
+  const visiblePos = currentVisibleIdx >= 0 ? currentVisibleIdx + 1 : currentPage + 1;
+  const visibleTotal = activeSegmentId ? visiblePages.length : (pages?.length ?? 0);
+
   const toggleCollapse = () => {
     const next = !isCollapsed;
     setInternalCollapsed(next);
@@ -275,11 +281,11 @@ export function LessonPalette({
             type="button"
             onClick={toggleCollapse}
             className="w-10 h-10 rounded-xl bg-surface hover:bg-primary-theme/10 border border-theme text-primary-theme flex items-center justify-center transition-all cursor-pointer shadow-2xs group relative"
-            title={`${lang === 'zh' ? '页面大纲' : 'Outline'} (P${currentPage + 1}/${pages.length}) - ${lang === 'zh' ? '点击展开' : 'Click to expand'}`}
+            title={`${lang === 'zh' ? '页面大纲' : 'Outline'} (P${visiblePos}/${visibleTotal}) - ${lang === 'zh' ? '点击展开' : 'Click to expand'}`}
           >
             <LayoutGrid size={16} />
             <span className="absolute -top-1 -right-1 text-[9px] bg-primary-theme text-white rounded-full w-4 h-4 flex items-center justify-center font-bold">
-              {currentPage + 1}
+              {visiblePos}
             </span>
           </button>
         )}

@@ -10,6 +10,7 @@ import {
   movePageItem,
   planDeleteSegmentPage,
   selectElementsOnPage,
+  planElementPageRemap,
   isPageVisibleInSegment,
   type WhiteboardPageItem,
   DEFAULT_WHITEBOARD_PAGES,
@@ -250,6 +251,17 @@ export function useWhiteboardPages<T extends WhiteboardElementLike>({
         mode: 'remove',
       });
 
+      // 复制页会把新页插到 idx+1，插入点之后缺 pageId 的存量元素下标需要整体后移（IKW19P ①）
+      const insertRemaps = planElementPageRemap(safeElements, { type: 'insert', atIndex: newIndex }, newPages);
+
+      setPages(newPages);
+      setCurrentPage(newIndex);
+      savePagesConfig(newPages);
+
+      insertRemaps.forEach(({ element, nextPage, nextPageId }) => {
+        onElementUpdate?.(element.id, { page: nextPage, pageId: nextPageId });
+      });
+
       pageElements.forEach((el) => {
         try {
           const d = JSON.parse(el.data);
@@ -267,7 +279,7 @@ export function useWhiteboardPages<T extends WhiteboardElementLike>({
         }
       });
     },
-    [pages, activeSegmentId, savePagesConfig, safeElements, onElementAdd],
+    [pages, activeSegmentId, savePagesConfig, safeElements, onElementAdd, onElementUpdate],
   );
 
   const handleDeletePage = useCallback(
@@ -291,6 +303,15 @@ export function useWhiteboardPages<T extends WhiteboardElementLike>({
         if (onElementDelete) {
           pageElements.forEach((el) => onElementDelete(el.id));
         }
+        // remove 会挪动后续页的全局下标：把缺 pageId 的存量元素一并重映射，
+        // 否则其它环节「第 N 页」的笔迹会串页或成为孤儿（IKW19P ①）
+        const remaps =
+          plan.action === 'remove'
+            ? planElementPageRemap(safeElements, { type: 'remove', removedIndex: plan.targetIndex }, plan.nextPages)
+            : [];
+        remaps.forEach(({ element, nextPage, nextPageId }) => {
+          onElementUpdate?.(element.id, { page: nextPage, pageId: nextPageId });
+        });
         setPages(plan.nextPages);
         if (plan.action === 'remove') {
           setCurrentPage(Math.min(currentPage, Math.max(plan.nextPages.length - 1, 0)));
@@ -322,6 +343,13 @@ export function useWhiteboardPages<T extends WhiteboardElementLike>({
       const { newPages, targetIndex } = moveResult;
       setPages(newPages);
 
+      // 移页只交换了页签位置：两页上缺 pageId 的存量元素要跟着交换归属，否则互相串页（IKW19P ①）
+      planElementPageRemap(safeElements, { type: 'swap', from: idx, to: targetIndex }, newPages).forEach(
+        ({ element, nextPage, nextPageId }) => {
+          onElementUpdate?.(element.id, { page: nextPage, pageId: nextPageId });
+        },
+      );
+
       if (currentPage === idx) {
         setCurrentPage(targetIndex);
       } else if (currentPage === targetIndex) {
@@ -329,7 +357,7 @@ export function useWhiteboardPages<T extends WhiteboardElementLike>({
       }
       savePagesConfig(newPages);
     },
-    [pages, currentPage, savePagesConfig],
+    [pages, currentPage, savePagesConfig, safeElements, onElementUpdate],
   );
 
   return {

@@ -34,6 +34,8 @@ export interface WhiteboardToolbarProps {
   setHighlighterColor: (col: string) => void;
   onElementAdd: (type: string, data: any) => Promise<void>;
   currentPage: number;
+  /** 当前页的稳定 id：随元素落库为 pageId，删页/移页后不因全局下标错位而串页（IKW19P ④） */
+  currentPageId?: string | null;
   activeSegmentId?: string | null;
   lessonId: string;
   safeElements: any[];
@@ -71,6 +73,7 @@ export const WhiteboardToolbar: React.FC<WhiteboardToolbarProps> = ({
   setHighlighterColor,
   onElementAdd,
   currentPage,
+  currentPageId,
   activeSegmentId,
   lessonId,
   safeElements,
@@ -338,6 +341,7 @@ export const WhiteboardToolbar: React.FC<WhiteboardToolbarProps> = ({
                       slideX: 0,
                       slideY: 0,
                       page: currentPage,
+                      pageId: currentPageId,
                       segmentId: activeSegmentId,
                     });
                     frontendEventBus.publish({
@@ -372,6 +376,7 @@ export const WhiteboardToolbar: React.FC<WhiteboardToolbarProps> = ({
                   x: 100,
                   y: 100,
                   page: currentPage,
+                  pageId: currentPageId,
                   segmentId: activeSegmentId,
                 });
                 frontendEventBus.publish({
@@ -403,6 +408,7 @@ export const WhiteboardToolbar: React.FC<WhiteboardToolbarProps> = ({
                   x: 100,
                   y: 150,
                   page: currentPage,
+                  pageId: currentPageId,
                   segmentId: activeSegmentId,
                 });
                 frontendEventBus.publish({
@@ -434,6 +440,7 @@ export const WhiteboardToolbar: React.FC<WhiteboardToolbarProps> = ({
                   x: 100,
                   y: 150,
                   page: currentPage,
+                  pageId: currentPageId,
                   segmentId: activeSegmentId,
                 });
                 frontendEventBus.publish({
@@ -467,6 +474,7 @@ export const WhiteboardToolbar: React.FC<WhiteboardToolbarProps> = ({
                   x: 120,
                   y: 120,
                   page: currentPage,
+                  pageId: currentPageId,
                   segmentId: activeSegmentId,
                 });
                 frontendEventBus.publish({

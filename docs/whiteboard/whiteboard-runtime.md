@@ -134,6 +134,10 @@ fullscreenRendererRegistry.register(type, (props) => <JSX />, pluginId);
 - 共享页：不从 `pages` 里 splice（splice 会让后面的页改下标，其它环节大纲里的对应页会一起消失）。只把当前环节写入 `excludedSegmentIds`，并只删除 `segmentId` 等于当前环节的元素。其它环节的大纲和内容保持不变。
 - 下标落到其它环节已绑定的页上时拒绝删除。
 
+**元素的页面归属同样以 `pageId` 为准**（IKW19P）：元素 `data.pageId` 存在时只认页面 `id`，`data.page` 只是兼容历史数据的回退。新建元素（画布笔迹/高亮/图形/文本、工具栏组件、拖放创建、复制页副本）统一写入 `pageId`；对缺 `pageId` 的存量元素，删页（remove）/移页（swap）/复制页（insert）会让全局下标位移，`planElementPageRemap` 规划受影响元素的新下标并回填目标页 `id`，由调用方经 `onElementUpdate` 增量写回（服务端 `whiteboard.update` 为顶层键合并语义，笔迹其余字段不受影响）。已带 `pageId` 的元素身份稳定，不参与重映射。
+
+环节切换时的画布跟随由 `resolveSegmentFollow`（`src/features/whiteboard/core/view-model.ts`）决策：当前页在新环节可见（专属页或未对其隐藏的共享页）时停留；不可见时跳到该环节大纲首页，与课中 `getPagesForSegment` 的「跳环节首页」口径一致（含共享页）；该环节一个可见页都没有时，教师端自动为其创建首个绑定页（`createSegmentPage` 信号），避免画布被环节过滤成空数组后白屏，学生端等待 `page_meta` 同步即可。
+
 课程包字段见 [course-package-spec.md](../reference/course-package-spec.md) 的 `page_meta.data.pages[]`。
 
 ## 白板事件槽 (`WhiteboardEventSlot`)

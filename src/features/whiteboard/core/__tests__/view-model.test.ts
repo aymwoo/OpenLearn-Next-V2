@@ -295,7 +295,12 @@ describe('resolveSegmentFollow：环节跟随矩阵', () => {
   it('首次渲染（prev 与 active 相同）不跳页', () => {
     expect(
       resolveSegmentFollow({ activeSegmentId: 'seg-b', previousSegmentId: 'seg-b', currentPage: 0, pages }),
-    ).toEqual({ targetPage: null, nextPreviousSegmentId: 'seg-b', consumeProgrammaticSwitch: false });
+    ).toEqual({
+      targetPage: null,
+      nextPreviousSegmentId: 'seg-b',
+      consumeProgrammaticSwitch: false,
+      createSegmentPage: false,
+    });
   });
 
   it('无环节时不跳页', () => {
@@ -303,6 +308,7 @@ describe('resolveSegmentFollow：环节跟随矩阵', () => {
       targetPage: null,
       nextPreviousSegmentId: null,
       consumeProgrammaticSwitch: false,
+      createSegmentPage: false,
     });
   });
 
@@ -315,43 +321,115 @@ describe('resolveSegmentFollow：环节跟随矩阵', () => {
         pages,
         programmaticPageSwitch: true,
       }),
-    ).toEqual({ targetPage: null, nextPreviousSegmentId: 'seg-b', consumeProgrammaticSwitch: true });
+    ).toEqual({
+      targetPage: null,
+      nextPreviousSegmentId: 'seg-b',
+      consumeProgrammaticSwitch: true,
+      createSegmentPage: false,
+    });
   });
 
   it('当前页是共享页（无 segmentId）时不跳页', () => {
     expect(
       resolveSegmentFollow({ activeSegmentId: 'seg-b', previousSegmentId: 'seg-a', currentPage: 0, pages }),
-    ).toEqual({ targetPage: null, nextPreviousSegmentId: 'seg-b', consumeProgrammaticSwitch: false });
+    ).toEqual({
+      targetPage: null,
+      nextPreviousSegmentId: 'seg-b',
+      consumeProgrammaticSwitch: false,
+      createSegmentPage: false,
+    });
   });
 
-  it('当前页绑定其它环节时跳到新环节首页', () => {
+  it('当前页绑定其它环节时跳到新环节大纲首页（含共享页，与课中 getPagesForSegment 口径一致）', () => {
     expect(
       resolveSegmentFollow({ activeSegmentId: 'seg-b', previousSegmentId: 'seg-a', currentPage: 1, pages }),
-    ).toEqual({ targetPage: 2, nextPreviousSegmentId: 'seg-b', consumeProgrammaticSwitch: false });
+    ).toEqual({
+      targetPage: 0,
+      nextPreviousSegmentId: 'seg-b',
+      consumeProgrammaticSwitch: false,
+      createSegmentPage: false,
+    });
   });
 
   it('当前页已属于目标环节时不跳页', () => {
     expect(
       resolveSegmentFollow({ activeSegmentId: 'seg-b', previousSegmentId: 'seg-a', currentPage: 3, pages }),
-    ).toEqual({ targetPage: null, nextPreviousSegmentId: 'seg-b', consumeProgrammaticSwitch: false });
+    ).toEqual({
+      targetPage: null,
+      nextPreviousSegmentId: 'seg-b',
+      consumeProgrammaticSwitch: false,
+      createSegmentPage: false,
+    });
   });
 
-  it('目标环节没有专属页时不跳页', () => {
+  it('目标环节没有专属页但有可见共享页时，跳到共享页而不是停在其它环节的页上', () => {
     expect(
       resolveSegmentFollow({ activeSegmentId: 'seg-c', previousSegmentId: 'seg-a', currentPage: 1, pages }),
-    ).toEqual({ targetPage: null, nextPreviousSegmentId: 'seg-c', consumeProgrammaticSwitch: false });
+    ).toEqual({
+      targetPage: 0,
+      nextPreviousSegmentId: 'seg-c',
+      consumeProgrammaticSwitch: false,
+      createSegmentPage: false,
+    });
   });
 
   it('页面列表为空时不跳页', () => {
     expect(
       resolveSegmentFollow({ activeSegmentId: 'seg-b', previousSegmentId: 'seg-a', currentPage: 0, pages: [] }),
-    ).toEqual({ targetPage: null, nextPreviousSegmentId: 'seg-b', consumeProgrammaticSwitch: false });
+    ).toEqual({
+      targetPage: null,
+      nextPreviousSegmentId: 'seg-b',
+      consumeProgrammaticSwitch: false,
+      createSegmentPage: false,
+    });
   });
 
-  it('当前页下标越界时不跳页', () => {
+  it('当前页下标越界时修复性跳到大纲首页', () => {
     expect(
       resolveSegmentFollow({ activeSegmentId: 'seg-b', previousSegmentId: 'seg-a', currentPage: 99, pages }),
-    ).toEqual({ targetPage: null, nextPreviousSegmentId: 'seg-b', consumeProgrammaticSwitch: false });
+    ).toEqual({
+      targetPage: 0,
+      nextPreviousSegmentId: 'seg-b',
+      consumeProgrammaticSwitch: false,
+      createSegmentPage: false,
+    });
+  });
+
+  it('共享页已从目标环节隐藏（excludedSegmentIds）时跳走，不再停留成空画布', () => {
+    const excludedPages: WhiteboardPageItem[] = [
+      { id: 'x0', title: '共享页', order: 0, excludedSegmentIds: ['seg-b'] },
+      { id: 'x1', title: 'B 页', order: 1, segmentId: 'seg-b' },
+    ];
+    expect(
+      resolveSegmentFollow({
+        activeSegmentId: 'seg-b',
+        previousSegmentId: 'seg-a',
+        currentPage: 0,
+        pages: excludedPages,
+      }),
+    ).toEqual({
+      targetPage: 1,
+      nextPreviousSegmentId: 'seg-b',
+      consumeProgrammaticSwitch: false,
+      createSegmentPage: false,
+    });
+  });
+
+  it('目标环节一个可见页都没有时给出建页信号（教师端据此创建首个页面）', () => {
+    const onlyASegPages: WhiteboardPageItem[] = [{ id: 'a0', title: 'A 页', order: 0, segmentId: 'seg-a' }];
+    expect(
+      resolveSegmentFollow({
+        activeSegmentId: 'seg-b',
+        previousSegmentId: 'seg-a',
+        currentPage: 0,
+        pages: onlyASegPages,
+      }),
+    ).toEqual({
+      targetPage: null,
+      nextPreviousSegmentId: 'seg-b',
+      consumeProgrammaticSwitch: false,
+      createSegmentPage: true,
+    });
   });
 });
 

@@ -8,6 +8,8 @@ import type { ExtensionPointConfig } from '../../../plugin-host/types';
 export interface UseWhiteboardDropOptions {
   lessonId: string;
   currentPage: number;
+  /** 当前页的稳定 id：随元素落库为 pageId，删页/移页后不因全局下标错位而串页（IKW19P ④） */
+  currentPageId?: string | null;
   activeSegmentId?: string | null;
   whiteboardRenderers: ExtensionPointConfig[] | undefined;
   containerRef: React.RefObject<HTMLDivElement | null>;
@@ -19,6 +21,7 @@ export interface UseWhiteboardDropOptions {
 export function useWhiteboardDrop({
   lessonId,
   currentPage,
+  currentPageId,
   activeSegmentId,
   whiteboardRenderers,
   containerRef,
@@ -50,7 +53,7 @@ export function useWhiteboardDrop({
   // 组装元素 data：合并内容字段与定位字段，并补齐各类型的默认值
   const buildElementData = useCallback(
     (type: string, content: Record<string, unknown>, x: number, y: number): Record<string, unknown> => {
-      const base = { x, y, page: currentPage, segmentId: activeSegmentId };
+      const base = { x, y, page: currentPage, pageId: currentPageId, segmentId: activeSegmentId };
       const pluginConfig = paletteItemRegistry.get(type);
       const pluginDefaults = pluginConfig?.defaultData || {};
       const extRenderer = whiteboardRenderers?.find((ext) => {

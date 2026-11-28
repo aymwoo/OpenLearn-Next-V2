@@ -1895,7 +1895,13 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
       if (!isDrawing || !currentDrawing) return;
       setIsDrawing(false);
 
-      const drawingToSubmit = { ...currentDrawing, page: currentPage, segmentId: activeSegmentId };
+      const drawingToSubmit = {
+        ...currentDrawing,
+        page: currentPage,
+        // 页面身份落 pageId（IKW19P ④）：全局下标在删页/移页后会错位，id 稳定
+        pageId: pages[currentPage]?.id,
+        segmentId: activeSegmentId,
+      };
       setCurrentDrawing(null); // Optimistically remove, the parent API fetch will restore it. Actually, wait. The user might see it disappear.
       // It's better to immediately call onElementAdd which is hopefully fast.
 
@@ -1922,7 +1928,12 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
           roomId: lessonId,
           type: 'temp-draw',
           userId: socketRef.current.id,
-          payload: { ...currentDrawing, page: currentPage, segmentId: activeSegmentId },
+          payload: {
+            ...currentDrawing,
+            page: currentPage,
+            pageId: pages[currentPage]?.id,
+            segmentId: activeSegmentId,
+          },
         });
       } else {
         socketRef.current.emit('whiteboard-update', {
@@ -1943,7 +1954,9 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
       }
     }, [activeSegmentId, lessonId]);
 
-    // 当 activeSegmentId 变更时（如授课时切换教学环节），如果当前页不属于该环节，且存在属于该环节的页面，自动切到该环节的首个页面
+    // 当 activeSegmentId 变更时（如授课时切换教学环节），当前页不属于该环节时自动跟随：
+    // 优先落到该环节大纲首页；环节连一个可见页都没有时由教师端为其创建首个页面，
+    // 避免画布被环节过滤成空数组后白屏（IKW19P ②，决策见 view-model.resolveSegmentFollow）
     const prevActiveSegmentIdRef = useRef<string | null | undefined>(activeSegmentId);
     useEffect(() => {
       const resolution = resolveSegmentFollow({
@@ -1959,8 +1972,11 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
       prevActiveSegmentIdRef.current = resolution.nextPreviousSegmentId;
       if (resolution.targetPage !== null) {
         setCurrentPage(resolution.targetPage);
+      } else if (resolution.createSegmentPage && userRole === 'teacher') {
+        // handleAddPage 会绑定当前环节建页、切页并向学生广播；学生端只等同步
+        handleAddPage();
       }
-    }, [activeSegmentId, pages, currentPage]);
+    }, [activeSegmentId, pages, currentPage, userRole, handleAddPage]);
 
     const renderDrawingRaw = (drawing: any) => {
       if (!drawing) return null;
@@ -2018,7 +2034,11 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
     };
 
     const renderActiveDrawing = () =>
-      renderDrawingRaw(currentDrawing ? { ...currentDrawing, page: currentPage, segmentId: activeSegmentId } : null);
+      renderDrawingRaw(
+        currentDrawing
+          ? { ...currentDrawing, page: currentPage, pageId: pages[currentPage]?.id, segmentId: activeSegmentId }
+          : null,
+      );
 
     const renderRemoteDrawings = () => {
       return Object.values(remoteDrawings).map((drawing, i) => (
@@ -3610,6 +3630,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
     } = useWhiteboardDrop({
       lessonId,
       currentPage,
+      currentPageId: pages[currentPage]?.id,
       activeSegmentId,
       whiteboardRenderers,
       containerRef,
@@ -3841,6 +3862,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
               setHighlighterColor={setHighlighterColor}
               onElementAdd={onElementAdd}
               currentPage={currentPage}
+              currentPageId={pages[currentPage]?.id}
               activeSegmentId={activeSegmentId}
               lessonId={lessonId}
               safeElements={safeElements}

@@ -298,3 +298,60 @@ export function selectElementsOnPage<T extends WhiteboardElementLike>(
     return fields.page === pageIndex;
   });
 }
+
+/** 结构性页操作类型：删除某页 / 交换两页 / 在某下标插入新页 */
+export type StructuralPageOp =
+  | { type: 'remove'; removedIndex: number }
+  | { type: 'swap'; from: number; to: number }
+  | { type: 'insert'; atIndex: number };
+
+export interface ElementPageRemap<T extends WhiteboardElementLike> {
+  element: T;
+  /** 元素新归属页的全局下标 */
+  nextPage: number;
+  /** 元素新归属页的 id（顺带回填 pageId，让存量元素获得稳定页面身份） */
+  nextPageId: string;
+}
+
+/**
+ * 规划结构性页操作之后，缺少 pageId 的存量元素的页下标重映射（IKW19P ①）。
+ *
+ * 页面身份的终局是 `pages[].id`（pageId），但历史笔迹/组件只落了全局下标 `data.page`：
+ * 删页（remove）会让后续页整体前移、移页（swap）会让两页交换、复制页（insert）会让
+ * 插入点之后的页整体后移——这些元素不跟随就会跨环节串页或成为孤儿。
+ *
+ * 规则：
+ * - 已有 pageId 的元素身份稳定，跳过；
+ * - data 损坏、或非可见图元的元素跳过（无法安全重映射）；
+ * - 仅返回下标真正变化的元素，并顺带回填新页 id；
+ * - 只做规划不落盘：由调用方经 onElementUpdate 增量写回（服务端为顶层键合并语义，
+ *   笔迹 points 等其余字段不受影响）。
+ */
+export function planElementPageRemap<T extends WhiteboardElementLike>(
+  elements: readonly T[],
+  op: StructuralPageOp,
+  pagesAfterOp: WhiteboardPageItem[],
+): ElementPageRemap<T>[] {
+  const remaps: ElementPageRemap<T>[] = [];
+  for (const el of elements) {
+    if (!isVisibleElementType(el.type)) continue;
+    const fields = readElementPageFields(el.data);
+    if (fields.corrupt || fields.pageId) continue;
+    let nextPage: number;
+    if (op.type === 'remove') {
+      if (fields.page <= op.removedIndex) continue;
+      nextPage = fields.page - 1;
+    } else if (op.type === 'swap') {
+      if (fields.page === op.from) nextPage = op.to;
+      else if (fields.page === op.to) nextPage = op.from;
+      else continue;
+    } else {
+      if (fields.page < op.atIndex) continue;
+      nextPage = fields.page + 1;
+    }
+    const targetPage = pagesAfterOp[nextPage];
+    if (!targetPage?.id) continue;
+    remaps.push({ element: el, nextPage, nextPageId: targetPage.id });
+  }
+  return remaps;
+}

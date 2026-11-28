@@ -8,6 +8,7 @@
  * 组件与 hook 负责把状态喂进来，并按返回值执行副作用。
  */
 import type { WhiteboardPageItem } from '../utils/pagination-utils';
+import { getSegmentVisiblePages, isPageVisibleInSegment } from '../utils/pagination-utils';
 import { FULLSCREEN_READONLY_INTERACTIVE_ELEMENT_TYPES } from './element-capabilities';
 
 // ── 页面 ──────────────────────────────────────────────────────────────────
@@ -81,6 +82,11 @@ export interface SegmentFollowResult {
   targetPage: number | null;
   nextPreviousSegmentId: string | null;
   consumeProgrammaticSwitch: boolean;
+  /**
+   * 目标环节没有任何可见页（IKW19P ②）：教师端应为其创建首个页面，
+   * 而不是停在一张被环节过滤成空数组的页上（表现为白屏画布）。
+   */
+  createSegmentPage: boolean;
 }
 
 /**
@@ -89,8 +95,11 @@ export interface SegmentFollowResult {
  * 优先级与守卫：
  * 1. 程序化翻页标记优先消费，不跟随；
  * 2. 无环节、环节未变化、页面列表为空时不动；
- * 3. 只有「当前页明确绑定到另一个环节」时才跳页，共享页（无 segmentId）不跳；
- * 4. 目标环节没有专属页时不动。
+ * 3. 当前页在新环节可见（本环节专属页或未对其隐藏的共享页）时不动；
+ * 4. 当前页不可见时，跳到大纲里该环节的首个可见页（与课中
+ *    `getPagesForSegment` 的「跳环节首页」口径一致）；
+ * 5. 该环节连一个可见页都没有时给出 createSegmentPage 信号，
+ *    由调用方决定是否创建（教师端），不再原地停留成白屏。
  */
 export function resolveSegmentFollow({
   activeSegmentId,
@@ -102,25 +111,49 @@ export function resolveSegmentFollow({
   const active = activeSegmentId ?? null;
 
   if (programmaticPageSwitch) {
-    return { targetPage: null, nextPreviousSegmentId: active, consumeProgrammaticSwitch: true };
+    return {
+      targetPage: null,
+      nextPreviousSegmentId: active,
+      consumeProgrammaticSwitch: true,
+      createSegmentPage: false,
+    };
   }
 
   const previous = previousSegmentId ?? null;
   if (!active || previous === active || !Array.isArray(pages) || pages.length === 0) {
-    return { targetPage: null, nextPreviousSegmentId: active, consumeProgrammaticSwitch: false };
+    return {
+      targetPage: null,
+      nextPreviousSegmentId: active,
+      consumeProgrammaticSwitch: false,
+      createSegmentPage: false,
+    };
   }
 
   const currentPageItem = pages[currentPage];
-  if (!currentPageItem?.segmentId || currentPageItem.segmentId === active) {
-    return { targetPage: null, nextPreviousSegmentId: active, consumeProgrammaticSwitch: false };
+  if (currentPageItem && isPageVisibleInSegment(currentPageItem, active)) {
+    return {
+      targetPage: null,
+      nextPreviousSegmentId: active,
+      consumeProgrammaticSwitch: false,
+      createSegmentPage: false,
+    };
   }
 
-  const targetIndex = pages.findIndex((page) => page.segmentId === active);
-  return {
-    targetPage: targetIndex === -1 ? null : targetIndex,
-    nextPreviousSegmentId: active,
-    consumeProgrammaticSwitch: false,
-  };
+  // 当前页越界或不可见（绑定到其它环节 / 已从本环节隐藏）：优先落到大纲首页
+  const firstVisible = getSegmentVisiblePages(pages, active)[0];
+  if (firstVisible) {
+    const targetIndex = pages.findIndex((page) => page.id === firstVisible.id);
+    if (targetIndex !== -1) {
+      return {
+        targetPage: targetIndex,
+        nextPreviousSegmentId: active,
+        consumeProgrammaticSwitch: false,
+        createSegmentPage: false,
+      };
+    }
+  }
+
+  return { targetPage: null, nextPreviousSegmentId: active, consumeProgrammaticSwitch: false, createSegmentPage: true };
 }
 
 // ── 全屏 ──────────────────────────────────────────────────────────────────
