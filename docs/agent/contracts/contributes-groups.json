@@ -32,6 +32,9 @@
     "ai.persona.provider",
     "class.tab",
     "class.batch.action",
+    "class.list.toolbar.action",
+    "student.enroll.source",
+    "student.row.action",
     "student.row.panel",
     "editor.header.action",
     "classroom.post_class.widget",
@@ -148,7 +151,7 @@
     "xuean.progress.summary",
     "xuean.home.block"
   ],
-  "a_total": 76,
+  "a_total": 79,
   "b_total": 67,
   "a_not_in_extension_slot": [
     "ai.persona.provider",

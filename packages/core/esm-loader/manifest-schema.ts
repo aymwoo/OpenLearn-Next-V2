@@ -287,9 +287,34 @@ const classTabSchema = z.object({
   label: z.string().min(1),
   icon: z.string().optional(),
   position: z.number().int().optional(),
+  // 可视沙箱 HTML 相对路径（同 teacherPanelSchema）：zod 默认 strip 未声明键，
+  // 漏声明会让声明式 class.tab 的面板在 parse() 后丢失 view —— 表现为
+  // 「Tab 按钮可点、面板渲染为 null」且无任何报错（Issue IKYMS2）。
+  view: z.string().min(1).optional(),
 });
 
 const classBatchActionSchema = z.object({
+  id: z.string().min(1),
+  label: z.string().min(1),
+  icon: z.string().optional(),
+  commandType: z.string().optional(),
+});
+
+const classListToolbarActionSchema = z.object({
+  id: z.string().min(1),
+  label: z.string().min(1),
+  icon: z.string().optional(),
+  commandType: z.string().optional(),
+});
+
+const studentEnrollSourceSchema = z.object({
+  id: z.string().min(1),
+  label: z.string().min(1),
+  icon: z.string().optional(),
+  commandType: z.string().optional(),
+});
+
+const studentRowActionSchema = z.object({
   id: z.string().min(1),
   label: z.string().min(1),
   icon: z.string().optional(),
@@ -952,6 +977,9 @@ const contributesSchema = z
     // 补齐宿主 UI 槽位
     'class.tab': z.array(classTabSchema).optional(),
     'class.batch.action': z.array(classBatchActionSchema).optional(),
+    'class.list.toolbar.action': z.array(classListToolbarActionSchema).optional(),
+    'student.enroll.source': z.array(studentEnrollSourceSchema).optional(),
+    'student.row.action': z.array(studentRowActionSchema).optional(),
     'student.row.panel': z.array(studentRowPanelSchema).optional(),
     'editor.header.action': z.array(editorHeaderActionSchema).optional(),
     'classroom.post_class.widget': z.array(postClassWidgetSchema).optional(),

@@ -44,6 +44,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - **内置备课面也支持插件追加**：新增 `classroom.prep.addon`，白板编辑器（`LessonEditorView`）与学案编辑器（`XueanEditor`）顶栏都挂载该槽位，`packId` / `prepContributionId` 分别为 `whiteboard` / `prep-whiteboard` 与 `xuean` / `prep-xuean`，插件可放按钮或弹层入口；`classroom.prep` 仍只服务第三方 Mode Pack 的整块替换语义。
 - **学案活动大纲可逐行扩展**：课中侧栏的学案环节展开后列出课时级活动（A1/A2… + 类型徽标），每行渲染 `classroom.outline.activity_action`（`{ activity, activityIndex, segment, lessonId, lang }`），插件可提供重新派发、跳转批阅等操作；非当前环节只提示进入后查看，避免同一份课时活动在各环节重复。`ExtensionSlot` 成员数增至 165。
 
+- **班级学生管理域新增 3 个 P0 扩展槽**：`class.list.toolbar.action`（班级列表顶部工具栏，创建班级旁，学籍系统一键同步 / 年级模板批量建班）、`student.enroll.source`（花名册「添加学生」来源扩展，二维码自助报到 / 名单 OCR / 第三方学籍同步）、`student.row.action`（学生行内快捷操作，紧邻「移除班级」按钮，单独转班 / 家校通知 / 加入分组）。三者均支持数据型 `commandType` 声明式贡献与组件 / 沙箱 view 双形态，`onRefresh` 供插件写操作后重拉花名册。`ExtensionSlot` 成员数增至 168。
+- **班级学生管理域实体投影白名单化**：新增 `StudentRosterSummary` / `ClassRosterSummary` 投影类型（`src/features/teacher/classes/rosterProjection.ts`），`class.batch.action` 的 `cls` / `selectedStudents` / `allStudents` 自本版起改为投影摘要（见 Breaking Changes）。
+- **`class.tab` 声明式贡献支持沙箱面板**：manifest schema 与 `ClassTabConfig` 补 `view?: string`（此前 zod strip 会让声明式 `view` 静默丢弃，表现为「Tab 按钮可点、面板渲染为 null」）。
+
 ### Fixes
 
 - **`rolesAllowed` 声明后从不生效**：扩展点的角色门控此前只有类型声明、运行时不消费，任何插件写了都等于没写。现在由 `extension-point-renderer` 在**渲染期**按当前角色过滤，教师切换「学生视图」预览时即时生效。
@@ -61,6 +65,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - **测评统计分布泄露主观题作答**：`getAssignmentStats` 只对单选 / 多选 / 判断题输出 `distribution`，填空、简答与未知插件题型不再以作答原文作为分布键。
 - **题型注册表订阅失效**：`useAssessmentQuestionTypes()` 使用稳定快照，插件题型激活后能立即出现在题库/组卷下拉与作答页。
 
+- **`student.row.panel` 文档 props 漂移**：`docs/reference/plugin-ui-extension-slots.md` 与 `docs/agent/reference/contributes-slots.md` 此前只写 `{ studentId }`，实际宿主传 `{ studentId, studentName, classId, lang }`，已同步。
+- **`ClassTabKey` 残留 `'seating'`**：座位功能已迁机房视图，班级详情 Tab 类型中不再保留无按钮、无面板的死分支。
+
 ### Refactor / Performance
 
 - **学生首页只保留默认布局**：移除「模块化自适应栅格工作台」工具条（作业攻坚 / 学情大屏 / 双列紧凑三种预设、恢复默认、窄屏「自定义布局」开关）以及每个组件头部的尺寸切换（1/3、1/2、2/3、Full）、前后移动、折叠展开与拖拽排序控件。`StudentDashboardPanel` 不再读写 `student_dashboard_layout_v4_<studentId>` 本地布局，组件顺序与宽度固定取自 `DEFAULT_WIDGET_LAYOUT`（教师可见性策略仍在渲染层过滤）；栅格容器 `#student-dashboard-modular-grid` 更名为 `#student-dashboard-grid`，`student-ui-policy` 移除失效的 `section.layout-toolbar` 功能 ID，`StudentQuickActionsFloatingMenu` 去掉 `onExpandWidget`，`docs/workspace/student-home-layout.md` 同步更新。
@@ -69,6 +76,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Breaking Changes
 
+- **`class.batch.action` slotProps 实体切换为白名单投影**：`cls` 由完整 `ClassType` 改为 `ClassRosterSummary`（不再含 `class_passcode` / `class_passcode_expires_at`），`selectedStudents` / `allStudents` 由完整 `StudentType[]` 改为 `StudentRosterSummary[]`（不再含 `password` / `private_notes` / `lock_mode` / `lock_target`）。此前第三方插件前端可读到学生密码字段与教师私密备忘录，属敏感数据越界；依赖这些字段的插件请改走服务端命令或 `requiresSensitive` 授予通道。既有依赖 `id` / `name` / `student_number` / `email` / `gender` / `avatar` / `locked_lesson_id` / `created_at` 的插件不受影响。
 - `AssessmentResultItemAddonProps` 改为与批改槽位同构的判别联合：标准答案与本人作答经 `sensitive` 注入，`item.answerKey` 已移除（运行时此前就未提供）。
 
 ## [0.8.0] - 2026-11-25

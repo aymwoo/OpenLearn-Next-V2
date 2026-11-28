@@ -25,6 +25,7 @@ import { ExtensionPointRenderer } from '../../../plugin-host/extension-point-ren
 import { useOptionalPluginHost } from '../../../plugin-host/plugin-host-context';
 import { StudentPrivateNotesEditor } from '../../../components/StudentPrivateNotesEditor';
 import { parseCSV } from '../../../utils/pluginParsers.js';
+import { toClassRosterSummary, toStudentRosterSummary } from './rosterProjection';
 import type { ClassType, StudentType, StudentProgressType, Lesson } from '../../../types/app';
 
 export type RosterTagFilter = 'all' | 'Academic' | 'Behavioral' | 'General' | 'SpecialCare';
@@ -397,6 +398,19 @@ export function ClassStudentsPanel({
             <Upload size={10} />
             {lang === 'zh' ? 'CSV 批量加入' : 'CSV Bulk Enroll'}
           </button>
+
+          {/* 插件学生来源扩展（二维码自助报到 / 名单 OCR / 第三方学籍同步） */}
+          <ExtensionPointRenderer
+            slot="student.enroll.source"
+            slotProps={{
+              classId: cls.id,
+              classInfo: toClassRosterSummary(cls),
+              lang,
+              onRefresh: async () => {
+                await Promise.all([fetchClassStudents(cls.id), fetchStudents()]);
+              },
+            }}
+          />
         </div>
       </div>
 
@@ -549,16 +563,20 @@ export function ClassStudentsPanel({
                       >
                         <BookOpen size={13} /> {lang === 'zh' ? '设课程' : 'Lock Lesson'}
                       </button>
-                      {/* 插件批量操作流水线（如学籍同步/名册导出/实验套件分发） */}
+                      {/* 插件批量操作流水线（如学籍同步/名册导出/实验套件分发）。
+                          实体经白名单投影（Issue IKYMS2）：不向插件下发
+                          password / private_notes / class_passcode 等敏感字段。 */}
                       <ExtensionPointRenderer
                         slot="class.batch.action"
                         slotProps={{
                           classId: cls.id,
-                          cls,
+                          cls: toClassRosterSummary(cls),
                           lang,
                           selectedStudentIds: Array.from(selectedStudentIds),
-                          selectedStudents: cStudents.filter((s) => selectedStudentIds.has(s.id)),
-                          allStudents: cStudents,
+                          selectedStudents: cStudents
+                            .filter((s) => selectedStudentIds.has(s.id))
+                            .map(toStudentRosterSummary),
+                          allStudents: cStudents.map(toStudentRosterSummary),
                           disabled: selectedStudentIds.size === 0,
                           onRefresh: async () => {
                             await Promise.all([fetchClassStudents(cls.id), fetchStudents()]);
@@ -726,6 +744,19 @@ export function ClassStudentsPanel({
                               >
                                 <Trash2 size={13} />
                               </button>
+                              {/* 插件学生行内快捷操作（单独转班 / 家校通知 / 加入分组）。
+                                  student 经白名单投影：不含 password / private_notes。 */}
+                              <ExtensionPointRenderer
+                                slot="student.row.action"
+                                slotProps={{
+                                  student: toStudentRosterSummary(st),
+                                  classId: cls.id,
+                                  lang,
+                                  onRefresh: async () => {
+                                    await Promise.all([fetchClassStudents(cls.id), fetchStudents()]);
+                                  },
+                                }}
+                              />
                               <span className="text-xs text-gray-400 font-medium">Student</span>
                             </div>
                           </div>
