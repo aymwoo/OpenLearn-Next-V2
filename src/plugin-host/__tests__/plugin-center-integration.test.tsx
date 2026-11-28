@@ -69,6 +69,19 @@ describe('PluginCenter grid rendering', () => {
     expect(html).toContain('Test Author');
   });
 
+  it('hides system plugins from the store tab', () => {
+    const plugins: PluginType[] = [
+      createPlugin({ id: '@openlearn/plugin-builtin' }),
+      createPlugin({ id: '@openlearn/plugin-vfs' }),
+      createPlugin({ id: 'ext-user-plugin' }),
+    ];
+    const html = renderToString(<PluginCenter {...defaultProps} plugins={plugins} storeTab="store" />);
+
+    expect(html).not.toContain('@openlearn/plugin-builtin');
+    expect(html).not.toContain('@openlearn/plugin-vfs');
+    expect(html).toContain('ext-user-plugin');
+  });
+
   it('renders plugin status badge for active plugins', () => {
     const plugins: PluginType[] = [createPlugin({ id: 'active-plugin', status: 'active' })];
     const html = renderToString(<PluginCenter {...defaultProps} plugins={plugins} storeTab="store" />);
