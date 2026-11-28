@@ -46,6 +46,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixes
 
+- **课堂倒计时无法关闭、学生端横幅残留**：互动白板工具栏 / 顶栏 / 大屏投影的倒计时新增「关闭」按钮（仅在教师发起过倒计时后出现）。关闭会停表并把剩余时间回退到总时长，双方一起回到开始之前的就绪态：教师端退出大屏投影与设置浮层；学生端横幅消失。服务端新增 `close` 动作并把 `dismissed` 一并持久化，因此学生刷新或重连后不会再弹出，直到教师重新开始（`start` / `resume` 自动清除该标记）。至此「重置」只回零、不再承担结束语义。
 - **`rolesAllowed` 声明后从不生效**：扩展点的角色门控此前只有类型声明、运行时不消费，任何插件写了都等于没写。现在由 `extension-point-renderer` 在**渲染期**按当前角色过滤，教师切换「学生视图」预览时即时生效。
 - **`rolesAllowed` 的 `admin` 角色永不命中**：`activeRole` 只有 `teacher` / `student`，管理员会话是 `role: 'teacher'` + `subRole: 'administrator'`，因此声明 `rolesAllowed: ['admin']` 的扩展此前在任何界面都不会渲染。现在渲染器会把管理员会话额外映射为 `'admin'`（普通教师 / 学生不受影响），并在渲染期随会话变化即时生效。
 - **空槽位吞掉调用点 fallback**：`ExtensionPointRenderer` 在槽位没有贡献、或活动槽未匹配到扩展时直接返回 `null`，调用点传入的 `fallback`（如学案活动「插件未加载」提示）永远不会出现，现改为 `fallback ?? null`。

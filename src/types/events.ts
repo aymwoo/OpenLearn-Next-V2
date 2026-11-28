@@ -41,6 +41,7 @@ export interface FrontendEventMap {
   'openlearn:countdown:paused': ClassroomCountdownState;
   'openlearn:countdown:resumed': ClassroomCountdownState;
   'openlearn:countdown:reset': ClassroomCountdownState;
+  'openlearn:countdown:closed': ClassroomCountdownState;
   'openlearn:student:countdown_tick': {
     timeRemaining: number;
     totalDuration: number;

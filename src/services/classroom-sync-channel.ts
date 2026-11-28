@@ -19,6 +19,8 @@ export interface ClassroomCountdownState {
   label: string;
   endsAt: number | null;
   updatedAt: number;
+  /** 教师已关闭倒计时：学生端据此隐藏横幅，直至教师重新发起新一轮倒计时 */
+  dismissed?: boolean;
 }
 
 export interface ShowcaseDiffBroadcastWork {
