@@ -517,14 +517,38 @@ export type HostToastAction = {
   payload: HostToastPayload;
 };
 
+/** classes 域深链的班级详情 Tab 合法键（其余 `plugin:{pluginId}/{extId}` 透传给插件 Tab 面板）。 */
+export type ClassDetailTabKey = 'students' | 'assignments' | 'schedules' | 'grades';
+
 export interface HostNavigatePayload {
   tab: string;
+  /**
+   * 目标域的二级 Tab。classes 域（`tab: 'classes'` + `params.classId`）消费
+   * `ClassDetailTabKey` 或 `plugin:{pluginId}/{extId}`；其余 tab 域当前未消费
+   * （保留字段——传入不会报错，也不会有效果）。
+   */
   subTab?: string;
-  params?: Record<string, any>;
+  /**
+   * 定位参数（由目标 tab 域的权威处理器消费；无权威处理器的域会忽略）。
+   * classes 域已知键（Issue IKYP37）：`classId`（展开该班）、`studentId`（展开学生行，
+   * 需属于该班）、`studentSubTab`（学生子 Tab：'progress' | 'settings' | 'notes' |
+   * `plugin:{pluginId}/{extId}`）。
+   */
+  params?: Record<string, unknown>;
 }
 
 export interface HostNavigateResult {
+  /** tab 切换是否成功（classes 深链中 tab 已切换、仅定位失败时仍为 true，见 reason） */
   navigated: boolean;
+  /** navigated:false 或定位失败时的原因（'tab-missing' | 'navigate-failed' | 'class-not-found' | 'student-not-found'） */
+  reason?: string;
+  /** classes 深链逐项应用结果（权威处理器返回；未出现的键表示未请求） */
+  located?: {
+    classId?: boolean;
+    subTab?: boolean;
+    studentId?: boolean;
+    studentSubTab?: boolean;
+  };
 }
 
 export type HostNavigateAction = {

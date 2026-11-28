@@ -1,4 +1,4 @@
-import { useState, type Dispatch, type SetStateAction } from 'react';
+import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react';
 import {
   Users,
   Check,
@@ -31,6 +31,8 @@ import { ClassRowHeader } from './ClassRowHeader.js';
 import { ClassPasscodeController } from './ClassPasscodeController.js';
 import { ClassTabs, type ClassTabKey } from './ClassTabs.js';
 import { ExtensionPointRenderer } from '../../../plugin-host/extension-point-renderer';
+import { useOptionalPluginHost } from '../../../plugin-host/plugin-host-context';
+import type { HostNavigatePayload, HostNavigateResult } from '../../../plugin-host/types';
 import { useOptionalAcademicYear } from '../../../context/AcademicYearContext';
 import { AcademicYearFilter } from '../../../components/AcademicYearFilter';
 import { getCurrentAcademicYear } from '../../../utils/academicYear';
@@ -192,6 +194,73 @@ export function ClassesView() {
       setIsExportingAttendance(false);
     }
   };
+
+  // ── host:navigate classes 域深链权威处理器（Issue IKYP37）──
+  // 层级：tab='classes' → subTab（班级详情 Tab）→ params.classId（展开班级）
+  //       → params.studentId（展开学生行）→ params.studentSubTab（学生子 Tab）。
+  // 经 ref 委托读取最新 props：handler 只注册一次，避免 Set 累加重复触发。
+  const pluginHost = useOptionalPluginHost();
+  const locateRef = useRef<(payload: HostNavigatePayload) => HostNavigateResult | null>(null);
+  locateRef.current = (payload) => {
+    const params = (payload.params ?? {}) as Record<string, unknown>;
+    const classId = params.classId;
+    if (payload?.tab !== 'classes' || typeof classId !== 'string' || !classId) {
+      // 非 classes 域或无定位目标：不冒领导航结果（内置处理器已切 tab）
+      return null;
+    }
+    const located: NonNullable<HostNavigateResult['located']> = { classId: false };
+    let reason: string | undefined;
+    if (!props.classes.some((c) => c.id === classId)) {
+      return { navigated: true, reason: 'class-not-found', located };
+    }
+    props.setExpandedClassId(classId);
+    located.classId = true;
+    const subTab = payload.subTab;
+    if (
+      typeof subTab === 'string' &&
+      (['students', 'assignments', 'schedules', 'grades'].includes(subTab) || subTab.startsWith('plugin:'))
+    ) {
+      props.setClassActiveTabs((prev) => ({ ...prev, [classId]: subTab }));
+      located.subTab = true;
+    }
+    const studentId = params.studentId;
+    if (typeof studentId === 'string' && studentId) {
+      const roster = props.classStudentsMap[classId];
+      // 花名册已加载且不含该学生：诚实失败（班级仍展开）
+      if (Array.isArray(roster) && roster.length > 0 && !roster.some((s) => s.id === studentId)) {
+        located.studentId = false;
+        reason = 'student-not-found';
+      } else {
+        props.setExpandedStudentId(studentId);
+        located.studentId = true;
+        const studentSubTab = params.studentSubTab;
+        if (typeof studentSubTab === 'string' && studentSubTab) {
+          props.setStudentActiveTabs((prev) => ({ ...prev, [studentId]: studentSubTab }));
+          located.studentSubTab = true;
+        }
+      }
+    }
+    return { navigated: true, ...(reason ? { reason } : {}), located };
+  };
+  useEffect(() => {
+    if (!pluginHost) return;
+    const dispatcher = pluginHost.getDispatcher?.();
+    if (!dispatcher?.registerHandler) return;
+    const disposable = dispatcher.registerHandler('host:navigate', async (envelope) => {
+      const payload = envelope.action.payload as HostNavigatePayload;
+      const result = locateRef.current?.(payload);
+      if (result) return result;
+      // 非 classes 域或无定位目标：镜像内置处理器的诚实语义（本 handler 是
+      // dispatch 聚合里的最后注册者，返回 undefined 会抹掉内置结果）。
+      if (!payload || typeof payload.tab !== 'string' || payload.tab === '') {
+        return { navigated: false, reason: 'tab-missing' } satisfies HostNavigateResult;
+      }
+      return { navigated: true } satisfies HostNavigateResult;
+    });
+    return () => {
+      disposable.dispose();
+    };
+  }, [pluginHost]);
 
   return (
     <div className="flex-1 flex flex-col gap-6 h-full overflow-y-auto relative p-1 pr-3">

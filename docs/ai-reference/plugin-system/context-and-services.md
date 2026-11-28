@@ -402,13 +402,30 @@ use(middleware): Disposable;
 
 内置 `HostAction` 六种：
 
-| type                 | payload 关键字段                                               | 返回                     |
-| -------------------- | -------------------------------------------------------------- | ------------------------ |
-| `host:refresh`       | `target: 'timetable'\|'classes'\|'lessons'\|'students'\|'all'` | `{success, refreshed[]}` |
-| `host:modal:confirm` | `title`, `message`, `variant?`                                 | `{confirmed}`            |
-| `host:modal:open`    | `title`, `content`, `size?`, `actions?`                        | `{actionId?, closed}`    |
-| `host:modal:close`   | `id?`, `result?`                                               | —                        |
-| `host:toast`         | `title`, `message`, `type?`, `duration?`                       | `{delivered}`            |
-| `host:navigate`      | `tab`, `subTab?`, `params?`                                    | `{navigated}`            |
+| type                 | payload 关键字段                                               | 返回                             |
+| -------------------- | -------------------------------------------------------------- | -------------------------------- |
+| `host:refresh`       | `target: 'timetable'\|'classes'\|'lessons'\|'students'\|'all'` | `{success, refreshed[]}`         |
+| `host:modal:confirm` | `title`, `message`, `variant?`                                 | `{confirmed}`                    |
+| `host:modal:open`    | `title`, `content`, `size?`, `actions?`                        | `{actionId?, closed}`            |
+| `host:modal:close`   | `id?`, `result?`                                               | —                                |
+| `host:toast`         | `title`, `message`, `type?`, `duration?`                       | `{delivered}`                    |
+| `host:navigate`      | `tab`, `subTab?`, `params?`                                    | `{navigated, reason?, located?}` |
+
+**classes 域深链（Issue IKYP37）**：`tab: 'classes'` 时支持三级定位——`subTab` 为班级详情 Tab（`students` / `assignments` / `schedules` / `grades` / `plugin:{pluginId}/{extId}`），`params.classId` 展开该班，`params.studentId` 展开学生行（须属于该班，花名册已加载时校验），`params.studentSubTab` 为学生子 Tab（`progress` / `settings` / `notes` / `plugin:{pluginId}/{extId}`）。示例：
+
+```ts
+await dispatcher.dispatch({
+  type: 'host:navigate',
+  payload: {
+    tab: 'classes',
+    subTab: 'students',
+    params: { classId: 'cls_1', studentId: 'stu_9', studentSubTab: 'notes' },
+  },
+});
+// => { navigated: true, located: { classId: true, subTab: true, studentId: true, studentSubTab: true } }
+// 定位失败（如班级不存在）时仍 navigated:true（tab 已切换），reason 给出原因（'class-not-found' 等）
+```
+
+其余 tab 域的 `subTab` / `params` 为保留字段：传入不报错、当前无效果（无权威处理器消费）。`tab` 切换失败时返回 `{navigated:false, reason:'tab-missing'|'navigate-failed'}`。
 
 证据：`types.ts`（L358-520）。渲染器会自动给每个扩展点注入 `dispatcher`（已绑定 `sourcePluginId`）。
