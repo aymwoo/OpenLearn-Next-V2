@@ -4,12 +4,10 @@
 > 代码基线：`b42c86b`（审计时的 `origin/main`）；落地实现基于 `41dfa28`（!32 合并后）
 > 审计范围：`ExtensionPointRenderer` 扩展点体系在「学案（xuean）/ 白板（whiteboard）」两种课堂交付模式下，教师侧与学生侧的接线、可见性、上下文与回退行为
 > 不包含：`assessment.*` / `teacher.dashboard.*` / 后台管理类槽位（仅在涉及共性问题时引用）
+>
+> **回填说明（2026-11-28）**：本报告正文保留审计时（`b42c86b`）的事实作为左栏，涉及结论的段落已改成「审计时 → 当前」双列；「当前」以 `a8e5440` 为准（!33 / !34 / !36 / !37 及期间并入的 !40 / !44 / !45）。逐项落地状态见 §3.0 对照表。
 
-> **实施状态（2026-11-27）**：P0 四项已落地——`rolesAllowed` 渲染期过滤、学案活动槽 fallback、学案学生主工作区接入 `student_main`、学案门禁兜底 `gate_fallback`。P1 全部落地：3.5 / 3.6 / 3.7（补 `studentId`/`studentName`、活动主槽上下文、白板选中与右键槽 `readOnly`/`userRole`）、3.8（学案学生壳复用 `student.lesson.tool`）、3.9（新增 `xuean.activity.teacher`，`ExtensionSlot` 增至 162）。P2 落地 3.10（内置白板页列表 / 学案大纲追加渲染 `classroom.outline`；`classroom.prep` 维持仅第三方模式包并在文档注明）、3.11（`adopt` 事件映射）、3.12（只读态按视口挂载插件渲染器）、3.13（学案课默认 `segment_main`）。
->
-> **后续补齐（2026-11-27）**：`rolesAllowed` 的 `admin` 语义接入管理员会话；学案学生壳补挂 `student.segment.badge`；新增白板页行级操作槽 `classroom.outline.page_action`（`ExtensionSlot` 增至 163）；插件图元懒挂载扩展到可编辑态，并改用 `useLayoutEffect` 做首帧同步判定以消除首帧闪空。
->
-> **3.10 收尾（2026-11-28）**：新增 `classroom.prep.addon`（内置白板 / 学案备课面顶栏追加，不替换编辑器）与 `classroom.outline.activity_action`（学案活动大纲行级操作，学案环节展开时列出课时级活动），`ExtensionSlot` 增至 **165**。
+> **落地批次**：P0 / P1 于 !33 / !34 落地；P2 3.11–3.13 于 !34 落地，3.10 在 !34 / !36 / !37 分批补齐。逐项状态与实现偏差见 §3.0，当前规模见 §1.1。
 
 ---
 
@@ -17,40 +15,57 @@
 
 ### 1.1 规模
 
-| 指标                          | 数值    |
-| ----------------------------- | ------- |
-| 固定扩展槽（`ExtensionSlot`） | **161** |
-| 锚点槽（`AnchorSlot`）        | **8**   |
-| 其中 `classroom.*`            | 47      |
-| 其中 `student.*`              | 21      |
-| 其中 `whiteboard.*`           | 10      |
-| 其中 `xuean.*`                | 10      |
-| 数据型/服务端槽（无渲染器）   | 7       |
+| 指标                          | 审计时（`b42c86b`） | 当前（`a8e5440`） | 变化                                                   |
+| ----------------------------- | ------------------- | ----------------- | ------------------------------------------------------ |
+| 固定扩展槽（`ExtensionSlot`） | **161**             | **177**           | +16（本报告 P1/P2 落地 +4，!40 / !44 / !45 并入 +12）  |
+| 锚点槽（`AnchorSlot`）        | **8**               | **8**             | 不变                                                   |
+| 其中 `classroom.*`            | 47                  | 50                | +3（`page_action` / `activity_action` / `prep.addon`） |
+| 其中 `student.*`              | 21                  | 28                | +7（含 !44 花名册 / 选课扩展）                         |
+| 其中 `whiteboard.*`           | 10                  | 10                | 不变                                                   |
+| 其中 `xuean.*`                | 10                  | 11                | +1（`xuean.activity.teacher`）                         |
+| 数据型/服务端槽（无渲染器）   | 7                   | 8                 | +1（`computer_lab.seating.save_hook`）                 |
+| 有渲染调用点的固定槽          | 154                 | 169               | +15                                                    |
 
-`src/plugin-host/types.ts`、`docs/agent/contracts/slots.json`、`docs/reference/plugin-ui-extension-slots.md` 三者计数已对齐（!27 已修正此前的 141/149 漂移）。
+`src/plugin-host/types.ts`、`docs/agent/contracts/slots.json`、`docs/reference/plugin-ui-extension-slots.md` 三者计数当前均为 **177**；渲染调用点 169 由 `audit-tools/reports/slots_inventory.json` 给出（`declared=177`、`rendered_fixed=169`、`anchor=8`，复核命令 `bash audit-tools/run.sh`）。
 
 ### 1.2 总体判断
 
-- **白板模式**：槽位覆盖最完整，画布、工具栏、选中态、右键菜单、页面条、属性面板、自动保存均有挂载点。
-- **学案模式**：活动级槽位（编辑器/学生卡/卡片动作/徽标/底部/附加面板/进度摘要/首页块）已成型，但**学生端环节主工作区仍被硬编码绕过**，且学生端缺少常驻工具位与门禁兜底槽。
-- **共性**：`rolesAllowed` 仅有类型声明、运行时不消费；学案活动槽在无匹配扩展时忽略 `fallback`。
+| 结论     | 审计时（`b42c86b`）                                                                          | 当前（`a8e5440`）                                                                                                                                                                                                                                      |
+| -------- | -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 白板模式 | 槽位覆盖最完整，画布、工具栏、选中态、右键菜单、页面条、属性面板、自动保存均有挂载点         | 保持完整；新增白板页行级操作 `classroom.outline.page_action`、内置备课面追加区 `classroom.prep.addon`，插件图元在可编辑态也按视口懒挂载（首帧同步判定）                                                                                                |
+| 学案模式 | 活动级槽位已成型，但**学生端环节主工作区仍被硬编码绕过**，且学生端缺少常驻工具位与门禁兜底槽 | 学案学生壳已消费 `classroom.active_segment.student_main`（primary / extra），补 `student.segment.gate_fallback`、`student.lesson.tool`、`student.segment.badge`；教师侧新增 `xuean.activity.teacher`；大纲可逐行挂 `classroom.outline.activity_action` |
+| 共性     | `rolesAllowed` 仅有类型声明、运行时不消费；学案活动槽在无匹配扩展时忽略 `fallback`           | `rolesAllowed` 在渲染期过滤（管理员会话额外匹配 `admin`，学生视图预览不匹配）；空槽位与活动槽未命中统一 `fallback ?? null`                                                                                                                             |
 
-### 1.3 模式 × 角色能力矩阵
+### 1.3 模式 × 角色能力矩阵（当前）
 
-| 能力                                      | 白板-教师        | 白板-学生       | 学案-教师                 | 学案-学生        |
-| ----------------------------------------- | ---------------- | --------------- | ------------------------- | ---------------- |
-| 环节主工作区可扩展                        | ✅               | ✅              | ✅                        | ❌ 硬编码绕过    |
-| 插件工具位（`classroom.tool` 等）         | ✅               | ⚠️ 未做角色过滤 | ⚠️ 仅经“演示白板”间接可用 | ❌               |
-| 画布元素渲染扩展（`whiteboard.renderer`） | ✅               | ✅              | ⚠️ 仅“演示白板”标签       | ❌               |
-| 活动级渲染扩展（`xuean.activity.*`）      | —                | —               | ✅                        | ✅（上下文不全） |
-| 门禁兜底可扩展                            | —                | ✅              | —                         | ❌               |
-| 大纲/备课面可扩展                         | ⚠️ 仅第三方 pack | —               | ⚠️ 仅第三方 pack          | —                |
+| 能力                                      | 白板-教师         | 白板-学生                 | 学案-教师                                     | 学案-学生                                         |
+| ----------------------------------------- | ----------------- | ------------------------- | --------------------------------------------- | ------------------------------------------------- |
+| 环节主工作区可扩展                        | ✅                | ✅                        | ✅                                            | ✅（primary / extra）                             |
+| 插件工具位（`classroom.tool` 等）         | ✅                | ✅（`rolesAllowed` 过滤） | ✅（`xuean.activity.teacher` / 编辑器工具栏） | ✅（`student.lesson.tool` / `segment.badge`）     |
+| 画布元素渲染扩展（`whiteboard.renderer`） | ✅                | ✅                        | ⚠️ 仅“演示白板”标签                           | ❌（学案无画布，按设计）                          |
+| 活动级渲染扩展（`xuean.activity.*`）      | —                 | —                         | ✅                                            | ✅（`progress` / `studentId` / `classId` 已注入） |
+| 门禁兜底可扩展                            | —                 | ✅                        | —                                             | ✅                                                |
+| 大纲/备课面可扩展                         | ✅（追加 + 行级） | —                         | ✅（`prep.addon` / `activity_action`）        | —                                                 |
+
+**审计时 → 当前的变化点**：
+
+| 能力 / 单元格                   | 审计时           | 当前                          | 落地                       |
+| ------------------------------- | ---------------- | ----------------------------- | -------------------------- |
+| 学案-学生 · 环节主工作区        | ❌ 硬编码绕过    | ✅ primary / extra            | 3.3（!33）                 |
+| 白板-学生 · 插件工具位          | ⚠️ 未做角色过滤  | ✅                            | 3.1（!33 / !36）           |
+| 学案-学生 · 活动级上下文        | ✅（上下文不全） | ✅（进度与学生身份已注入）    | 3.6（!34）                 |
+| 学案-学生 · 门禁兜底            | ❌               | ✅                            | 3.4（!33）                 |
+| 学案-学生 · 常驻工具位          | ❌               | ✅                            | 3.8 + 后续 `segment.badge` |
+| 学案-教师 · 活动实时视图        | ❌               | ✅ `xuean.activity.teacher`   | 3.9（!34）                 |
+| 大纲/备课面（白板 / 学案-教师） | ⚠️ 仅第三方 pack | ✅ 追加 + 行级 + `prep.addon` | 3.10（!34 / !36 / !37）    |
 
 ---
 
 ## 2. 实现现状
 
 ### 2.1 通用课堂壳（两种模式共用，教师侧）
+
+> 下表行号为**审计时**的代码位置；合并后行号已漂移，按文件路径 + 槽位名检索即可（槽位名与所属组件未变）。
 
 | 槽位                                 | 调用点                                                                                                                              |
 | ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
@@ -103,19 +118,19 @@
 
 ### 2.2 白板模式
 
-| 槽位                            | 调用点                                                                                                                | 角色                 |
-| ------------------------------- | --------------------------------------------------------------------------------------------------------------------- | -------------------- |
-| `classroom.tool`                | [WhiteboardToolbar.tsx L493](../../src/features/whiteboard/components/WhiteboardToolbar.tsx#L493)                     | 双端（未做角色过滤） |
-| `whiteboard.renderer`           | [InteractiveWhiteboard.tsx L3286](../../src/features/whiteboard/InteractiveWhiteboard.tsx#L3286)                      | 双端                 |
-| `whiteboard.selection.toolbar`  | [InteractiveWhiteboard.tsx L3857](../../src/features/whiteboard/InteractiveWhiteboard.tsx#L3857)                      | 双端                 |
-| `whiteboard.context_menu`       | [InteractiveWhiteboard.tsx L3990](../../src/features/whiteboard/InteractiveWhiteboard.tsx#L3990)                      | 双端                 |
-| `whiteboard.canvas.widget`      | [InteractiveWhiteboard.tsx L4014](../../src/features/whiteboard/InteractiveWhiteboard.tsx#L4014)                      | 双端                 |
-| `whiteboard.dock.plugin`        | [InteractiveWhiteboard.tsx L4025](../../src/features/whiteboard/InteractiveWhiteboard.tsx#L4025)                      | 双端                 |
-| `whiteboard.pagebar.action`     | [WhiteboardPageBar.tsx L250](../../src/features/whiteboard/components/WhiteboardPageBar.tsx#L250)                     | 双端                 |
-| `whiteboard.page_drawer.action` | [WhiteboardPageBar.tsx L282](../../src/features/whiteboard/components/WhiteboardPageBar.tsx#L282)                     | 双端                 |
-| `whiteboard.properties.addon`   | [WhiteboardPropertiesSidebar.tsx L699](../../src/features/whiteboard/components/WhiteboardPropertiesSidebar.tsx#L699) | 双端                 |
-| `whiteboard.autosave.status`    | [LessonEditorView.tsx L309](../../src/features/teacher/LessonEditorView.tsx#L309)                                     | 教师                 |
-| `whiteboard.autosave.action`    | [LessonEditorView.tsx L318](../../src/features/teacher/LessonEditorView.tsx#L318)                                     | 教师                 |
+| 槽位                            | 调用点                                                                                                                | 角色（审计时 → 当前）                                 |
+| ------------------------------- | --------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| `classroom.tool`                | [WhiteboardToolbar.tsx L493](../../src/features/whiteboard/components/WhiteboardToolbar.tsx#L493)                     | 双端（审计时未过滤 → 当前 `rolesAllowed` 渲染期过滤） |
+| `whiteboard.renderer`           | [InteractiveWhiteboard.tsx L3286](../../src/features/whiteboard/InteractiveWhiteboard.tsx#L3286)                      | 双端                                                  |
+| `whiteboard.selection.toolbar`  | [InteractiveWhiteboard.tsx L3857](../../src/features/whiteboard/InteractiveWhiteboard.tsx#L3857)                      | 双端                                                  |
+| `whiteboard.context_menu`       | [InteractiveWhiteboard.tsx L3990](../../src/features/whiteboard/InteractiveWhiteboard.tsx#L3990)                      | 双端                                                  |
+| `whiteboard.canvas.widget`      | [InteractiveWhiteboard.tsx L4014](../../src/features/whiteboard/InteractiveWhiteboard.tsx#L4014)                      | 双端                                                  |
+| `whiteboard.dock.plugin`        | [InteractiveWhiteboard.tsx L4025](../../src/features/whiteboard/InteractiveWhiteboard.tsx#L4025)                      | 双端                                                  |
+| `whiteboard.pagebar.action`     | [WhiteboardPageBar.tsx L250](../../src/features/whiteboard/components/WhiteboardPageBar.tsx#L250)                     | 双端                                                  |
+| `whiteboard.page_drawer.action` | [WhiteboardPageBar.tsx L282](../../src/features/whiteboard/components/WhiteboardPageBar.tsx#L282)                     | 双端                                                  |
+| `whiteboard.properties.addon`   | [WhiteboardPropertiesSidebar.tsx L699](../../src/features/whiteboard/components/WhiteboardPropertiesSidebar.tsx#L699) | 双端                                                  |
+| `whiteboard.autosave.status`    | [LessonEditorView.tsx L309](../../src/features/teacher/LessonEditorView.tsx#L309)                                     | 教师                                                  |
+| `whiteboard.autosave.action`    | [LessonEditorView.tsx L318](../../src/features/teacher/LessonEditorView.tsx#L318)                                     | 教师                                                  |
 
 学生侧课堂浮层（App 级挂载，两种模式都生效）：
 
@@ -148,27 +163,54 @@
 | `xuean.activity.card.action`                                                    | [XueanActivitiesPanel.tsx L382](../../src/features/teacher/xuean/XueanActivitiesPanel.tsx#L382)         |
 | `xuean.activity.editor`                                                         | [XueanActivitiesPanel.tsx L668](../../src/features/teacher/xuean/XueanActivitiesPanel.tsx#L668)         |
 | `xuean.activity.editor.footer`                                                  | [XueanActivitiesPanel.tsx L871](../../src/features/teacher/xuean/XueanActivitiesPanel.tsx#L871)         |
+| `xuean.activity.teacher`（当前新增）                                            | [ProgressPanel.tsx](../../src/features/teacher/xuean/ProgressPanel.tsx)（活动展开区）                   |
+| `classroom.outline.activity_action`（当前新增）                                 | [ClassroomTimelineSidebar.tsx](../../src/features/classroom/ClassroomTimelineSidebar.tsx)（学案活动行） |
 
 学生侧：
 
-| 槽位                                    | 调用点                                                                                                                                                      |
-| --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `xuean.progress.summary`                | [StudentXueanView.tsx L193](../../src/features/student/xuean/StudentXueanView.tsx#L193)                                                                     |
-| `xuean.home.block`                      | [StudentXueanView.tsx L253](../../src/features/student/xuean/StudentXueanView.tsx#L253)                                                                     |
-| `xuean.activity.student`                | [StudentXueanView.tsx L533](../../src/features/student/xuean/StudentXueanView.tsx#L533)                                                                     |
-| `xuean.activity.student.addon`          | [StudentXueanView.tsx L539](../../src/features/student/xuean/StudentXueanView.tsx#L539)、[L661](../../src/features/student/xuean/StudentXueanView.tsx#L661) |
-| `classroom.active_segment.student_main` | 已注册（[registerXueanModePack.ts L61-L68](../../src/features/classroom/mode-pack/registerXueanModePack.ts#L61-L68)），**但学案壳未消费**                   |
+| 槽位                                    | 调用点                                                                                                                                                                        |
+| --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `xuean.progress.summary`                | [StudentXueanView.tsx L193](../../src/features/student/xuean/StudentXueanView.tsx#L193)                                                                                       |
+| `xuean.home.block`                      | [StudentXueanView.tsx L253](../../src/features/student/xuean/StudentXueanView.tsx#L253)                                                                                       |
+| `xuean.activity.student`                | [StudentXueanView.tsx L533](../../src/features/student/xuean/StudentXueanView.tsx#L533)                                                                                       |
+| `xuean.activity.student.addon`          | [StudentXueanView.tsx L539](../../src/features/student/xuean/StudentXueanView.tsx#L539)、[L661](../../src/features/student/xuean/StudentXueanView.tsx#L661)                   |
+| `classroom.active_segment.student_main` | 已注册（[registerXueanModePack.ts L61-L68](../../src/features/classroom/mode-pack/registerXueanModePack.ts#L61-L68)）；**审计时学案壳未消费 → 当前已消费（primary / extra）** |
+| `student.lesson.tool`（当前新增）       | [XueanStudentClassroom.tsx](../../src/features/student/mode-classroom/XueanStudentClassroom.tsx)（学案壳工具行）                                                              |
+| `student.segment.badge`（当前新增）     | [XueanStudentClassroom.tsx](../../src/features/student/mode-classroom/XueanStudentClassroom.tsx)（学案壳当前环节徽标）                                                        |
 
-### 2.4 第三方 Mode Pack 专用
+### 2.4 Mode Pack 备课面与大纲（审计时 → 当前）
 
-| 槽位                | 调用点                                                                                              | 说明                                                     |
-| ------------------- | --------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
-| `classroom.prep`    | [ModePackPrepShell.tsx L199](../../src/features/classroom/mode-pack/ModePackPrepShell.tsx#L199)     | 内置白板/学案走硬编码编辑器，不经过该槽                  |
-| `classroom.outline` | [ClassroomTimelineSidebar.tsx L305](../../src/features/classroom/ClassroomTimelineSidebar.tsx#L305) | 内置白板显示页面列表、内置学案显示占位文案，均不经过该槽 |
+| 槽位                                            | 审计时                                                                  | 当前                                                                                                                                           |
+| ----------------------------------------------- | ----------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `classroom.prep`                                | 仅第三方 pack；内置白板 / 学案走硬编码编辑器，不经过该槽                | 语义不变：第三方 pack 的**整块替换**备课面；内置编辑器改用 `classroom.prep.addon`（`LessonEditorView` / `XueanEditor` 顶栏追加，不替换编辑器） |
+| `classroom.prep.addon`（当前新增）              | —                                                                       | 内置白板 / 学案备课面顶栏追加区，`packId` 为 `whiteboard` / `xuean`，`prepContributionId` 为 `prep-whiteboard` / `prep-xuean`                  |
+| `classroom.outline`                             | 仅第三方 pack；内置白板显示页面列表、内置学案显示占位文案，均不经过该槽 | 第三方 pack 仍是**替换**；内置白板页列表 / 学案活动大纲改为**追加**渲染（学案大纲会列出课时活动行）                                            |
+| `classroom.outline.page_action`（当前新增）     | —                                                                       | 白板页大纲每行的页级操作，点击不触发切页                                                                                                       |
+| `classroom.outline.activity_action`（当前新增） | —                                                                       | 学案活动大纲每行的操作；活动是课时级数据，仅在当前演示的学案环节列出                                                                           |
 
 ---
 
 ## 3. 优化点
+
+> 以下 3.1–3.13 保留审计时的证据与建议原文；实际状态以 §3.0 对照表为准，正文中的行号均为审计时位置。
+
+### 3.0 审计项落地对照（审计时 → 当前）
+
+| 编号 | 审计时问题                                            | 当前状态                                                    | 落地 / 偏差                                                                                              |
+| ---- | ----------------------------------------------------- | ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| 3.1  | `rolesAllowed` 死字段                                 | ✅ 渲染期按角色过滤                                         | !33；!36 补 `admin` 语义（管理员会话额外匹配，学生视图预览不匹配；未按建议映射为 `teacher`）             |
+| 3.2  | 学案活动槽忽略 `fallback`                             | ✅ 空槽位 / 活动未命中统一 `fallback ?? null`               | !33；其余 `return null` 分支属“无匹配即不渲染”，未改                                                     |
+| 3.3  | 学案学生端主工作区被硬编码绕过                        | ✅ 学案壳消费 `student_main`（primary / extra）             | !33                                                                                                      |
+| 3.4  | 学案学生端缺门禁兜底槽                                | ✅ 未解锁分支渲染 `student.segment.gate_fallback`           | !33                                                                                                      |
+| 3.5  | `student_main` 缺学生身份                             | ✅ 注入 `studentId` / `studentName`                         | !34                                                                                                      |
+| 3.6  | `xuean.activity.student` 缺上下文                     | ✅ 注入 `progress` / `studentId` / `classId` / `lang`       | !34                                                                                                      |
+| 3.7  | 白板选中 / 右键槽缺角色与只读                         | ✅ 注入 `readOnly` / `userRole`                             | !34                                                                                                      |
+| 3.8  | 学案学生端无常驻工具位                                | ✅ 复用 `student.lesson.tool`，并补 `student.segment.badge` | !34 / !36                                                                                                |
+| 3.9  | 教师课中无活动实时视图槽                              | ✅ 新增 `xuean.activity.teacher`                            | !34                                                                                                      |
+| 3.10 | 内置模式不消费 `classroom.outline` / `classroom.prep` | ✅ 大纲追加 + 行级操作；备课面新增 `classroom.prep.addon`   | !34 / !36 / !37；`classroom.prep` 保持第三方整块替换语义，内置改用 addon（与建议的“文档化”相比更进一步） |
+| 3.11 | 白板事件槽映射漂移                                    | ✅ `adopt → courseware.adopted`，删除 `promote` 分支        | !34                                                                                                      |
+| 3.12 | 只读态仍逐图元挂载插件 iframe                         | ✅ 按视口懒挂载，并扩展到可编辑态 + 首帧同步判定            | !34 / !36；未采用“只读跳过挂载”（会让锁定态课件整块消失）                                                |
+| 3.13 | 教师学案默认落在“演示白板”                            | ✅ 学案课（mode pack 开启）默认 `segment_main`              | !34；产品是否对全部学案课都默认此行为仍待确认                                                            |
 
 ### P0 — 契约与对称性缺陷
 
@@ -264,6 +306,8 @@
 | B（P1） | 3.5–3.9 上下文补齐与学案常驻工具/教师实时视图                      | `src/plugin-host/types.ts`、`StudentLessonView.tsx`、`StudentXueanView.tsx`、`InteractiveWhiteboard.tsx`、`XueanStudentClassroom.tsx`、新增 `xuean.activity.teacher` | slotProps 快照测试；学生身份注入；只读态写按钮不出现；教师活动视图按 `activityType` 分发            |
 | C（P2） | 3.10–3.13 内置大纲/备课、事件映射、只读渲染、默认 tab              | `ClassroomTimelineSidebar.tsx`、`ModePackPrepShell.tsx`、`useClassroomSocket.ts`、`InteractiveWhiteboard.tsx`、`LiveClassroomView.tsx`                               | 事件契约测试；只读渲染不挂载；学案默认 tab                                                          |
 
+**落地状态（2026-11-28）**：A / B / C 三批均已合并（!33 / !34）；C 批的 3.10 在 !36 / !37 收尾（白板页行级槽、内置备课面 `prep.addon`、学案活动行级槽）。逐项状态见 §3.0。
+
 **兼容性要求**：所有新增 slotProps 均为可选字段，不破坏现有插件；新增槽位需同步 `slots.json`、`docs/reference/plugin-ui-extension-slots.md` 与漂移审计（`audit-tools` 的 `drift_count` 保持 0）。
 
 ---
@@ -272,7 +316,7 @@
 
 ### 5.1 审计方法
 
-- 契约与实现比对：`docs/agent/contracts/slots.json` vs `src/plugin-host/types.ts` 的 `ExtensionSlot` 联合类型（161 vs 161，锚点 8）。
+- 契约与实现比对：`docs/agent/contracts/slots.json` vs `src/plugin-host/types.ts` 的 `ExtensionSlot` 联合类型（审计时 161 vs 161；当前 177 vs 177，渲染调用点 169，锚点 8）。
 - 渲染点定位：全仓检索 `slot="<domain>.*"` 字面量，逐个确认调用组件与角色。
 - 行为核实：阅读 `ExtensionPointRenderer` 的分发分支、`plugin-host` 注册逻辑、`rolesAllowed` 消费情况。
 - 模式路由：`resolveWorkspace` / `resolveStudentClassroomMode` / `resolveLessonModePackDeliveryMode` / `getLessonModePackIds`。
