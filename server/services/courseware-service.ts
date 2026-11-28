@@ -9,7 +9,17 @@ import crypto from 'crypto';
 import type Database from 'better-sqlite3';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
 import { CLASSROOM_EVENTS, publishClassroomEvent } from '../classroom-events.js';
-import { aggregateAttemptScore, describeAggregation } from '../../packages/plugins/courseware-score.js';
+import {
+  aggregateAttemptScore,
+  describeAggregation,
+  resolveScoreConfig,
+} from '../../packages/plugins/courseware-score.js';
+import {
+  normalizeCompletionForDisplay,
+  normalizeCompletionRatio,
+} from '../../packages/courseware-adapters/completion.js';
+import { resolveCoursewareProtocol, toSubmissionProtocol } from '../utils/courseware-protocol.js';
+import type { SubmissionProtocolSource } from '../../packages/courseware-adapters/types.js';
 import { extractScoreCommentCompletion } from '../utils/score-extract.js';
 import { parsePagination, type Pagination } from '../utils/pagination.js';
 import {
@@ -90,6 +100,36 @@ export class CoursewareService {
       CLASSROOM_EVENTS.COURSEWARE_ATTEMPT_UPDATED,
       { attemptId, type },
       { correlationId: attemptId },
+    );
+  }
+
+  /** attempt → 课件（id/uuid）的唯一查询入口 */
+  private loadAttemptCourseware(attemptId: string): { id: string; uuid: string } | null {
+    try {
+      const row = this.db
+        .prepare(
+          `SELECT cw.id AS id, cw.uuid AS uuid
+             FROM courseware_attempt a
+             JOIN courseware cw ON a.courseware_id = cw.id
+            WHERE a.id = ?`,
+        )
+        .get(attemptId) as { id?: string; uuid?: string } | undefined;
+      return row?.id && row.uuid ? { id: row.id, uuid: row.uuid } : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * 解析一条成绩样本的真实来源：课件包协议（SCORM / xAPI / H5P / html）
+   * 优先采用上报方 payload.protocol，其次按课件包协议推导。
+   */
+  private resolveAttemptProtocol(attemptId: string, reportedProtocol?: unknown): SubmissionProtocolSource {
+    const courseware = this.loadAttemptCourseware(attemptId);
+    if (!courseware) return toSubmissionProtocol('html', reportedProtocol);
+    return toSubmissionProtocol(
+      resolveCoursewareProtocol({ id: courseware.id, uuid: courseware.uuid }),
+      reportedProtocol,
     );
   }
 
@@ -211,7 +251,13 @@ export class CoursewareService {
 
     const extracted = extractScoreCommentCompletion(payload);
     const comment = extracted.comment;
-    const completion = extracted.completion;
+    // 完成度统一收敛为 0~1 比率；历史数据里的 85 在读取侧再由 normalizeCompletionForDisplay 兜底
+    const completion = normalizeCompletionRatio(extracted.completion);
+    const reportedProtocol =
+      payload && typeof payload === 'object' && !Array.isArray(payload)
+        ? (payload as Record<string, unknown>).protocol
+        : undefined;
+    const protocolSource = this.resolveAttemptProtocol(attemptId, reportedProtocol);
 
     // 原生成绩归集：按课件成绩配置的策略从样本历史算出官方成绩
     let aggregatedScore: number | null = null;
@@ -232,8 +278,7 @@ export class CoursewareService {
       }
       let parsedCompletion: number | null = null;
       if (completion !== undefined && completion !== null) {
-        const num = parseFloat(completion);
-        if (!isNaN(num)) parsedCompletion = num;
+        parsedCompletion = completion;
       }
 
       const existing = this.db.prepare('SELECT * FROM submission_result WHERE attempt_id = ?').get(attemptId) as any;
@@ -252,6 +297,7 @@ export class CoursewareService {
             JSON.stringify({
               ...(payload && typeof payload === 'object' ? payload : {}),
               ...aggregationExtra,
+              protocol: protocolSource,
             }),
           );
       } else {
@@ -260,14 +306,16 @@ export class CoursewareService {
         const finalComment = comment || existing.comment;
         const finalCompletion = parsedCompletion !== null ? parsedCompletion : existing.completion;
 
-        let mergedExtra = {};
+        let previousExtra: Record<string, unknown> = {};
         try {
-          mergedExtra = JSON.parse(existing.extra_json || '{}');
+          previousExtra = JSON.parse(existing.extra_json || '{}');
         } catch {}
-        if (payload && typeof payload === 'object') {
-          mergedExtra = { ...mergedExtra, ...payload };
-        }
-        mergedExtra = { ...mergedExtra, ...aggregationExtra };
+        const mergedExtra: Record<string, unknown> = {
+          ...previousExtra,
+          ...(payload && typeof payload === 'object' ? payload : {}),
+          ...aggregationExtra,
+          protocol: protocolSource,
+        };
 
         this.db
           .prepare(
@@ -331,26 +379,45 @@ export class CoursewareService {
     if (comment === undefined || comment === null) comment = extracted.comment;
     if (completion === undefined || completion === null) completion = extracted.completion;
 
+    const courseware = this.loadAttemptCourseware(attemptId);
+    const reportedProtocol =
+      extra && typeof extra === 'object' && !Array.isArray(extra)
+        ? (extra as Record<string, unknown>).protocol
+        : undefined;
+    const protocolSource = courseware
+      ? toSubmissionProtocol(resolveCoursewareProtocol(courseware), reportedProtocol)
+      : toSubmissionProtocol('html', reportedProtocol);
+
+    // 满分校验（Issue IKYP8P 阶段 B）：按 courseware_score_config.raw_full_score 判定上限。
+    // 归一化后的官方分由聚合层负责（raw → target_full_score），提交侧只拒绝越界原始分。
+    const resolvedConfig = courseware ? resolveScoreConfig(this.db as any, courseware.id) : null;
+    const rawFullScore = resolvedConfig?.config.raw_full_score ?? 100;
+    const scoreCap = Number.isFinite(rawFullScore) && rawFullScore > 0 ? rawFullScore : 100;
+
     let parsedScore: number | null = null;
     if (score !== undefined && score !== null) {
       const num = parseFloat(score);
       // V4 纵深：伪造成绩直达落库。此前 NaN 静默忽略、超大值照收；现拒绝非有限/越界分数
-      if (typeof score === 'boolean' || !Number.isFinite(num) || num < 0 || num > 1000) {
-        const err: any = new Error('Invalid score: must be a finite number in [0, 1000]');
+      if (typeof score === 'boolean' || !Number.isFinite(num) || num < 0 || num > scoreCap + 1e-6) {
+        const err: any = new Error(
+          `Invalid score: must be a finite number in [0, ${scoreCap}] (courseware raw_full_score)`,
+        );
         err.status = 400;
         throw err;
       }
       parsedScore = num;
     }
+
+    // 完成度统一收敛为 0~1 比率；不再接受 0~100 混用
     let parsedCompletion: number | null = null;
     if (completion !== undefined && completion !== null) {
-      const num = parseFloat(completion);
-      if (!Number.isFinite(num) || num < 0 || num > 100) {
-        const err: any = new Error('Invalid completion: must be a finite number in [0, 100]');
+      const normalized = normalizeCompletionRatio(completion);
+      if (normalized === null) {
+        const err: any = new Error('Invalid completion: must be a finite number ratio or percentage');
         err.status = 400;
         throw err;
       }
-      parsedCompletion = num;
+      parsedCompletion = normalized;
     }
 
     const actorId =
@@ -363,7 +430,11 @@ export class CoursewareService {
     if (parsedCompletion !== null) payload.completion = parsedCompletion;
     if (comment !== undefined && comment !== null) payload.comment = comment;
     if (status !== undefined && status !== null) payload.status = status;
-    if (extra && typeof extra === 'object' && !Array.isArray(extra)) payload.extra = extra;
+    if (extra && typeof extra === 'object' && !Array.isArray(extra)) {
+      payload.extra = { ...extra, protocol: protocolSource };
+    } else {
+      payload.extra = { protocol: protocolSource };
+    }
 
     const cmd = kernelContainer.commandBus.createCommand('courseware.submit_attempt', payload, actorId);
     const result = await kernelContainer.commandBus.execute(cmd);
@@ -524,9 +595,15 @@ export class CoursewareService {
     const stmt = this.db.prepare(sql);
     const rows = stmt.all(...selectArgs, ...args, pg.isAll ? -1 : pg.pageSize, pg.offset) as AttemptListItem[];
 
+    // 读取侧兼容历史脏数据：旧行里的 completion=85 统一投影为 0.85
+    const normalizedRows = rows.map((row) => ({
+      ...row,
+      completion: row.completion === null ? null : normalizeCompletionForDisplay(row.completion),
+    }));
+
     const sanitizedData = isStaff
-      ? rows
-      : rows.map((row) => {
+      ? normalizedRows
+      : normalizedRows.map((row) => {
           const sanitized = { ...row };
           delete sanitized.extra_json;
           delete sanitized.comment;
@@ -589,7 +666,7 @@ export class CoursewareService {
     return {
       score: result.score,
       comment: result.comment,
-      completion: result.completion,
+      completion: result.completion === null ? null : normalizeCompletionForDisplay(result.completion),
       extra,
     };
   }

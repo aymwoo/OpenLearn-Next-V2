@@ -27,24 +27,25 @@
 
 `server/routes/courseware.ts` 中 `registerCoursewareRoutes` 注册的全部端点（按注册顺序）：
 
-| 方法   | 路径                                           | 角色           | 用途                                     |
-| ------ | ---------------------------------------------- | -------------- | ---------------------------------------- |
-| POST   | `/api/courseware/upload`                       | 教师/管理员    | 上传课件（base64）→ 落 VFS               |
-| POST   | `/api/courseware/confirm`                      | 教师/管理员    | 上传后登记 `courseware` 行               |
-| GET    | `/api/courseware`                              | 任意登录       | 课件列表（**无 `/list` 后缀**）          |
-| DELETE | `/api/courseware/:id`                          | 教师/管理员    | 删除课件（**不是 POST**）                |
-| POST   | `/api/courseware/attempts/:attemptId/log`      | 学生/教师      | 学生答题过程事件流                       |
-| POST   | `/api/courseware/attempts/:attemptId/submit`   | 学生/教师      | 学生最终提交分数                         |
-| POST   | `/api/courseware/attempts/:attemptId/adopt`    | 任意登录       | 把无主 attempt 认领到当前学生名下        |
-| GET    | `/api/courseware/attempts`                     | 任意登录       | 成绩榜（分页信封 + 角色脱敏，见 §4）     |
-| GET    | `/api/courseware/attempts/:attemptId/raw`      | 本人/教师      | 拉取 attempt 的原始事件流                |
-| GET    | `/api/courseware/attempts/:attemptId/progress` | 本人/教师      | 拉取 attempt 当前成绩快照                |
-| POST   | `/api/courseware/attempts/mark-absent`         | 教师/管理员    | 教师标记缺考                             |
-| POST   | `/api/courseware/attempts/:attemptId/promote`  | 教师/管理员    | 把成绩写入作业/进度                      |
-| POST   | `/api/courseware/attempts/auto-record`         | 教师/管理员    | 按规则批量补录成绩                       |
-| GET    | `/api/courseware/:id/access-token`             | 任意登录       | 铸造课件 HTML 短时访问令牌               |
-| POST   | `/api/courseware/inline`                       | 任意登录       | 手写 HTML 课件落库（按内容 sha256 幂等） |
-| GET    | `/api/courseware/:id`                          | 持 `?ct=` 令牌 | 单课件详情（VFS 节点 → HTML）            |
+| 方法   | 路径                                           | 角色           | 用途                                      |
+| ------ | ---------------------------------------------- | -------------- | ----------------------------------------- |
+| POST   | `/api/courseware/upload`                       | 教师/管理员    | 上传课件（base64）→ 落 VFS                |
+| POST   | `/api/courseware/confirm`                      | 教师/管理员    | 上传后登记 `courseware` 行                |
+| GET    | `/api/courseware`                              | 任意登录       | 课件列表（**无 `/list` 后缀**）           |
+| DELETE | `/api/courseware/:id`                          | 教师/管理员    | 删除课件（**不是 POST**）                 |
+| POST   | `/api/courseware/attempts/:attemptId/log`      | 学生/教师      | 学生答题过程事件流                        |
+| POST   | `/api/courseware/attempts/:attemptId/submit`   | 学生/教师      | 学生最终提交分数                          |
+| POST   | `/api/courseware/attempts/:attemptId/adopt`    | 任意登录       | 把无主 attempt 认领到当前学生名下         |
+| GET    | `/api/courseware/attempts`                     | 任意登录       | 成绩榜（分页信封 + 角色脱敏，见 §4）      |
+| GET    | `/api/courseware/scores/view`                  | 教师/管理员    | 课件成绩统一只读视图（attempt + Surface） |
+| GET    | `/api/courseware/attempts/:attemptId/raw`      | 本人/教师      | 拉取 attempt 的原始事件流                 |
+| GET    | `/api/courseware/attempts/:attemptId/progress` | 本人/教师      | 拉取 attempt 当前成绩快照                 |
+| POST   | `/api/courseware/attempts/mark-absent`         | 教师/管理员    | 教师标记缺考                              |
+| POST   | `/api/courseware/attempts/:attemptId/promote`  | 教师/管理员    | 把成绩写入作业/进度                       |
+| POST   | `/api/courseware/attempts/auto-record`         | 教师/管理员    | 按规则批量补录成绩                        |
+| GET    | `/api/courseware/:id/access-token`             | 任意登录       | 铸造绑定 attempt/user 的短时访问令牌      |
+| POST   | `/api/courseware/inline`                       | 任意登录       | 手写 HTML 课件落库（按内容 sha256 幂等）  |
+| GET    | `/api/courseware/:id`                          | 持 `?ct=` 令牌 | 单课件详情（VFS 节点 → HTML）             |
 
 > **路由顺序陷阱**：`/api/courseware/attempts/:attemptId/promote` 等 `:attemptId` 形态的路由与 `/api/courseware/attempts/mark-absent`、`/api/courseware/attempts/auto-record` 这类**字面量**路径共存时，Express 按注册顺序匹配。新增 `/api/courseware/attempts/<字面量>` 端点时必须注册在 `attempts/:attemptId/*` 之前，否则会被当作 attemptId 吞掉。
 >
@@ -68,9 +69,10 @@ Content-Type: application/json
 {
   "eventType": "progress",     // 必填 — 任意字符串，会原样存到 submission_raw.event_type
   "payload": {                 // 必填 — 任意 JSON 对象，会被搜索 score/comment/completion 字段
-    "score": 50,               // 可选 — 0-100 整数或 0-1 浮点（仅作为单次事件快照，不归一化）
-    "completion": 0.5,         // 可选 — 0-1
+    "score": 50,               // 可选 — 原始分，按课件 raw_full_score 校验上限
+    "completion": 0.5,         // 可选 — 0~1 比率；85 会按百分数折算为 0.85 后入库
     "comment": "q1 done",      // 可选
+    "protocol": "scorm-12",    // 可选 — 适配器自报来源；缺省按课件包协议推导
     "data": { "q1": "B" }      // 任意扩展字段
   }
 }
@@ -104,9 +106,10 @@ Content-Type: application/json
 1. 写入 `submission_raw` 表（新行，`id` 前缀 `raw_`）
 2. `extractScoreCommentCompletion(payload)` 提取 `score` / `comment` / `completion`
 3. **原生成绩归集**：调 `aggregateAttemptScore(db, attemptId)`（`packages/plugins/courseware-score.ts`）按该课件的成绩策略从 `submission_raw` 样本历史算出官方分；策略由 `resolveScoreConfig` 决定，取值为 `LATEST`（默认）/ `MAX` / `AVERAGE` / `FIRST`（见 `normalizeScorePolicy` 与 `aggregateScores`）。无显式配置时保留最后一次分数的历史行为
-4. 若聚合分 / comment / completion 任一存在，UPSERT `submission_result`（`id` 前缀 `res_`）；`extra_json` 合并本次 `payload` 并附 `score_aggregation` 快照（`describeAggregation` 的输出：policy / sample_count / samples / raw_aggregate / normalized / weight_percentage / configured / aggregated_at）
-5. `publishAttemptUpdated(attemptId, 'log')` → 内核事件 `courseware.attempt_updated` → socket `courseware-attempt-updated`
-6. `kernelContainer.eventBus.publish({ type: 'courseware.event_logged', source: 'builtin.courseware', payload: { attemptId, eventType, payload } })`
+4. 若聚合分 / comment / completion 任一存在，UPSERT `submission_result`（`id` 前缀 `res_`）；`completion` 先经 `normalizeCompletionRatio` 收敛为 0~1，`extra_json` 合并本次 `payload`、`protocol`（`official-lms` / `scorm-12` / `scorm-2004` / `xapi` / `h5p` / `watch` / `hook` 等）并附 `score_aggregation` 快照（`describeAggregation` 的输出：policy / sample_count / samples / raw_aggregate / normalized / weight_percentage / configured / aggregated_at）
+5. **本路径不会把 attempt 标为已完成**：监视器 / 钩子 / 过程日志只产生样本，终态必须由 `LMS.submit` 或 SCORM 终态触发
+6. `publishAttemptUpdated(attemptId, 'log')` → 内核事件 `courseware.attempt_updated` → socket `courseware-attempt-updated`
+7. `kernelContainer.eventBus.publish({ type: 'courseware.event_logged', source: 'builtin.courseware', payload: { attemptId, eventType, payload } })`
 
 ---
 
@@ -120,14 +123,15 @@ Content-Type: application/json
 
 ```json
 {
-  "score": 88, // 可选 — 0-100 整数或 0-1 浮点（推荐 0-100，避免与 promote 归一化歧义）
-  "completion": 1, // 可选 — 0-1；不传则从 extractScoreCommentCompletion 推断
+  "score": 88, // 可选 — 原始分，必须 ≤ courseware_score_config.raw_full_score（缺省 100），越界 400
+  "completion": 1, // 可选 — 0~1 比率；85 会归一化为 0.85；不传则从 extractScoreCommentCompletion 推断
   "status": "completed", // 关键字段！传 "completed" 才把 attempt.status 切到终态
   // 可选值: "active" / "in_progress" / "completed" / "abandoned"
   // 推荐统一用 "completed"
   "comment": "all questions done", // 可选
   "extra": {
     // 可选 — 任意扩展，写入 submission_raw.payload_json 与 submission_result.extra_json
+    "protocol": "scorm-12", // 可选 — 适配器自报来源；缺省按课件包协议推导
     "q1": "B",
     "q2": "C"
   },
@@ -160,9 +164,9 @@ Content-Type: application/json
 
 ### 副作用
 
-1. 写 `submission_raw`（`event_type='submit_lms'`，`payload_json={score, comment, completion, status, ...extra}`）
+1. 写 `submission_raw`（`event_type='submit_lms'`，`payload_json={score, comment, completion, status, protocol, ...extra}`；`completion` 已归一化为 0~1）
 2. 若 `status === 'completed'`：`UPDATE courseware_attempt SET finished_at=now, status='completed' WHERE id=:attemptId`
-3. 按成绩策略归集官方分（`aggregateAttemptScore`），UPSERT `submission_result`（score/comment/completion/extra_json，extra 附 `score_aggregation` 快照）
+3. 按成绩策略归集官方分（`aggregateAttemptScore`），UPSERT `submission_result`（score/comment/completion/extra_json，extra 附 `score_aggregation` 快照与 `protocol` 来源）
 4. `eventBus.publish({ type: 'courseware.attempt_submitted', source: 'builtin.courseware' })`
 5. `publishAttemptUpdated(attemptId, 'submit')` → 内核事件 `courseware.attempt_updated` → socket `courseware-attempt-updated`
 6. 实时自动录入（见上）
@@ -172,6 +176,8 @@ Content-Type: application/json
 - `401 { error: "Authentication required to submit attempt scores" }` — 未登录
 - `403 { error: "Forbidden: Cannot submit scores for another student" }` — 学生操作他人 attempt
 - `403 { code: "COMMAND_CAPABILITY_DENIED" }` — 权限不足（CapabilityGuard 拦截 — 需 `student:write` capability）
+- `400 { error: "Invalid score: must be a finite number in [0, <raw_full_score>] ..." }` — 原始分越界
+- `400 { error: "Invalid completion: must be a finite number ratio or percentage" }` — 完成度不可解析
 - `500` — 内部错误（如 `PayloadValidationError` — 路由已剔空 `score`/`completion` 的显式 `null` 再组 payload，因为 `validateJsonSchema` 把 `null` 当作已提供值）
 
 ---
@@ -209,7 +215,7 @@ Content-Type: application/json
       "studentId": "stu-001",
       "score": 88, // submission_result.score（可能为 null）
       "comment": "finished", // submission_result.comment（可能为 null）—— 非 staff 会被剥除
-      "completion": 1, // submission_result.completion（可能为 null）
+      "completion": 1, // submission_result.completion（0~1；历史 85 读取时折算为 0.85）
       "extra_json": "{\"q1\":\"B\"}", // 原始 JSON 字符串 —— 非 staff 会被剥除
       "isPromoted": 0 // 已晋升作业的次数（同一学生在该课件下产生的 assignment_submissions 行数）
     }
@@ -263,7 +269,22 @@ LIMIT ? OFFSET ?;   -- pageSize='all' 时 LIMIT 传 -1
 
 ---
 
-## 5. `POST /api/courseware/attempts/:attemptId/promote` — 写入作业成绩
+## 4.1 `GET /api/courseware/scores/view` — 统一成绩视图
+
+**角色**：教师/管理员（`requireScopedAuth('class-staff')`）。教师必须传 `classId` 并经 `authorizeClass` 校验；管理员可跨班查询。
+
+**Query**：`coursewareUuid?` / `lessonId?` / `classId?` / `studentId?`。
+
+**响应**：`{ success: true, data: UnifiedCoursewareScoreRow[] }`。每行以 `(coursewareUuid, studentId)` 合并 `courseware_attempt` 与 `learning_surface_attempts`：
+
+- `source: 'learning-surface' | 'courseware-attempt'` 表示当前采用的主数据源；
+- Surface 有分时以 Surface 为准；Surface 无分时保留旧链路分数；
+- `hasSurfaceAttempt` 显式暴露双写是否同时存在，便于前端提示漂移；
+- `completion` 统一为 0~1。
+
+该端点只读，不改变任何写入路径。
+
+---
 
 ### 用途
 
@@ -415,9 +436,9 @@ socket.on('courseware-attempt-updated', async (payload) => {
 2. **status 词汇不统一**：`/submit` 入参约定 `status: 'completed'`，但部分前端/文档用 `'finished'`。数据库实际写入的终态是 `completed`；`FINISHED_ATTEMPT_STATUSES = ['completed', 'submitted', 'finished']` 兼容三种读法。展示层应统一翻译为「已完成」
 3. **assignment.title 取名依赖课件 name**：若同一 lesson 有多个同名课件会合并到同一作业（按 class_id + lesson_id + title 查复用）。建议在 title 中追加课件 uuid 后缀以唯一化
 4. **跨 lesson 重 promote**：若同一 student 在不同 lesson 都用过同一课件，会创建多份独立 assignment——这是正确行为（title 复用查询含 lesson_id），但前端 UI 提示需要解释
-5. **`completion` 单位不统一**：`submission_result.completion` 存 0-1（promote 的 feedback 会 `× 100`），而 `WhiteboardEvent` 的 `payload.completion` 约定是 0-100。跨层传递时必须显式换算
+5. ~~**`completion` 单位不统一**~~ — ✅ 已修复：写入 `submission_result` 前统一经 `normalizeCompletionRatio` 收敛为 0~1；读取侧用 `normalizeCompletionForDisplay` 兼容历史 85 脏数据
 
-> ✅ **已修复**（不再列为陷阱）：`score = 0` 被当作满分、`score = NULL` 兜底 100、分页信封未生效、`GET /list` 与 `POST /:id` 路径错误、7 个端点漏记、`/raw` 与成绩榜的越权读取。
+> ✅ **已修复**（不再列为陷阱）：`score = 0` 被当作满分、`score = NULL` 兜底 100、分页信封未生效、`GET /list` 与 `POST /:id` 路径错误、7 个端点漏记、`/raw` 与成绩榜的越权读取、`completion` 0.85/85 混用。
 
 ---
 
@@ -429,7 +450,11 @@ socket.on('courseware-attempt-updated', async (payload) => {
 | `server/utils/score-extract.ts`                       | `extractScoreCommentCompletion` 分数/评语/完成度探测                                                                      |
 | `server/utils/pagination.ts`                          | `parsePagination` 全站分页信封约定                                                                                        |
 | `server/utils/auto-record-score.ts`                   | `promoteAttemptToGrade` / `markStudentAbsent` / `autoRecordForLesson` / `normalizePercentScore`                           |
-| `server/utils/courseware-access.ts`                   | `mintCoursewareToken` / `verifyCoursewareToken`（课件 HTML 短时 HMAC 令牌）                                               |
+| `server/utils/courseware-access.ts`                   | `mintCoursewareToken` / `verifyCoursewareTokenClaims`（v2 绑定课件 + attempt + 用户 + 课节）                              |
+| `server/utils/courseware-protocol.ts`                 | 课件协议解析（旁车优先 + 清单现场扫描）                                                                                   |
+| `server/utils/courseware-attempt.ts`                  | 学生/教师/访客 attempt 解析与 token 身份补全                                                                              |
+| `packages/courseware-adapters/`                       | SCORM 1.2 / 2004 / xAPI / H5P 适配器、协议识别、完成度归一                                                                |
+| `server/services/courseware-score-view.ts`            | courseware_attempt + learning_surface_attempts 统一只读视图                                                               |
 | `server/classroom-events.ts`                          | `publishClassroomEvent` / `CLASSROOM_EVENTS` 课堂事件统一发布入口                                                         |
 | `server/event-routing.ts`                             | 内核事件 → Socket.IO 投递的声明式路由表                                                                                   |
 | `packages/plugins/courseware-score.ts`                | `aggregateAttemptScore` / `describeAggregation` 成绩归集策略                                                              |
@@ -449,6 +474,10 @@ socket.on('courseware-attempt-updated', async (payload) => {
 | `server/__tests__/courseware-access-token.test.ts`      | `?ct=` 短时令牌鉴权                                 |
 | `server/__tests__/courseware-submit-actor.test.ts`      | `/submit` 的 actorId `:role` 后缀归一化（曾致 500） |
 | `server/__tests__/courseware-score-capture-e2e.test.ts` | 分数/评语捕获与成绩归集                             |
+| `server/__tests__/courseware-protocol-adapters.test.ts` | 协议识别 / 适配器注入 / v2 token 绑定               |
+| `server/__tests__/courseware-score-guard.test.ts`       | `raw_full_score` 校验 / completion 0~1 归一         |
+| `server/__tests__/courseware-score-view.test.ts`        | 统一成绩视图合并与班级过滤                          |
+| `packages/courseware-adapters/__tests__/`               | 协议纯函数、完成度归一、适配器脚本语法              |
 
 ---
 
@@ -456,11 +485,11 @@ socket.on('courseware-attempt-updated', async (payload) => {
 
 ### 11.1 `POST /api/courseware/upload` — 上传课件
 
-**角色**：教师/管理员。**Body**：`{ name, filename, base64Data }`（base64 字符串）。转发 `courseware.upload` 命令，HTML 分支响应 `{ success: true, id, uuid, name, entry }`（以 `packages/plugins/builtin.ts` 的 `courseware.upload` handler 为准；ZIP 分支会解包并递归登记多个文件）。
+**角色**：教师/管理员。**Body**：`{ name, filename, base64Data }`（base64 字符串）。转发 `courseware.upload` 命令，HTML 分支响应 `{ success: true, id, uuid, name, entry, protocol }`（以 `packages/plugins/builtin.ts` 的 `courseware.upload` handler 为准；ZIP 分支会解包并递归登记多个文件）。`protocol` 由解包后的清单识别（`imsmanifest.xml` / `tincan.xml` / `activity.json` / `h5p.json`），并写入存储目录旁车 `.openlearn-courseware.json`；`courseware.type` 仍保持 `html` / `folder` 二态。
 
 ### 11.2 `POST /api/courseware/confirm` — 登记课件
 
-**角色**：教师/管理员。**Body**：`{ uuid, name, entry }`。转发 `courseware.confirm` 命令，写入 `courseware` 表行。
+**角色**：教师/管理员。**Body**：`{ uuid, name, entry }`。转发 `courseware.confirm` 命令，写入 `courseware` 表行；响应包含 `protocol`。
 
 ### 11.3 `GET /api/courseware` — 课件列表
 
@@ -489,9 +518,10 @@ socket.on('courseware-attempt-updated', async (payload) => {
 
 两段式鉴权。沙箱 iframe 不带会话 cookie，无法 `requireAuth()`：
 
-1. 已认证的**父页面**调 `/api/courseware/:id/access-token` → `{ token }`（`mintCoursewareToken`，与 `:id` 绑定 + 有效期）
-2. 父页面把 token 拼进 iframe src：`/api/courseware/<id>?ct=<token>`
-3. `GET /api/courseware/:id` 用 `verifyCoursewareToken` 校验；未带/无效一律 `401 Courseware access token missing or invalid`
+1. 已认证的**父页面**调 `/api/courseware/:id/access-token?lessonId=...` → `{ token, attemptId, coursewareId, coursewareUuid }`（v2 `mintCoursewareToken` 绑定 `coursewareId + attemptId + userId + lessonId + exp`；若该生尚无 active attempt，会先创建/复用本人 attempt）
+2. 父页面把 token 拼进 iframe src：`/api/courseware/<id>?ct=<token>` 或 `/runtime/<uuid>/?ct=<token>`
+3. `GET /api/courseware/:id` / `GET /runtime/:uuid/*` 用 `verifyCoursewareTokenClaims` 校验；未带/无效一律 `401 Courseware access token missing or invalid`
+4. 验签通过后，`injectLmsSdk` 直接使用 token 声明的 attempt/user 注入 `__LMS_STUDENT__`，不再创建 `guest` 共享 attempt（历史 legacy token 仍兼容，仅绑定课件）
 
 副作用（`GET /:id`）：读 `vfs_nodes`（须 `type='file'`）→ 若 `courseware` 表无对应行则**自动登记**一行 → 注入 LMS SDK（`injectLmsSdk`）→ 以 `text/html` 直出，并用 `setCoursewareDocumentCsp` 覆盖 helmet 全局 CSP（第三方课件内容需要宽松 CSP）。这同时挡住「未认证读取课件 HTML」与「未认证触发 courseware 行自动登记」两个面。
 
@@ -520,3 +550,14 @@ socket.on('courseware-attempt-updated', async (payload) => {
 **Body**：`{ code }`（≤ 512KB，按内容 sha256 前 16 位生成 `inline-<hash>` 幂等去重，存 `system_resources`）。**响应**：`{ uuid }`。**错误**：`400 Missing code`、`413 Inline courseware too large (512KB max)`。
 
 > **废弃端点下线说明 (Issue #132)**：原 `POST /api/courseware/debug`（直接写 `client_debug.log`）因无任何前端调用方且存在无限制写盘 DoS 隐患，已彻底移除。课件 iframe 异常上报统一走标准 `/api/client-errors` 接口。
+
+### 11.10 协议适配器（Issue IKYP8P）
+
+- **识别**：上传/渲染时扫描课件存储根目录浅层清单——`h5p.json` → `h5p`，`tincan.xml` / `activity.json` → `xapi`，`imsmanifest.xml` → `scorm-12` / `scorm-2004`（按 `schemaversion` / `adlcp_v1p3` / `imsss` 判定）。识别结果写入旁车 `.openlearn-courseware.json`，老课件则现场扫描。
+- **注入**：`injectLmsSdk` 按协议在 Bridge SDK 之后、课件自身脚本之前注入适配器，并设置 `window.__LMS_ADAPTER_MANAGED__ = true`。桥接 SDK 检测到该标志后跳过 DOM 猜测式自动提交；分数监视器也默认只作过程样本（除非课件显式声明 `__LMS_WATCH__`）。
+- **翻译**：适配器只调用官方 `window.LMS.submit` / `saveProgress` / `finish`，不新建成绩表、不发明平行的 `platform.reportScore`。
+- **SCORM 1.2**：提供 `window.API`（`LMSInitialize` / `LMSGetValue` / `LMSSetValue` / `LMSCommit` / `LMSFinish`），映射 `cmi.core.score.raw`、`cmi.core.lesson_status`。
+- **SCORM 2004**：提供 `window.API_1484_11`（`Initialize` / `GetValue` / `SetValue` / `Commit` / `Terminate`），映射 `cmi.score.raw` / `cmi.score.scaled`、`cmi.completion_status`、`cmi.success_status`。
+- **xAPI**：包装 `ADL.XAPIWrapper` 并拦截发往 `/statements` 的 fetch/XHR，原始语句写入 `submission_result.extra_json.xapi_statement`，不自建完整 LRS。
+- **H5P**：监听 `postMessage` 的 xAPI / `setFinished` 与 `H5P.externalDispatcher.on('xAPI')`，只翻译不打包完整运行时。
+- **终态**：只有 `LMS.submit` 或 SCORM 终态（`completed` / `passed` / `failed`）才会把 attempt 标为完成；`saveProgress`、日志、监视器与 Hook 永不单独标记完成。

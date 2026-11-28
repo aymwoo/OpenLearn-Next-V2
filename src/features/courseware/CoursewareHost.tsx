@@ -178,7 +178,10 @@ export function CoursewareHost({
       return;
     }
     let cancelled = false;
-    fetch(`/api/courseware/${encodeURIComponent(effectiveUuid)}/access-token`)
+    const params = new URLSearchParams();
+    if (lessonId) params.set('lessonId', lessonId);
+    const suffix = params.toString() ? `?${params.toString()}` : '';
+    fetch(`/api/courseware/${encodeURIComponent(effectiveUuid)}/access-token${suffix}`)
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
       .then((j: { token?: unknown }) => {
         if (!cancelled && typeof j?.token === 'string' && j.token) setRuntimeToken(j.token);
@@ -189,7 +192,7 @@ export function CoursewareHost({
     return () => {
       cancelled = true;
     };
-  }, [effectiveUuid]);
+  }, [effectiveUuid, lessonId]);
 
   const handleIframeLoad = () => {
     broadcastThemeToIframes(theme, getThemeTokens(theme));

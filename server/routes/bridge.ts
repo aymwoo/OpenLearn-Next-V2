@@ -8,7 +8,9 @@ import {
   setCoursewareDocumentCsp,
   resolveRequestHostOrigin,
 } from './shared.js';
-import { verifyCoursewareToken } from '../utils/courseware-access.js';
+import { verifyCoursewareTokenClaims } from '../utils/courseware-access.js';
+import { resolveCoursewareProtocol } from '../utils/courseware-protocol.js';
+import { resolveLaunchIdentity } from '../utils/courseware-attempt.js';
 import { isPathInsideRoot } from '../utils/path-guard.js';
 import { getStorageDir } from '../utils/paths.js';
 import type { ServerContext } from '../context.js';
@@ -87,7 +89,9 @@ export function registerBridgeRoutes(ctx: ServerContext) {
       // 直连（地址栏 Dest=document、curl 无元数据）→ 401，且早于任何 DB/磁盘写。
       // 外部站点 iframe 嵌入由下方 HTML 响应的 `frame-ancestors 'self'` 挡下；
       // 伪造 Sec-Fetch 头仅限非浏览器客户端（残余风险已知，资源本身非机密）。
-      const hasToken = verifyCoursewareToken(uuid, typeof req.query.ct === 'string' ? req.query.ct : null);
+      const launchToken = typeof req.query.ct === 'string' ? req.query.ct : null;
+      const claims = verifyCoursewareTokenClaims(uuid, launchToken);
+      const hasToken = claims !== null;
       const dest = req.headers['sec-fetch-dest'];
       const site = req.headers['sec-fetch-site'];
       const browserInitiated =
@@ -304,7 +308,18 @@ export function registerBridgeRoutes(ctx: ServerContext) {
         // SEC-AUTH: frame-ancestors 'self' 挡外部站点嵌入（本自有 CSP 覆盖 Helmet 全局头）
         setCoursewareDocumentCsp(res);
         let html = fs.readFileSync(filePath, 'utf8');
-        html = injectLmsSdk(html, req, { id: courseware.id, name: courseware.name, uuid: courseware.uuid });
+        const protocol = resolveCoursewareProtocol(courseware);
+        const launch = claims?.attemptId ? resolveLaunchIdentity(kernelContainer.db, claims) : null;
+        html = injectLmsSdk(
+          html,
+          req,
+          { id: courseware.id, name: courseware.name, uuid: courseware.uuid },
+          {
+            protocol,
+            launch: launch || undefined,
+            launchToken: launchToken || undefined,
+          },
+        );
         return res.send(html);
       } else {
         return res.sendFile(filePath);
