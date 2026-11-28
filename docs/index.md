@@ -111,7 +111,6 @@ reference/course-package-spec
 
 whiteboard/whiteboard-runtime
 whiteboard/canvas-object-model
-whiteboard/change-summary-pr-46
 ```
 
 ```{toctree}
