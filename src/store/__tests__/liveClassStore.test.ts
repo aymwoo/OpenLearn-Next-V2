@@ -26,4 +26,14 @@ describe('liveClassStore', () => {
     liveClassStore.getState().appendLiveClassFeed({ id: 'msg1', text: 'hello' });
     expect(liveClassStore.getState().liveClassFeed).toHaveLength(1);
   });
+
+  it('endLiveClassSession clears both the active flag and the stale countdown', () => {
+    liveClassStore.getState().setLiveClassIsActive(true);
+    liveClassStore.getState().setLiveClassTimeRemaining(450);
+
+    liveClassStore.getState().endLiveClassSession();
+
+    expect(liveClassStore.getState().liveClassIsActive).toBe(false);
+    expect(liveClassStore.getState().liveClassTimeRemaining).toBe(0);
+  });
 });

@@ -32,6 +32,7 @@ import {
   WifiOff,
 } from 'lucide-react';
 import { ExtensionPointRenderer } from '../../plugin-host/extension-point-renderer';
+import { appStore } from '../../store/appStore';
 import { useNetworkLatency } from '../../hooks/useNetworkLatency';
 import AccessibleDialog, {
   DialogBody,
@@ -1367,6 +1368,8 @@ export function ClassroomEntryPortal({
         throw new Error(body?.error || `HTTP ${res.status}`);
       }
       releaseActiveSessionLock();
+      // 归档即结束授课：清掉倒计时等运行时状态，避免全局「正在授课」悬浮胶囊继续常驻。
+      appStore.getState().endLiveClassSession();
       setArchiveConfirmOpen(false);
       addToast?.(
         zh ? '归档成功' : 'Archived successfully',

@@ -637,7 +637,7 @@ export function LiveClassroomView({
     setEntryDecisionReady(true);
     setClassroomStage('PRE_CLASS_READY');
     setHasActiveSession(false);
-    setLiveClassIsActive(false);
+    liveClassStore.getState().endLiveClassSession();
     setShowSessionManager(false);
     setShowEntryPortal(true);
   };
@@ -876,7 +876,8 @@ export function LiveClassroomView({
       if (payload.stage) {
         setClassroomStage(payload.stage);
         if (payload.stage === 'ARCHIVED_REPORT') {
-          setLiveClassIsActive(false);
+          // 归档即结束：倒计时残留值一并归零，否则全局悬浮胶囊会一直显示「正在授课」。
+          liveClassStore.getState().endLiveClassSession();
         }
       }
     };
@@ -885,7 +886,7 @@ export function LiveClassroomView({
       viewingSpecificReportRef.current = null;
       setReportSessionId(null);
       setClassroomStage('PRE_CLASS_READY');
-      setLiveClassIsActive(false);
+      liveClassStore.getState().endLiveClassSession();
       setSessionStartedAt(null);
     };
     let detach: (() => void) | null = null;
@@ -1084,7 +1085,7 @@ export function LiveClassroomView({
             viewingSpecificReportRef.current = session.id;
             setReportSessionId(session.id);
             setClassroomStage('ARCHIVED_REPORT');
-            setLiveClassIsActive(false);
+            liveClassStore.getState().endLiveClassSession();
           }
         }}
         onSessionDeleted={(session: ClassroomSessionItem) => {
@@ -1092,7 +1093,7 @@ export function LiveClassroomView({
             viewingSpecificReportRef.current = null;
             setReportSessionId(null);
             setClassroomStage('PRE_CLASS_READY');
-            setLiveClassIsActive(false);
+            liveClassStore.getState().endLiveClassSession();
             setSessionStartedAt(null);
             userReturnedToPortalRef.current = true;
             enteredClassroomRef.current = false;

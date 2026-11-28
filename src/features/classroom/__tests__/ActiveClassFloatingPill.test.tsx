@@ -1,9 +1,51 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, cleanup, fireEvent } from '@testing-library/react';
+import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react';
 import { ActiveClassFloatingPill } from '../ActiveClassFloatingPill';
-import { AppDataProvider } from '../../../context/AppDataContext';
+import { AppDataProvider, type AppDataValue } from '../../../context/AppDataContext';
 import { appStore } from '../../../store/appStore';
 import { liveClassStore } from '../../../store/liveClassStore';
+
+/** 悬浮胶囊只消费 `students` 与可选的 `fetchStudents`，其余字段按上下文契约补齐。 */
+const appData = { students: [] } as unknown as AppDataValue;
+
+function renderPill() {
+  return render(
+    <AppDataProvider value={appData}>
+      <ActiveClassFloatingPill />
+    </AppDataProvider>,
+  );
+}
+
+function stubFetch(handlers?: {
+  session?: { hasActiveSession: boolean; session: { id: string } | null };
+  archiveOk?: boolean;
+  deleteOk?: boolean;
+}) {
+  const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input);
+    if (init?.method === 'DELETE') {
+      return {
+        ok: handlers?.deleteOk ?? true,
+        status: 200,
+        json: async () => ({ success: true }),
+      } as Response;
+    }
+    if (url.endsWith('/archive')) {
+      return {
+        ok: handlers?.archiveOk ?? true,
+        status: 200,
+        json: async () => ({ success: true }),
+      } as Response;
+    }
+    return {
+      ok: true,
+      status: 200,
+      json: async () => handlers?.session ?? { hasActiveSession: true, session: { id: 'sess-live-1' } },
+    } as Response;
+  });
+  vi.stubGlobal('fetch', fetchMock);
+  return fetchMock;
+}
 
 describe('ActiveClassFloatingPill (全局授课悬浮监控胶囊)', () => {
   beforeEach(() => {
@@ -25,14 +67,11 @@ describe('ActiveClassFloatingPill (全局授课悬浮监控胶囊)', () => {
   afterEach(() => {
     cleanup();
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
   });
 
   it('renders pill when not in live_class and active teaching is running', () => {
-    render(
-      <AppDataProvider value={{ students: [] } as any}>
-        <ActiveClassFloatingPill />
-      </AppDataProvider>,
-    );
+    renderPill();
 
     expect(screen.getByTestId('active-class-floating-pill')).toBeTruthy();
     expect(screen.getByText('正在授课')).toBeTruthy();
@@ -44,11 +83,7 @@ describe('ActiveClassFloatingPill (全局授课悬浮监控胶囊)', () => {
 
   it('does NOT render pill when already inside live_class tab', () => {
     appStore.setState({ teacherTab: 'live_class' });
-    render(
-      <AppDataProvider value={{ students: [] } as any}>
-        <ActiveClassFloatingPill />
-      </AppDataProvider>,
-    );
+    renderPill();
 
     expect(screen.queryByTestId('active-class-floating-pill')).toBeNull();
   });
@@ -56,11 +91,7 @@ describe('ActiveClassFloatingPill (全局授课悬浮监控胶囊)', () => {
   it('does NOT render pill when there is no active lesson session', () => {
     appStore.setState({ teacherTab: 'plugins', selectedLesson: null });
     liveClassStore.setState({ liveClassIsActive: false, liveClassTimeRemaining: 0 });
-    render(
-      <AppDataProvider value={{ students: [] } as any}>
-        <ActiveClassFloatingPill />
-      </AppDataProvider>,
-    );
+    renderPill();
 
     expect(screen.queryByTestId('active-class-floating-pill')).toBeNull();
   });
@@ -69,15 +100,74 @@ describe('ActiveClassFloatingPill (全局授课悬浮监控胶囊)', () => {
     const setTeacherTabSpy = vi.fn();
     appStore.setState({ setTeacherTab: setTeacherTabSpy });
 
-    render(
-      <AppDataProvider value={{ students: [] } as any}>
-        <ActiveClassFloatingPill />
-      </AppDataProvider>,
-    );
+    renderPill();
 
-    const backBtn = screen.getByText('返回白板');
-    fireEvent.click(backBtn);
+    fireEvent.click(screen.getByText('返回白板'));
 
     expect(setTeacherTabSpy).toHaveBeenCalledWith('live_class');
+  });
+
+  describe('结束课程（归档并结束 / 直接结束）', () => {
+    it('offers both archive-and-end and direct-end choices', async () => {
+      stubFetch();
+      renderPill();
+
+      fireEvent.click(screen.getByTestId('active-pill-end-class-btn'));
+
+      expect(await screen.findByText('结束本次课程？')).toBeTruthy();
+      expect(await screen.findByText('归档并结束')).toBeTruthy();
+      expect(screen.getByText('直接结束')).toBeTruthy();
+    });
+
+    it('archives the session, ends the class and dismisses the pill', async () => {
+      const fetchMock = stubFetch();
+      renderPill();
+
+      fireEvent.click(screen.getByTestId('active-pill-end-class-btn'));
+      fireEvent.click(await screen.findByText('归档并结束'));
+
+      await waitFor(() => expect(screen.queryByTestId('active-class-floating-pill')).toBeNull());
+      expect(
+        fetchMock.mock.calls.some(
+          ([url, init]) =>
+            String(url).endsWith('/api/classroom/sessions/sess-live-1/archive') && init?.method === 'POST',
+        ),
+      ).toBe(true);
+      expect(liveClassStore.getState().liveClassIsActive).toBe(false);
+      expect(liveClassStore.getState().liveClassTimeRemaining).toBe(0);
+    });
+
+    it('requires a second confirmation before deleting the session', async () => {
+      const fetchMock = stubFetch();
+      renderPill();
+
+      fireEvent.click(screen.getByTestId('active-pill-end-class-btn'));
+      fireEvent.click(await screen.findByText('直接结束'));
+
+      // 第一次点击只是展开二次确认，不能直接删除
+      expect(await screen.findByText('确认直接结束课程？')).toBeTruthy();
+      expect(fetchMock.mock.calls.some(([, init]) => init?.method === 'DELETE')).toBe(false);
+
+      fireEvent.click(screen.getByText('确认删除并结束'));
+
+      await waitFor(() => expect(screen.queryByTestId('active-class-floating-pill')).toBeNull());
+      expect(
+        fetchMock.mock.calls.some(
+          ([url, init]) => String(url).endsWith('/api/classroom/sessions/sess-live-1') && init?.method === 'DELETE',
+        ),
+      ).toBe(true);
+      expect(liveClassStore.getState().liveClassIsActive).toBe(false);
+      expect(liveClassStore.getState().liveClassTimeRemaining).toBe(0);
+    });
+
+    it('dismisses a stale pill when the server reports no active session', async () => {
+      stubFetch({ session: { hasActiveSession: false, session: null } });
+      renderPill();
+
+      fireEvent.click(screen.getByTestId('active-pill-end-class-btn'));
+
+      await waitFor(() => expect(screen.queryByTestId('active-class-floating-pill')).toBeNull());
+      expect(liveClassStore.getState().liveClassTimeRemaining).toBe(0);
+    });
   });
 });
