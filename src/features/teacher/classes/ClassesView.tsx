@@ -73,8 +73,9 @@ export interface ClassesViewProps {
   setRosterViewMode: Dispatch<SetStateAction<'grid' | 'list'>>;
   rosterSearchQuery: string;
   setRosterSearchQuery: Dispatch<SetStateAction<string>>;
-  rosterTagFilter: 'all' | 'Academic' | 'Behavioral' | 'General' | 'SpecialCare';
-  setRosterTagFilter: Dispatch<SetStateAction<'all' | 'Academic' | 'Behavioral' | 'General' | 'SpecialCare'>>;
+  // IKYOXD：值域拓宽为开放字符串（插件自定义过滤维度 / 插件展开 Tab），内建取值不变。
+  rosterTagFilter: string;
+  setRosterTagFilter: Dispatch<SetStateAction<string>>;
   toggleSelectAllStudents: (list: StudentType[]) => void;
   handleBatchDeleteStudents: () => Promise<void>;
   handleBatchResetPassword: () => Promise<void>;
@@ -83,8 +84,8 @@ export interface ClassesViewProps {
   toggleStudentSelection: (id: string) => void;
   get30DayAverageWarning: (studentId: string, classId: string) => number | null;
   studentProgressMap: Record<string, StudentProgressType[]>;
-  studentActiveTabs: Record<string, 'progress' | 'settings' | 'notes'>;
-  setStudentActiveTabs: Dispatch<SetStateAction<Record<string, 'progress' | 'settings' | 'notes'>>>;
+  studentActiveTabs: Record<string, string>;
+  setStudentActiveTabs: Dispatch<SetStateAction<Record<string, string>>>;
   setStudents:
     | Dispatch<SetStateAction<StudentType[]>>
     | ((students: StudentType[] | ((prev: StudentType[]) => StudentType[])) => void);
@@ -265,6 +266,20 @@ export function ClassesView() {
                 >
                   <CalendarIcon size={13} /> {props.lang === 'zh' ? '排课' : 'Schedule'}
                 </button>
+                {/* 插件班级批量操作扩展（批量归档 / 批量推送电子班牌）。
+                    实体经白名单投影（Issue IKYOXD）：不含 class_passcode 等敏感字段。 */}
+                <ExtensionPointRenderer
+                  slot="class.list.batch.action"
+                  slotProps={{
+                    selectedClassIds: Array.from(props.selectedClassIds),
+                    selectedClasses: props.classes
+                      .filter((c) => props.selectedClassIds.has(c.id))
+                      .map(toClassRosterSummary),
+                    disabled: props.selectedClassIds.size === 0,
+                    lang: props.lang,
+                    onRefresh: props.fetchClasses,
+                  }}
+                />
               </>
             )}
           </div>
@@ -450,6 +465,11 @@ export function ClassesView() {
               setShowImportModal={props.setShowImportModal}
             />
             <CreateClassButton lang={props.lang} fetchClasses={props.fetchClasses} />
+            {/* 插件建班来源扩展（教务系统导入班级 / 年级模板建班，Issue IKYOXD）。 */}
+            <ExtensionPointRenderer
+              slot="class.create.source"
+              slotProps={{ lang: props.lang, onRefresh: props.fetchClasses }}
+            />
             {/* 插件班级列表工具栏扩展（学籍系统一键同步 / 年级模板批量建班）。
                 classes 经白名单投影：不含 class_passcode 等敏感字段（Issue IKYMS2）。 */}
             <ExtensionPointRenderer

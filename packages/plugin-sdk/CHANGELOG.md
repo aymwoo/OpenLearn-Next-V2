@@ -12,6 +12,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 ### Features
 
 - **机房域贡献类型补全（平台 Issue IKYMRY）**：新增导出 `ComputerLabSeatingSaveHookConfig`（`computer_lab.seating.save_hook` 保存前校验钩子贡献，`{ id, label, commandType }`，`commandType` 必填——宿主保存排座前派发该命令，`result.ok === false` 否决保存）。纯新增导出，无破坏性变更。
+- **班级管理域贡献类型 P1/P2 补全（平台 Issue IKYOXD）**：新增导出 `StudentRowBadgeConfig`、`ClassListBatchActionConfig`、`ClassCardBadgeConfig`、`StudentSettingsAddonConfig`、`StudentRowTabConfig`（含可选 `view`，声明式沙箱面板）、`StudentRosterFilterConfig`、`StudentRosterSummaryConfig`、`ClassCreateSourceConfig`。纯新增导出，无破坏性变更。
 
 - **班级管理域贡献类型补全（平台 Issue IKYMS2）**：新增导出 `ClassListToolbarActionConfig`、`StudentEnrollSourceConfig`、`StudentRowActionConfig`（均 `{ id, label, icon?, commandType? }`）；`ClassTabConfig` 补可选 `view?: string`（声明式沙箱面板，此前 zod strip 语义下该字段会在安装校验后被丢弃）。纯新增导出 + 可选字段，无破坏性变更。
 

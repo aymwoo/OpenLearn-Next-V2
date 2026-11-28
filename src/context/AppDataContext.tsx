@@ -91,7 +91,8 @@ export type AppExtras = {
   setRosterViewMode: Dispatch<SetStateAction<'grid' | 'list'>>;
   rosterSearchQuery: string;
   setRosterSearchQuery: Dispatch<SetStateAction<string>>;
-  rosterTagFilter: 'all' | 'Academic' | 'Behavioral' | 'General' | 'SpecialCare';
+  // IKYOXD：值域拓宽为开放字符串（student.roster.filter 插件自定义过滤维度），内建取值不变。
+  rosterTagFilter: string;
   setRosterTagFilter: Dispatch<SetStateAction<'all' | 'Academic' | 'Behavioral' | 'General' | 'SpecialCare'>>;
   classSubmissionFilters: Record<string, 'all' | 'submitted' | 'graded' | 'pending'>;
   setClassSubmissionFilters: Dispatch<SetStateAction<Record<string, 'all' | 'submitted' | 'graded' | 'pending'>>>;
@@ -121,7 +122,8 @@ export type AppExtras = {
   setIsApprovalsCollapsed: (v: boolean) => void;
   isProcessesCollapsed: boolean;
   setIsProcessesCollapsed: (v: boolean) => void;
-  studentActiveTabs: Record<string, 'progress' | 'settings' | 'notes'>;
+  // IKYOXD：值域拓宽为开放字符串（student.row.tab 插件展开 Tab，`plugin:{pluginId}/{extId}`）。
+  studentActiveTabs: Record<string, string>;
   setStudentActiveTabs: (
     updater: (
       prev: Record<string, 'progress' | 'settings' | 'notes'>,

@@ -723,6 +723,59 @@ export function ExtensionPointRenderer({
     );
   }
 
+  // student.row.tab with renderType 'button' — 学生展开区插件 Tab 按钮（元数据驱动，
+  // 与 class.tab 同一模式，Issue IKYOXD）。面板内容由 ClassesView 同槽位 panel 形态渲染。
+  if (slot === 'student.row.tab' && slotProps?.renderType === 'button') {
+    const currentLang = (slotProps?.lang as Language) || 'zh';
+    return (
+      <>
+        {extensions.map((ext) => {
+          const tabValue = `plugin:${ext.pluginId}/${ext.id}`;
+          const isActive = slotProps?.studentActiveTab === tabValue;
+          const rawLabel = (ext as { title?: string }).title || ext.label || ext.id;
+          const label = resolveLabel(rawLabel, ext.pluginId, currentLang);
+          const pluginInfo = activePlugins.find((p) => p.id === ext.pluginId);
+          const icon = ext.icon || pluginInfo?.icon;
+          return (
+            <button
+              key={`${ext.pluginId}/${ext.id}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                slotProps?.setStudentActiveTab?.(tabValue);
+              }}
+              className={`flex-1 py-1 px-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all duration-200 cursor-pointer ${
+                isActive
+                  ? 'bg-white text-indigo-600 shadow-xs font-bold border border-slate-200/50'
+                  : 'text-slate-500 hover:text-slate-800 hover:bg-white/40'
+              }`}
+              title={label}
+            >
+              <PluginIconRenderer icon={icon} size={10} className="shrink-0" alt={label} />
+              <span className="truncate">{label}</span>
+            </button>
+          );
+        })}
+      </>
+    );
+  }
+
+  // student.row.tab with renderType 'panel' — 仅当该学生激活对应插件 Tab 时渲染面板。
+  if (slot === 'student.row.tab' && slotProps?.renderType === 'panel') {
+    const expected = slotProps?.studentActiveTab as string | undefined;
+    const activeExt = extensions.find((ext) => `plugin:${ext.pluginId}/${ext.id}` === expected);
+    if (!activeExt) return null;
+    return renderTabPanelContent(
+      activeExt,
+      {
+        studentId: slotProps?.studentId,
+        classId: slotProps?.classId,
+        student: slotProps?.student,
+        lang: slotProps?.lang,
+      },
+      '学生扩展 Tab 加载失败',
+    );
+  }
+
   // timetable.tab with renderType 'button' — render segmented buttons
   if (slot === 'timetable.tab' && slotProps?.renderType === 'button') {
     const currentLang = (slotProps?.lang as Language) || 'zh';
