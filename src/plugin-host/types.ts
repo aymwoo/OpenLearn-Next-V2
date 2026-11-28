@@ -243,10 +243,11 @@ export type ExtensionSlot =
   | 'timetable.toolbar.action' // 课表中心工具栏操作扩展（外部日历同步等）
   | 'timetable.card.badge' // 周历卡片状态角标扩展
   | 'computer_lab.toolbar.action' // 机房管理顶部操作扩展（批量网络唤醒等）
-  | 'computer_lab.seat.overlay' // 机房机位硬件图层扩展
+  | 'computer_lab.seat.overlay' // 机房机位硬件图层扩展（occupied 与 empty 座位均渲染）
   | 'computer_lab.seating.toolbar' // 机房排座工具栏扩展（按学号/成绩自动排座、座位表导入导出）
   | 'computer_lab.unassigned.item' // 未排座学生列表项扩展（身体状况/分组标签等）
   | 'computer_lab.seating.sidebar' // 机房排座统计区扩展（排座统计、规则校验结果）
+  | 'computer_lab.seating.save_hook' // 机房排座保存前校验钩子（声明式 commandType，result.ok=false 否决保存）
   // ── 学生端自主学习与作业域扩展槽位 ──
   | 'student.dashboard.hero_widget' // 学生仪表盘激励挂件扩展
   | 'student.assignment.toolbar.action' // 学生作业详情顶部工具扩展
@@ -1324,13 +1325,15 @@ export interface ComputerLabToolbarActionSlotProps {
   dispatcher?: IHostActionDispatcher;
 }
 
-/** Props passed to computer_lab.seat.overlay extensions。渲染于座位单元内，宿主已做点击冒泡隔离。 */
+/** Props passed to computer_lab.seat.overlay extensions。渲染于座位单元内（occupied 与 empty 座位均渲染），宿主已做点击冒泡隔离。 */
 export interface ComputerLabSeatOverlaySlotProps {
   labId?: string;
   row?: number;
   col?: number;
+  /** 有学生时为学生座位分配；空座位为 null（按 isOccupied 区分） */
   seat?: any;
   isOccupied?: boolean;
+  lang?: string;
   dispatcher?: IHostActionDispatcher;
 }
 
@@ -1349,6 +1352,7 @@ export interface ComputerLabUnassignedItemSlotProps {
   student?: any;
   classId?: string | null;
   labId?: string;
+  lang?: string;
   dispatcher?: IHostActionDispatcher;
 }
 
@@ -1358,6 +1362,66 @@ export interface ComputerLabSeatingSidebarSlotProps {
   classId?: string | null;
   assignedSeats?: any[];
   unassignedStudents?: any[];
+  lang?: string;
+  dispatcher?: IHostActionDispatcher;
+}
+
+// ── 课堂座位图 SlotProps（ComputerLabSeatingMap.tsx）──────────────────────
+
+/** 课堂座位图统计摘要（宿主 useMemo 派生，只读投影） */
+export interface ClassroomSeatingStats {
+  totalSeats: number;
+  assignedCount: number;
+  onlineCount: number;
+  emptySeats: number;
+}
+
+/** Props passed to classroom.seating.toolbar extensions（与 ComputerLabSeatingMap.tsx 实际传参一致） */
+export interface ClassroomSeatingToolbarSlotProps {
+  classId?: string;
+  /** 当前机房（含 room_number / rows / cols）；班级未分配机房时整个座位图不渲染，实际恒非空 */
+  lab?: any;
+  stats?: ClassroomSeatingStats;
+  lang?: string;
+  dispatcher?: IHostActionDispatcher;
+}
+
+/** Props passed to classroom.seating.legend extensions（图例区追加） */
+export interface ClassroomSeatingLegendSlotProps {
+  classId?: string;
+  stats?: ClassroomSeatingStats;
+  lang?: string;
+  dispatcher?: IHostActionDispatcher;
+}
+
+/** Props passed to classroom.seating.seat_badge extensions（每个有学生的座位内渲染徽章） */
+export interface ClassroomSeatingSeatBadgeSlotProps {
+  /** 座位分配（student_id / row_idx / col_idx）；无学生的座位不渲染本槽位 */
+  seat?: any;
+  student?: any;
+  isOnline?: boolean;
+  classId?: string;
+  lang?: string;
+  dispatcher?: IHostActionDispatcher;
+}
+
+/** Props passed to classroom.seating.seat_actions extensions（座位动作菜单项） */
+export interface ClassroomSeatingSeatActionsSlotProps {
+  seat?: any;
+  student?: any;
+  isOnline?: boolean;
+  classId?: string;
+  lang?: string;
+  dispatcher?: IHostActionDispatcher;
+}
+
+/** Props passed to classroom.seating.summary extensions（底部汇总区追加统计卡片） */
+export interface ClassroomSeatingSummarySlotProps {
+  classId?: string;
+  stats?: ClassroomSeatingStats;
+  /** WebSocket 实时在线学生 id 列表 */
+  onlineStudentIds?: string[];
+  lang?: string;
   dispatcher?: IHostActionDispatcher;
 }
 

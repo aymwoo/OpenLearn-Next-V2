@@ -763,6 +763,16 @@ const frontendSlotsShape = {
   'computer_lab.seating.toolbar': z.array(frontendSlotEntrySchema).optional(),
   'computer_lab.unassigned.item': z.array(frontendSlotEntrySchema).optional(),
   'computer_lab.seating.sidebar': z.array(frontendSlotEntrySchema).optional(),
+  // 排座保存前校验钩子（Issue IKYMRY）：commandType 必填，result.ok === false 否决保存
+  'computer_lab.seating.save_hook': z
+    .array(
+      z.object({
+        id: z.string().min(1),
+        label: z.string().min(1),
+        commandType: z.string().min(1),
+      }),
+    )
+    .optional(),
   'student.dashboard.hero_widget': z.array(frontendSlotEntrySchema).optional(),
   'student.assignment.toolbar.action': z.array(frontendSlotEntrySchema).optional(),
   'student.lesson.notes_addon': z.array(frontendSlotEntrySchema).optional(),

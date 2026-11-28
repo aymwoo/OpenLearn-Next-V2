@@ -116,6 +116,7 @@
     "computer_lab.seating.toolbar",
     "computer_lab.unassigned.item",
     "computer_lab.seating.sidebar",
+    "computer_lab.seating.save_hook",
     "student.dashboard.hero_widget",
     "student.assignment.toolbar.action",
     "student.lesson.notes_addon",
@@ -152,7 +153,7 @@
     "xuean.home.block"
   ],
   "a_total": 79,
-  "b_total": 67,
+  "b_total": 68,
   "a_not_in_extension_slot": [
     "ai.persona.provider",
     "assessment.question_type",

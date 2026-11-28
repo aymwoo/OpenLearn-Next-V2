@@ -149,6 +149,7 @@ export type ExtensionSlot =
   | 'computer_lab.seating.toolbar'
   | 'computer_lab.unassigned.item'
   | 'computer_lab.seating.sidebar'
+  | 'computer_lab.seating.save_hook'
   // ── 学生学习门户与作业闭环 ──
   | 'student.dashboard.hero_widget'
   | 'student.assignment.toolbar.action'
@@ -263,6 +264,7 @@ export type AnyExtensionSlot = ExtensionSlot | AnchorSlot | (string & {});
   - `computer_lab.seating.toolbar` → `ComputerLabSeatingToolbarConfig`
   - `computer_lab.unassigned.item` → `ComputerLabUnassignedItemConfig`
   - `computer_lab.seating.sidebar` → `ComputerLabSeatingSidebarConfig`
+  - `computer_lab.seating.save_hook` → `ComputerLabSeatingSaveHookConfig`
   - `student.dashboard.hero_widget` → `StudentDashboardHeroWidgetConfig`
   - `student.assignment.toolbar.action` → `StudentAssignmentToolbarActionConfig`
   - `student.lesson.notes_addon` → `StudentLessonNotesAddonConfig`
@@ -334,7 +336,7 @@ export type AnyExtensionSlot = ExtensionSlot | AnchorSlot | (string & {});
 | `classroom.seating.toolbar`             | `src/features/classroom/ComputerLabSeatingMap.tsx`                                                                                      | `{ classId, lab, stats }`                                                                                                                                                                                                                                 |
 | `classroom.seating.legend`              | `src/features/classroom/ComputerLabSeatingMap.tsx`                                                                                      | `{ classId, stats }`                                                                                                                                                                                                                                      |
 | `classroom.seating.summary`             | `src/features/classroom/ComputerLabSeatingMap.tsx`                                                                                      | `{ classId, stats, onlineStudentIds }`                                                                                                                                                                                                                    |
-| `classroom.seating.seat_badge`          | `src/features/classroom/ComputerLabSeatingMap.tsx`（每个座位内渲染）                                                                    | `{ seat, student, isOnline, classId }`                                                                                                                                                                                                                    |
+| `classroom.seating.seat_badge`          | `src/features/classroom/ComputerLabSeatingMap.tsx`（每个座位内渲染）                                                                    | `{ seat, student, isOnline, classId, lang }`                                                                                                                                                                                                              |
 | `classroom.seating.seat_actions`        | `src/features/classroom/ComputerLabSeatingMap.tsx`                                                                                      | `{ seat, student, isOnline, classId, lang }`                                                                                                                                                                                                              |
 | `student.classroom.countdown`           | `src/features/student/StudentCountdownBanner.tsx`                                                                                       | 无（仅 `route?`）                                                                                                                                                                                                                                         |
 | `student.classroom.overlay`             | `src/features/student/StudentInteractiveOverlay.tsx`                                                                                    | `{ studentId, lessonId }`                                                                                                                                                                                                                                 |
@@ -397,10 +399,11 @@ export type AnyExtensionSlot = ExtensionSlot | AnchorSlot | (string & {});
 | `timetable.toolbar.action`              | `src/components/TimetableManager.tsx`                                                                                                   | `{ schedules, currentWeekMonday, lang, onRefresh }`                                                                                                                                                                                                       |
 | `timetable.card.badge`                  | `src/components/timetable/sub-views/TimetableCalendarView.tsx`                                                                          | `{ schedule, lang }`                                                                                                                                                                                                                                      |
 | `computer_lab.toolbar.action`           | `src/components/ComputerLabManager.tsx`                                                                                                 | `{ activeLab, computerLabs, onRefresh, lang }`                                                                                                                                                                                                            |
-| `computer_lab.seat.overlay`             | `src/components/ComputerLabManager.tsx`                                                                                                 | `{ labId, row, col, seat, isOccupied }`                                                                                                                                                                                                                   |
+| `computer_lab.seat.overlay`             | `src/components/ComputerLabManager.tsx`（occupied 与 empty 座位均渲染）                                                                 | `{ labId, row, col, seat, isOccupied, lang }`（空座位 `seat` 为 `null`）                                                                                                                                                                                  |
 | `computer_lab.seating.toolbar`          | `src/components/ComputerLabManager.tsx`                                                                                                 | `{ labId, classId, assignedSeats, setAssignedSeats, lang }`                                                                                                                                                                                               |
-| `computer_lab.unassigned.item`          | `src/components/ComputerLabManager.tsx`                                                                                                 | `{ student, classId, labId }`                                                                                                                                                                                                                             |
-| `computer_lab.seating.sidebar`          | `src/components/ComputerLabManager.tsx`                                                                                                 | `{ labId, classId, assignedSeats, unassignedStudents }`                                                                                                                                                                                                   |
+| `computer_lab.unassigned.item`          | `src/components/ComputerLabManager.tsx`                                                                                                 | `{ student, classId, labId, lang }`                                                                                                                                                                                                                       |
+| `computer_lab.seating.sidebar`          | `src/components/ComputerLabManager.tsx`                                                                                                 | `{ labId, classId, assignedSeats, unassignedStudents, lang }`                                                                                                                                                                                             |
+| `computer_lab.seating.save_hook`        | `src/components/ComputerLabManager.tsx`（保存排座前命令式校验，不渲染）                                                                 | 命令 payload：`{ labId, classId, seats }`；`result.ok === false` 否决保存                                                                                                                                                                                 |
 | `student.dashboard.hero_widget`         | `src/features/student/StudentDashboardPanel.tsx`                                                                                        | `{ studentId, students, studentDashboardData, lang }`                                                                                                                                                                                                     |
 | `student.assignment.toolbar.action`     | `src/features/student/StudentAssignmentHeader.tsx`                                                                                      | `{ assignment }`                                                                                                                                                                                                                                          |
 | `student.lesson.notes_addon`            | `src/features/student/StudentLessonView.tsx`                                                                                            | `{ lessonId, studentId, activeSegmentId, lang }`                                                                                                                                                                                                          |
@@ -1281,11 +1284,24 @@ export interface AssignmentFilePreviewSlotProps {
 - **`timetable.toolbar.action`**：在课表管理工具栏渲染，Props 包含 `{ schedules, currentWeekMonday, lang, onRefresh }`。用于学期课表一键同步或对接外部排课系统。
 - **`timetable.card.badge`**：在日历课表卡片中渲染，Props 包含 `{ schedule, lang }`。展示公开课、国家平台同步直播课等标记。
 - **`computer_lab.toolbar.action`**：在机房管理工具栏渲染，Props 包含 `{ activeLab, computerLabs, onRefresh, lang }`。
-- **`computer_lab.seat.overlay`**：在机房座位图每个座位单元内渲染浮层，Props 包含 `{ labId, row, col, seat, isOccupied }`。宿主已对座位根节点的 onClick 做了点击冒泡隔离（overlay 内点击不会误触座位安排/移除）。
-- **`computer_lab.seating.toolbar`**：在「班级机位联动」工具栏（清空/保存按钮旁）渲染，Props 包含 `{ labId, classId, assignedSeats, setAssignedSeats, lang }`。适用于按学号/成绩/分组自动排座、座位表导入导出等。
+- **`computer_lab.seat.overlay`**：在机房座位图每个座位单元内渲染浮层，Props 包含 `{ labId, row, col, seat, isOccupied, lang }`。**occupied 与 empty 座位均渲染**（空座位 `seat` 为 `null`，插件按 `isOccupied` 区分，v0.8.0 起生效）——设备资产/硬件状态等扩展信息也适用于空机位。宿主已对座位根节点的 onClick 做了点击冒泡隔离（overlay 内点击不会误触座位安排/移除）。
+- **`computer_lab.seating.toolbar`**：在「班级机位联动」工具栏（清空/保存按钮旁）渲染，Props 包含 `{ labId, classId, assignedSeats, setAssignedSeats, lang }`。适用于按学号/成绩/分组自动排座、座位表导入导出等。v0.8.0 起 `setAssignedSeats` 由宿主包装：插件经它修改座位后自动置 `isDirty`，保存按钮随即亮起（此前需宿主操作触发）。
   - **没有 `onSeatMove` 回调**：宿主不会主动通知插件座位变更。插件已拿到响应式的 `assignedSeats`，若需校验或记录，自行与上一次渲染的座位表 diff（`useRef` 保存上一轮快照），发现违规排座（如排到故障机位）时调用 `setAssignedSeats(prev => …)` 回滚。
-- **`computer_lab.unassigned.item`**：在未排座学生列表的每个条目旁渲染（与学生选择按钮同级，避免嵌套交互元素），Props 包含 `{ student, classId, labId }`。可显示学生身体状况、分组等标签。
-- **`computer_lab.seating.sidebar`**：在座位网格下方的统计区渲染，Props 包含 `{ labId, classId, assignedSeats, unassignedStudents }`。适用于排座统计、规则校验结果展示。
+- **`computer_lab.unassigned.item`**：在未排座学生列表的每个条目旁渲染（与学生选择按钮同级，避免嵌套交互元素），Props 包含 `{ student, classId, labId, lang }`。可显示学生身体状况、分组等标签。
+- **`computer_lab.seating.sidebar`**：在座位网格下方的统计区渲染，Props 包含 `{ labId, classId, assignedSeats, unassignedStudents, lang }`。适用于排座统计、规则校验结果展示。
+- **`computer_lab.seating.save_hook`**（v0.8.0，声明式校验钩子，**不渲染 UI**）：保存排座前宿主逐个派发 `commandType` 命令（payload `{ labId, classId, seats }`），任一钩子返回 `result.ok === false`（或命令执行失败）即否决保存并展示 `result.message`；全部通过才发起 `POST /api/classes/:classId/seats`。命令必须走插件命名空间（见 `plugin-namespace.ts`）。manifest 声明示例：
+
+  ```json
+  {
+    "contributes": {
+      "computer_lab.seating.save_hook": [
+        { "id": "vision-guard", "label": "视力保护校验", "commandType": "ext-vision-guard:validate_seating" }
+      ]
+    }
+  }
+  ```
+
+  对应命令处理器返回 `{ ok: boolean, message?: string }`：`ok: false` 阻止本次保存；已熔断/加载失败的钩子插件会被跳过，不阻塞正常保存。配套平台事件（roster-service 发布）：`lab.created` / `lab.updated` / `lab.deleted` / `seat.saved` / `seat.cleared`，审计与行为分析类插件可订阅。
 
 ### 11.4 学生学习门户与作业闭环
 
@@ -1708,3 +1724,4 @@ ctx.ui.registerExtensionPoint('xuean.activity.student', {
 > 2026-11-27 更新：新增 `xuean.activity.teacher`（教师课中活动实时视图，按 `activityType` 分发），`ExtensionSlot` 成员数增至 **162**（含 8 个锚点共 **170**）。同批：`classroom.outline` 在内置白板页列表 / 学案活动大纲里改为**追加**渲染（此前仅第三方模式包消费）；`classroom.prep` 仍仅第三方模式包；`student.lesson.tool` 同时挂载到学案学生壳。
 > 2026-11-27 更新（续）：新增 `classroom.outline.page_action`（内置白板页大纲的行级操作，`page` / `pageIndex` / `isActive` / `segment` / `lessonId` / `lang`），`ExtensionSlot` 成员数增至 **163**（含 8 个锚点共 **171**）；同批为学案学生壳补挂 `student.segment.badge`，并把 `rolesAllowed: ['admin']` 接入管理员会话。
 > 2026-11-28 更新：新增 `classroom.prep.addon`（内置白板 / 学案备课面的追加扩展区，不替换编辑器）与 `classroom.outline.activity_action`（学案活动大纲行级操作），`ExtensionSlot` 成员数增至 **165**（含 8 个锚点共 **172**）。学案活动大纲改为在当前学案环节列出课时级活动并逐行渲染操作槽。
+> 2026-11-28 更新（Issue IKYMRY）：机房域新增 `computer_lab.seating.save_hook`（排座保存前声明式校验钩子，`commandType` 必填，`result.ok === false` 否决保存），`ExtensionSlot` 成员数增至 **169**（含 8 个锚点共 **177**；含同批 !39（Issue IKYMS2）合入的 3 个班级域槽位）。同批：`computer_lab.seat.overlay` 放开到空座位渲染（`seat: null`）；`computer_lab.unassigned.item` / `computer_lab.seating.sidebar` / `classroom.seating.seat_badge` 补传 `lang`；roster-service 新增平台事件 `lab.created` / `lab.updated` / `lab.deleted` / `seat.saved` / `seat.cleared`。详见 §11.3。

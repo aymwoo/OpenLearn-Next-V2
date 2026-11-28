@@ -986,6 +986,26 @@ export class RosterService {
     return this.reader.prepare('SELECT * FROM computer_labs ORDER BY created_at DESC').all();
   }
 
+  /**
+   * 发布花名册领域事件（lab.created / lab.updated / lab.deleted / seat.saved / seat.cleared）。
+   *
+   * 事件广播失败只记告警、不回滚已落库的业务结果 —— 与 course-package-import
+   * 的 lesson.created 广播策略一致。source 固定 `server.roster`（平台内部发布方，
+   * 不计入插件维度指标）。
+   */
+  private publishRosterEvent(type: string, payload: Record<string, unknown>, correlationId?: string): void {
+    void kernelContainer.eventBus
+      .publish({
+        id: randomId('evt_'),
+        type,
+        source: 'server.roster',
+        payload,
+        timestamp: Date.now(),
+        correlationId,
+      })
+      .catch((err) => console.warn(`[roster] ${type} 事件发布失败（已忽略）:`, (err as Error).message));
+  }
+
   public createLab(data: { room_number: string; rows: number; cols: number }): {
     id: string;
     room_number: string;
@@ -1002,6 +1022,12 @@ export class RosterService {
       .prepare('INSERT INTO computer_labs (id, room_number, rows, cols, created_at) VALUES (?, ?, ?, ?, ?)')
       .run(labId, room_number.trim(), parsedRows, parsedCols, Date.now());
 
+    this.publishRosterEvent(
+      'lab.created',
+      { labId, roomNumber: room_number.trim(), rows: parsedRows, cols: parsedCols },
+      labId,
+    );
+
     return { id: labId, room_number: room_number.trim(), rows: parsedRows, cols: parsedCols };
   }
 
@@ -1011,18 +1037,37 @@ export class RosterService {
     const parsedRows = parseInt(String(rows), 10) || 6;
     const parsedCols = parseInt(String(cols), 10) || 8;
 
-    this.db
+    const result = this.db
       .prepare('UPDATE computer_labs SET room_number = ?, rows = ?, cols = ? WHERE id = ?')
       .run(room_number.trim(), parsedRows, parsedCols, id);
+
+    // 目标机房不存在时（changes = 0）不发事件，避免下游插件对幻影 labId 做出反应。
+    if (result.changes > 0) {
+      this.publishRosterEvent(
+        'lab.updated',
+        { labId: id, roomNumber: room_number.trim(), rows: parsedRows, cols: parsedCols },
+        id,
+      );
+    }
   }
 
   public deleteLab(id: string): void {
+    let roomNumber = '';
+    let affectedClasses = 0;
+    let clearedSeats = 0;
     const tx = this.db.transaction(() => {
-      this.db.prepare('UPDATE classes SET lab_id = NULL WHERE lab_id = ?').run(id);
-      this.db.prepare('DELETE FROM student_seats WHERE lab_id = ?').run(id);
+      const lab = this.db.prepare('SELECT room_number FROM computer_labs WHERE id = ?').get(id) as
+        { room_number?: string } | undefined;
+      roomNumber = lab?.room_number ?? '';
+      affectedClasses = this.db.prepare('UPDATE classes SET lab_id = NULL WHERE lab_id = ?').run(id).changes;
+      clearedSeats = this.db.prepare('DELETE FROM student_seats WHERE lab_id = ?').run(id).changes;
       this.db.prepare('DELETE FROM computer_labs WHERE id = ?').run(id);
     });
     tx();
+    // 机房不存在时不发事件（roomNumber 为空即未命中）。
+    if (roomNumber) {
+      this.publishRosterEvent('lab.deleted', { labId: id, roomNumber, affectedClasses, clearedSeats }, id);
+    }
   }
 
   public getClassSeats(classId: string): { lab_id: string | null; seats: any[] } {
@@ -1061,6 +1106,14 @@ export class RosterService {
       }
     });
     tx();
+
+    // 事务提交后按结果区分事件：有座位 → seat.saved；清空/未选机房 → seat.cleared。
+    const seatCount = labId && Array.isArray(seats) ? seats.length : 0;
+    if (seatCount > 0) {
+      this.publishRosterEvent('seat.saved', { classId, labId, seatCount }, classId);
+    } else {
+      this.publishRosterEvent('seat.cleared', { classId, labId: labId || null }, classId);
+    }
   }
 
   // ── 5. 分组管理与智能自动分组 ────────────────────────────────────────────────

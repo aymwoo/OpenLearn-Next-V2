@@ -349,13 +349,13 @@ function SeatCell({
           <ExtensionPointRenderer
             slot="classroom.seating.seat_badge"
             lang={lang}
-            slotProps={{ seat, student, isOnline, classId }}
+            slotProps={{ seat, student, isOnline, classId, lang }}
           />
           {/* Plugin seat actions extension */}
           <ExtensionPointRenderer
             slot="classroom.seating.seat_actions"
             lang={lang}
-            slotProps={{ seat, student, isOnline, classId }}
+            slotProps={{ seat, student, isOnline, classId, lang }}
           />
         </>
       ) : hasSeat ? (

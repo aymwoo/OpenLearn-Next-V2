@@ -22,6 +22,12 @@ import {
   ArrowRightLeft,
 } from 'lucide-react';
 import { ExtensionPointRenderer } from '../plugin-host/extension-point-renderer';
+import { useOptionalPluginHost } from '../plugin-host/plugin-host-context';
+import { usePluginHostStore } from '../plugin-host/plugin-host-store';
+import { isPluginBlown } from '../plugin-host/extension-breaker';
+import { frontendApi } from '../services/frontend-api';
+import { resolveLabel } from '../i18n';
+import type { ExtensionSlot } from '../plugin-host/types';
 
 export interface ComputerLab {
   id: string;
@@ -61,6 +67,9 @@ export interface ComputerLabManagerProps {
 }
 
 export function ComputerLabManager({ computerLabs, onRefresh, lang, classes: propsClasses }: ComputerLabManagerProps) {
+  // 插件宿主接入：save_hook 校验钩子需要读取声明式贡献并派发命令（Issue IKYMRY）
+  const pluginHost = useOptionalPluginHost();
+  const pluginErrors = usePluginHostStore((s) => s.pluginErrors);
   const [isCreating, setIsCreating] = useState(false);
   const [editingLabId, setEditingLabId] = useState<string | null>(null);
 
@@ -386,12 +395,63 @@ export function ComputerLabManager({ computerLabs, onRefresh, lang, classes: pro
     setSelectedStudentToPlace(null);
   };
 
+  // ── 排座保存前校验钩子（computer_lab.seating.save_hook，Issue IKYMRY）──────
+  //
+  // 逐个派发声明式 commandType 命令，任一钩子「否决」即中止保存：
+  // - 命令执行失败（res.success === false）→ 否决，展示 res.error；
+  // - 命令成功但 result.ok === false → 否决，展示 result.message。
+  // 全部通过（或没有钩子/钩子插件已熔断）返回 null。
+  const runSeatingSaveHooks = async (): Promise<string | null> => {
+    const zh = lang === 'zh';
+    if (!pluginHost || !selectedClassId || !activePreviewLab) return null;
+    const hooks = pluginHost
+      .getExtensions('computer_lab.seating.save_hook' as ExtensionSlot)
+      .map((ext) => ({ ext, commandType: ext.slotProps?.commandType }))
+      .filter(({ ext, commandType }) => {
+        // 熔断/加载失败的钩子插件跳过，不阻塞正常保存流程
+        if (pluginErrors.get(ext.pluginId) || isPluginBlown(ext.pluginId)) return false;
+        return typeof commandType === 'string' && commandType.length > 0;
+      });
+    for (const { ext, commandType } of hooks) {
+      const hookLabel = resolveLabel(ext.label || ext.id, ext.pluginId, lang);
+      try {
+        const res = await frontendApi.post('/api/plugins/execute-command', {
+          type: commandType,
+          payload: { labId: activePreviewLab.id, classId: selectedClassId, seats: assignedSeats },
+        });
+        if (!res.success) {
+          return (
+            (zh ? `排座校验未通过（${hookLabel}）：` : `Seating check failed (${hookLabel}): `) +
+            (res.error || (zh ? '插件命令执行失败' : 'plugin command failed'))
+          );
+        }
+        const verdict = res.result as { ok?: boolean; message?: string } | null | undefined;
+        if (verdict && verdict.ok === false) {
+          return verdict.message || (zh ? `排座校验未通过（${hookLabel}）` : `Seating check failed (${hookLabel})`);
+        }
+      } catch (err) {
+        return (
+          (zh ? `排座校验未通过（${hookLabel}）：` : `Seating check failed (${hookLabel}): `) +
+          (err instanceof Error ? err.message : String(err))
+        );
+      }
+    }
+    return null;
+  };
+
   const handleSaveSeats = async () => {
     if (!selectedClassId || !activePreviewLab) return;
     try {
       setSavingSeats(true);
       setError('');
       setSaveSuccessMsg('');
+
+      // 保存前先跑声明式校验钩子；任一否决即中止（不发起保存请求）
+      const veto = await runSeatingSaveHooks();
+      if (veto) {
+        setError(veto);
+        return;
+      }
 
       const res = await fetch(`/api/classes/${selectedClassId}/seats`, {
         method: 'POST',
@@ -889,7 +949,13 @@ export function ComputerLabManager({ computerLabs, onRefresh, lang, classes: pro
                         labId: activePreviewLab.id,
                         classId: selectedClassId,
                         assignedSeats,
-                        setAssignedSeats,
+                        // 插件经此入口修改座位同样视为「已修改」——直接透传原生
+                        // setState 不会触发 isDirty，保存按钮保持禁用、插件改动
+                        // 无法持久化（Issue IKYMRY / 审计 P1）
+                        setAssignedSeats: (updater: AssignedSeat[] | ((prev: AssignedSeat[]) => AssignedSeat[])) => {
+                          setAssignedSeats(updater);
+                          setIsDirty(true);
+                        },
                         lang,
                       }}
                     />
@@ -1064,6 +1130,7 @@ export function ComputerLabManager({ computerLabs, onRefresh, lang, classes: pro
                                               col: cIdx,
                                               seat,
                                               isOccupied: true,
+                                              lang,
                                             }}
                                           />
                                         </div>
@@ -1098,6 +1165,23 @@ export function ComputerLabManager({ computerLabs, onRefresh, lang, classes: pro
                                         {rIdx + 1}-{cIdx + 1}
                                       </span>
 
+                                      {/* 空座位同样渲染扩展 overlay（seat 为 null，插件按 isOccupied 区分，
+                                          Issue IKYMRY）：设备资产/硬件状态等扩展信息也适用于空机位。
+                                          空座位根节点 onClick 是「落座」入口，冒泡隔离与有座分支一致。 */}
+                                      <div className="w-full min-w-0" onClick={(e) => e.stopPropagation()}>
+                                        <ExtensionPointRenderer
+                                          slot="computer_lab.seat.overlay"
+                                          slotProps={{
+                                            labId: activePreviewLab.id,
+                                            row: rIdx,
+                                            col: cIdx,
+                                            seat: null,
+                                            isOccupied: false,
+                                            lang,
+                                          }}
+                                        />
+                                      </div>
+
                                       {/* Tooltip */}
                                       <div className="absolute bottom-12 bg-slate-900 text-white text-xs rounded px-2 py-1 hidden group-hover:block whitespace-nowrap z-30 font-sans border border-slate-700 shadow-xl pointer-events-none">
                                         {selectedStudentToPlace
@@ -1129,6 +1213,7 @@ export function ComputerLabManager({ computerLabs, onRefresh, lang, classes: pro
                           classId: selectedClassId,
                           assignedSeats,
                           unassignedStudents,
+                          lang,
                         }}
                       />
                     </div>
@@ -1229,6 +1314,7 @@ export function ComputerLabManager({ computerLabs, onRefresh, lang, classes: pro
                                     student: st,
                                     classId: selectedClassId,
                                     labId: activePreviewLab?.id,
+                                    lang,
                                   }}
                                 />
                               </div>

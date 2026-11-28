@@ -197,6 +197,7 @@ export type {
   ComputerLabSeatingToolbarConfig,
   ComputerLabUnassignedItemConfig,
   ComputerLabSeatingSidebarConfig,
+  ComputerLabSeatingSaveHookConfig,
   StudentDashboardHeroWidgetConfig,
   StudentAssignmentToolbarActionConfig,
   StudentLessonNotesAddonConfig,
