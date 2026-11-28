@@ -312,10 +312,36 @@ export interface ClassTabConfig {
   label: string;
   icon?: string;
   position?: number;
+  /** 可视沙箱 HTML 相对路径；声明后面板经 PluginSandboxIframeView 渲染（Issue IKYMS2）。 */
+  view?: string;
 }
 
 /** A contribution to the class.batch.action slot. */
 export interface ClassBatchActionConfig {
+  id: string;
+  label: string;
+  icon?: string;
+  commandType?: string;
+}
+
+/** A contribution to the class.list.toolbar.action slot（班级列表顶部工具栏，Issue IKYMS2）。 */
+export interface ClassListToolbarActionConfig {
+  id: string;
+  label: string;
+  icon?: string;
+  commandType?: string;
+}
+
+/** A contribution to the student.enroll.source slot（花名册学生来源扩展，Issue IKYMS2）。 */
+export interface StudentEnrollSourceConfig {
+  id: string;
+  label: string;
+  icon?: string;
+  commandType?: string;
+}
+
+/** A contribution to the student.row.action slot（学生行内快捷操作，Issue IKYMS2）。 */
+export interface StudentRowActionConfig {
   id: string;
   label: string;
   icon?: string;
@@ -1038,6 +1064,9 @@ export type ContributionConfig =
   | AIPersonaProviderConfig
   | ClassTabConfig
   | ClassBatchActionConfig
+  | ClassListToolbarActionConfig
+  | StudentEnrollSourceConfig
+  | StudentRowActionConfig
   | StudentRowPanelConfig
   | EditorHeaderActionConfig
   | PostClassWidgetConfig

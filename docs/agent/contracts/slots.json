@@ -31,6 +31,7 @@
     "assignment.submission.actions",
     "assignment.submission.preview",
     "class.batch.action",
+    "class.list.toolbar.action",
     "class.tab",
     "classroom.active_segment.main",
     "classroom.active_segment.student_main",
@@ -123,6 +124,7 @@
     "student.classroom.countdown",
     "student.classroom.overlay",
     "student.dashboard.hero_widget",
+    "student.enroll.source",
     "student.fullscreen",
     "student.lesson.notes_addon",
     "student.lesson.tool",
@@ -135,6 +137,7 @@
     "student.quick_actions.action",
     "student.quick_actions.fab",
     "student.quick_actions.item",
+    "student.row.action",
     "student.row.panel",
     "student.segment.badge",
     "student.segment.gate_fallback",
@@ -179,5 +182,5 @@
     "anchor:whiteboard-toolbar:presentation",
     "anchor:whiteboard-toolbar:rollcall"
   ],
-  "total": 166
+  "total": 169
 }

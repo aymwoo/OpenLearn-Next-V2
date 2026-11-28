@@ -87,6 +87,28 @@ describe('StudentCountdownBanner — 服务端权威事件 + 提示音复位', (
     expect(screen.getByText('本课节任务')).toBeDefined();
   });
 
+  it('教师关闭（dismissed）后，已截止的横幅也会立即消失', async () => {
+    await act(async () => {
+      setSocketInstance(fakeSocket as never);
+    });
+    render(<StudentCountdownBanner lessonId="L1" lang="zh" />);
+
+    // 先让第一轮倒计时走到结束，横幅进入「时间已截止」
+    fire('classroom:countdown_updated', countdown({ timeRemaining: 1, endsAt: Date.now() + 1_000 }));
+    await act(async () => {
+      vi.advanceTimersByTime(1_500);
+    });
+    expect(screen.getByText(/时间已截止/)).toBeDefined();
+
+    // 教师点击关闭：即使此前响过结束提示音，横幅也应立刻消失（回到开始之前）
+    fire(
+      'classroom:countdown_updated',
+      countdown({ timeRemaining: 300, isRunning: false, endsAt: null, dismissed: true }),
+    );
+    expect(screen.queryByText(/时间已截止/)).toBeNull();
+    expect(screen.queryByText('课堂限时任务')).toBeNull();
+  });
+
   it('新一轮倒计时会复位「已响过结束提示音」的标记，横幅不再卡在已截止', async () => {
     await act(async () => {
       setSocketInstance(fakeSocket as never);

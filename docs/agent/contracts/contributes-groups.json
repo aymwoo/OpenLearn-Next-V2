@@ -157,13 +157,10 @@
   "a_not_in_extension_slot": [
     "ai.persona.provider",
     "assessment.question_type",
-    "class.list.toolbar.action",
     "learning.surface",
     "locales",
     "mode.pack",
     "palette.items",
-    "student.enroll.source",
-    "student.row.action",
     "teacher.cockpit.widget",
     "timeline.segments"
   ],

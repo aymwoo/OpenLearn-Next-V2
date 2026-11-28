@@ -4,7 +4,7 @@
  * 由 packages/plugin-sdk/generate-dts.mts 从 packages/core/ 源码抽取。
  * 手写契约请改 openlearn.d.ts —— 本文件会在 build 时被覆盖。
  *
- * 覆盖符号：302 个（入口导出但手写 d.ts 未声明的 302 项及其类型引用闭包）
+ * 覆盖符号：305 个（入口导出但手写 d.ts 未声明的 305 项及其类型引用闭包）
  */
 
 /** @see packages/core/analytics-engine/types.ts */
@@ -327,12 +327,23 @@ interface ClassBatchActionConfig {
 }
 
 /** @see packages/core/plugin-host/contribution-registry.ts */
+/** A contribution to the class.list.toolbar.action slot（班级列表顶部工具栏，Issue IKYMS2）。 */
+interface ClassListToolbarActionConfig {
+    id: string;
+    label: string;
+    icon?: string;
+    commandType?: string;
+}
+
+/** @see packages/core/plugin-host/contribution-registry.ts */
 /** A contribution to the class.tab slot. */
 interface ClassTabConfig {
     id: string;
     label: string;
     icon?: string;
     position?: number;
+    /** 可视沙箱 HTML 相对路径；声明后面板经 PluginSandboxIframeView 渲染（Issue IKYMS2）。 */
+    view?: string;
 }
 
 /** @see packages/core/plugin-host/contribution-registry.ts */
@@ -2239,6 +2250,15 @@ interface StudentDashboardHeroWidgetConfig {
 }
 
 /** @see packages/core/plugin-host/contribution-registry.ts */
+/** A contribution to the student.enroll.source slot（花名册学生来源扩展，Issue IKYMS2）。 */
+interface StudentEnrollSourceConfig {
+    id: string;
+    label: string;
+    icon?: string;
+    commandType?: string;
+}
+
+/** @see packages/core/plugin-host/contribution-registry.ts */
 /** A contribution to the student.fullscreen slot. */
 interface StudentFullscreenConfig {
     id: string;
@@ -2311,6 +2331,15 @@ interface StudentQuickActionsFabConfig {
 /** @see packages/core/plugin-host/contribution-registry.ts */
 /** A contribution to the student.quick_actions.item slot. */
 interface StudentQuickActionsItemConfig {
+    id: string;
+    label: string;
+    icon?: string;
+    commandType?: string;
+}
+
+/** @see packages/core/plugin-host/contribution-registry.ts */
+/** A contribution to the student.row.action slot（学生行内快捷操作，Issue IKYMS2）。 */
+interface StudentRowActionConfig {
     id: string;
     label: string;
     icon?: string;
@@ -2706,6 +2735,7 @@ export type {
   CapabilityResult,
   CapabilityRole,
   ClassBatchActionConfig,
+  ClassListToolbarActionConfig,
   ClassTabConfig,
   ClassroomActiveSegmentMainConfig,
   ClassroomActiveSegmentStudentMainConfig,
@@ -2876,6 +2906,7 @@ export type {
   StudentCompetencyDimensionConfig,
   StudentCountdownConfig,
   StudentDashboardHeroWidgetConfig,
+  StudentEnrollSourceConfig,
   StudentFullscreenConfig,
   StudentLessonNotesAddonConfig,
   StudentLessonToolConfig,
@@ -2886,6 +2917,7 @@ export type {
   StudentQuickActionsActionConfig,
   StudentQuickActionsFabConfig,
   StudentQuickActionsItemConfig,
+  StudentRowActionConfig,
   StudentRowPanelConfig,
   StudentSegmentBadgeConfig,
   StudentSegmentGateFallbackConfig,

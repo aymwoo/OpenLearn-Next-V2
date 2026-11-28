@@ -169,6 +169,10 @@ export type ExtensionSlot =
   | 'class.tab' // 班级详情扩展 Tab（如综合素质评价 / 心理健康档案 / 班级积分商城）
   | 'class.batch.action' // 花名册批量操作流水线扩展（如一键同步学籍系统 / 批量导出名册）
   | 'student.row.panel' // 学生行展开面板扩展（知识图谱雷达 / 多维评价勋章等卡片）
+  // ── 班级与学生管理域扩展槽位 P0 补全（Issue IKYMS2）──
+  | 'class.list.toolbar.action' // 班级列表顶部工具栏扩展（学籍系统一键同步 / 年级模板批量建班）
+  | 'student.enroll.source' // 花名册学生来源扩展（二维码自助报到 / 名单 OCR / 第三方学籍同步）
+  | 'student.row.action' // 学生行内快捷操作扩展（单独转班 / 家校通知 / 加入分组）
   // ── 备课与课后闭环扩展槽位 ──
   | 'editor.header.action' // 备课编辑器头部动作扩展（导入教案库 / AI 合规审查 / 导出 PDF）
   | 'classroom.post_class.widget' // 课后结课视图扩展卡片（分层作业 / 勋章仪式 / 专注度报告）
@@ -1677,4 +1681,89 @@ export interface XueanHomeBlockSlotProps {
   lessonId: string;
   blocks: Array<{ id: string; block_type: string; order_index: number; [key: string]: unknown }>;
   lang?: string;
+}
+
+// ── 班级与学生管理域 SlotProps（Issue IKYMS2）──────────────────────────
+//
+// 白名单投影原则（与测评域 SlotProps 同一基线）：传给插件的实体是**摘要
+// 投影**而非整表对象 —— `StudentType.password` / `private_notes`（教师私密
+// 备忘）与 `ClassType.class_passcode` 属敏感字段，一律不下发；确有需要的
+// 场景应走 `requiresSensitive` 声明 + 授予集合机制。
+
+/** 学生花名册白名单投影（不含 password / private_notes / lock_mode / lock_target）。 */
+export interface StudentRosterSummary {
+  id: string;
+  name: string;
+  student_number?: string;
+  email: string;
+  /** 性别（课堂专注力监控头像用）；未设置为 null */
+  gender?: 'male' | 'female' | null;
+  /** 头像 URL；未设置时为 null */
+  avatar?: string | null;
+  /** 专注模式锁定的课程 id；未锁定为 null */
+  locked_lesson_id?: string | null;
+  created_at: number;
+}
+
+/** 班级白名单投影（不含 class_passcode / class_passcode_expires_at）。 */
+export interface ClassRosterSummary {
+  id: string;
+  name: string;
+  description: string;
+  student_count?: number;
+  course_count?: number;
+  assignment_count?: number;
+  created_at: number;
+}
+
+/** Props passed to class.batch.action extensions（花名册批量操作流水线；实体为白名单投影，Issue IKYMS2 起） */
+export interface ClassBatchActionSlotProps {
+  classId: string;
+  /** 目标班级（白名单投影；不再透传 class_passcode 等敏感字段） */
+  cls: ClassRosterSummary;
+  lang: 'zh' | 'en';
+  /** 已选学生 id 数组 */
+  selectedStudentIds: string[];
+  /** 已选学生（白名单投影；不再透传 password / private_notes 等敏感字段） */
+  selectedStudents: StudentRosterSummary[];
+  /** 本班全部学生（白名单投影） */
+  allStudents: StudentRosterSummary[];
+  /** 未选中任何学生时为 true（与内置批量按钮同一禁用语义） */
+  disabled: boolean;
+  /** 宿主花名册重载入口：批量写操作完成后调用。 */
+  onRefresh?: () => void | Promise<void>;
+}
+
+/** Props passed to class.list.toolbar.action extensions（班级列表顶部工具栏，创建班级按钮旁） */
+export interface ClassListToolbarActionSlotProps {
+  /** 当前可见班级（白名单投影，按学年筛选后的教师班级列表） */
+  classes: ClassRosterSummary[];
+  /** 批量模式下已选班级 id（未开批量模式为空数组） */
+  selectedClassIds?: string[];
+  lang?: 'zh' | 'en';
+  /** 宿主班级列表重载入口：插件建班 / 同步学籍后调用。 */
+  onRefresh?: () => void | Promise<void>;
+  dispatcher?: IHostActionDispatcher;
+}
+
+/** Props passed to student.enroll.source extensions（花名册「添加学生」来源扩展） */
+export interface StudentEnrollSourceSlotProps {
+  classId: string;
+  /** 目标班级（白名单投影） */
+  classInfo: ClassRosterSummary;
+  lang?: 'zh' | 'en';
+  /** 宿主花名册重载入口：学生注册/加入本班后调用。 */
+  onRefresh?: () => void | Promise<void>;
+  dispatcher?: IHostActionDispatcher;
+}
+
+/** Props passed to student.row.action extensions（学生行内快捷操作，紧邻「移除班级」按钮） */
+export interface StudentRowActionSlotProps {
+  /** 目标学生（白名单投影） */
+  student: StudentRosterSummary;
+  classId: string;
+  lang?: 'zh' | 'en';
+  /** 宿主花名册重载入口：操作改变了学生归属/属性后调用。 */
+  onRefresh?: () => void | Promise<void>;
+  dispatcher?: IHostActionDispatcher;
 }

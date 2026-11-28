@@ -16,6 +16,7 @@ import {
   Check,
   ChevronDown,
   Sparkles,
+  X,
 } from 'lucide-react';
 import type { ClassroomSyncChannel, ClassroomCountdownState } from '../../services/classroom-sync-channel';
 import { ExtensionPointRenderer } from '../../plugin-host/extension-point-renderer';
@@ -266,7 +267,7 @@ export function ClassroomCountdownWidget({
     (
       newState: ClassroomCountdownState,
       serverPayload?: {
-        action: 'start' | 'pause' | 'resume' | 'reset' | 'add_time' | 'set';
+        action: 'start' | 'pause' | 'resume' | 'reset' | 'add_time' | 'set' | 'close';
         duration?: number;
         addSeconds?: number;
         label?: string;
@@ -403,6 +404,7 @@ export function ClassroomCountdownWidget({
       label,
       endsAt: now + duration * 1000,
       updatedAt: now,
+      dismissed: false,
     };
     syncAndBroadcast(nextState, { action: 'start', duration: nextState.totalDuration, label: nextState.label });
 
@@ -451,6 +453,7 @@ export function ClassroomCountdownWidget({
       isPaused: false,
       endsAt: now + remaining * 1000,
       updatedAt: now,
+      dismissed: false,
     };
     syncAndBroadcast(nextState, { action: 'resume' });
 
@@ -499,6 +502,36 @@ export function ClassroomCountdownWidget({
       updatedAt: now,
     };
     syncAndBroadcast(nextState, { action: 'add_time', addSeconds: seconds });
+  };
+
+  /**
+   * 关闭倒计时：停表并把教师端与学生端一起恢复到「开始之前」的展示态。
+   * - 教师端：剩余时间回到总时长、退出大屏投影与设置浮层；
+   * - 学生端：广播 `dismissed` 后隐藏横幅（服务端持久化，刷新/重连也不会重新弹出）。
+   */
+  const handleClose = () => {
+    const now = Date.now();
+    const current = countdownRef.current;
+    const nextState: ClassroomCountdownState = {
+      ...current,
+      timeRemaining: current.totalDuration || current.timeRemaining,
+      isRunning: false,
+      isPaused: false,
+      endsAt: null,
+      dismissed: true,
+      updatedAt: now,
+    };
+    syncAndBroadcast(nextState, { action: 'close' });
+    setIsFullModalOpen(false);
+    setIsHeaderPopoverOpen(false);
+
+    try {
+      window.dispatchEvent(
+        new CustomEvent('openlearn:countdown:closed', {
+          detail: nextState,
+        }),
+      );
+    } catch (_) {}
   };
 
   const actionHandlersRef = useRef({
@@ -583,6 +616,10 @@ export function ClassroomCountdownWidget({
   const isUrgent = countdown.timeRemaining > 0 && countdown.timeRemaining <= 60;
   const isWarning = countdown.timeRemaining > 60 && countdown.timeRemaining <= 180;
 
+  // 是否处于「已发起」阶段：运行 / 暂停 / 重置后（dismissed === false 且尚未关闭）展示关闭按钮；
+  // 关闭后 dismissed 置 true，按钮隐藏，教师端回到开始之前的就绪态。
+  const isCountdownActive = countdown.isRunning || countdown.isPaused || countdown.dismissed === false;
+
   // 进度条与高亮颜色
   const themeColorClass = isUrgent ? 'text-rose-500' : isWarning ? 'text-amber-500' : 'text-primary-theme';
 
@@ -610,8 +647,19 @@ export function ClassroomCountdownWidget({
             type="button"
             onClick={() => setIsFullModalOpen(false)}
             className="p-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer"
+            title={lang === 'zh' ? '退出大屏（保留倒计时）' : 'Exit projector'}
           >
             <Minimize2 size={20} />
+          </button>
+          <button
+            type="button"
+            id="classroom-countdown-projector-close-btn"
+            onClick={handleClose}
+            className="p-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white transition-colors cursor-pointer"
+            title={lang === 'zh' ? '关闭倒计时（学生端同步隐藏）' : 'Close countdown'}
+            aria-label={lang === 'zh' ? '关闭倒计时' : 'Close countdown'}
+          >
+            <X size={20} />
           </button>
         </div>
 
@@ -782,6 +830,20 @@ export function ClassroomCountdownWidget({
             >
               +1m
             </button>
+
+            {/* 关闭倒计时：教师端与学生端一并恢复为开始之前的就绪态 */}
+            {isCountdownActive && (
+              <button
+                type="button"
+                id="classroom-countdown-close-btn"
+                onClick={handleClose}
+                className="w-5 h-5 rounded-md bg-rose-500/10 text-rose-600 hover:bg-rose-500/20 flex items-center justify-center cursor-pointer transition-colors"
+                title={lang === 'zh' ? '关闭倒计时（学生端同步隐藏）' : 'Close countdown'}
+                aria-label={lang === 'zh' ? '关闭倒计时' : 'Close countdown'}
+              >
+                <X size={11} />
+              </button>
+            )}
 
             {/* 展开浮层设置 */}
             <button
@@ -981,6 +1043,18 @@ export function ClassroomCountdownWidget({
         </div>
 
         <div className="flex items-center gap-1 shrink-0">
+          {isCountdownActive && (
+            <button
+              type="button"
+              id="classroom-countdown-card-close-btn"
+              onClick={handleClose}
+              className="p-1 rounded-md text-xs text-rose-600 bg-rose-500/10 hover:bg-rose-500/20 transition-colors cursor-pointer border border-rose-500/20"
+              title={lang === 'zh' ? '关闭倒计时（学生端同步隐藏）' : 'Close countdown'}
+              aria-label={lang === 'zh' ? '关闭倒计时' : 'Close countdown'}
+            >
+              <X size={12} />
+            </button>
+          )}
           <button
             type="button"
             onClick={() => setSoundEnabled(!soundEnabled)}

@@ -162,6 +162,14 @@ export function StudentCountdownBanner({
     setHasFinishedAlerted(false);
   }, [countdown?.isRunning, countdown?.endsAt]);
 
+  /**
+   * 教师关闭倒计时（dismissed）时复位结束提示标记。
+   * 否则「已截止」横幅的状态会残留，教师重新发起的新一轮倒计时在结束前无法正确判定。
+   */
+  useEffect(() => {
+    if (countdown?.dismissed) setHasFinishedAlerted(false);
+  }, [countdown?.dismissed]);
+
   // 2. 本地平滑时钟推进
   useEffect(() => {
     if (!countdown || !countdown.isRunning || !countdown.endsAt) return;
@@ -210,8 +218,12 @@ export function StudentCountdownBanner({
     return () => clearInterval(interval);
   }, [countdown?.isRunning, countdown?.endsAt, soundEnabled, hasFinishedAlerted]);
 
-  // 如果没有活动倒计时或已重置且未在运行，不展示
-  if (!countdown || (countdown.timeRemaining === 0 && !countdown.isRunning && !hasFinishedAlerted)) {
+  // 教师关闭倒计时（dismissed）、无活动倒计时，或已重置且未在运行时，都不展示
+  if (
+    !countdown ||
+    countdown.dismissed ||
+    (countdown.timeRemaining === 0 && !countdown.isRunning && !hasFinishedAlerted)
+  ) {
     return null;
   }
 

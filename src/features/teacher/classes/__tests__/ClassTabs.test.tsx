@@ -17,7 +17,7 @@ function baseProps() {
   return {
     cls: makeClass(),
     lang: 'en' as 'zh' | 'en',
-    classActiveTabs: {} as Record<string, 'students' | 'assignments' | 'schedules' | 'seating' | 'grades'>,
+    classActiveTabs: {} as Record<string, 'students' | 'assignments' | 'schedules' | 'grades'>,
     setClassActiveTabs: vi.fn(),
   };
 }
