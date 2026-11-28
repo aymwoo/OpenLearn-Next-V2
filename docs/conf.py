@@ -18,7 +18,17 @@ templates_path = ['_templates']
 # `ai-reference` 是面向 AI Agent 的平行文档层（结论 + 源码坐标 + 真值表），
 # 不进 Sphinx toctree 也不参与 `make html` 构建：它会持续按符号名增删，
 # 若纳入构建会不断产生「document isn't included in any toctree」告警。
-exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store', 'requirements.txt', '.venv', 'ai-reference']
+# `whiteboard/change-summary-*` 是一次性 PR 变更摘要快照（如 !46），同样不进
+# 导航树，glob 排除以免 toctree 告警并覆盖后续同类文件。
+exclude_patterns = [
+    '_build',
+    'Thumbs.db',
+    '.DS_Store',
+    'requirements.txt',
+    '.venv',
+    'ai-reference',
+    'whiteboard/change-summary-*',
+]
 
 html_theme = 'sphinx_rtd_theme'
 html_static_path = ['_static']
