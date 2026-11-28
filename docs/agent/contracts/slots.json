@@ -52,6 +52,7 @@
     "classroom.monitor.header_action",
     "classroom.notification.tabs",
     "classroom.outline",
+    "classroom.outline.activity_action",
     "classroom.outline.page_action",
     "classroom.pacing.dashboard",
     "classroom.portal.course_badge",
@@ -65,6 +66,7 @@
     "classroom.preclass.passcode_action",
     "classroom.preclass.passcode_addon",
     "classroom.prep",
+    "classroom.prep.addon",
     "classroom.quick_activity",
     "classroom.seating.legend",
     "classroom.seating.seat_actions",
@@ -176,5 +178,5 @@
     "anchor:whiteboard-toolbar:presentation",
     "anchor:whiteboard-toolbar:rollcall"
   ],
-  "total": 163
+  "total": 165
 }

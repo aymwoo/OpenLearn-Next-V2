@@ -41,6 +41,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - **学案壳补齐 `student.segment.badge`**：学案课堂没有环节胶囊列表，当前环节的插件徽标改挂在工具行上方（`{ segment, isActive: true, isLocked, studentId, lessonId, lang }`），与白板壳的环节徽标对称；无贡献时容器 `empty:hidden` 不占高度。
 - **新增 `classroom.outline.page_action`（白板页行级操作）**：课中侧栏每个白板页行都渲染该槽位，插件可提供页备注、页级工具等入口；props `{ page, pageIndex, isActive, segment, lessonId, lang }`，操作区点击不会触发行级切页。`ExtensionSlot` 成员数增至 163。
 - **白板插件图元在可编辑态也懒挂载**：`whiteboard.renderer` 的「进视口再挂载」此前只对只读演示态生效，可编辑态仍会为画布上所有插件图元创建实例。现在两种状态都启用，并用 `useLayoutEffect` + `getBoundingClientRect` 做首帧同步判定 —— 已在视口（含 800px 预取边距）内的图元在绘制前就挂载，首帧不会出现占位块闪空；视口外的图元滚动到附近再挂载，挂载后不卸载。
+- **内置备课面也支持插件追加**：新增 `classroom.prep.addon`，白板编辑器（`LessonEditorView`）与学案编辑器（`XueanEditor`）顶栏都挂载该槽位，`packId` / `prepContributionId` 分别为 `whiteboard` / `prep-whiteboard` 与 `xuean` / `prep-xuean`，插件可放按钮或弹层入口；`classroom.prep` 仍只服务第三方 Mode Pack 的整块替换语义。
+- **学案活动大纲可逐行扩展**：课中侧栏的学案环节展开后列出课时级活动（A1/A2… + 类型徽标），每行渲染 `classroom.outline.activity_action`（`{ activity, activityIndex, segment, lessonId, lang }`），插件可提供重新派发、跳转批阅等操作；非当前环节只提示进入后查看，避免同一份课时活动在各环节重复。`ExtensionSlot` 成员数增至 165。
 
 ### Fixes
 

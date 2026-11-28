@@ -268,8 +268,10 @@ export type ExtensionSlot =
   | 'classroom.active_segment.main' // 当前活跃教学环节主工作区自定义接管面板（探究仿真实验、代码竞技等）
   | 'classroom.active_segment.student_main' // 学生端对称的活跃环节主工作区接管（与教师端按 segment.type 路由，学案/Moodle 学生视图）
   | 'classroom.prep' // 第三方 Mode Pack 的备课面（按 prepContributionId / segment.type 分发）
+  | 'classroom.prep.addon' // 内置备课面（白板 / 学案编辑器）的追加扩展区（不替换编辑器）
   | 'classroom.outline' // 第三方 Mode Pack 的课中侧栏大纲（按 outlineContributionId / segment.type 分发）
   | 'classroom.outline.page_action' // 课中侧栏白板页大纲的行级操作（页备注 / 页级工具等）
+  | 'classroom.outline.activity_action' // 课中侧栏学案活动大纲的行级操作（重新派发 / 跳转批阅等）
   // ── 学生端学业对比扩展槽位 ──
   | 'student.academic_year.metric_card' // 学生端多学年综合学业对比自定义指标卡扩展
   // ── 环节节点与学生端徽标微扩展槽位 ──
@@ -811,6 +813,21 @@ export interface WhiteboardPageDrawerActionSlotProps {
   dispatcher?: IHostActionDispatcher;
 }
 
+/** Props passed to classroom.prep.addon extensions */
+export interface ClassroomPrepAddonSlotProps {
+  /** 内置 Mode Pack id：`whiteboard` / `xuean` */
+  packId: string;
+  /** 与 `classroom.prep` 同口径的备课贡献 id：`prep-whiteboard` / `prep-xuean` */
+  prepContributionId: string;
+  /** 当前备课环节（未选择环节时为 null） */
+  segment?: { id: string; title?: string; type?: string } | null;
+  lessonId?: string | null;
+  /** 白板编辑器只读预览时为 true；学案编辑器不传 */
+  isReadOnly?: boolean;
+  lang?: string;
+  dispatcher?: IHostActionDispatcher;
+}
+
 /** Props passed to classroom.outline.page_action extensions */
 export interface ClassroomOutlinePageActionSlotProps {
   /** 该页在本环节大纲中的白板页对象 */
@@ -826,6 +843,25 @@ export interface ClassroomOutlinePageActionSlotProps {
   /** 该页是否正在演示（当前环节 + 当前页） */
   isActive: boolean;
   /** 该页所属/正在展示的环节 */
+  segment: { id: string; title?: string; type?: string };
+  lessonId: string | null;
+  lang?: string;
+  dispatcher?: IHostActionDispatcher;
+}
+
+/** Props passed to classroom.outline.activity_action extensions */
+export interface ClassroomOutlineActivityActionSlotProps {
+  /** 该行对应的学案活动（不含 config_json / rubric_json 等重字段） */
+  activity: {
+    id: string;
+    title: string;
+    type: string;
+    order_index?: number;
+    required?: boolean | number;
+  };
+  /** 活动在课时内的大纲序号（从 0 开始） */
+  activityIndex: number;
+  /** 正在展示该大纲的环节 */
   segment: { id: string; title?: string; type?: string };
   lessonId: string | null;
   lang?: string;
