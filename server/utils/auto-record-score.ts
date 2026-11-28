@@ -16,6 +16,7 @@
 import crypto from 'crypto';
 import type { SqliteLike } from '../../packages/plugins/courseware-score.js';
 import { resolveScoreConfig, type CoursewareScoreConfig } from '../../packages/plugins/courseware-score.js';
+import { normalizeCompletionForDisplay } from '../../packages/courseware-adapters/completion.js';
 import { deriveAcademicYear } from './academic-year.js';
 import { applyGradeChange } from '../../packages/core/db/assignment-grade-writer.js';
 
@@ -162,7 +163,7 @@ export function promoteAttemptToGrade(db: SqliteLike, attemptId: string, options
     return { ok: false, reason: 'missing-score', studentId: attempt.student_id };
   }
 
-  const completion = Number.isFinite(attempt.completion as number) ? (attempt.completion as number) : 0;
+  const completion = normalizeCompletionForDisplay(attempt.completion) ?? 0;
   const minCompletion = options.ignoreMinCompletion ? 0 : (options.minCompletion ?? 0);
   if (completion < minCompletion) {
     return {
@@ -731,7 +732,7 @@ export function evaluateAutoRecord(db: SqliteLike, attemptId: string): AutoRecor
   if (normalizePercentScore(attempt.score) === null) {
     return { shouldRecord: false, rule, ruleSource: resolved.source, reason: 'missing-score' };
   }
-  const completion = Number.isFinite(attempt.completion as number) ? (attempt.completion as number) : 0;
+  const completion = normalizeCompletionForDisplay(attempt.completion) ?? 0;
   if (completion < rule.auto_record_min_completion) {
     return { shouldRecord: false, rule, ruleSource: resolved.source, reason: 'below-min-completion' };
   }

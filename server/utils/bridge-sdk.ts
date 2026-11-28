@@ -978,6 +978,12 @@ export const BRIDGE_SDK_CODE = `(function () {
 
     function initAutoSubmit() {
       try {
+        // SCORM / xAPI / H5P 适配器已接管终态判定：DOM 猜测式自动提交会抢先
+        // 把 attempt 标为完成，且分数口径不可信。协议适配器存在时完全让位。
+        if (window.__LMS_ADAPTER_MANAGED__ === true) {
+          logToServer('Protocol adapter is active; skip DOM auto-submit');
+          return;
+        }
         logToServer('Initializing AutoSubmit SDK');
         const observer = new MutationObserver(function () {
           attachListeners();

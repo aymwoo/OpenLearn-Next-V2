@@ -32,6 +32,9 @@ export const SCORE_MONITOR_SCRIPT = `(function () {
   if (typeof window === 'undefined' || typeof document === 'undefined') return;
   if (window.__LMS_WATCH_DISABLED__ === true) return;
   if (window.__LMS_WATCH__ === false) return;
+  // 协议适配器（SCORM / xAPI / H5P）已提供权威分数与终态；除课件显式声明
+  // __LMS_WATCH__ 外，不启用自动发现与 DOM 兜底，避免过程样本污染官方成绩。
+  if (window.__LMS_ADAPTER_MANAGED__ === true && !window.__LMS_WATCH__) return;
   if (window.__LMS_SCORE_WATCHER_READY__ === true) return;
   window.__LMS_SCORE_WATCHER_READY__ = true;
 
@@ -195,7 +198,7 @@ export const SCORE_MONITOR_SCRIPT = `(function () {
     snap._changed = keys;
     snap._at = Date.now();
     try { console.warn('Score variable changed (' + keys.join(', ') + ') -> ' + best); } catch (err) { /* noop */ }
-    var ok = report({ score: best, watch: snap });
+    var ok = report({ score: best, watch: snap, protocol: 'watch' });
     if (ok) state.submitted = state.submitted + 1;
   }
 

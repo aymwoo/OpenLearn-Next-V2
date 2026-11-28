@@ -1,11 +1,13 @@
 import path from 'path';
-import crypto from 'crypto';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
 import { ICoursewareRuntimeScriptRegistryToken } from '../../packages/core/di/interfaces.js';
 import { getCookieToken, getValidSession } from '../middleware/auth.js';
 import { BRIDGE_SDK_CODE } from '../utils/bridge-sdk.js';
 import { sanitizeExternalFontsInHtml } from '../../packages/core/security/font-sanitizer.js';
 import { resolveHookTelemetryPolicy } from '../services/runtime-policies.js';
+import { adapterScriptsForProtocol, type CoursewareProtocol } from '../../packages/courseware-adapters/index.js';
+import { resolveCoursewareProtocol } from '../utils/courseware-protocol.js';
+import { resolveOrCreateCoursewareAttempt } from '../utils/courseware-attempt.js';
 
 export { validateMagicBytes, BLOCKED_EXTENSIONS } from '../utils/upload.js';
 
@@ -84,84 +86,72 @@ export function resolveRequestHostOrigin(req: any): string {
   }
 }
 
-export function injectLmsSdk(htmlContent: string, req: any, cwInfo: { id: string; name: string; uuid: string }) {
+export interface LmsInjectionLaunch {
+  /** token 声明的 attempt（优先于现场创建） */
+  attemptId?: string;
+  /** token 声明的用户 id，用于注入 __LMS_STUDENT__.student_id */
+  userId?: string;
+  /** token 声明的课节 id（当前仅随 token 传递，供后续审计/路由使用） */
+  lessonId?: string;
+  /** 覆盖注入的学习者 id / 名称（缺省从 userId 与会话推导） */
+  learnerId?: string;
+  learnerName?: string;
+  classId?: string;
+  role?: string;
+}
+
+export interface LmsInjectionOptions {
+  /** 已解析的课件包协议；缺省时按课件 id/uuid 现场解析 */
+  protocol?: CoursewareProtocol;
+  /** v2 access token 声明；存在时不再创建 guest/新 attempt */
+  launch?: LmsInjectionLaunch;
+  /** 原始 launch token（`?ct=`），注入给桥接以便后续上报携带 */
+  launchToken?: string;
+}
+
+export function injectLmsSdk(
+  htmlContent: string,
+  req: any,
+  cwInfo: { id: string; name: string; uuid: string },
+  options: LmsInjectionOptions = {},
+) {
   const token = getCookieToken(req);
-  let studentInfo = {
-    student_id: 'guest',
-    student_name: 'Guest Student',
-    class_id: '',
-    attempt_id: 'guest-attempt',
-  };
+  const session = token ? getValidSession(token) : null;
+  const launch = options.launch;
 
-  if (token) {
-    const session = getValidSession(token);
-    if (session) {
-      if (session.role === 'student') {
-        const classRow = kernelContainer.db
-          .prepare('SELECT class_id FROM class_students WHERE student_id = ? LIMIT 1')
-          .get(session.studentId) as any;
-
-        let attempt = kernelContainer.db
-          .prepare('SELECT id FROM courseware_attempt WHERE courseware_id = ? AND student_id = ? AND status = ?')
-          .get(cwInfo.id, session.studentId, 'active') as any;
-
-        if (!attempt) {
-          const attemptId = 'att_' + crypto.randomBytes(8).toString('hex');
-          kernelContainer.db
-            .prepare(
-              'INSERT INTO courseware_attempt (id, courseware_id, student_id, started_at, status) VALUES (?, ?, ?, ?, ?)',
-            )
-            .run(attemptId, cwInfo.id, session.studentId, Date.now(), 'active');
-          attempt = { id: attemptId };
-        }
-
-        studentInfo = {
-          student_id: session.studentId || 'guest',
-          student_name: session.name || 'Guest Student',
-          class_id: classRow ? classRow.class_id : '',
-          attempt_id: attempt.id,
-        };
-      } else if (session.role === 'teacher' || session.role === 'administrator') {
-        let attempt = kernelContainer.db
-          .prepare('SELECT id FROM courseware_attempt WHERE courseware_id = ? AND student_id = ? AND status = ?')
-          .get(cwInfo.id, 'teacher', 'active') as any;
-
-        if (!attempt) {
-          const attemptId = 'att_teacher_' + crypto.randomBytes(8).toString('hex');
-          kernelContainer.db
-            .prepare(
-              'INSERT INTO courseware_attempt (id, courseware_id, student_id, started_at, status) VALUES (?, ?, ?, ?, ?)',
-            )
-            .run(attemptId, cwInfo.id, 'teacher', Date.now(), 'active');
-          attempt = { id: attemptId };
-        }
-
-        studentInfo = {
-          student_id: session.userId || 'teacher',
-          student_name: (session.name || 'Teacher') + ' (Test)',
-          class_id: '',
-          attempt_id: attempt.id,
-        };
-      }
-    }
+  // v2 token 已绑定 attempt/user：直接采用声明，不再为匿名访问者创建 guest attempt。
+  let studentInfo: { student_id: string; student_name: string; class_id: string; attempt_id: string };
+  if (launch?.attemptId) {
+    studentInfo = {
+      student_id: launch.learnerId || launch.userId || 'guest',
+      student_name: launch.learnerName || (launch.role === 'teacher' ? 'Teacher (Test)' : 'Guest Student'),
+      class_id: launch.classId || '',
+      attempt_id: launch.attemptId,
+    };
+  } else {
+    const resolved = resolveOrCreateCoursewareAttempt(kernelContainer.db, cwInfo.id, session);
+    studentInfo = {
+      student_id: resolved.learnerId,
+      student_name: resolved.learnerName,
+      class_id: resolved.classId,
+      attempt_id: resolved.attemptId,
+    };
   }
 
-  if (studentInfo.attempt_id === 'guest-attempt') {
-    let attempt = kernelContainer.db
-      .prepare('SELECT id FROM courseware_attempt WHERE courseware_id = ? AND student_id = ? AND status = ?')
-      .get(cwInfo.id, 'guest', 'active') as any;
-
-    if (!attempt) {
-      const attemptId = 'att_guest_' + crypto.randomBytes(8).toString('hex');
-      kernelContainer.db
-        .prepare(
-          'INSERT INTO courseware_attempt (id, courseware_id, student_id, started_at, status) VALUES (?, ?, ?, ?, ?)',
-        )
-        .run(attemptId, cwInfo.id, 'guest', Date.now(), 'active');
-      attempt = { id: attemptId };
-    }
-    studentInfo.attempt_id = attempt.id;
-  }
+  const protocol =
+    options.protocol ?? resolveCoursewareProtocol({ id: cwInfo.id, uuid: cwInfo.uuid, name: cwInfo.name });
+  const adapterScripts = adapterScriptsForProtocol(protocol);
+  const adapterManaged = adapterScripts.length > 0;
+  const renderAdapter = (script: (typeof adapterScripts)[number]) =>
+    `\n<!-- Courseware Adapter (${script.protocol}/${script.id}) -->\n<script>${script.source}</script>`;
+  const adapterHead = adapterScripts
+    .filter((script) => script.position === 'head')
+    .map(renderAdapter)
+    .join('');
+  const adapterBody = adapterScripts
+    .filter((script) => script.position === 'body-end')
+    .map(renderAdapter)
+    .join('');
 
   const runtimeScripts = collectCoursewareRuntimeScripts(cwInfo);
 
@@ -177,10 +167,13 @@ window.__LMS_ENFORCE_ORIGIN__ = ${process.env.NODE_ENV === 'production'};
 window.__LMS_HOOK_TELEMETRY__ = ${resolveHookTelemetryPolicy(kernelContainer.db).enabled ? 'true' : 'false'};
 window.__LMS_COURSEWARE__ = {
   uuid: ${JSON.stringify(cwInfo.uuid)},
-  name: ${JSON.stringify(cwInfo.name)}
+  name: ${JSON.stringify(cwInfo.name)},
+  protocol: ${JSON.stringify(protocol)}
 };
+window.__LMS_ADAPTER_MANAGED__ = ${adapterManaged ? 'true' : 'false'};
+window.__LMS_LAUNCH_TOKEN__ = ${JSON.stringify(options.launchToken || '')};
 </script>
-<script>${BRIDGE_SDK_CODE}</script>${runtimeScripts.head}
+<script>${BRIDGE_SDK_CODE}</script>${adapterHead}${runtimeScripts.head}
 `;
 
   let html = htmlContent;
@@ -217,12 +210,14 @@ window.__LMS_COURSEWARE__ = {
     html = injection + html;
   }
 
-  // 插件注册的 body-end 脚本：放在 Bridge SDK 之后、且尽量靠后，确保能观察到课件自己的 DOM
-  if (runtimeScripts.bodyEnd) {
+  // 插件注册的 body-end 脚本 + 协议适配器：放在 Bridge SDK 之后、且尽量靠后，
+  // 确保能观察到课件自己的 DOM，也保证 window.LMS 已就绪。
+  const bodyEndScripts = `${runtimeScripts.bodyEnd}${adapterBody}`;
+  if (bodyEndScripts) {
     if (/<\/body>/i.test(html)) {
-      html = html.replace(/<\/body>/i, `${runtimeScripts.bodyEnd}</body>`);
+      html = html.replace(/<\/body>/i, `${bodyEndScripts}</body>`);
     } else {
-      html += runtimeScripts.bodyEnd;
+      html += bodyEndScripts;
     }
   }
   return html;

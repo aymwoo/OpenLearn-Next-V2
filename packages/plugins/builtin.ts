@@ -15,6 +15,9 @@ import {
 import type { PluginContext } from '@openlearn/plugin-sdk';
 import { hasDataSubmission, hasScoreDisplay, injectScoreSubmissionUsingAI } from './ai-submit-injector.js';
 import { SCORE_MONITOR_SCRIPT, SCORE_MONITOR_SCRIPT_ID, SCORE_MONITOR_SCRIPT_OWNER } from './score-monitor-script.js';
+import { normalizeCompletionRatio } from '../courseware-adapters/completion.js';
+import { resolveProtocolForStorageDir, writeProtocolSidecar } from '../courseware-adapters/node.js';
+import { toSubmissionProtocolSource } from '../courseware-adapters/protocol.js';
 import { resolveDataDir } from '../core/db/backup-paths.js';
 import { resolveCourseDeliveryMode } from '../core/plugin-host/course-delivery-mode.js';
 import {
@@ -1557,6 +1560,10 @@ export const BuiltinPlugin = {
             fs.writeFileSync(indexDestPath, fileBuffer);
           }
 
+          // 单 HTML 无清单文件，协议固定为 html；仍写旁车，保证 list/渲染口径一致。
+          const protocol = resolveProtocolForStorageDir(storageDir);
+          writeProtocolSidecar(storageDir, protocol);
+
           const coursewareId = 'cw_' + crypto.randomBytes(8).toString('hex');
           db.prepare('INSERT INTO courseware (id, uuid, name, type, entry, created_at) VALUES (?, ?, ?, ?, ?, ?)').run(
             coursewareId,
@@ -1585,7 +1592,7 @@ export const BuiltinPlugin = {
             id: uuidv7(),
             type: 'courseware.uploaded',
             source: 'builtin.courseware',
-            payload: { id: coursewareId, uuid, name, entry: entryName },
+            payload: { id: coursewareId, uuid, name, entry: entryName, protocol },
             timestamp: Date.now(),
             correlationId: command.id,
           });
@@ -1604,6 +1611,7 @@ export const BuiltinPlugin = {
                 if (entryName !== 'index.html') {
                   fs.writeFileSync(path.join(newStorageDir, 'index.html'), modified);
                 }
+                writeProtocolSidecar(newStorageDir, protocol);
 
                 db.prepare(
                   'INSERT INTO courseware (id, uuid, name, type, entry, created_at) VALUES (?, ?, ?, ?, ?, ?)',
@@ -1613,7 +1621,7 @@ export const BuiltinPlugin = {
                   id: uuidv7(),
                   type: 'courseware.uploaded',
                   source: 'builtin.courseware',
-                  payload: { id: newCwId, uuid: newUuid, name: `[自动提交版] ${name}`, entry: entryName },
+                  payload: { id: newCwId, uuid: newUuid, name: `[自动提交版] ${name}`, entry: entryName, protocol },
                   timestamp: Date.now() + 10,
                   correlationId: command.id,
                 });
@@ -1623,7 +1631,7 @@ export const BuiltinPlugin = {
             console.error('Failed to create AI auto-submit version for html upload:', aiErr);
           }
 
-          return { success: true, id: coursewareId, uuid, name, entry: entryName };
+          return { success: true, id: coursewareId, uuid, name, entry: entryName, protocol };
         } else {
           // Zip file unzipping - using direct load since JSZip is required
           const JSZip = (await import('jszip')).default;
@@ -1677,6 +1685,11 @@ export const BuiltinPlugin = {
               files.push(relativePath);
             }
           }
+
+          // 解包后识别协议（imsmanifest.xml / tincan.xml / activity.json / h5p.json），
+          // 写入旁车供渲染与列表复用；不改变 courseware.type（仍是 html/folder 二态）。
+          const protocol = resolveProtocolForStorageDir(storageDir);
+          writeProtocolSidecar(storageDir, protocol);
 
           // Candidates scan
           const primaryCandidates = files.filter((f) => {
@@ -1737,7 +1750,7 @@ export const BuiltinPlugin = {
               id: uuidv7(),
               type: 'courseware.uploaded',
               source: 'builtin.courseware',
-              payload: { id: coursewareId, uuid, name, entry },
+              payload: { id: coursewareId, uuid, name, entry, protocol },
               timestamp: Date.now(),
               correlationId: command.id,
             });
@@ -1755,6 +1768,7 @@ export const BuiltinPlugin = {
                     const newStorageDir = path.resolve(resolveDataDir(), 'storage', 'courseware', newUuid);
                     copyFolderSync(storageDir, newStorageDir);
                     fs.writeFileSync(path.join(newStorageDir, entry), modified);
+                    writeProtocolSidecar(newStorageDir, protocol);
 
                     db.prepare(
                       'INSERT INTO courseware (id, uuid, name, type, entry, created_at) VALUES (?, ?, ?, ?, ?, ?)',
@@ -1764,7 +1778,7 @@ export const BuiltinPlugin = {
                       id: uuidv7(),
                       type: 'courseware.uploaded',
                       source: 'builtin.courseware',
-                      payload: { id: newCwId, uuid: newUuid, name: `[自动提交版] ${name}`, entry },
+                      payload: { id: newCwId, uuid: newUuid, name: `[自动提交版] ${name}`, entry, protocol },
                       timestamp: Date.now() + 10,
                       correlationId: command.id,
                     });
@@ -1775,7 +1789,7 @@ export const BuiltinPlugin = {
               console.error('Failed to create AI auto-submit version for zip auto-confirm:', aiErr);
             }
 
-            return { success: true, id: coursewareId, uuid, name, entry };
+            return { success: true, id: coursewareId, uuid, name, entry, protocol };
           } else {
             if (allHtmlCandidates.length === 0) {
               throw new Error('No HTML entry page found in ZIP archive');
@@ -1786,6 +1800,7 @@ export const BuiltinPlugin = {
               candidates: allHtmlCandidates,
               uuid,
               name,
+              protocol,
             };
           }
         }
@@ -1825,18 +1840,21 @@ export const BuiltinPlugin = {
           Date.now(),
         );
 
+        const storageDir = path.resolve(resolveDataDir(), 'storage', 'courseware', uuid);
+        const protocol = resolveProtocolForStorageDir(storageDir);
+        writeProtocolSidecar(storageDir, protocol);
+
         await eventBus.publish({
           id: uuidv7(),
           type: 'courseware.confirmed',
           source: 'builtin.courseware',
-          payload: { id: coursewareId, uuid, name, entry },
+          payload: { id: coursewareId, uuid, name, entry, protocol },
           timestamp: Date.now(),
           correlationId: command.id,
         });
 
         // Check for AI version injection
         try {
-          const storageDir = path.resolve(resolveDataDir(), 'storage', 'courseware', uuid);
           const entryPath = path.join(storageDir, entry);
           if (fs.existsSync(entryPath)) {
             const htmlContent = fs.readFileSync(entryPath, 'utf-8');
@@ -1848,6 +1866,7 @@ export const BuiltinPlugin = {
                 const newStorageDir = path.resolve(resolveDataDir(), 'storage', 'courseware', newUuid);
                 copyFolderSync(storageDir, newStorageDir);
                 fs.writeFileSync(path.join(newStorageDir, entry), modified);
+                writeProtocolSidecar(newStorageDir, protocol);
 
                 db.prepare(
                   'INSERT INTO courseware (id, uuid, name, type, entry, created_at) VALUES (?, ?, ?, ?, ?, ?)',
@@ -1857,7 +1876,7 @@ export const BuiltinPlugin = {
                   id: uuidv7(),
                   type: 'courseware.confirmed',
                   source: 'builtin.courseware',
-                  payload: { id: newCwId, uuid: newUuid, name: `[自动提交版] ${name}`, entry },
+                  payload: { id: newCwId, uuid: newUuid, name: `[自动提交版] ${name}`, entry, protocol },
                   timestamp: Date.now() + 10,
                   correlationId: command.id,
                 });
@@ -1868,7 +1887,7 @@ export const BuiltinPlugin = {
           console.error('Failed to create AI auto-submit version for manual confirm:', aiErr);
         }
 
-        return { success: true, id: coursewareId, uuid, name, entry };
+        return { success: true, id: coursewareId, uuid, name, entry, protocol };
       },
     });
 
@@ -1898,6 +1917,59 @@ export const BuiltinPlugin = {
         const payload = command.payload as any;
         const { attemptId, score, comment, completion, status, extra = {} } = payload;
 
+        // 完成度统一收敛为 0~1 比率（0.85 / 85 不再混存）
+        const normalizedCompletion = normalizeCompletionRatio(completion);
+
+        // 成绩来源：课件包协议（SCORM / xAPI / H5P / html）+ 上报方自报（适配器会带 protocol）
+        let protocolSource = 'official-lms';
+        let coursewareId: string | null = null;
+        try {
+          const cw = db
+            .prepare(
+              'SELECT cw.id AS coursewareId, cw.uuid FROM courseware_attempt a JOIN courseware cw ON a.courseware_id = cw.id WHERE a.id = ?',
+            )
+            .get(attemptId) as { coursewareId?: string; uuid?: string } | undefined;
+          coursewareId = cw?.coursewareId || null;
+          const cwProtocol = cw?.uuid
+            ? resolveProtocolForStorageDir(path.resolve(resolveDataDir(), 'storage', 'courseware', cw.uuid))
+            : 'html';
+          const reportedProtocol =
+            extra && typeof extra === 'object' && !Array.isArray(extra)
+              ? (extra as Record<string, unknown>).protocol
+              : undefined;
+          protocolSource = toSubmissionProtocolSource(cwProtocol, reportedProtocol);
+        } catch {
+          protocolSource = 'official-lms';
+        }
+
+        // 满分校验（阶段 B）：命令直达路径也必须按 raw_full_score 拒绝越界原始分，
+        // 不能只依赖 HTTP 服务层，否则插件/内部调用可绕过。
+        if (score !== undefined && score !== null) {
+          const numericScore = parseFloat(score);
+          let cap = 100;
+          try {
+            cap = resolveScoreConfig(db as any, coursewareId).config.raw_full_score;
+          } catch {
+            cap = 100;
+          }
+          if (!Number.isFinite(cap) || cap <= 0) cap = 100;
+          if (
+            typeof score === 'boolean' ||
+            !Number.isFinite(numericScore) ||
+            numericScore < 0 ||
+            numericScore > cap + 1e-6
+          ) {
+            const err: any = new Error(`Invalid score: must be a finite number in [0, ${cap}] (raw_full_score)`);
+            err.status = 400;
+            throw err;
+          }
+        }
+
+        const mergedExtra = {
+          ...(extra && typeof extra === 'object' && !Array.isArray(extra) ? extra : {}),
+          protocol: protocolSource,
+        };
+
         // 1. Log to raw submission
         const rawId = 'raw_' + crypto.randomBytes(8).toString('hex');
         db.prepare(
@@ -1906,7 +1978,13 @@ export const BuiltinPlugin = {
           rawId,
           attemptId,
           'submit_lms',
-          JSON.stringify({ score, comment, completion, status, ...extra }),
+          JSON.stringify({
+            score,
+            comment,
+            completion: normalizedCompletion,
+            status,
+            ...mergedExtra,
+          }),
           Date.now(),
         );
 
@@ -1945,23 +2023,23 @@ export const BuiltinPlugin = {
             attemptId,
             aggregatedScore !== null ? aggregatedScore : score !== undefined ? score : null,
             comment || null,
-            completion !== undefined ? completion : null,
-            JSON.stringify({ ...extra, ...aggregationExtra }),
+            normalizedCompletion,
+            JSON.stringify({ ...mergedExtra, ...aggregationExtra }),
           );
         } else {
           const finalScore = aggregatedScore !== null ? aggregatedScore : score !== undefined ? score : existing.score;
           const finalComment = comment || existing.comment;
-          const finalCompletion = completion !== undefined ? completion : existing.completion;
+          const finalCompletion = normalizedCompletion !== null ? normalizedCompletion : existing.completion;
 
-          let mergedExtra = {};
+          let previousExtra: Record<string, unknown> = {};
           try {
-            mergedExtra = JSON.parse(existing.extra_json || '{}');
+            previousExtra = JSON.parse(existing.extra_json || '{}');
           } catch (e) {}
-          mergedExtra = { ...mergedExtra, ...extra, ...aggregationExtra };
+          const resultExtra = { ...previousExtra, ...mergedExtra, ...aggregationExtra };
 
           db.prepare(
             'UPDATE submission_result SET score = ?, comment = ?, completion = ?, extra_json = ? WHERE attempt_id = ?',
-          ).run(finalScore, finalComment, finalCompletion, JSON.stringify(mergedExtra), attemptId);
+          ).run(finalScore, finalComment, finalCompletion, JSON.stringify(resultExtra), attemptId);
         }
 
         await eventBus.publish({
@@ -2180,8 +2258,17 @@ export const BuiltinPlugin = {
       async execute() {
         const rows = db
           .prepare('SELECT id, uuid, name, type, entry, created_at FROM courseware ORDER BY created_at DESC LIMIT 500')
-          .all();
-        return rows;
+          .all() as any[];
+        const dataDir = resolveDataDir();
+        return rows.map((row) => {
+          let protocol = 'html';
+          try {
+            protocol = resolveProtocolForStorageDir(path.resolve(dataDir, 'storage', 'courseware', row.uuid));
+          } catch {
+            protocol = 'html';
+          }
+          return { ...row, protocol };
+        });
       },
     });
 
