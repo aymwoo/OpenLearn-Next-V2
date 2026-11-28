@@ -1,4 +1,6 @@
 import { ChevronDown, ChevronRight, Users, BookOpen, ClipboardList } from 'lucide-react';
+import { ExtensionPointRenderer } from '../../../plugin-host/extension-point-renderer';
+import { toClassRosterSummary } from './rosterProjection';
 import type { ClassType } from '../../../types/app';
 
 export interface ClassRowHeaderProps {
@@ -100,6 +102,9 @@ export function ClassRowHeader({
           <ClipboardList size={13} className="text-gray-400" />
           {cls.assignment_count ?? 0}
         </span>
+        {/* 插件班级徽章扩展（电子班牌绑定状态 / 第三方班级编号）。
+            cls 经白名单投影（Issue IKYOXD）：不含 class_passcode 等敏感字段。 */}
+        <ExtensionPointRenderer slot="class.card.badge" slotProps={{ cls: toClassRosterSummary(cls), lang }} />
       </div>
     </div>
   );

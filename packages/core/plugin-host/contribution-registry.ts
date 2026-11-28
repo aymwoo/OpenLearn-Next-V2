@@ -348,6 +348,67 @@ export interface StudentRowActionConfig {
   commandType?: string;
 }
 
+/** A contribution to the student.row.badge slot（学生行徽章，Issue IKYOXD）。 */
+export interface StudentRowBadgeConfig {
+  id: string;
+  label: string;
+  icon?: string;
+}
+
+/** A contribution to the class.list.batch.action slot（班级批量操作栏，Issue IKYOXD）。 */
+export interface ClassListBatchActionConfig {
+  id: string;
+  label: string;
+  icon?: string;
+  commandType?: string;
+}
+
+/** A contribution to the class.card.badge slot（班级行头徽章，Issue IKYOXD）。 */
+export interface ClassCardBadgeConfig {
+  id: string;
+  label: string;
+  icon?: string;
+}
+
+/** A contribution to the student.settings.addon slot（教学控制 Tab 设置项附加，Issue IKYOXD）。 */
+export interface StudentSettingsAddonConfig {
+  id: string;
+  title: string;
+  icon?: string;
+}
+
+/** A contribution to the student.row.tab slot（学生展开区附加 Tab，button/panel 双形态，Issue IKYOXD）。 */
+export interface StudentRowTabConfig {
+  id: string;
+  label: string;
+  icon?: string;
+  position?: number;
+  /** 可视沙箱 HTML 相对路径；声明后面板经 PluginSandboxIframeView 渲染。 */
+  view?: string;
+}
+
+/** A contribution to the student.roster.filter slot（花名册筛选维度，Issue IKYOXD）。 */
+export interface StudentRosterFilterConfig {
+  id: string;
+  title: string;
+  icon?: string;
+}
+
+/** A contribution to the student.roster.summary slot（花名册底部统计区，Issue IKYOXD）。 */
+export interface StudentRosterSummaryConfig {
+  id: string;
+  title: string;
+  icon?: string;
+}
+
+/** A contribution to the class.create.source slot（建班来源扩展，Issue IKYOXD）。 */
+export interface ClassCreateSourceConfig {
+  id: string;
+  label: string;
+  icon?: string;
+  commandType?: string;
+}
+
 /** A contribution to the student.row.panel slot. */
 export interface StudentRowPanelConfig {
   id: string;
@@ -1067,6 +1128,14 @@ export type ContributionConfig =
   | ClassListToolbarActionConfig
   | StudentEnrollSourceConfig
   | StudentRowActionConfig
+  | StudentRowBadgeConfig
+  | ClassListBatchActionConfig
+  | ClassCardBadgeConfig
+  | StudentSettingsAddonConfig
+  | StudentRowTabConfig
+  | StudentRosterFilterConfig
+  | StudentRosterSummaryConfig
+  | ClassCreateSourceConfig
   | StudentRowPanelConfig
   | EditorHeaderActionConfig
   | PostClassWidgetConfig

@@ -45,6 +45,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - **内置备课面也支持插件追加**：新增 `classroom.prep.addon`，白板编辑器（`LessonEditorView`）与学案编辑器（`XueanEditor`）顶栏都挂载该槽位，`packId` / `prepContributionId` 分别为 `whiteboard` / `prep-whiteboard` 与 `xuean` / `prep-xuean`，插件可放按钮或弹层入口；`classroom.prep` 仍只服务第三方 Mode Pack 的整块替换语义。
 - **学案活动大纲可逐行扩展**：课中侧栏的学案环节展开后列出课时级活动（A1/A2… + 类型徽标），每行渲染 `classroom.outline.activity_action`（`{ activity, activityIndex, segment, lessonId, lang }`），插件可提供重新派发、跳转批阅等操作；非当前环节只提示进入后查看，避免同一份课时活动在各环节重复。`ExtensionSlot` 成员数增至 165。
 
+- **班级学生管理域新增 8 个 P1/P2 扩展槽**：`student.row.badge`（学生行徽章，与备忘/成绩预警徽章并排）、`class.list.batch.action`（班级批量操作栏，排课之后）、`class.card.badge`（班级行头统计区旁）、`student.settings.addon`（「教学控制」Tab 设置项尾部）、`student.row.tab`（学生展开区附加 Tab，button/panel 双形态，同 `class.tab` 模式）、`student.roster.filter`（备忘分类过滤条右侧筛选维度）、`student.roster.summary`（花名册底部统计区）、`class.create.source`（建班来源，创建班级按钮旁）。实体一律白名单投影；`ExtensionSlot` 成员数增至 177（IKYMRY save_hook 落地后为 169）。
+- **花名册「备忘分类」过滤真正生效**：此前 `rosterTagFilter`（全部/日常/学术/行为/特别关注）只被 chips 自身消费（选中态样式），学生列表从未按分类收敛。现按与行内徽章相同的分类口径（`private_notes` JSON `{category}` / 纯文本回退 General）真正过滤，无备忘学生仅出现在「全部」下。
+- **`studentActiveTabs` / `rosterTagFilter` 值域开放**：从内建联合拓宽为开放字符串，插件可经 `student.row.tab` 贡献自定义展开 Tab（`plugin:{pluginId}/{extId}`）、经 `student.roster.filter` 贡献自定义过滤维度，内建行为不变。
+
 - **班级学生管理域新增 3 个 P0 扩展槽**：`class.list.toolbar.action`（班级列表顶部工具栏，创建班级旁，学籍系统一键同步 / 年级模板批量建班）、`student.enroll.source`（花名册「添加学生」来源扩展，二维码自助报到 / 名单 OCR / 第三方学籍同步）、`student.row.action`（学生行内快捷操作，紧邻「移除班级」按钮，单独转班 / 家校通知 / 加入分组）。三者均支持数据型 `commandType` 声明式贡献与组件 / 沙箱 view 双形态，`onRefresh` 供插件写操作后重拉花名册。`ExtensionSlot` 成员数增至 168。
 - **班级学生管理域实体投影白名单化**：新增 `StudentRosterSummary` / `ClassRosterSummary` 投影类型（`src/features/teacher/classes/rosterProjection.ts`），`class.batch.action` 的 `cls` / `selectedStudents` / `allStudents` 自本版起改为投影摘要（见 Breaking Changes）。
 - **`class.tab` 声明式贡献支持沙箱面板**：manifest schema 与 `ClassTabConfig` 补 `view?: string`（此前 zod strip 会让声明式 `view` 静默丢弃，表现为「Tab 按钮可点、面板渲染为 null」）。

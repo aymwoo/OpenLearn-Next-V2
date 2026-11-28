@@ -31,6 +31,9 @@
     "assignment.submission.actions",
     "assignment.submission.preview",
     "class.batch.action",
+    "class.card.badge",
+    "class.create.source",
+    "class.list.batch.action",
     "class.list.toolbar.action",
     "class.tab",
     "classroom.active_segment.main",
@@ -137,10 +140,15 @@
     "student.quick_actions.action",
     "student.quick_actions.fab",
     "student.quick_actions.item",
+    "student.roster.filter",
+    "student.roster.summary",
     "student.row.action",
+    "student.row.badge",
     "student.row.panel",
+    "student.row.tab",
     "student.segment.badge",
     "student.segment.gate_fallback",
+    "student.settings.addon",
     "student.view",
     "teacher.dashboard.widget",
     "teacher.panel",
@@ -182,5 +190,5 @@
     "anchor:whiteboard-toolbar:presentation",
     "anchor:whiteboard-toolbar:rollcall"
   ],
-  "total": 169
+  "total": 177
 }

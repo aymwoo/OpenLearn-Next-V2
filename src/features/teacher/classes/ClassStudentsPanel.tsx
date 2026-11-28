@@ -28,8 +28,10 @@ import { parseCSV } from '../../../utils/pluginParsers.js';
 import { toClassRosterSummary, toStudentRosterSummary } from './rosterProjection';
 import type { ClassType, StudentType, StudentProgressType, Lesson } from '../../../types/app';
 
-export type RosterTagFilter = 'all' | 'Academic' | 'Behavioral' | 'General' | 'SpecialCare';
-export type StudentActiveTab = 'progress' | 'settings' | 'notes';
+// IKYOXD：值域拓宽为开放字符串 —— 插件可贡献自定义过滤维度（student.roster.filter）
+// 与自定义展开 Tab（student.row.tab，`plugin:{pluginId}/{extId}`），内建取值不变。
+export type RosterTagFilter = 'all' | 'Academic' | 'Behavioral' | 'General' | 'SpecialCare' | (string & {});
+export type StudentActiveTab = 'progress' | 'settings' | 'notes' | (string & {});
 
 export interface ClassStudentsPanelProps {
   cls: ClassType;
@@ -53,8 +55,8 @@ export interface ClassStudentsPanelProps {
   setExpandedStudentId: (v: string | null) => void;
   fetchStudentProgress: (id: string) => Promise<void>;
   studentProgressMap: Record<string, StudentProgressType[]>;
-  studentActiveTabs: Record<string, StudentActiveTab>;
-  setStudentActiveTabs: (updater: (prev: Record<string, StudentActiveTab>) => Record<string, StudentActiveTab>) => void;
+  studentActiveTabs: Record<string, string>;
+  setStudentActiveTabs: (updater: (prev: Record<string, string>) => Record<string, string>) => void;
   toggleStudentSelection: (id: string) => void;
   get30DayAverageWarning: (studentId: string, classId: string) => number | null;
   lessons: Lesson[];
@@ -65,6 +67,24 @@ export interface ClassStudentsPanelProps {
   fetchClassStudents: (id: string) => Promise<void>;
   fetchStudents: () => Promise<void>;
   parseCSV: typeof parseCSV;
+}
+
+/** 解析学生备忘分类（行内徽章与花名册分类过滤共用同一口径）：JSON `{category}` 或纯文本回退 General；无有效备忘为 null。 */
+function resolveNoteCategory(st: StudentType): string | null {
+  if (!st.private_notes || st.private_notes === '<br>' || st.private_notes.trim() === '') return null;
+  const val = st.private_notes.trim();
+  if (val.startsWith('{') && val.endsWith('}')) {
+    try {
+      const parsed = JSON.parse(val);
+      if (parsed.html && parsed.html !== '<br>' && parsed.html.trim() !== '') {
+        return parsed.category || 'General';
+      }
+      return null;
+    } catch {
+      return 'General';
+    }
+  }
+  return 'General';
 }
 
 export function ClassStudentsPanel({
@@ -421,6 +441,11 @@ export function ClassStudentsPanel({
       ) : (
         (() => {
           const filtered = cStudents.filter((st) => {
+            // IKYOXD 修复：备忘分类过滤此前从未生效（chips 只作选中态展示），
+            // 现按 resolveNoteCategory 口径真正收敛列表；'all' 不过滤。
+            if (rosterTagFilter !== 'all' && resolveNoteCategory(st) !== rosterTagFilter) {
+              return false;
+            }
             if (!rosterSearchQuery) return true;
             const q = rosterSearchQuery.toLowerCase();
             return (
@@ -516,6 +541,16 @@ export function ClassStudentsPanel({
                 >
                   {lang === 'zh' ? '特别关注' : 'Care'}
                 </button>
+                {/* 插件筛选维度扩展（按分组 / 标签 / 健康档案过滤）。students 经白名单投影。 */}
+                <ExtensionPointRenderer
+                  slot="student.roster.filter"
+                  slotProps={{
+                    students: cStudents.map(toStudentRosterSummary),
+                    rosterTagFilter,
+                    setRosterTagFilter,
+                    lang,
+                  }}
+                />
               </div>
 
               {filtered.length === 0 ? (
@@ -653,26 +688,7 @@ export function ClassStudentsPanel({
                                     </button>
                                   )}
                                   {(() => {
-                                    let noteCategory: string | null = null;
-                                    if (
-                                      st.private_notes &&
-                                      st.private_notes !== '<br>' &&
-                                      st.private_notes.trim() !== ''
-                                    ) {
-                                      const val = st.private_notes.trim();
-                                      if (val.startsWith('{') && val.endsWith('}')) {
-                                        try {
-                                          const parsed = JSON.parse(val);
-                                          if (parsed.html && parsed.html !== '<br>' && parsed.html.trim() !== '') {
-                                            noteCategory = parsed.category || 'General';
-                                          }
-                                        } catch (e) {
-                                          noteCategory = 'General';
-                                        }
-                                      } else {
-                                        noteCategory = 'General';
-                                      }
-                                    }
+                                    const noteCategory = resolveNoteCategory(st);
                                     if (!noteCategory) return null;
                                     let label = lang === 'zh' ? '备忘' : 'Dossier';
                                     let style = 'bg-emerald-50 text-emerald-700 border-emerald-150';
@@ -717,6 +733,11 @@ export function ClassStudentsPanel({
                                     }
                                     return null;
                                   })()}
+                                  {/* 插件学生徽章扩展（素养徽章 / 健康档案标识）。student 经白名单投影。 */}
+                                  <ExtensionPointRenderer
+                                    slot="student.row.badge"
+                                    slotProps={{ student: toStudentRosterSummary(st), classId: cls.id, lang }}
+                                  />
                                 </div>
                                 {st.email && <span className="text-xs text-gray-400">{st.email}</span>}
                               </div>
@@ -809,6 +830,19 @@ export function ClassStudentsPanel({
                                   <FileText size={10} />
                                   <span>{lang === 'zh' ? '私有备忘' : 'Private Notes'}</span>
                                 </button>
+                                {/* 插件扩展 Tab（德育档案 / 心理健康问卷等；按钮由扩展点元数据渲染，面板由下方 panel 形态渲染） */}
+                                <ExtensionPointRenderer
+                                  slot="student.row.tab"
+                                  slotProps={{
+                                    renderType: 'button',
+                                    studentId: st.id,
+                                    classId: cls.id,
+                                    lang,
+                                    studentActiveTab: stActiveTab,
+                                    setStudentActiveTab: (tab: string) =>
+                                      setStudentActiveTabs((prev) => ({ ...prev, [st.id]: tab })),
+                                  }}
+                                />
                               </div>
 
                               {stActiveTab === 'settings' ? (
@@ -1089,6 +1123,18 @@ export function ClassStudentsPanel({
                                       {lang === 'zh' ? '分配' : 'Assign'}
                                     </button>
                                   </div>
+                                  {/* 插件设置项附加扩展（分组归属 / 座位号 / 奖惩积分）。student 经白名单投影。 */}
+                                  <ExtensionPointRenderer
+                                    slot="student.settings.addon"
+                                    slotProps={{
+                                      student: toStudentRosterSummary(st),
+                                      classId: cls.id,
+                                      lang,
+                                      onRefresh: async () => {
+                                        await Promise.all([fetchClassStudents(cls.id), fetchStudents()]);
+                                      },
+                                    }}
+                                  />
                                 </div>
                               ) : stActiveTab === 'notes' ? (
                                 <div className="mt-1" onClick={(e) => e.stopPropagation()}>
@@ -1124,6 +1170,21 @@ export function ClassStudentsPanel({
                                     }}
                                   />
                                 </div>
+                              ) : stActiveTab.startsWith('plugin:') ? (
+                                /* 插件扩展 Tab 面板（德育档案 / 心理健康问卷等）。student 经白名单投影。 */
+                                <div onClick={(e) => e.stopPropagation()}>
+                                  <ExtensionPointRenderer
+                                    slot="student.row.tab"
+                                    slotProps={{
+                                      renderType: 'panel',
+                                      studentId: st.id,
+                                      classId: cls.id,
+                                      student: toStudentRosterSummary(st),
+                                      lang,
+                                      studentActiveTab: stActiveTab,
+                                    }}
+                                  />
+                                </div>
                               ) : null}
                               {/* 插件扩展卡片（多维评价/知识图谱雷达等）：所有展开 Tab 下可见 */}
                               <div onClick={(e) => e.stopPropagation()}>
@@ -1132,7 +1193,7 @@ export function ClassStudentsPanel({
                                   slotProps={{ studentId: st.id, studentName: st.name, classId: cls.id, lang }}
                                 />
                               </div>
-                              {stActiveTab !== 'notes' && (
+                              {!stActiveTab.startsWith('plugin:') && stActiveTab !== 'notes' && (
                                 <div className="space-y-2" onClick={(e) => e.stopPropagation()}>
                                   {progress.length === 0 ? (
                                     <div className="text-xs text-gray-500 italic">
@@ -1231,6 +1292,16 @@ export function ClassStudentsPanel({
                       );
                     })}
                   </div>
+                  {/* 插件花名册统计区扩展（出勤率 / 小组分布）。students 经白名单投影。 */}
+                  <ExtensionPointRenderer
+                    slot="student.roster.summary"
+                    slotProps={{
+                      classId: cls.id,
+                      cls: toClassRosterSummary(cls),
+                      students: cStudents.map(toStudentRosterSummary),
+                      lang,
+                    }}
+                  />
                 </>
               )}
             </div>

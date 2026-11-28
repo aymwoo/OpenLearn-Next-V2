@@ -4,7 +4,7 @@
  * 由 packages/plugin-sdk/generate-dts.mts 从 packages/core/ 源码抽取。
  * 手写契约请改 openlearn.d.ts —— 本文件会在 build 时被覆盖。
  *
- * 覆盖符号：305 个（入口导出但手写 d.ts 未声明的 305 项及其类型引用闭包）
+ * 覆盖符号：313 个（入口导出但手写 d.ts 未声明的 313 项及其类型引用闭包）
  */
 
 /** @see packages/core/analytics-engine/types.ts */
@@ -320,6 +320,32 @@ type CapabilityRole = 'Teacher' | 'Student' | 'Plugin' | 'AI' | 'Observer' | 'Sy
 /** @see packages/core/plugin-host/contribution-registry.ts */
 /** A contribution to the class.batch.action slot. */
 interface ClassBatchActionConfig {
+    id: string;
+    label: string;
+    icon?: string;
+    commandType?: string;
+}
+
+/** @see packages/core/plugin-host/contribution-registry.ts */
+/** A contribution to the class.card.badge slot（班级行头徽章，Issue IKYOXD）。 */
+interface ClassCardBadgeConfig {
+    id: string;
+    label: string;
+    icon?: string;
+}
+
+/** @see packages/core/plugin-host/contribution-registry.ts */
+/** A contribution to the class.create.source slot（建班来源扩展，Issue IKYOXD）。 */
+interface ClassCreateSourceConfig {
+    id: string;
+    label: string;
+    icon?: string;
+    commandType?: string;
+}
+
+/** @see packages/core/plugin-host/contribution-registry.ts */
+/** A contribution to the class.list.batch.action slot（班级批量操作栏，Issue IKYOXD）。 */
+interface ClassListBatchActionConfig {
     id: string;
     label: string;
     icon?: string;
@@ -2338,6 +2364,22 @@ interface StudentQuickActionsItemConfig {
 }
 
 /** @see packages/core/plugin-host/contribution-registry.ts */
+/** A contribution to the student.roster.filter slot（花名册筛选维度，Issue IKYOXD）。 */
+interface StudentRosterFilterConfig {
+    id: string;
+    title: string;
+    icon?: string;
+}
+
+/** @see packages/core/plugin-host/contribution-registry.ts */
+/** A contribution to the student.roster.summary slot（花名册底部统计区，Issue IKYOXD）。 */
+interface StudentRosterSummaryConfig {
+    id: string;
+    title: string;
+    icon?: string;
+}
+
+/** @see packages/core/plugin-host/contribution-registry.ts */
 /** A contribution to the student.row.action slot（学生行内快捷操作，Issue IKYMS2）。 */
 interface StudentRowActionConfig {
     id: string;
@@ -2347,11 +2389,30 @@ interface StudentRowActionConfig {
 }
 
 /** @see packages/core/plugin-host/contribution-registry.ts */
+/** A contribution to the student.row.badge slot（学生行徽章，Issue IKYOXD）。 */
+interface StudentRowBadgeConfig {
+    id: string;
+    label: string;
+    icon?: string;
+}
+
+/** @see packages/core/plugin-host/contribution-registry.ts */
 /** A contribution to the student.row.panel slot. */
 interface StudentRowPanelConfig {
     id: string;
     title: string;
     icon?: string;
+}
+
+/** @see packages/core/plugin-host/contribution-registry.ts */
+/** A contribution to the student.row.tab slot（学生展开区附加 Tab，button/panel 双形态，Issue IKYOXD）。 */
+interface StudentRowTabConfig {
+    id: string;
+    label: string;
+    icon?: string;
+    position?: number;
+    /** 可视沙箱 HTML 相对路径；声明后面板经 PluginSandboxIframeView 渲染。 */
+    view?: string;
 }
 
 /** @see packages/core/plugin-host/contribution-registry.ts */
@@ -2367,6 +2428,14 @@ interface StudentSegmentBadgeConfig {
 interface StudentSegmentGateFallbackConfig {
     id: string;
     label: string;
+    icon?: string;
+}
+
+/** @see packages/core/plugin-host/contribution-registry.ts */
+/** A contribution to the student.settings.addon slot（教学控制 Tab 设置项附加，Issue IKYOXD）。 */
+interface StudentSettingsAddonConfig {
+    id: string;
+    title: string;
     icon?: string;
 }
 
@@ -2735,6 +2804,9 @@ export type {
   CapabilityResult,
   CapabilityRole,
   ClassBatchActionConfig,
+  ClassCardBadgeConfig,
+  ClassCreateSourceConfig,
+  ClassListBatchActionConfig,
   ClassListToolbarActionConfig,
   ClassTabConfig,
   ClassroomActiveSegmentMainConfig,
@@ -2917,10 +2989,15 @@ export type {
   StudentQuickActionsActionConfig,
   StudentQuickActionsFabConfig,
   StudentQuickActionsItemConfig,
+  StudentRosterFilterConfig,
+  StudentRosterSummaryConfig,
   StudentRowActionConfig,
+  StudentRowBadgeConfig,
   StudentRowPanelConfig,
+  StudentRowTabConfig,
   StudentSegmentBadgeConfig,
   StudentSegmentGateFallbackConfig,
+  StudentSettingsAddonConfig,
   StudentStatus,
   StudentViewConfig,
   SubmissionKind,

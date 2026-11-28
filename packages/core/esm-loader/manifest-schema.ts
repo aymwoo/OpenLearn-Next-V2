@@ -321,6 +321,59 @@ const studentRowActionSchema = z.object({
   commandType: z.string().optional(),
 });
 
+const studentRowBadgeSchema = z.object({
+  id: z.string().min(1),
+  label: z.string().min(1),
+  icon: z.string().optional(),
+});
+
+const classListBatchActionSchema = z.object({
+  id: z.string().min(1),
+  label: z.string().min(1),
+  icon: z.string().optional(),
+  commandType: z.string().optional(),
+});
+
+const classCardBadgeSchema = z.object({
+  id: z.string().min(1),
+  label: z.string().min(1),
+  icon: z.string().optional(),
+});
+
+const studentSettingsAddonSchema = z.object({
+  id: z.string().min(1),
+  title: z.string().min(1),
+  icon: z.string().optional(),
+});
+
+const studentRowTabSchema = z.object({
+  id: z.string().min(1),
+  label: z.string().min(1),
+  icon: z.string().optional(),
+  position: z.number().int().optional(),
+  // 同 classTabSchema：zod strip 语义下必须显式声明 view，声明式沙箱面板才能保留。
+  view: z.string().min(1).optional(),
+});
+
+const studentRosterFilterSchema = z.object({
+  id: z.string().min(1),
+  title: z.string().min(1),
+  icon: z.string().optional(),
+});
+
+const studentRosterSummarySchema = z.object({
+  id: z.string().min(1),
+  title: z.string().min(1),
+  icon: z.string().optional(),
+});
+
+const classCreateSourceSchema = z.object({
+  id: z.string().min(1),
+  label: z.string().min(1),
+  icon: z.string().optional(),
+  commandType: z.string().optional(),
+});
+
 const studentRowPanelSchema = z.object({
   id: z.string().min(1),
   title: z.string().min(1),
@@ -990,7 +1043,15 @@ const contributesSchema = z
     'class.list.toolbar.action': z.array(classListToolbarActionSchema).optional(),
     'student.enroll.source': z.array(studentEnrollSourceSchema).optional(),
     'student.row.action': z.array(studentRowActionSchema).optional(),
+    'student.row.badge': z.array(studentRowBadgeSchema).optional(),
+    'student.row.tab': z.array(studentRowTabSchema).optional(),
+    'student.settings.addon': z.array(studentSettingsAddonSchema).optional(),
+    'student.roster.filter': z.array(studentRosterFilterSchema).optional(),
+    'student.roster.summary': z.array(studentRosterSummarySchema).optional(),
     'student.row.panel': z.array(studentRowPanelSchema).optional(),
+    'class.list.batch.action': z.array(classListBatchActionSchema).optional(),
+    'class.card.badge': z.array(classCardBadgeSchema).optional(),
+    'class.create.source': z.array(classCreateSourceSchema).optional(),
     'editor.header.action': z.array(editorHeaderActionSchema).optional(),
     'classroom.post_class.widget': z.array(postClassWidgetSchema).optional(),
     'courseware.viewer.toolbar': z.array(coursewareViewerToolbarSchema).optional(),

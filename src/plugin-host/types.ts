@@ -173,6 +173,15 @@ export type ExtensionSlot =
   | 'class.list.toolbar.action' // 班级列表顶部工具栏扩展（学籍系统一键同步 / 年级模板批量建班）
   | 'student.enroll.source' // 花名册学生来源扩展（二维码自助报到 / 名单 OCR / 第三方学籍同步）
   | 'student.row.action' // 学生行内快捷操作扩展（单独转班 / 家校通知 / 加入分组）
+  // ── 班级与学生管理域扩展槽位 P1/P2 补全（Issue IKYOXD）──
+  | 'student.row.badge' // 学生行徽章扩展（素养徽章 / 健康档案标识，与内置备忘、成绩预警徽章并排）
+  | 'class.list.batch.action' // 班级批量操作栏扩展（批量归档 / 批量推送电子班牌，与删除/导出/设密码/排课并排）
+  | 'class.card.badge' // 班级行头徽章扩展（电子班牌绑定状态 / 第三方班级编号）
+  | 'student.settings.addon' // 学生「教学控制」Tab 设置项附加扩展（分组归属 / 座位号 / 奖惩积分）
+  | 'student.row.tab' // 学生展开区附加 Tab（德育档案 / 心理健康问卷；button/panel 双形态，同 class.tab 模式）
+  | 'student.roster.filter' // 花名册筛选维度扩展（按分组 / 标签 / 健康档案过滤，与备忘分类 chips 并排）
+  | 'student.roster.summary' // 花名册底部统计区扩展（出勤率 / 小组分布）
+  | 'class.create.source' // 建班来源扩展（教务系统导入班级 / 年级模板建班）
   // ── 备课与课后闭环扩展槽位 ──
   | 'editor.header.action' // 备课编辑器头部动作扩展（导入教案库 / AI 合规审查 / 导出 PDF）
   | 'classroom.post_class.widget' // 课后结课视图扩展卡片（分层作业 / 勋章仪式 / 专注度报告）
@@ -1764,6 +1773,89 @@ export interface StudentRowActionSlotProps {
   classId: string;
   lang?: 'zh' | 'en';
   /** 宿主花名册重载入口：操作改变了学生归属/属性后调用。 */
+  onRefresh?: () => void | Promise<void>;
+  dispatcher?: IHostActionDispatcher;
+}
+
+/** Props passed to student.row.badge extensions（学生行徽章，与内置备忘/成绩预警徽章并排） */
+export interface StudentRowBadgeSlotProps {
+  /** 目标学生（白名单投影） */
+  student: StudentRosterSummary;
+  classId: string;
+  lang?: 'zh' | 'en';
+}
+
+/** Props passed to class.list.batch.action extensions（班级批量操作栏；实体为白名单投影） */
+export interface ClassListBatchActionSlotProps {
+  /** 已选班级 id 数组 */
+  selectedClassIds: string[];
+  /** 已选班级（白名单投影） */
+  selectedClasses: ClassRosterSummary[];
+  /** 未选中任何班级时为 true（与内置批量按钮同一禁用语义） */
+  disabled: boolean;
+  lang?: 'zh' | 'en';
+  /** 宿主班级列表重载入口：批量写操作完成后调用。 */
+  onRefresh?: () => void | Promise<void>;
+  dispatcher?: IHostActionDispatcher;
+}
+
+/** Props passed to class.card.badge extensions（班级行头徽章，统计区旁） */
+export interface ClassCardBadgeSlotProps {
+  /** 目标班级（白名单投影） */
+  cls: ClassRosterSummary;
+  lang?: 'zh' | 'en';
+}
+
+/** Props passed to student.settings.addon extensions（教学控制 Tab 设置项附加） */
+export interface StudentSettingsAddonSlotProps {
+  /** 目标学生（白名单投影） */
+  student: StudentRosterSummary;
+  classId: string;
+  lang?: 'zh' | 'en';
+  /** 宿主花名册重载入口：附加设置写操作完成后调用。 */
+  onRefresh?: () => void | Promise<void>;
+  dispatcher?: IHostActionDispatcher;
+}
+
+/** Props passed to student.row.tab extensions（button/panel 双形态，同 class.tab 模式） */
+export interface StudentRowTabSlotProps {
+  renderType: 'button' | 'panel';
+  studentId: string;
+  classId: string;
+  lang?: 'zh' | 'en';
+  /** button 形态：当前激活 tab（内建 progress/settings/notes 或 `plugin:{pluginId}/{extId}`） */
+  studentActiveTab?: string;
+  /** button 形态：切换激活 tab */
+  setStudentActiveTab?: (tab: string) => void;
+  /** panel 形态：目标学生（白名单投影） */
+  student?: StudentRosterSummary;
+}
+
+/** Props passed to student.roster.filter extensions（花名册筛选维度扩展，与备忘分类 chips 并排） */
+export interface StudentRosterFilterSlotProps {
+  /** 本班学生（白名单投影） */
+  students: StudentRosterSummary[];
+  /** 当前激活过滤键（内建 'all'/'General'/'Academic'/'Behavioral'/'SpecialCare' 或插件自定义键） */
+  rosterTagFilter: string;
+  /** 切换过滤键；插件自定义键需自负责其过滤语义（宿主按同名键收敛） */
+  setRosterTagFilter: (v: string) => void;
+  lang?: 'zh' | 'en';
+}
+
+/** Props passed to student.roster.summary extensions（花名册底部统计区） */
+export interface StudentRosterSummarySlotProps {
+  classId: string;
+  /** 目标班级（白名单投影） */
+  cls: ClassRosterSummary;
+  /** 本班学生（白名单投影） */
+  students: StudentRosterSummary[];
+  lang?: 'zh' | 'en';
+}
+
+/** Props passed to class.create.source extensions（建班来源扩展，创建班级按钮旁） */
+export interface ClassCreateSourceSlotProps {
+  lang?: 'zh' | 'en';
+  /** 宿主班级列表重载入口：插件建班后调用。 */
   onRefresh?: () => void | Promise<void>;
   dispatcher?: IHostActionDispatcher;
 }
