@@ -384,13 +384,19 @@ export class HostActionDispatcher implements IHostActionDispatcher {
       return result;
     });
 
-    // 6. host:navigate built-in handler
+    // 6. host:navigate built-in handler（Issue IKYP37 诚实化：不再无条件成功）
     this.registerHandler('host:navigate', (envelope) => {
       const payload = envelope.action.payload as HostNavigatePayload;
+      if (!payload || typeof payload.tab !== 'string' || payload.tab === '') {
+        const missing: HostNavigateResult = { navigated: false, reason: 'tab-missing' };
+        return missing;
+      }
       try {
         appStore.getState().setTeacherTab(payload.tab);
       } catch (err) {
         console.warn('[HostActionDispatcher] Failed to navigate:', err);
+        const failed: HostNavigateResult = { navigated: false, reason: 'navigate-failed' };
+        return failed;
       }
       const result: HostNavigateResult = { navigated: true };
       return result;

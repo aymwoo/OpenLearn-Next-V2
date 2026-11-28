@@ -364,3 +364,33 @@ describe('HostActionDispatcher Integration with PluginHost & Slots', () => {
     expect(typeof capturedProps.dispatcher.dispatch).toBe('function');
   });
 });
+
+describe('host:navigate contract honesty (Issue IKYP37)', () => {
+  let dispatcher: HostActionDispatcher;
+
+  beforeEach(() => {
+    dispatcher = new HostActionDispatcher();
+  });
+
+  it('returns navigated:false + tab-missing when tab is empty/missing', async () => {
+    const result = await dispatcher.dispatch({ type: 'host:navigate', payload: { tab: '' } });
+    expect(result).toEqual({ navigated: false, reason: 'tab-missing' });
+  });
+
+  it('returns navigated:false + navigate-failed when setTeacherTab throws', async () => {
+    const spy = vi.spyOn(appStore.getState(), 'setTeacherTab').mockImplementation(() => {
+      throw new Error('boom');
+    });
+    try {
+      const result = await dispatcher.dispatch({ type: 'host:navigate', payload: { tab: 'classes' } });
+      expect(result).toEqual({ navigated: false, reason: 'navigate-failed' });
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('returns navigated:true for a valid tab', async () => {
+    const result = await dispatcher.dispatch({ type: 'host:navigate', payload: { tab: 'classes' } });
+    expect(result).toEqual({ navigated: true });
+  });
+});

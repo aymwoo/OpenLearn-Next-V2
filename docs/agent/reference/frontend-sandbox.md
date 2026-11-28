@@ -728,7 +728,7 @@ ExtensionErrorBoundary key=`${pluginId}/${id}`
 | `host:modal:open` | 受控弹窗，返回 `{actionId?, closed}` |
 | `host:modal:close` | 关闭 |
 | `host:toast` | `type \|\| 'info'`，返回 `{delivered:true}` |
-| `host:navigate` | `setTeacherTab`，返回 `{navigated:true}` |
+| `host:navigate` | `setTeacherTab(tab)`；失败返回 `{navigated:false, reason}`。classes 域（`tab:'classes'` + `params.classId/studentId/studentSubTab` + `subTab`）由 `ClassesView` 权威处理器逐级定位并返回 `located` 明细（Issue IKYP37） |
 
 其余 `CustomHostAction<TType, TPayload>` 任意 type 也可派发。
 ```
