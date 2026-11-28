@@ -300,7 +300,7 @@ export type AnyExtensionSlot = ExtensionSlot | AnchorSlot | (string & {});
 
 实测口径：遍历 `src/**/*.tsx`（排除 `__tests__`），解析 `<ExtensionPointRenderer ... slot="…">`。
 
-- 生产调用点上的**固定名槽位值随版本增长**（当前联合类型 165 个成员，以 `docs/agent/contracts/slots.json` 为准；`command_palette.item` / `quick_insert.item` / `ai.prompt.template` / `ai.skill.provider` 等是**数据型或服务端消费**槽位，不经过渲染器，契约见 §12.7。消费率口径见文末统计节，复核命令见下）；
+- 生产调用点上的**固定名槽位值随版本增长**（当前联合类型 177 个成员，以 `docs/agent/contracts/slots.json` 为准；`command_palette.item` / `quick_insert.item` / `ai.prompt.template` / `ai.skill.provider` 等是**数据型或服务端消费**槽位，不经过渲染器，契约见 §12.7。消费率口径见文末统计节，复核命令见下）；
 - 另有 **8 个** `anchor:*` 锚点槽位（见 §1.1 附注）。
 
 | 槽位                                    | 渲染调用点（`src/` 下）                                                                                                                 | 调用点传入的 `slotProps`                                                                                                                                                                                                                                  |
@@ -526,7 +526,7 @@ export type AnyExtensionSlot = ExtensionSlot | AnchorSlot | (string & {});
 
 ### 1.1.1 槽位容器语义分类（layoutVariant）
 
-平台将扩展槽位（当前 165 个，以 `docs/agent/contracts/slots.json` 为准）按照挂载上下文的容器模型划分为 4 种语义类型：
+平台将扩展槽位（当前 177 个，以 `docs/agent/contracts/slots.json` 为准）按照挂载上下文的容器模型划分为 4 种语义类型：
 
 | 容器语义分类 (`layoutVariant`)                           | 核心特征与宿主环境                                                                                                    | 典型槽位                                                                                          | 插件视图样式规范与禁止项                                                                                                                                                                                                                                                                                                                                                                           |
 | :------------------------------------------------------- | :-------------------------------------------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------------ | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -1719,14 +1719,14 @@ ctx.ui.registerExtensionPoint('xuean.activity.student', {
 
 | 指标                                                           | 数值                                              |
 | -------------------------------------------------------------- | ------------------------------------------------- |
-| `ExtensionSlot` 联合类型成员                                   | **165**                                           |
-| 生产调用点（`src/**/*.tsx`，排除 `__tests__`）上的固定名槽位值 | **157**（`99` / `98` / `116` / `121` 为历史记录） |
-| 其中属于 `ExtensionSlot` 联合类型                              | **157**                                           |
+| `ExtensionSlot` 联合类型成员                                   | **177**                                           |
+| 生产调用点（`src/**/*.tsx`，排除 `__tests__`）上的固定名槽位值 | **169**（`99` / `98` / `116` / `121` 为历史记录） |
+| 其中属于 `ExtensionSlot` 联合类型                              | **169**                                           |
 | 不在联合类型内但有渲染器的字符串槽位                           | **0**                                             |
 | 已挂载的 `anchor:*` 锚点槽位                                   | **8**                                             |
 | 无渲染器的 `ExtensionSlot` 成员（数据型 / 服务端消费）         | **7**（见 §12.7、§11.6、§12.9）                   |
 | `ExtensionPointRenderer` 唯一槽位值总数（固定名 + 锚点）       | 随版本增长（含 8 个 `anchor:*` 锚点）             |
-| 在本页有使用说明的槽位（含 props 表 / 专项小节 / 代码示例）    | **165 / 165**                                     |
+| 在本页有使用说明的槽位（含 props 表 / 专项小节 / 代码示例）    | **177 / 177**                                     |
 
 > 复核命令：`python3 audit-tools/extract_slots.py --repo .`（槽位清单真值）与 `python3 audit-tools/slots_coverage.py --repo .`（文档覆盖分级）。两者均已接入 `bash audit-tools/run.sh`：**L0（文档中完全不存在）计为 drift 并阻断门禁**，L1/L2 仅作提示输出。
 >
@@ -1743,3 +1743,4 @@ ctx.ui.registerExtensionPoint('xuean.activity.student', {
 > 2026-11-27 更新（续）：新增 `classroom.outline.page_action`（内置白板页大纲的行级操作，`page` / `pageIndex` / `isActive` / `segment` / `lessonId` / `lang`），`ExtensionSlot` 成员数增至 **163**（含 8 个锚点共 **171**）；同批为学案学生壳补挂 `student.segment.badge`，并把 `rolesAllowed: ['admin']` 接入管理员会话。
 > 2026-11-28 更新：新增 `classroom.prep.addon`（内置白板 / 学案备课面的追加扩展区，不替换编辑器）与 `classroom.outline.activity_action`（学案活动大纲行级操作），`ExtensionSlot` 成员数增至 **165**（含 8 个锚点共 **172**）。学案活动大纲改为在当前学案环节列出课时级活动并逐行渲染操作槽。
 > 2026-11-28 更新（Issue IKYMRY）：机房域新增 `computer_lab.seating.save_hook`（排座保存前声明式校验钩子，`commandType` 必填，`result.ok === false` 否决保存），`ExtensionSlot` 成员数增至 **169**（含 8 个锚点共 **177**；含同批 !39（Issue IKYMS2）合入的 3 个班级域槽位）。同批：`computer_lab.seat.overlay` 放开到空座位渲染（`seat: null`）；`computer_lab.unassigned.item` / `computer_lab.seating.sidebar` / `classroom.seating.seat_badge` 补传 `lang`；roster-service 新增平台事件 `lab.created` / `lab.updated` / `lab.deleted` / `seat.saved` / `seat.cleared`。详见 §11.3。
+> 2026-11-28 复核（`a8e5440`）：并入 !40 / !44 / !45 后，`ExtensionSlot` 成员数 **177**、渲染调用点 **169**（含 8 个锚点共 **185**）；此前 165 / 157 是 !37 合并时的口径。
