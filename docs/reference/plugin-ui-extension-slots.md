@@ -195,8 +195,10 @@ export type ExtensionSlot =
   | 'classroom.active_segment.main'
   | 'classroom.active_segment.student_main'
   | 'classroom.prep'
+  | 'classroom.prep.addon'
   | 'classroom.outline'
   | 'classroom.outline.page_action'
+  | 'classroom.outline.activity_action'
   | 'timetable.import.source'
   | 'timetable.entry.action'
   // ── 全局壳层后台任务 ──
@@ -283,7 +285,7 @@ export type AnyExtensionSlot = ExtensionSlot | AnchorSlot | (string & {});
 
 实测口径：遍历 `src/**/*.tsx`（排除 `__tests__`），解析 `<ExtensionPointRenderer ... slot="…">`。
 
-- 生产调用点上的**固定名槽位值随版本增长**（当前联合类型 163 个成员，以 `docs/agent/contracts/slots.json` 为准；`command_palette.item` / `quick_insert.item` / `ai.prompt.template` / `ai.skill.provider` 等是**数据型或服务端消费**槽位，不经过渲染器，契约见 §12.7。消费率口径见文末统计节，复核命令见下）；
+- 生产调用点上的**固定名槽位值随版本增长**（当前联合类型 165 个成员，以 `docs/agent/contracts/slots.json` 为准；`command_palette.item` / `quick_insert.item` / `ai.prompt.template` / `ai.skill.provider` 等是**数据型或服务端消费**槽位，不经过渲染器，契约见 §12.7。消费率口径见文末统计节，复核命令见下）；
 - 另有 **8 个** `anchor:*` 锚点槽位（见 §1.1 附注）。
 
 | 槽位                                    | 渲染调用点（`src/` 下）                                                                                                                 | 调用点传入的 `slotProps`                                                                                                        |
@@ -430,9 +432,11 @@ export type AnyExtensionSlot = ExtensionSlot | AnchorSlot | (string & {});
 | `student.academic_year.metric_card`     | `src/features/student/StudentAcademicYearComparison.tsx`                                                                                | `{ studentId, comparisonData, selectedYears, lang }`                                                                            |
 | `classroom.active_segment.main`         | `src/components/LiveClassroomView.tsx`（活跃环节主工作区，含兜底分支）                                                                  | `{ segment, lessonId, classId, lang, onRefresh, flow }`                                                                         |
 | `classroom.active_segment.student_main` | `src/features/student/StudentLessonView.tsx`（学生端对称工作区，按 segment.type 路由）                                                  | `{ segment, lessonId, classId, lang, flow, studentId, studentName }`                                                            |
-| `classroom.prep`                        | `src/features/classroom/mode-pack/ModePackPrepShell.tsx`（**仅第三方模式包**备课面；内置白板/学案编辑器不经过该槽）                     | `{ packId, prepContributionId, segment, lessonId, lang }`                                                                       |
+| `classroom.prep`                        | `src/features/classroom/mode-pack/ModePackPrepShell.tsx`（**仅第三方模式包**整块备课面；内置编辑器改用 `classroom.prep.addon`）         | `{ packId, prepContributionId, segment, lessonId, lang }`                                                                       |
+| `classroom.prep.addon`                  | `src/features/teacher/LessonEditorView.tsx` / `src/features/teacher/xuean/XueanEditor.tsx`（内置备课面顶栏追加）                        | `{ packId, prepContributionId, segment, lessonId, isReadOnly?, lang }`                                                          |
 | `classroom.outline`                     | `src/features/classroom/ClassroomTimelineSidebar.tsx`（第三方模式包课中大纲**替换**；内置白板页列表 / 学案活动大纲**追加**渲染）        | `{ packId, outlineContributionId, segment, lessonId, lang }`                                                                    |
 | `classroom.outline.page_action`         | `src/features/classroom/ClassroomTimelineSidebar.tsx`（白板页大纲**每行**页级操作，点击不切页）                                         | `{ page, pageIndex, isActive, segment, lessonId, lang }`                                                                        |
+| `classroom.outline.activity_action`     | `src/features/classroom/ClassroomTimelineSidebar.tsx`（学案活动大纲**每行**操作）                                                       | `{ activity, activityIndex, segment, lessonId, lang }`                                                                          |
 | `timetable.import.source`               | `src/components/timetable/sub-views/TimetableOcrView.tsx`                                                                               | `{ lang, onImportEntries }`                                                                                                     |
 | `timetable.entry.action`                | `src/components/timetable/sub-views/TimetableCalendarView.tsx`（周历卡片 + 列表行两处）                                                 | `{ schedule, lang, onEdit }`                                                                                                    |
 | `header.async_task.item`                | `src/components/AppHeader.tsx`                                                                                                          | `{ lang, activeRole, teacherTab, setTeacherTab }`                                                                               |
@@ -494,7 +498,7 @@ export type AnyExtensionSlot = ExtensionSlot | AnchorSlot | (string & {});
 
 ### 1.1.1 槽位容器语义分类（layoutVariant）
 
-平台将扩展槽位（当前 163 个，以 `docs/agent/contracts/slots.json` 为准）按照挂载上下文的容器模型划分为 4 种语义类型：
+平台将扩展槽位（当前 165 个，以 `docs/agent/contracts/slots.json` 为准）按照挂载上下文的容器模型划分为 4 种语义类型：
 
 | 容器语义分类 (`layoutVariant`)                           | 核心特征与宿主环境                                                                                                    | 典型槽位                                                                                          | 插件视图样式规范与禁止项                                                                                                                                                                                                                                                                                                                                                                           |
 | :------------------------------------------------------- | :-------------------------------------------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------------ | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -1405,7 +1409,7 @@ export default function SandboxConfig({ segmentType, segment, readOnly, onPatch 
 
 > 不要把主工作区做成 `h-screen` 全屏——容器是受限高度的 `flex-grow` 区域。需要全屏就用 `ctx.ui.registerFullscreenRenderer`（§5）。
 
-**`classroom.prep` / `classroom.outline`** 是第三方 Mode Pack 的备课面与课中大纲槽位，按 `prepContributionId` / `outlineContributionId` 过滤贡献。宿主找不到匹配贡献时不会留白：备课面回退 `LessonEditorView`，大纲回退白板页面列表。
+**`classroom.prep` / `classroom.prep.addon` / `classroom.outline`**：`classroom.prep` 是第三方 Mode Pack 的**整块**备课面（替换），按 `prepContributionId` 过滤；内置白板 / 学案编辑器不替换自身，改用 `classroom.prep.addon` **追加**（`packId` 为 `whiteboard` / `xuean`，`prepContributionId` 为 `prep-whiteboard` / `prep-xuean`）。`classroom.outline` 是第三方 Mode Pack 的课中大纲（替换），内置白板页列表 / 学案活动大纲**追加**渲染；行级操作分别用 `classroom.outline.page_action`（白板页）与 `classroom.outline.activity_action`（学案活动）。宿主找不到匹配贡献时不会留白：备课面回退 `LessonEditorView`，大纲回退白板页面列表。
 
 **`timetable.import.source`** —— 课表「AI 识别导入」子页，识别按钮下方的外部导入区。`{ lang, onImportEntries }`。插件解析完 Excel/CSV/第三方教务 API 后调 `onImportEntries(entries)`，宿主把结果灌进识别结果表格交给教师审核——**插件不要自己写库**，统一走审核后导入。
 
@@ -1674,14 +1678,14 @@ ctx.ui.registerExtensionPoint('xuean.activity.student', {
 
 | 指标                                                           | 数值                                              |
 | -------------------------------------------------------------- | ------------------------------------------------- |
-| `ExtensionSlot` 联合类型成员                                   | **163**                                           |
-| 生产调用点（`src/**/*.tsx`，排除 `__tests__`）上的固定名槽位值 | **155**（`99` / `98` / `116` / `121` 为历史记录） |
-| 其中属于 `ExtensionSlot` 联合类型                              | **155**                                           |
+| `ExtensionSlot` 联合类型成员                                   | **165**                                           |
+| 生产调用点（`src/**/*.tsx`，排除 `__tests__`）上的固定名槽位值 | **157**（`99` / `98` / `116` / `121` 为历史记录） |
+| 其中属于 `ExtensionSlot` 联合类型                              | **157**                                           |
 | 不在联合类型内但有渲染器的字符串槽位                           | **0**                                             |
 | 已挂载的 `anchor:*` 锚点槽位                                   | **8**                                             |
 | 无渲染器的 `ExtensionSlot` 成员（数据型 / 服务端消费）         | **7**（见 §12.7、§11.6、§12.9）                   |
 | `ExtensionPointRenderer` 唯一槽位值总数（固定名 + 锚点）       | 随版本增长（含 8 个 `anchor:*` 锚点）             |
-| 在本页有使用说明的槽位（含 props 表 / 专项小节 / 代码示例）    | **163 / 163**                                     |
+| 在本页有使用说明的槽位（含 props 表 / 专项小节 / 代码示例）    | **165 / 165**                                     |
 
 > 复核命令：`python3 audit-tools/extract_slots.py --repo .`（槽位清单真值）与 `python3 audit-tools/slots_coverage.py --repo .`（文档覆盖分级）。两者均已接入 `bash audit-tools/run.sh`：**L0（文档中完全不存在）计为 drift 并阻断门禁**，L1/L2 仅作提示输出。
 >
@@ -1696,3 +1700,4 @@ ctx.ui.registerExtensionPoint('xuean.activity.student', {
 > 2026-11-25 更新：学案编排与学习过程新增 7 个槽位（`xuean.editor.toolbar`、`xuean.activity.card.action`、`xuean.activity.card.badge`、`xuean.activity.editor.footer`、`xuean.activity.student.addon`、`xuean.progress.summary`、`xuean.home.block`），并落地声明式题型 UI（`assessment.question_type`），`ExtensionSlot` 成员数增至 **161**（含 8 个锚点共 **169**），详见 §12.10 / §12.11。
 > 2026-11-27 更新：新增 `xuean.activity.teacher`（教师课中活动实时视图，按 `activityType` 分发），`ExtensionSlot` 成员数增至 **162**（含 8 个锚点共 **170**）。同批：`classroom.outline` 在内置白板页列表 / 学案活动大纲里改为**追加**渲染（此前仅第三方模式包消费）；`classroom.prep` 仍仅第三方模式包；`student.lesson.tool` 同时挂载到学案学生壳。
 > 2026-11-27 更新（续）：新增 `classroom.outline.page_action`（内置白板页大纲的行级操作，`page` / `pageIndex` / `isActive` / `segment` / `lessonId` / `lang`），`ExtensionSlot` 成员数增至 **163**（含 8 个锚点共 **171**）；同批为学案学生壳补挂 `student.segment.badge`，并把 `rolesAllowed: ['admin']` 接入管理员会话。
+> 2026-11-28 更新：新增 `classroom.prep.addon`（内置白板 / 学案备课面的追加扩展区，不替换编辑器）与 `classroom.outline.activity_action`（学案活动大纲行级操作），`ExtensionSlot` 成员数增至 **165**（含 8 个锚点共 **172**）。学案活动大纲改为在当前学案环节列出课时级活动并逐行渲染操作槽。

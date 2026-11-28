@@ -8,6 +8,8 @@ import { useOptionalAppData } from '../../../context/AppDataContext.js';
 import { useAppStore } from '../../../store/appStore';
 import { Loader2, Eye, Download, Upload, ArrowLeft } from 'lucide-react';
 import { exportXueanPackage, importXueanPackage } from '../../../services/lessonActivitiesService.js';
+import { ExtensionPointRenderer } from '../../../plugin-host/extension-point-renderer';
+import { XUEAN_MODE_PACK } from '../../classroom/mode-pack/xueanPack';
 
 const XueanActivitiesPanel = lazy(() =>
   import('./XueanActivitiesPanel').then((m) => ({ default: m.XueanActivitiesPanel })),
@@ -26,6 +28,11 @@ export function XueanEditor() {
   const lessons = appData?.lessons ?? [];
   const lessonTitle = lessons.find((l) => l.id === selectedLesson)?.title ?? '未选择课时';
   const lang = appData?.lang === 'en' ? 'en' : 'zh';
+  const activeSegmentId = (appData?.activeSegmentId as string | null | undefined) ?? null;
+  const activeSegment =
+    ((appData?.timelineSegments ?? []) as Array<{ id: string; title?: string; type?: string }>).find(
+      (seg) => seg.id === activeSegmentId,
+    ) ?? null;
 
   const courseEditingLessonId = useAppStore((s) => s.courseEditingLessonId);
   const setCourseEditingLessonId = useAppStore((s) => s.setCourseEditingLessonId);
@@ -123,6 +130,18 @@ export function XueanEditor() {
                   进度面板
                 </TabButton>
               </div>
+
+              {/* 内置学案备课面的追加扩展（不替换编辑器）：`classroom.prep` 只服务第三方 Mode Pack */}
+              <ExtensionPointRenderer
+                slot="classroom.prep.addon"
+                slotProps={{
+                  packId: 'xuean',
+                  prepContributionId: XUEAN_MODE_PACK.prepContributionId,
+                  segment: activeSegment,
+                  lessonId: selectedLesson || null,
+                  lang,
+                }}
+              />
 
               {/* 导出 / 导入 学案包 */}
               <button

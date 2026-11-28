@@ -1,4 +1,4 @@
-import React from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Clock,
   ChevronsUpDown,
@@ -18,6 +18,16 @@ import type { WhiteboardPageItem } from '../whiteboard/InteractiveWhiteboard';
 import { isModePacksEnabled } from './mode-pack/flags';
 import { resolveOutlineContribution } from './mode-pack/outlineContribution';
 import { useModePackCatalog } from './mode-pack/useModePackCatalog';
+import { getLessonActivities } from '../../services/lessonActivitiesService.js';
+
+/** 学案活动大纲行（只取渲染所需字段，避免把 config_json 等重字段传进插件指针） */
+type OutlineActivity = {
+  id: string;
+  title: string;
+  type: string;
+  order_index?: number;
+  required?: boolean | number;
+};
 
 export interface TimelineSegmentItem {
   id: string;
@@ -84,6 +94,48 @@ export function ClassroomTimelineSidebar({
 }: ClassroomTimelineSidebarProps) {
   const modePacks = useModePackCatalog();
   const pluginHost = useOptionalPluginHost();
+
+  // 学案活动大纲：活动是**课时级**数据（lesson_activities 无 segment_id），
+  // 只在当前正在演示的学案环节里列出，避免每个环节重复同一份活动列表。
+  const [outlineActivities, setOutlineActivities] = useState<OutlineActivity[]>([]);
+  const [activitiesLoading, setActivitiesLoading] = useState(false);
+  const [activitiesError, setActivitiesError] = useState(false);
+
+  const needsOutlineActivities = useMemo(
+    () =>
+      timelineSegments.some((seg) => {
+        const open = expandedSegmentMap[seg.id] ?? seg.id === activeSegmentId;
+        if (!open) return false;
+        const outline = isModePacksEnabled()
+          ? resolveOutlineContribution({
+              segmentType: typeof seg.type === 'string' ? seg.type : null,
+              packs: modePacks.length > 0 ? modePacks : undefined,
+            })
+          : { kind: 'whiteboard-pages' as const };
+        return outline.kind === 'xuean-activities';
+      }),
+    [timelineSegments, expandedSegmentMap, activeSegmentId, modePacks],
+  );
+
+  useEffect(() => {
+    if (!selectedLesson || !needsOutlineActivities) return;
+    let cancelled = false;
+    setActivitiesLoading(true);
+    setActivitiesError(false);
+    void getLessonActivities(selectedLesson).then((res) => {
+      if (cancelled) return;
+      if (res.ok && Array.isArray(res.data)) {
+        setOutlineActivities(res.data as OutlineActivity[]);
+      } else {
+        setOutlineActivities([]);
+        setActivitiesError(true);
+      }
+      setActivitiesLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedLesson, needsOutlineActivities]);
 
   return (
     <div className="w-[280px] shrink-0 bg-surface border-r border-theme flex flex-col min-h-0 select-none shadow-xs">
@@ -282,7 +334,7 @@ export function ClassroomTimelineSidebar({
                         const outline = isModePacksEnabled()
                           ? resolveOutlineContribution({
                               segmentType: typeof seg.type === 'string' ? seg.type : null,
-                              packs: modePacks,
+                              packs: modePacks.length > 0 ? modePacks : undefined,
                             })
                           : { kind: 'whiteboard-pages' as const, outlineContributionId: 'outline-whiteboard-pages' };
                         if (outline.kind === 'extension') {
@@ -325,12 +377,67 @@ export function ClassroomTimelineSidebar({
                             >
                               <div className="flex items-center justify-between text-[11px] text-muted px-0.5 font-bold">
                                 <span>{lang === 'zh' ? '学案活动大纲' : 'Xuean Activities'}</span>
+                                <span className="text-[10px] font-medium text-muted/80">
+                                  {lang === 'zh' ? '课时活动' : 'Lesson-wide'}
+                                </span>
                               </div>
-                              <div className="text-[11px] text-muted italic px-2 py-1.5 text-center bg-surface/50 rounded-lg border border-dashed border-theme/50">
-                                {lang === 'zh'
-                                  ? '本环节活动列表由学案 Mode Pack 提供（见备课面 / ProgressPanel）'
-                                  : 'Activities are provided by the Xuean Mode Pack (prep / ProgressPanel).'}
-                              </div>
+                              {isActive ? (
+                                activitiesLoading ? (
+                                  <div className="text-[11px] text-muted italic px-2 py-1.5 text-center">
+                                    {lang === 'zh' ? '加载活动…' : 'Loading activities…'}
+                                  </div>
+                                ) : activitiesError ? (
+                                  <div className="text-[11px] text-rose-600 px-2 py-1.5 text-center bg-rose-500/5 rounded-lg border border-dashed border-rose-500/30">
+                                    {lang === 'zh' ? '活动加载失败' : 'Failed to load activities'}
+                                  </div>
+                                ) : outlineActivities.length > 0 ? (
+                                  <div className="flex flex-col gap-1">
+                                    {outlineActivities.map((activity, activityIndex) => (
+                                      <div
+                                        key={activity.id}
+                                        data-testid="outline-xuean-activity-row"
+                                        className="flex items-center justify-between gap-1 px-2 py-1.5 rounded-lg text-xs bg-surface border border-theme/40"
+                                      >
+                                        <div className="flex items-center gap-1.5 min-w-0">
+                                          <span className="text-[10px] px-1.5 py-0.2 rounded font-mono font-bold bg-surface-secondary text-muted shrink-0">
+                                            A{activityIndex + 1}
+                                          </span>
+                                          <span className="truncate tracking-tight font-medium">
+                                            {activity.title ||
+                                              `${lang === 'zh' ? '活动' : 'Activity'} ${activityIndex + 1}`}
+                                          </span>
+                                          <span className="text-[10px] px-1 py-0.2 rounded border border-theme/50 text-muted shrink-0">
+                                            {activity.type}
+                                          </span>
+                                        </div>
+                                        {/* 活动行级操作槽：重新派发 / 跳转批阅 / 附加资源等 */}
+                                        <div className="flex items-center gap-1 shrink-0 empty:hidden">
+                                          <ExtensionPointRenderer
+                                            slot="classroom.outline.activity_action"
+                                            slotProps={{
+                                              activity,
+                                              activityIndex,
+                                              segment: seg,
+                                              lessonId: selectedLesson,
+                                              lang,
+                                            }}
+                                          />
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <div className="text-[11px] text-muted italic px-2 py-1.5 text-center bg-surface/50 rounded-lg border border-dashed border-theme/50">
+                                    {lang === 'zh' ? '本课时还没有学案活动' : 'No activities in this lesson yet'}
+                                  </div>
+                                )
+                              ) : (
+                                <div className="text-[11px] text-muted italic px-2 py-1.5 text-center bg-surface/50 rounded-lg border border-dashed border-theme/50">
+                                  {lang === 'zh'
+                                    ? '进入本环节后可查看课时活动大纲（活动为课时级，不在各环节重复）'
+                                    : 'Open this segment to see lesson-wide activities.'}
+                                </div>
+                              )}
                               {/* 内置学案大纲也接受插件贡献（追加，不替换内置内容） */}
                               <ExtensionPointRenderer
                                 slot="classroom.outline"

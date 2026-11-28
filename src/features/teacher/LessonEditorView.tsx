@@ -17,6 +17,7 @@ import { ExtensionPointRenderer } from '../../plugin-host/extension-point-render
 import { useOptionalPluginHost } from '../../plugin-host/plugin-host-context';
 import { SkillLauncher } from '../skills/SkillLauncher';
 import { isModePacksEnabled } from '../classroom/mode-pack/flags';
+import { WHITEBOARD_MODE_PACK } from '../classroom/mode-pack/whiteboardPack';
 import { routePrepDrop } from '../classroom/mode-pack/prepDropRouter';
 
 export function LessonEditorView() {
@@ -56,6 +57,7 @@ export function LessonEditorView() {
   const appSession = useAppStore((s) => s.session);
   const effectiveSession = session || appSession;
   const currentLesson = lessons.find((l) => l.id === selectedLesson);
+  const activeSegment = timelineSegments.find((seg) => seg.id === activeSegmentId) ?? null;
 
   const isAdmin =
     effectiveSession?.username === 'admin' ||
@@ -392,6 +394,18 @@ export function LessonEditorView() {
               isReadOnly,
               activeRole,
               onSave: handleSaveElementToServer,
+            }}
+          />
+          {/* 内置白板备课面的追加扩展（不替换编辑器）：`classroom.prep` 只服务第三方 Mode Pack */}
+          <ExtensionPointRenderer
+            slot="classroom.prep.addon"
+            slotProps={{
+              packId: 'whiteboard',
+              prepContributionId: WHITEBOARD_MODE_PACK.prepContributionId,
+              segment: activeSegment,
+              lessonId: selectedLesson || null,
+              isReadOnly,
+              lang,
             }}
           />
 

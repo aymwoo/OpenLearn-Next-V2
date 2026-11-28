@@ -3,6 +3,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, fireEvent, cleanup } from '@testing-library/react';
 import { ClassroomTimelineSidebar, stripHtml, type TimelineSegmentItem } from '../ClassroomTimelineSidebar';
 import type { WhiteboardPageItem } from '../../whiteboard/InteractiveWhiteboard';
+import { setModePacksEnabledForTests } from '../mode-pack/flags';
 
 // Mock ExtensionPointRenderer to avoid complex plugin-host dependencies
 vi.mock('../../../plugin-host/extension-point-renderer', () => ({
@@ -11,10 +12,17 @@ vi.mock('../../../plugin-host/extension-point-renderer', () => ({
   ),
 }));
 
+const { mockGetLessonActivities } = vi.hoisted(() => ({ mockGetLessonActivities: vi.fn() }));
+
+vi.mock('../../../services/lessonActivitiesService.js', () => ({
+  getLessonActivities: mockGetLessonActivities,
+}));
+
 describe('ClassroomTimelineSidebar', () => {
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
+    setModePacksEnabledForTests(null);
   });
 
   const mockSegments: TimelineSegmentItem[] = [
@@ -179,6 +187,62 @@ describe('ClassroomTimelineSidebar', () => {
 
     fireEvent.click(pageActionSlots[0]);
     expect(onSelectPage).not.toHaveBeenCalled();
+  });
+
+  it('学案环节展开时列出课时活动，并为每行渲染 classroom.outline.activity_action', async () => {
+    setModePacksEnabledForTests(true);
+    mockGetLessonActivities.mockResolvedValue({
+      ok: true,
+      data: [
+        { id: 'a1', title: '阅读材料', type: 'reading', order_index: 0 },
+        { id: 'a2', title: '随堂测验', type: 'quiz', order_index: 1 },
+      ],
+    });
+    const xueanSegments: TimelineSegmentItem[] = [{ id: 'seg-x', title: '研读环节', type: 'xuean' }];
+
+    render(
+      <ClassroomTimelineSidebar
+        {...defaultProps}
+        timelineSegments={xueanSegments}
+        activeSegmentId="seg-x"
+        expandedSegmentMap={{ 'seg-x': true }}
+        getPagesForSegment={() => []}
+      />,
+    );
+
+    expect(await screen.findByText('阅读材料')).toBeTruthy();
+    expect(screen.getByText('随堂测验')).toBeTruthy();
+    expect(mockGetLessonActivities).toHaveBeenCalledWith('lesson-101');
+
+    const actionSlots = screen
+      .getAllByTestId('extension-point-renderer')
+      .filter((el) => el.getAttribute('data-slot') === 'classroom.outline.activity_action');
+    expect(actionSlots).toHaveLength(2);
+  });
+
+  it('非当前学案环节只提示进入后可查看，不重复列出课时活动', async () => {
+    setModePacksEnabledForTests(true);
+    mockGetLessonActivities.mockResolvedValue({
+      ok: true,
+      data: [{ id: 'a1', title: '阅读材料', type: 'reading', order_index: 0 }],
+    });
+    const xueanSegments: TimelineSegmentItem[] = [
+      { id: 'seg-x', title: '研读环节', type: 'xuean' },
+      { id: 'seg-y', title: '练习环节', type: 'xuean' },
+    ];
+
+    render(
+      <ClassroomTimelineSidebar
+        {...defaultProps}
+        timelineSegments={xueanSegments}
+        activeSegmentId="seg-y"
+        expandedSegmentMap={{ 'seg-x': true, 'seg-y': false }}
+        getPagesForSegment={() => []}
+      />,
+    );
+
+    expect(await screen.findByText(/进入本环节后可查看课时活动大纲/)).toBeTruthy();
+    expect(screen.queryByText('阅读材料')).toBeNull();
   });
 
   describe('stripHtml 工具函数', () => {
