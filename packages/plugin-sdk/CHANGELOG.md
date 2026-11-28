@@ -11,6 +11,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Features
 
+- **班级管理域贡献类型补全（平台 Issue IKYMS2）**：新增导出 `ClassListToolbarActionConfig`、`StudentEnrollSourceConfig`、`StudentRowActionConfig`（均 `{ id, label, icon?, commandType? }`）；`ClassTabConfig` 补可选 `view?: string`（声明式沙箱面板，此前 zod strip 语义下该字段会在安装校验后被丢弃）。纯新增导出 + 可选字段，无破坏性变更。
+
 - **第三方插件 P0 安全扩展服务**：新增 `IAssignmentSubmissionService`、`IXueanActivityProgressService`、`ILessonReportService`、`IClassroomSelfMessageService` 及对应 Token 与视图类型。`PluginContext.services` 新增 `assignmentSubmission` / `xueanActivityProgress` / `lessonReport` / `classroomSelfMessage` 四个字段（inline 模式可能为 `null`，worker / process 模式下为 `undefined`；消费前请判空）。前三个是 sql-guard 禁读表的只读替代通道；`classroomSelfMessage.sendAsSelf()` 把 sender 派生为当前学生 actor，不要求 `lesson:write`，需声明 `classroom:message:self`。纯新增导出，无破坏性变更。
 
 - **`IAIService.listProviders()`**（平台 Issue #561）：可选方法，返回 `AIProviderSummary[]`。字段与 `GET /api/ai-providers` 的列表项一致，但永不包含 `api_key`。需 `ai:invoke`。纯新增，旧插件与旧 mock 不必实现。不是活动生态的 `ActivityRegistry.listProviders()`。

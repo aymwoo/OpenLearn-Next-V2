@@ -40,6 +40,7 @@ import { ClassScheduleAttendance } from './ClassScheduleAttendance';
 import { ClassStudentsPanel } from './ClassStudentsPanel.js';
 import { ManualImportButton } from './ManualImportButton.js';
 import { CreateClassButton } from './CreateClassButton.js';
+import { toClassRosterSummary } from './rosterProjection';
 import { SemesterGradeManager } from '../../../components/SemesterGradeManager';
 
 type Translation = (typeof translations)['zh'];
@@ -449,6 +450,17 @@ export function ClassesView() {
               setShowImportModal={props.setShowImportModal}
             />
             <CreateClassButton lang={props.lang} fetchClasses={props.fetchClasses} />
+            {/* 插件班级列表工具栏扩展（学籍系统一键同步 / 年级模板批量建班）。
+                classes 经白名单投影：不含 class_passcode 等敏感字段（Issue IKYMS2）。 */}
+            <ExtensionPointRenderer
+              slot="class.list.toolbar.action"
+              slotProps={{
+                classes: props.classes.map(toClassRosterSummary),
+                selectedClassIds: Array.from(props.selectedClassIds),
+                lang: props.lang,
+                onRefresh: props.fetchClasses,
+              }}
+            />
           </div>
         </div>
         <div className="flex-1 overflow-y-auto p-2">

@@ -2,7 +2,7 @@ import { Users, Activity, Calendar as CalendarIcon, ClipboardList } from 'lucide
 import type { ClassType } from '../../../types/app';
 import { ExtensionPointRenderer } from '../../../plugin-host/extension-point-renderer';
 
-export type ClassTabKey = 'students' | 'assignments' | 'schedules' | 'seating' | 'grades' | (string & {});
+export type ClassTabKey = 'students' | 'assignments' | 'schedules' | 'grades' | (string & {});
 
 export interface ClassTabsProps {
   cls: ClassType;
