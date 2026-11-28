@@ -52,6 +52,7 @@
     "classroom.monitor.header_action",
     "classroom.notification.tabs",
     "classroom.outline",
+    "classroom.outline.page_action",
     "classroom.pacing.dashboard",
     "classroom.portal.course_badge",
     "classroom.portal.insight",
@@ -175,5 +176,5 @@
     "anchor:whiteboard-toolbar:presentation",
     "anchor:whiteboard-toolbar:rollcall"
   ],
-  "total": 162
+  "total": 163
 }

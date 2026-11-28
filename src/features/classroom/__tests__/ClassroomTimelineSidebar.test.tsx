@@ -167,6 +167,20 @@ describe('ClassroomTimelineSidebar', () => {
     expect(outlineSlots.length).toBeGreaterThan(0);
   });
 
+  it('每个白板页行都渲染 classroom.outline.page_action，且点击不切页', () => {
+    const onSelectPage = vi.fn();
+    render(<ClassroomTimelineSidebar {...defaultProps} onSelectPage={onSelectPage} />);
+
+    const pageActionSlots = screen
+      .getAllByTestId('extension-point-renderer')
+      .filter((el) => el.getAttribute('data-slot') === 'classroom.outline.page_action');
+    // defaultProps 里 seg-1 展开且只有一页
+    expect(pageActionSlots).toHaveLength(1);
+
+    fireEvent.click(pageActionSlots[0]);
+    expect(onSelectPage).not.toHaveBeenCalled();
+  });
+
   describe('stripHtml 工具函数', () => {
     it('清除 HTML 标签并格式化空白', () => {
       expect(stripHtml('<p>Hello <b>World</b>&nbsp;!</p>')).toBe('Hello World !');

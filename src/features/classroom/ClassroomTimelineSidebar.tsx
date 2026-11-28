@@ -420,6 +420,23 @@ export function ClassroomTimelineSidebar({
                                           {lang === 'zh' ? '当前' : 'Active'}
                                         </span>
                                       )}
+                                      {/* 页级操作槽：插件可为单页提供备注 / 页级工具；点击不触发整行切页 */}
+                                      <div
+                                        className="flex items-center gap-1 empty:hidden"
+                                        onClick={(e) => e.stopPropagation()}
+                                      >
+                                        <ExtensionPointRenderer
+                                          slot="classroom.outline.page_action"
+                                          slotProps={{
+                                            page: p,
+                                            pageIndex: globalIdx,
+                                            isActive: isPageActive,
+                                            segment: seg,
+                                            lessonId: selectedLesson,
+                                            lang,
+                                          }}
+                                        />
+                                      </div>
                                     </div>
                                   </div>
                                 );

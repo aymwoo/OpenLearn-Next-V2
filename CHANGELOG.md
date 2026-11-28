@@ -38,10 +38,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - **学案学生端常驻工具位**：`XueanStudentClassroom` 复用 `student.lesson.tool`，学案课也有跨活动的常驻工具（笔记本 / 计算器 / 求助），不再只能靠每个活动的 `.student.addon`。
 - **内置模式也能扩展中大纲**：`classroom.outline` 在内置白板页列表与学案活动大纲里改为**追加**渲染（此前仅第三方 Mode Pack 消费）；`classroom.prep` 仍只服务第三方模式包，文档已注明。
 - **学案课默认进入「环节工作区」**：课时交付模式为 `xuean` 且 mode pack 开启时，进入课堂默认 `segment_main`，不必再手动切换；白板课与未声明交付模式的旧课保持原默认，且每个课节只自动决定一次，不覆盖教师的手动切换。
+- **学案壳补齐 `student.segment.badge`**：学案课堂没有环节胶囊列表，当前环节的插件徽标改挂在工具行上方（`{ segment, isActive: true, isLocked, studentId, lessonId, lang }`），与白板壳的环节徽标对称；无贡献时容器 `empty:hidden` 不占高度。
+- **新增 `classroom.outline.page_action`（白板页行级操作）**：课中侧栏每个白板页行都渲染该槽位，插件可提供页备注、页级工具等入口；props `{ page, pageIndex, isActive, segment, lessonId, lang }`，操作区点击不会触发行级切页。`ExtensionSlot` 成员数增至 163。
+- **白板插件图元在可编辑态也懒挂载**：`whiteboard.renderer` 的「进视口再挂载」此前只对只读演示态生效，可编辑态仍会为画布上所有插件图元创建实例。现在两种状态都启用，并用 `useLayoutEffect` + `getBoundingClientRect` 做首帧同步判定 —— 已在视口（含 800px 预取边距）内的图元在绘制前就挂载，首帧不会出现占位块闪空；视口外的图元滚动到附近再挂载，挂载后不卸载。
 
 ### Fixes
 
-- **`rolesAllowed` 声明后从不生效**：扩展点的角色门控此前只有类型声明、运行时不消费，任何插件写了都等于没写。现在由 `extension-point-renderer` 在**渲染期**按 `activeRole` 过滤，教师切换「学生视图」预览时即时生效。注意 `activeRole` 只有 `teacher` / `student`，只声明 `['admin']` 的扩展不会被渲染。
+- **`rolesAllowed` 声明后从不生效**：扩展点的角色门控此前只有类型声明、运行时不消费，任何插件写了都等于没写。现在由 `extension-point-renderer` 在**渲染期**按当前角色过滤，教师切换「学生视图」预览时即时生效。
+- **`rolesAllowed` 的 `admin` 角色永不命中**：`activeRole` 只有 `teacher` / `student`，管理员会话是 `role: 'teacher'` + `subRole: 'administrator'`，因此声明 `rolesAllowed: ['admin']` 的扩展此前在任何界面都不会渲染。现在渲染器会把管理员会话额外映射为 `'admin'`（普通教师 / 学生不受影响），并在渲染期随会话变化即时生效。
 - **空槽位吞掉调用点 fallback**：`ExtensionPointRenderer` 在槽位没有贡献、或活动槽未匹配到扩展时直接返回 `null`，调用点传入的 `fallback`（如学案活动「插件未加载」提示）永远不会出现，现改为 `fallback ?? null`。
 - **白板事件槽把认领当成完成**：`courseware-attempt-updated` 前端把 `promote` 映射为 `courseware.finished`，而服务端 `publishAttemptUpdated` 只发 `log | submit | adopt`，导致 `courseware.finished` 永不触发、`adopt`（学生认领无主 attempt）被降级成 `event_logged`。现改为 `adopt → courseware.adopted` 并删除 `promote` 分支；`courseware.finished` 只由 iframe 的 `LMS_FINISH` 产生。
 - **学生端白板环节锁定与大纲「当前」误标（Gitee IKYK90）**：全班指针指向本课 `timeline` 中不存在的环节（旧会话 / 历史种子残留）时视为失效，不再把学生锁在「请跟随课堂当前环节」；该分支明确返回 `followedClassSegment`，学生端据此把本地指针对齐到全班环节并隐藏锁定横幅，而不是停在一个无法自行解除的解锁提示上。教师端 socket 重连后重新广播一次当前环节，避免服务端保留上次演示的旧指针；该自动重播只对主讲教师 / 管理员生效，协同教师的陈旧本地指针不会覆盖全班。指针有效性同时兼容 mode pack 合成的环节（如 `xuean:study`），避免把学案课的全班指针误判为失效。教学环节进度表里共享页只在正在演示的环节上标「当前」（此前每个环节都复用同一个全局页码，五个环节同时显示「当前」），组件计数也改为只统计本环节可见的组件。演示课程把无效的 `allPreviousCompleted` 门禁换成内置 `quiz_completed`，课堂总结环节可正常通过随堂测验放行。

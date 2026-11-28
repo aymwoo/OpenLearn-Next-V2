@@ -6,6 +6,8 @@
 > 不包含：`assessment.*` / `teacher.dashboard.*` / 后台管理类槽位（仅在涉及共性问题时引用）
 
 > **实施状态（2026-11-27）**：P0 四项已落地——`rolesAllowed` 渲染期过滤、学案活动槽 fallback、学案学生主工作区接入 `student_main`、学案门禁兜底 `gate_fallback`。P1 全部落地：3.5 / 3.6 / 3.7（补 `studentId`/`studentName`、活动主槽上下文、白板选中与右键槽 `readOnly`/`userRole`）、3.8（学案学生壳复用 `student.lesson.tool`）、3.9（新增 `xuean.activity.teacher`，`ExtensionSlot` 增至 162）。P2 落地 3.10（内置白板页列表 / 学案大纲追加渲染 `classroom.outline`；`classroom.prep` 维持仅第三方模式包并在文档注明）、3.11（`adopt` 事件映射）、3.12（只读态按视口挂载插件渲染器）、3.13（学案课默认 `segment_main`）。
+>
+> **后续补齐（2026-11-27）**：`rolesAllowed` 的 `admin` 语义接入管理员会话；学案学生壳补挂 `student.segment.badge`；新增白板页行级操作槽 `classroom.outline.page_action`（`ExtensionSlot` 增至 163）；插件图元懒挂载扩展到可编辑态，并改用 `useLayoutEffect` 做首帧同步判定以消除首帧闪空。
 
 ---
 

@@ -16,6 +16,7 @@ import { PluginHostProvider } from '../plugin-host-context';
 import { FrontendPluginHost } from '../plugin-host';
 import { usePluginHostStore } from '../plugin-host-store';
 import { uiStore } from '../../store/uiStore';
+import { appStore } from '../../store/appStore';
 
 /**
  * Build a lazy component factory in the exact shape the renderer expects:
@@ -763,5 +764,56 @@ describe('ExtensionPointRenderer — rolesAllowed 渲染期角色过滤', () => 
 
     expect(await screen.findByTestId('teacher-only')).toBeTruthy();
     expect(screen.getByTestId('any-role')).toBeTruthy();
+  });
+
+  describe('admin 角色语义', () => {
+    const prevSession = appStore.getState().session;
+    const registerAdminExt = () => {
+      usePluginHostStore.getState().registerExtensionPoint('classroom.tool', {
+        id: 'admin-only-tool',
+        label: '管理员工具',
+        pluginId: 'p-role',
+        rolesAllowed: ['admin'],
+        component: lazyComponent(<span data-testid="admin-only">admin</span>),
+      });
+    };
+
+    afterEach(() => {
+      appStore.setState({ session: prevSession });
+    });
+
+    it('管理员会话（subRole=administrator）渲染声明 admin 的扩展', async () => {
+      appStore.setState({
+        session: { role: 'teacher', subRole: 'administrator', name: '管理员' },
+      });
+      registerAdminExt();
+
+      renderWithHost(<ExtensionPointRenderer slot="classroom.tool" />);
+
+      expect(await screen.findByTestId('admin-only')).toBeTruthy();
+    });
+
+    it('普通教师会话不渲染声明 admin 的扩展', async () => {
+      appStore.setState({
+        session: { role: 'teacher', subRole: 'teacher', name: '教师' },
+      });
+      registerAdminExt();
+
+      renderWithHost(<ExtensionPointRenderer slot="classroom.tool" />);
+
+      expect(screen.queryByTestId('admin-only')).toBeNull();
+    });
+
+    it('管理员切到学生视图预览时不渲染 admin-only 扩展', async () => {
+      appStore.setState({
+        session: { role: 'teacher', subRole: 'administrator', name: '管理员' },
+      });
+      uiStore.setState({ activeRole: 'student' });
+      registerAdminExt();
+
+      renderWithHost(<ExtensionPointRenderer slot="classroom.tool" />);
+
+      expect(screen.queryByTestId('admin-only')).toBeNull();
+    });
   });
 });
