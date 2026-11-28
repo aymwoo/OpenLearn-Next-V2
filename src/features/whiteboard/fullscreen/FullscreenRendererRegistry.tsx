@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { BookOpen, Minimize2 } from 'lucide-react';
 import Markdown from 'react-markdown';
 import { sanitizeHref } from '../../../../packages/core/security/url-safety.js';
+import { resolveFullscreenReadOnlyPolicy } from '../core/view-model';
 
 export type FullscreenRendererProps = {
   elementType: string;
@@ -222,13 +223,13 @@ export const FullscreenOverlay: React.FC<{
         {/* 原先此处还有一个右上角悬浮 X 关闭按钮，与标题栏的「退出全屏」功能完全
             重复（两者都调用同一个 onClose），已移除。ESC 退出仍然有效。 */}
         {(() => {
-          const isInteractiveWidget = type === 'quiz' || type === 'assignment';
+          const readOnlyPolicy = resolveFullscreenReadOnlyPolicy({ readOnly, elementType: type });
           return (
             <div
               ref={attachContent}
               data-testid="fullscreen-content"
               className="flex-1 overflow-auto p-6 relative"
-              style={{ pointerEvents: readOnly && !isInteractiveWidget ? 'none' : 'auto' }}
+              style={{ pointerEvents: readOnlyPolicy.pointerEvents }}
             >
               {/* 插件注册的自定义全屏视图 > 宿主注入的真实组件 > 字段预览兜底 */}
               {Renderer ? (
@@ -251,7 +252,7 @@ export const FullscreenOverlay: React.FC<{
                   lessonId={lessonId}
                 />
               )}
-              {readOnly && !isInteractiveWidget && (
+              {readOnlyPolicy.showLockCover && (
                 <div
                   data-testid="fullscreen-readonly-lock-cover"
                   className="absolute inset-0 z-50 cursor-not-allowed bg-transparent select-none"

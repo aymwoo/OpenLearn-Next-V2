@@ -2,14 +2,23 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, cleanup } from '@testing-library/react';
 import type { ComponentProps } from 'react';
 import { LiveClassroomMiddleWorkspace } from '../LiveClassroomMiddleWorkspace';
+import {
+  findWhiteboardHostContractViolations,
+  type WhiteboardHostProps,
+} from '../../whiteboard/host/whiteboard-host-contract';
 
+const whiteboardProps: Record<string, unknown>[] = [];
 vi.mock('../../../components/LazyWhiteboard', () => ({
-  LazyWhiteboard: () => <div data-testid="lazy-whiteboard" />,
+  LazyWhiteboard: (props: Record<string, unknown>) => {
+    whiteboardProps.push(props);
+    return <div data-testid="lazy-whiteboard" />;
+  },
 }));
 
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  whiteboardProps.length = 0;
 });
 
 function makeProps(overrides: Record<string, unknown> = {}) {
@@ -58,6 +67,12 @@ describe('LiveClassroomMiddleWorkspace 环节工作区回退', () => {
 
     expect(screen.getByTestId('lazy-whiteboard')).toBeTruthy();
     expect(setMiddleTab).toHaveBeenCalledWith('whiteboard');
+    expect(
+      findWhiteboardHostContractViolations(
+        'teacher-classroom',
+        whiteboardProps.at(-1) as unknown as WhiteboardHostProps,
+      ),
+    ).toEqual([]);
   });
 
   it('有匹配扩展时保持环节工作区，不强制切回白板', () => {

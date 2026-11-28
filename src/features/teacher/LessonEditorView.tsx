@@ -16,6 +16,7 @@ import type { WhiteboardPageItem, WhiteboardDragState } from '../whiteboard/Inte
 import { ExtensionPointRenderer } from '../../plugin-host/extension-point-renderer';
 import { useOptionalPluginHost } from '../../plugin-host/plugin-host-context';
 import { SkillLauncher } from '../skills/SkillLauncher';
+import { buildLessonEditorWhiteboardHostProps } from '../whiteboard/host/whiteboard-host-contract';
 import { isModePacksEnabled } from '../classroom/mode-pack/flags';
 import { WHITEBOARD_MODE_PACK } from '../classroom/mode-pack/whiteboardPack';
 import { routePrepDrop } from '../classroom/mode-pack/prepDropRouter';
@@ -545,80 +546,82 @@ export function LessonEditorView() {
                 <>
                   <LazyWhiteboard
                     ref={whiteboardRef}
-                    lessonId={selectedLesson}
-                    userRole={activeRole}
-                    readOnly={isReadOnly}
-                    elements={elements}
-                    activeSegmentId={activeSegmentId}
-                    hidePageBar={true}
-                    onPagesStateChange={handleWhiteboardPagesStateChange}
-                    onSegmentSync={(segId: string) => setActiveSegmentId(segId)}
-                    onElementDragChange={setWhiteboardDragState}
-                    onElementDropCheck={handleElementDropCheck}
-                    onElementAdd={async (type: string, data: any) => {
-                      if (isReadOnly) return;
-                      await flushAutoSave();
-                      setEditorSaveStatus('saving');
-                      try {
-                        const response = await fetch(`/api/lessons/${selectedLesson}/whiteboard`, {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ type, data }),
-                        });
-                        if (response.ok) {
-                          setEditorSaveStatus('saved');
-                          setEditorLastSavedTime(new Date());
-                          fetchElements(selectedLesson);
-                        } else {
+                    {...buildLessonEditorWhiteboardHostProps({
+                      lessonId: selectedLesson,
+                      userRole: activeRole,
+                      readOnly: isReadOnly,
+                      elements,
+                      activeSegmentId,
+                      hidePageBar: true,
+                      onPagesStateChange: handleWhiteboardPagesStateChange,
+                      onSegmentSync: (segId: string) => setActiveSegmentId(segId),
+                      onElementDragChange: setWhiteboardDragState,
+                      onElementDropCheck: handleElementDropCheck,
+                      onElementAdd: async (type: string, data: any) => {
+                        if (isReadOnly) return;
+                        await flushAutoSave();
+                        setEditorSaveStatus('saving');
+                        try {
+                          const response = await fetch(`/api/lessons/${selectedLesson}/whiteboard`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ type, data }),
+                          });
+                          if (response.ok) {
+                            setEditorSaveStatus('saved');
+                            setEditorLastSavedTime(new Date());
+                            fetchElements(selectedLesson);
+                          } else {
+                            setEditorSaveStatus('error');
+                          }
+                        } catch (err) {
                           setEditorSaveStatus('error');
                         }
-                      } catch (err) {
-                        setEditorSaveStatus('error');
-                      }
-                    }}
-                    onElementUpdate={(elementId: string, data: any) => {
-                      if (isReadOnly) return;
-                      queueUpdate(elementId, data);
-                    }}
-                    onElementDelete={async (elementId: string) => {
-                      if (isReadOnly) return;
-                      await flushAutoSave();
-                      setEditorSaveStatus('saving');
-                      try {
-                        const response = await fetch(`/api/lessons/${selectedLesson}/whiteboard/${elementId}`, {
-                          method: 'DELETE',
-                        });
-                        if (response.ok) {
-                          setEditorSaveStatus('saved');
-                          setEditorLastSavedTime(new Date());
-                          fetchElements(selectedLesson);
-                        } else {
+                      },
+                      onElementUpdate: async (elementId: string, data: any) => {
+                        if (isReadOnly) return;
+                        queueUpdate(elementId, data);
+                      },
+                      onElementDelete: async (elementId: string) => {
+                        if (isReadOnly) return;
+                        await flushAutoSave();
+                        setEditorSaveStatus('saving');
+                        try {
+                          const response = await fetch(`/api/lessons/${selectedLesson}/whiteboard/${elementId}`, {
+                            method: 'DELETE',
+                          });
+                          if (response.ok) {
+                            setEditorSaveStatus('saved');
+                            setEditorLastSavedTime(new Date());
+                            fetchElements(selectedLesson);
+                          } else {
+                            setEditorSaveStatus('error');
+                          }
+                        } catch (err) {
                           setEditorSaveStatus('error');
                         }
-                      } catch (err) {
-                        setEditorSaveStatus('error');
-                      }
-                    }}
-                    onClearBoard={async () => {
-                      if (isReadOnly) return;
-                      await flushAutoSave();
-                      setEditorSaveStatus('saving');
-                      try {
-                        const response = await fetch(`/api/lessons/${selectedLesson}/whiteboard`, {
-                          method: 'DELETE',
-                        });
-                        if (response.ok) {
-                          setEditorSaveStatus('saved');
-                          setEditorLastSavedTime(new Date());
-                          fetchElements(selectedLesson);
-                        } else {
+                      },
+                      onClearBoard: async () => {
+                        if (isReadOnly) return;
+                        await flushAutoSave();
+                        setEditorSaveStatus('saving');
+                        try {
+                          const response = await fetch(`/api/lessons/${selectedLesson}/whiteboard`, {
+                            method: 'DELETE',
+                          });
+                          if (response.ok) {
+                            setEditorSaveStatus('saved');
+                            setEditorLastSavedTime(new Date());
+                            fetchElements(selectedLesson);
+                          } else {
+                            setEditorSaveStatus('error');
+                          }
+                        } catch (err) {
                           setEditorSaveStatus('error');
                         }
-                      } catch (err) {
-                        setEditorSaveStatus('error');
-                      }
-                    }}
-                    onRefresh={() => fetchElements(selectedLesson)}
+                      },
+                      onRefresh: () => fetchElements(selectedLesson),
+                    })}
                   />
                   {paletteEdit && !isReadOnly && getPaletteItemConfig(paletteEdit.type) && (
                     <PaletteCardEditModal

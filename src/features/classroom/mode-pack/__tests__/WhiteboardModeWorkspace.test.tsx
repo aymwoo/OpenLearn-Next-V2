@@ -57,6 +57,8 @@ describe('WhiteboardModeWorkspace', () => {
         value={{
           canvasProps: {
             lessonId: 'les-1',
+            elements: [],
+            onElementAdd: async () => {},
             userRole: 'teacher',
             broadcastFullscreen: true,
             activeSegmentId: 'seg-1',

@@ -3,14 +3,23 @@ import { render, screen, cleanup } from '@testing-library/react';
 import type { MutableRefObject } from 'react';
 import { LessonEditorView } from '../LessonEditorView';
 import { AppDataProvider } from '../../../context/AppDataContext';
+import {
+  findWhiteboardHostContractViolations,
+  type WhiteboardHostProps,
+} from '../../whiteboard/host/whiteboard-host-contract';
 
+const editorWhiteboardProps: Record<string, unknown>[] = [];
 vi.mock('../../../components/LazyWhiteboard', () => ({
-  LazyWhiteboard: ({ readOnly }: { readOnly?: boolean }) => (
-    <div data-testid="editor-whiteboard" data-read-only={String(Boolean(readOnly))} />
-  ),
+  LazyWhiteboard: (props: Record<string, unknown>) => {
+    editorWhiteboardProps.push(props);
+    return <div data-testid="editor-whiteboard" data-read-only={String(Boolean(props.readOnly))} />;
+  },
 }));
 
-afterEach(() => cleanup());
+afterEach(() => {
+  cleanup();
+  editorWhiteboardProps.length = 0;
+});
 
 function makeProps(overrides: Record<string, any> = {}): Record<string, any> {
   return {
@@ -97,6 +106,12 @@ describe('LessonEditorView', () => {
 
     expect(screen.getByTestId('editor-whiteboard').getAttribute('data-read-only')).toBe('true');
     expect(screen.queryByRole('button', { name: /加环节/ })).toBeNull();
+    expect(
+      findWhiteboardHostContractViolations(
+        'lesson-editor',
+        editorWhiteboardProps.at(-1) as unknown as WhiteboardHostProps,
+      ),
+    ).toEqual([]);
     expect(screen.getByLabelText('环节名称')).toHaveProperty('disabled', true);
     expect(screen.queryByRole('button', { name: /删除环节/ })).toBeNull();
   });

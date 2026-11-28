@@ -2,6 +2,7 @@ import { lazy, Suspense, type Dispatch, type SetStateAction } from 'react';
 import type { StudentType } from '../../types/app';
 import { BookOpen, Minimize2, Maximize2, ChevronRight, Folder, Globe, BookOpenCheck } from 'lucide-react';
 import { LazyWhiteboard } from '../../components/LazyWhiteboard';
+import { buildStudentWhiteboardHostProps } from '../whiteboard/host/whiteboard-host-contract';
 import { LazyCourseware } from '../../components/LazyCourseware';
 import { StudentAssignmentEvalPanel } from '../../components/StudentAssignmentEvalPanel';
 import { ExtensionPointRenderer } from '../../plugin-host/extension-point-renderer';
@@ -260,43 +261,44 @@ export function StudentLessonInteractionPanel(props: StudentLessonInteractionPan
       ) : null}
       {!hideSegmentBody && studentLessonTab === 'whiteboard' && (
         <LazyWhiteboard
-          lessonId={selectedLesson}
-          classId={classId ?? null}
-          studentId={activeStudentId}
-          studentName={studentName ?? null}
-          elements={elements}
-          userRole={activeRole}
-          readOnly={interactionLocked}
-          followRemoteFullscreen
-          activeSegmentId={boardSegmentId}
-          onSegmentSync={(segId: string) => {
-            if (contentSegmentId !== undefined && contentSegmentId !== activeSegmentId) return;
-            setActiveSegmentId(segId);
-          }}
-          onElementUpdate={async () => {
-            /* readonly or sync */
-          }}
-          onElementDelete={async (elementId: string) => {
-            // 完全锁定期间白板只读：拒绝任何删除写入
-            if (interactionLocked) return;
-            if (!selectedLesson) return;
-            await fetch(`/api/lessons/${selectedLesson}/whiteboard/${elementId}`, { method: 'DELETE' });
-            fetchElements(selectedLesson);
-          }}
-          onClearBoard={async () => {
-            // 完全锁定期间白板只读：拒绝清空写入
-            if (interactionLocked) return;
-            if (!selectedLesson) return;
-            await fetch(`/api/lessons/${selectedLesson}/whiteboard`, { method: 'DELETE' });
-            fetchElements(selectedLesson);
-          }}
-          onElementAdd={async () => {
-            /* readonly or sync */
-          }}
-          onRefresh={() => {
-            if (!selectedLesson) return;
-            fetchElements(selectedLesson);
-          }}
+          {...buildStudentWhiteboardHostProps({
+            lessonId: selectedLesson,
+            classId: classId ?? null,
+            studentId: activeStudentId,
+            studentName: studentName ?? null,
+            elements,
+            userRole: activeRole,
+            readOnly: interactionLocked,
+            activeSegmentId: boardSegmentId,
+            onSegmentSync: (segId: string) => {
+              if (contentSegmentId !== undefined && contentSegmentId !== activeSegmentId) return;
+              setActiveSegmentId(segId);
+            },
+            onElementUpdate: async () => {
+              /* readonly or sync */
+            },
+            onElementDelete: async (elementId: string) => {
+              // 完全锁定期间白板只读：拒绝任何删除写入
+              if (interactionLocked) return;
+              if (!selectedLesson) return;
+              await fetch(`/api/lessons/${selectedLesson}/whiteboard/${elementId}`, { method: 'DELETE' });
+              fetchElements(selectedLesson);
+            },
+            onClearBoard: async () => {
+              // 完全锁定期间白板只读：拒绝清空写入
+              if (interactionLocked) return;
+              if (!selectedLesson) return;
+              await fetch(`/api/lessons/${selectedLesson}/whiteboard`, { method: 'DELETE' });
+              fetchElements(selectedLesson);
+            },
+            onElementAdd: async () => {
+              /* readonly or sync */
+            },
+            onRefresh: () => {
+              if (!selectedLesson) return;
+              fetchElements(selectedLesson);
+            },
+          })}
         />
       )}
       {!hideSegmentBody && studentLessonTab === 'courseware' && (

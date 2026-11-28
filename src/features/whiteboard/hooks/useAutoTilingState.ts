@@ -21,6 +21,7 @@ import {
   type StackDirection,
 } from '../utils/auto-tiling';
 import { parseElementData } from '../utils/element-cache';
+import { getDefaultElementSize } from '../core/element-capabilities';
 
 export interface WhiteboardElement {
   id: string;
@@ -34,27 +35,6 @@ export interface WhiteboardPageItem {
   name?: string;
   sortOrder?: number;
   [key: string]: any;
-}
-
-const DEFAULT_ELEMENT_SIZE: Record<string, { width: number; height: number }> = {
-  quiz: { width: 340, height: 380 },
-  timer: { width: 280, height: 200 },
-  assignment: { width: 340, height: 400 },
-  rollcall: { width: 340, height: 420 },
-  'html-applet': { width: 400, height: 300 },
-  learning_surface: { width: 640, height: 400 },
-  'code-sandbox': { width: 400, height: 320 },
-  'math-graph': { width: 400, height: 350 },
-  presentation: { width: 600, height: 400 },
-  plugin: { width: 500, height: 400 },
-};
-
-export function getDefaultElementSize(type: string, data: any): { width: number; height: number } {
-  const preset = DEFAULT_ELEMENT_SIZE[type];
-  if (preset) {
-    return { width: data?.width || preset.width, height: data?.height || preset.height };
-  }
-  return { width: data?.width || 300, height: data?.height || 300 };
 }
 
 export interface UseAutoTilingStateParams {

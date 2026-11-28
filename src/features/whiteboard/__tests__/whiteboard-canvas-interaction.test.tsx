@@ -157,4 +157,19 @@ describe('Whiteboard Canvas & Toolbar Interactive Journey Tests', () => {
       }),
     );
   });
+
+  it('6. 交互网页课件仍以 html-applet 提交，服务端负责转成 learning_surface', () => {
+    const onElementAdd = vi.fn().mockResolvedValue(undefined);
+    render(<WhiteboardToolbar {...defaultToolbarProps} onElementAdd={onElementAdd} />);
+
+    fireEvent.click(screen.getByTitle('插入交互网页课件 (Interactive Courseware)'));
+
+    expect(onElementAdd).toHaveBeenCalledWith(
+      'html-applet',
+      expect.objectContaining({
+        page: 0,
+        code: expect.stringContaining('Interactive Web Courseware'),
+      }),
+    );
+  });
 });

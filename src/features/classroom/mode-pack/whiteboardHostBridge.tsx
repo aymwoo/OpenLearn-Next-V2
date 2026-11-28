@@ -5,10 +5,10 @@
  * WhiteboardModeWorkspace 只消费本桥，避免把宿主细节塞进通用 slotProps。
  */
 import { createContext, useContext, type ReactNode, type Ref } from 'react';
-import type { WhiteboardHandle } from '../../whiteboard/InteractiveWhiteboard';
+import type { InteractiveWhiteboardProps, WhiteboardHandle } from '../../whiteboard/InteractiveWhiteboard';
 
-/** LazyWhiteboard 透传 props（宿主组装，包内不解析语义） */
-export type WhiteboardHostCanvasProps = Record<string, unknown>;
+/** LazyWhiteboard 透传 props（宿主通过 whiteboard-host-contract 组装） */
+export type WhiteboardHostCanvasProps = InteractiveWhiteboardProps;
 
 export type WhiteboardHostBridgeValue = {
   canvasProps: WhiteboardHostCanvasProps;

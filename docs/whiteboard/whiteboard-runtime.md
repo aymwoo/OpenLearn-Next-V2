@@ -9,36 +9,46 @@
 
 ```
 InteractiveWhiteboard.tsx (主组件)
+├── core/                            # 纯决策层（不依赖 React / DOM）
+│   ├── view-model.ts                # 分页 / 全屏 / 只读优先级
+│   └── element-capabilities.ts      # 内置元素元数据单一真源
+├── host/whiteboard-host-contract.ts # 宿主接线契约（必需 props）
 ├── components/
-│   ├── WhiteboardToolbar.tsx         # 顶部工具栏（画笔、图形、组件面板）
+│   ├── WhiteboardToolbar.tsx        # 顶部工具栏（画笔、图形、组件面板）
 │   ├── WhiteboardPageBar.tsx        # 底部页面切换 & 缩略图抽屉
 │   ├── WhiteboardDialog.tsx         # 通用弹窗
-│   └── CoursewareEntrySelectorModal.tsx  # ZIP 课件入口选择弹窗
+│   ├── WhiteboardPropertiesSidebar.tsx  # 右侧属性编辑器
+│   └── WhiteboardFullscreenOverlay.tsx  # 白板 / 浏览器全屏覆盖层
 ├── widgets/
+│   ├── WidgetFrame.tsx              # 统一窗口框架（标题栏 / 最小化 / 全屏 / 删除）
 │   ├── PluginCardRenderer.tsx       # 插件白板组件渲染器
 │   ├── RollCallWrapper.tsx          # 随机点名
 │   ├── CodeSandboxWrapper.tsx       # 代码沙箱
 │   ├── MathGraphWrapper.tsx         # 数学函数图形
 │   ├── HelloWorldWrapper.tsx        # 示例组件
 │   └── RevealPresentationWrapper.tsx # Slide 演示文稿
+├── hooks/                           # 分页、拖放、自动平铺、答题采集
+├── courseware/                      # 课件内容源注册与 iframe 并发限制
 ├── fullscreen/
 │   ├── FullscreenRendererRegistry.tsx  # 全屏渲染器注册表
 │   └── index.ts                        # Barrel export
 ├── properties/
 │   ├── PropertyEditorRegistry.tsx      # 属性编辑器注册表
 │   └── index.ts                        # Barrel export
-├── utils/
-│   └── bridgeUtils.ts               # Bridge SDK 封装（wrapSrcDocWithBridge）
-├── theme.ts                         # 主题令牌与 ThemeManager
-└── types/payloads.ts                # 图元 payload 类型（宿主对外契约）
+├── utils/                           # 自动平铺、分页、画布边界、bridge 等纯工具
+└── theme.ts                         # 主题令牌与 ThemeManager
 ```
+
+> **课件宿主**：`learning_surface` 经 `LearningSurfaceHost` 分发到
+> `features/courseware/CoursewareHost`；存量 `html-applet` 直接复用同一个
+> `CoursewareHost`（`HtmlAppletFrame` 已删除）。
 
 > **Phase 0 变更（2026-11）**：此前的 `canvas-model/`、`interaction-engine/`、
 > `rendering-engine/`、`teaching-object/`、`tool-system/` 五个目录已整体删除
 > （61 文件 / 4,042 行）。它们声明了 6 个「引擎」，但 `InteractiveWhiteboard.tsx`
 > 只把符号 import 进来、从未调用，构建产物中也不存在对应代码（这些模块的专有
-> 字符串在 `dist/` 里 0 命中）。唯一真正被使用的 `theme-manager` 与
-> `HtmlAppletPayload` 已就地提升为 `theme.ts` / `types/payloads.ts`。
+> 字符串在 `dist/` 里 0 命中）。唯一真正被使用的 `theme-manager` 已就地提升为
+> `theme.ts`；原先一并提升的 `HtmlAppletPayload` 随后随 html-applet 废弃而移除。
 
 ## 渲染器扩展
 
@@ -52,10 +62,16 @@ InteractiveWhiteboard.tsx (主组件)
 > 结论：**白板图元渲染没有可用的注册表机制**。新增图元不要恢复上述 registry。
 
 当前实际实现是宿主内的**硬编码分支**：`InteractiveWhiteboard.tsx` 的 `renderElement()`
-（约 1,457 行）用 16 个 `el.type === '…'` 分支分派 15 种图元 ——
+按 `el.type` 分派内置图元 ——
 `pen` / `highlighter` / `rectangle` / `circle` / `text` / `shape` / `quiz` /
-`assignment` / `rollcall` / `presentation` / `html-applet` / `code-sandbox` /
-`math-graph` / `plugin` / `hello-world`。
+`assignment` / `rollcall` / `presentation` / `code-sandbox` / `math-graph` /
+`learning_surface` / `plugin` / `hello-world` / `whiteboard.renderer`，
+以及仅用于存量数据的 `html-applet`。
+
+这些类型的元数据（默认尺寸、是否可平铺、是否可见、全屏只读是否可交互、
+属性侧栏的尺寸形态）统一登记在 `core/element-capabilities.ts`。新增类型必须
+**同时**补渲染分支与能力表，否则会出现「元素存在但画布空白」或「全屏被误锁」
+这类静默回归。
 
 新增图元的正确入口是**已存在的插件贡献点** `whiteboard.renderer`
 （宿主侧由 `<ExtensionPointRenderer slot="whiteboard.renderer" />` 消费）；
@@ -128,7 +144,7 @@ fullscreenRendererRegistry.register(type, (props) => <JSX />, pluginId);
 
 ### 设计动机
 
-之前白板内的 HTML 课件（`html-applet` 组件）通过 iframe 嵌入，课件内调 `LMS.submit` 走的是 `postMessage` 协议，但**白板容器（`HtmlAppletFrame`）没有监听 message 事件**——成绩事件被静默丢弃。`WhiteboardEventSlot` 解决了三个痛点：
+之前白板内的 HTML 课件（`learning_surface` 的 `html_courseware` 渲染器与存量 `html-applet`）通过 iframe 嵌入，课件内调 `LMS.submit` 走的是 `postMessage` 协议，但**白板容器（当时的 `HtmlAppletFrame`，现为 `CoursewareHost`）没有监听 message 事件**——成绩事件被静默丢弃。`WhiteboardEventSlot` 解决了三个痛点：
 
 1. **统一事件入口**：iframe postMessage、widget 行为、手动录入都不需要知道谁会订阅它们
 2. **可订阅 + 可重放**：教师面板 / AI 助手 / 调试面板能实时拿到事件，也能回放最近 N 条历史
@@ -188,7 +204,7 @@ useWhiteboardEventListener({ coursewareUuid }, (e) => {
 ```
 iframe 内部 (LMS.submit / OpenLearn.submit)
    ↓ postMessage
-HtmlAppletFrame.messageHandler
+CoursewareHost.messageHandler
    ↓ ingest({ source:'iframe.postMessage', type:'courseware.submitted', ... })
 WhiteboardEventSlot
    ├─→ 本地订阅者 (TeacherPanel / AI / 调试面板)
@@ -209,24 +225,34 @@ WhiteboardEventSlot
 
 ## 白板组件类型
 
-| 类型           | Canvas 渲染                    | 全屏模式                  | 属性编辑器              |
-| -------------- | ------------------------------ | ------------------------- | ----------------------- |
-| `text`         | `Text`+`Html`                  | 智能默认（text 字段）     | 文本/字体/颜色          |
-| `quiz`         | `Html`（题目标题+选项）        | 注册表（quiz renderer）   | 问题/选项/正确答案      |
-| `assignment`   | `Html`（作业卡片）             | 宿主注入真实组件          | 标题/描述               |
-| `code-sandbox` | `CodeSandboxWrapper`（IFrame） | 智能默认（code 字段）     | 代码编辑                |
-| `html-applet`  | `<iframe>`（Bridge SDK）       | 宿主注入真实组件          | UUID/资源/代码/ZIP 上传 |
-| `math-graph`   | `MathGraphWrapper`（Canvas）   | 智能默认（equation 字段） | 公式输入                |
-| `presentation` | `RevealPresentationWrapper`    | 智能默认（markdown 字段） | Markdown 编辑           |
-| `rollcall`     | `RollCallWrapper`（点名面板）  | 宿主注入真实组件          | 点名按钮                |
-| `plugin-*`     | `PluginCardRenderer`           | 可注册/智能默认           | 可注册/通用属性         |
+| 类型                      | Canvas 渲染                    | 全屏模式                  | 属性编辑器         |
+| ------------------------- | ------------------------------ | ------------------------- | ------------------ |
+| `text`                    | `Text`+`Html`                  | 智能默认（text 字段）     | 文本/字体/颜色     |
+| `quiz`                    | `Html`（题目标题+选项）        | 注册表（quiz renderer）   | 问题/选项/正确答案 |
+| `assignment`              | `Html`（作业卡片）             | 宿主注入真实组件          | 标题/描述          |
+| `code-sandbox`            | `CodeSandboxWrapper`（IFrame） | 智能默认（code 字段）     | 代码编辑           |
+| `learning_surface`        | `LearningSurfaceHost`          | 宿主注入真实组件          | 渲染器 / 资源绑定  |
+| `html-applet`（存量兼容） | `CoursewareHost`               | 宿主注入真实组件          | 无（属性栏已移除） |
+| `math-graph`              | `MathGraphWrapper`（Canvas）   | 智能默认（equation 字段） | 公式输入           |
+| `presentation`            | `RevealPresentationWrapper`    | 智能默认（markdown 字段） | Markdown 编辑      |
+| `rollcall`                | `RollCallWrapper`（点名面板）  | 宿主注入真实组件          | 点名按钮           |
+| `plugin`                  | `PluginCardRenderer`           | 可注册/智能默认           | 可注册/通用属性    |
 
 > `hello-world`（`HelloWorldWrapper`）为示例组件，无对应的全屏与属性编辑器注册。
+>
+> `html-applet` 已废弃：新建时服务端会把 `whiteboard.draw` 统一转换成
+> `learning_surface`（写入 Surface 记录），客户端分支只用于历史课节 / 导入课程包
+> 中的存量元素，避免它们渲染成空白卡片。
+>
+> **单一真源**：上表的默认尺寸、是否参与自动平铺、是否可见、全屏只读是否可交互、
+> 属性侧栏的尺寸形态，统一由 `core/element-capabilities.ts` 提供；这里只描述
+> 渲染通道，不重复登记这些数值。
+>
 > 全屏列的「宿主注入真实组件」指 `FullscreenOverlay` 的 `renderContent` 回调 —— 见 `FullscreenRendererRegistry.tsx` 的 `getEffectiveRenderer`：只有**插件注册**（带 `pluginId`）或显式 `registerHostBuiltin`（当前仅 `quiz`）的渲染器才从注册表生效，其余走宿主注入的真实组件路径。
 
 ## iframe postMessage 监听（`CoursewareHost`）
 
-**问题**：之前白板内 `html-applet` 组件 iframe 内调 `LMS.submit` / `OpenLearn.submit` 时，**白板容器没有监听 message 事件**，导致成绩上报静默丢失。
+**问题**：之前白板内课件组件（`learning_surface` 的 `html_courseware` 渲染器，以及存量 `html-applet`）的 iframe 内调 `LMS.submit` / `OpenLearn.submit` 时，**白板容器没有监听 message 事件**，导致成绩上报静默丢失。
 
 **修复**（`src/features/courseware/CoursewareHost.tsx`）：组件挂载后注册 `window.addEventListener('message')`，仅信任本组件的 iframe（通过 `event.source === iframe.contentWindow` 过滤）。识别以下协议：
 
@@ -241,7 +267,7 @@ WhiteboardEventSlot
 父组件（`InteractiveWhiteboard.tsx` / `FullscreenOverlay`）必须传入 `elementId` 才能正确关联到白板元素：
 
 ```tsx
-<HtmlAppletFrame data={data} lessonId={lessonId} elementId={el.id} />
+<CoursewareHost source={source} lessonId={lessonId} elementId={el.id} />
 ```
 
-同时 `lms-bridge.ts` 的全局监听器（`useLmsBridge(session)`）处理 `LMS_SUBMIT` 时也会同步写入事件槽，source 标记为 `iframe.bridge`（与 `HtmlAppletFrame` 局部监听互补，不冲突）。
+同时 `lms-bridge.ts` 的全局监听器（`useLmsBridge(session)`）处理 `LMS_SUBMIT` 时也会同步写入事件槽，source 标记为 `iframe.bridge`（与 `CoursewareHost` 局部监听互补，不冲突）。

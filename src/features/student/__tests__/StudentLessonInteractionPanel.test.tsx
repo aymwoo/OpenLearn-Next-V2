@@ -3,6 +3,10 @@ import { render, screen, cleanup } from '@testing-library/react';
 import { Suspense } from 'react';
 import { StudentLessonInteractionPanel } from '../StudentLessonInteractionPanel';
 import { setModePacksEnabledForTests } from '../../classroom/mode-pack';
+import {
+  findWhiteboardHostContractViolations,
+  type WhiteboardHostProps,
+} from '../../whiteboard/host/whiteboard-host-contract';
 
 // 捕获传给白板的 props，用于断言只读跟随模式是否下传
 const whiteboardProps: Record<string, unknown>[] = [];
@@ -115,6 +119,21 @@ describe('StudentLessonInteractionPanel', () => {
       </Suspense>,
     );
     expect(whiteboardProps.at(-1)?.readOnly).toBe(false);
+  });
+
+  it('实际下发给白板的 props 满足学生课堂宿主契约', () => {
+    render(
+      <Suspense fallback={null}>
+        <StudentLessonInteractionPanel {...makeProps()} />
+      </Suspense>,
+    );
+
+    expect(
+      findWhiteboardHostContractViolations(
+        'student-classroom',
+        whiteboardProps.at(-1) as unknown as WhiteboardHostProps,
+      ),
+    ).toEqual([]);
   });
 
   it('Mode Pack flag 关闭时展示平行学案 tab', () => {

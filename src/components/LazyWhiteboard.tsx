@@ -1,4 +1,5 @@
 import React, { Suspense, lazy, forwardRef } from 'react';
+import type { InteractiveWhiteboardProps, WhiteboardHandle } from '../features/whiteboard/InteractiveWhiteboard';
 
 const Whiteboard = lazy(() =>
   import('../features/whiteboard/InteractiveWhiteboard').then((m) => ({
@@ -7,7 +8,7 @@ const Whiteboard = lazy(() =>
 );
 
 export const LazyWhiteboard = React.memo(
-  forwardRef<any, any>((props, ref) => {
+  forwardRef<WhiteboardHandle, InteractiveWhiteboardProps>((props, ref) => {
     return (
       <Suspense
         fallback={
@@ -16,7 +17,7 @@ export const LazyWhiteboard = React.memo(
           </div>
         }
       >
-        <Whiteboard ref={ref} {...(props as any)} />
+        <Whiteboard ref={ref} {...props} />
       </Suspense>
     );
   }),

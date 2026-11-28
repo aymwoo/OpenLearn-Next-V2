@@ -53,6 +53,13 @@ import {
   type StackDirection,
 } from './utils/auto-tiling';
 import { parseElementData } from './utils/element-cache';
+import { resolveCanvasReadOnlyPolicy, resolveFullscreenView, resolveSegmentFollow } from './core/view-model';
+import {
+  isVisibleElementType,
+  getDefaultElementSize,
+  resolveElementTitle,
+  resolveElementText,
+} from './core/element-capabilities';
 import { computeContentBounds, resolveCanvasLayout, toCanvasPoint } from './utils/canvas-bounds';
 import { clampOverlayPosition, runScopedTransition } from './utils/modern-web-utils';
 import { measurePaddingBox, measureScrollbarThickness } from './utils/scrollbar-thickness';
@@ -71,6 +78,8 @@ import { CodeSandboxWrapper } from './widgets/CodeSandboxWrapper';
 import { MathGraphWrapper } from './widgets/MathGraphWrapper';
 import { HelloWorldWrapper } from './widgets/HelloWorldWrapper';
 import { LearningSurfaceHost } from '../learning-surface/LearningSurfaceHost';
+import { CoursewareHost } from '../courseware/CoursewareHost';
+import { CoursewareScoresOverlay } from '../courseware/CoursewareScoresOverlay';
 import { isTypingTarget } from '../learning-surface/keyboard';
 import { WhiteboardToolbar } from './components/WhiteboardToolbar';
 import { DeferredMountWhenVisible } from './components/DeferredMountWhenVisible';
@@ -81,7 +90,7 @@ import { WhiteboardPropertiesSidebar, type ElementUpdateResult } from './compone
 import { WhiteboardEmptyState } from './components/WhiteboardEmptyState';
 import { WhiteboardFullscreenOverlay } from './components/WhiteboardFullscreenOverlay';
 import { WhiteboardTilingOverlay } from './components/WhiteboardTilingOverlay';
-import { useAutoTilingState, getDefaultElementSize } from './hooks/useAutoTilingState';
+import { useAutoTilingState } from './hooks/useAutoTilingState';
 import { useQuizIngest } from './hooks/useQuizIngest';
 import { useWhiteboardPages } from './hooks/useWhiteboardPages';
 import { useWhiteboardDrop } from './hooks/useWhiteboardDrop';
@@ -445,26 +454,33 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
     // 远程状态放在 store 中（而非组件内），因为学生切到互动课件/作业标签页时
     // 白板会卸载，组件内的状态会在切回时丢失。
     const remoteFullscreenElementId = useWhiteboardViewStore((s) => s.remoteFullscreenElementId);
-    const isRemoteFullscreen = followRemoteFullscreen && !!remoteFullscreenElementId;
+    const remoteBrowserFullscreenElementId = useWhiteboardViewStore((s) => s.remoteBrowserFullscreenElementId);
+
+    // 全屏优先级统一由 view-model 决定：同级远程 > 本地，跨级 browser > board。
+    const fullscreenView = resolveFullscreenView({
+      followRemoteFullscreen,
+      remoteBoardElementId: remoteFullscreenElementId,
+      localBoardElementId: fullscreenElementId,
+      remoteBrowserElementId: remoteBrowserFullscreenElementId,
+      localBrowserElementId: localBrowserFullscreenElementId,
+    });
     // 远程视图优先：教师正在展示组件时，学生本地的最大化不能覆盖它
-    const effectiveFullscreenElementId = isRemoteFullscreen ? remoteFullscreenElementId : fullscreenElementId;
-    const isFullscreenDismissible = !isRemoteFullscreen;
+    const isRemoteFullscreen = fullscreenView.board.isRemote;
+    const effectiveFullscreenElementId = fullscreenView.board.elementId;
+    const isFullscreenDismissible = fullscreenView.board.dismissible;
 
     // ── 整个浏览器全屏（与上面的「白板全屏」是两种能力）────────────────────
     // 白板全屏：组件在画布内最大化，仍能看到白板周边。
     // 浏览器全屏：组件脱离白板占满视口，并（教师端）进入浏览器原生全屏，用于投屏。
-    const remoteBrowserFullscreenElementId = useWhiteboardViewStore((s) => s.remoteBrowserFullscreenElementId);
-    const isRemoteBrowserFullscreen = followRemoteFullscreen && !!remoteBrowserFullscreenElementId;
-    const browserFullscreenElementId = isRemoteBrowserFullscreen
-      ? remoteBrowserFullscreenElementId
-      : localBrowserFullscreenElementId;
+    const isRemoteBrowserFullscreen = fullscreenView.browser.isRemote;
+    const browserFullscreenElementId = fullscreenView.browser.elementId;
     // 学生端跟随教师时同样不可本地退出：与白板全屏保持一致口径
-    const isBrowserFullscreenDismissible = !isRemoteBrowserFullscreen;
+    const isBrowserFullscreenDismissible = fullscreenView.browser.dismissible;
 
     const browserFullscreen = useBrowserFullscreen({
       elementId: browserFullscreenElementId,
       // 只有本机控制端才发起原生全屏，学生端只跟随「占满视口」
-      enableNativeFullscreen: !isRemoteBrowserFullscreen,
+      enableNativeFullscreen: fullscreenView.nativeBrowserFullscreenEnabled,
       onChange: (id) => {
         setLocalBrowserFullscreenElementId(id);
         // 广播给其他客户端：他们跟随「占满视口」，但不代其打开原生全屏
@@ -1930,24 +1946,19 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
     // 当 activeSegmentId 变更时（如授课时切换教学环节），如果当前页不属于该环节，且存在属于该环节的页面，自动切到该环节的首个页面
     const prevActiveSegmentIdRef = useRef<string | null | undefined>(activeSegmentId);
     useEffect(() => {
-      if (programmaticPageSwitchRef.current) {
+      const resolution = resolveSegmentFollow({
+        activeSegmentId,
+        previousSegmentId: prevActiveSegmentIdRef.current,
+        currentPage,
+        pages,
+        programmaticPageSwitch: programmaticPageSwitchRef.current,
+      });
+      if (resolution.consumeProgrammaticSwitch) {
         programmaticPageSwitchRef.current = false;
-        prevActiveSegmentIdRef.current = activeSegmentId;
-        return;
       }
-      const prevSegmentId = prevActiveSegmentIdRef.current;
-      prevActiveSegmentIdRef.current = activeSegmentId;
-
-      // 仅当 activeSegmentId 真正发生变化时才响应联动切页，避免首帧闪烁以及阻断用户在环节内手动切页浏览
-      if (!activeSegmentId || prevSegmentId === activeSegmentId || !Array.isArray(pages) || pages.length === 0) {
-        return;
-      }
-      const currentObj = pages[currentPage];
-      if (currentObj?.segmentId && currentObj.segmentId !== activeSegmentId) {
-        const targetIdx = pages.findIndex((p) => p.segmentId === activeSegmentId);
-        if (targetIdx !== -1) {
-          setCurrentPage(targetIdx);
-        }
+      prevActiveSegmentIdRef.current = resolution.nextPreviousSegmentId;
+      if (resolution.targetPage !== null) {
+        setCurrentPage(resolution.targetPage);
       }
     }, [activeSegmentId, pages, currentPage]);
 
@@ -2161,7 +2172,8 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
           themeColor: 'indigo' | 'orange' | 'purple' | 'gray' | 'slate' | 'default' = 'default',
           extraActions?: React.ReactNode,
         ) => ({
-          title: data.title || defaultTitle,
+          // data 来自数据库 JSON，title 可能是任意类型；对象直接进标题栏会让整块画布崩溃。
+          title: resolveElementTitle(data.title, defaultTitle),
           icon,
           // 浏览器全屏时整条标题栏退场（沉浸展示）。在这里统一注入，
           // 9 个元素分支与第三方 widget 无需各自判断 —— 这也保证了新类型自动一致。
@@ -2287,6 +2299,159 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                       studentId={studentId}
                       studentName={studentName}
                     />
+                  </WidgetFrame>
+                  {readOnly && <ReadOnlyLockCover />}
+                  {!data.isMinimized && renderResizeHandles()}
+                </div>
+              </Html>
+            </Group>
+          );
+        }
+
+        if (el.type === 'html-applet') {
+          // 兼容存量数据：服务端已把新建的 html-applet 统一转换成 learning_surface，
+          // 但历史课节 / 导入的课程包里仍可能存在未迁移的元素。缺少这个分支时
+          // 它们会变成一张空白卡片（元素存在、内容不渲染），这里用 HtmlAppletFrame
+          // 的继任者 CoursewareHost 兜底，保证旧内容仍然可见。
+          const coursewareUuid = typeof data.coursewareUuid === 'string' ? data.coursewareUuid : undefined;
+          const resourceId = typeof data.resourceId === 'string' ? data.resourceId : undefined;
+          return (
+            <Group key={el.id}>
+              <Html
+                divProps={{
+                  style: {
+                    position: 'absolute',
+                    top: `${displayY}px`,
+                    left: `${displayX}px`,
+                    pointerEvents: 'none',
+                    zIndex: isThisSelected ? 20 : 10,
+                  },
+                }}
+              >
+                <div
+                  onPointerDown={(e) => {
+                    if (readOnly) return;
+                    setSelectedShapeId(el.id);
+                    e.stopPropagation();
+                  }}
+                  onContextMenu={(e) => {
+                    if (readOnly) {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      return;
+                    }
+                    const point = toCanvasPointFromEvent(e.clientX, e.clientY);
+                    if (point) {
+                      setContextMenu({
+                        x: point.x,
+                        y: point.y,
+                        elementId: el.id,
+                      });
+                    }
+                  }}
+                  className={`bg-white border border-gray-300 rounded-lg shadow-xl overflow-hidden flex flex-col font-sans text-sm relative ${hoverCardClass}`}
+                  style={{
+                    pointerEvents: readOnly ? 'none' : 'auto',
+                    userSelect: readOnly ? 'none' : 'auto',
+                    width: `${displayWidth}px`,
+                    height: `${displayHeight}px`,
+                  }}
+                >
+                  <WidgetFrame
+                    {...getWidgetTitleBarProps(
+                      'Interactive Courseware',
+                      <Globe size={13} className="text-primary-theme" />,
+                      'default',
+                    )}
+                    contentClassName="wb-widget-container flex-1 bg-white overflow-hidden relative min-h-0"
+                  >
+                    <CoursewareHost
+                      source={{
+                        coursewareUuid,
+                        resourceId,
+                        code: typeof data.code === 'string' ? data.code : undefined,
+                        title: typeof data.title === 'string' ? data.title : undefined,
+                        sourceType: typeof data.sourceType === 'string' ? data.sourceType : undefined,
+                        sourceId: typeof data.sourceId === 'string' ? data.sourceId : undefined,
+                      }}
+                      lessonId={lessonId}
+                      elementId={el.id}
+                      className="w-full h-full border-none"
+                      overlay={coursewareUuid ? <CoursewareScoresOverlay coursewareUuid={coursewareUuid} /> : undefined}
+                    />
+                  </WidgetFrame>
+                  {readOnly && <ReadOnlyLockCover />}
+                  {!data.isMinimized && renderResizeHandles()}
+                </div>
+              </Html>
+            </Group>
+          );
+        }
+
+        if (el.type === 'learning_surface') {
+          const surfaceId = typeof data.surfaceId === 'string' ? data.surfaceId : '';
+          return (
+            <Group key={el.id}>
+              <Html
+                divProps={{
+                  style: {
+                    position: 'absolute',
+                    top: `${displayY}px`,
+                    left: `${displayX}px`,
+                    pointerEvents: 'none',
+                    zIndex: isThisSelected ? 20 : 10,
+                  },
+                }}
+              >
+                <div
+                  onPointerDown={(e) => {
+                    if (readOnly) return;
+                    setSelectedShapeId(el.id);
+                    e.stopPropagation();
+                  }}
+                  onContextMenu={(e) => {
+                    if (readOnly) {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      return;
+                    }
+                    const point = toCanvasPointFromEvent(e.clientX, e.clientY);
+                    if (point) {
+                      setContextMenu({
+                        x: point.x,
+                        y: point.y,
+                        elementId: el.id,
+                      });
+                    }
+                  }}
+                  className={`bg-white border border-gray-300 rounded-lg shadow-xl overflow-hidden flex flex-col font-sans text-sm relative ${hoverCardClass}`}
+                  style={{
+                    pointerEvents: readOnly ? 'none' : 'auto',
+                    userSelect: readOnly ? 'none' : 'auto',
+                    width: `${displayWidth}px`,
+                    height: `${displayHeight}px`,
+                  }}
+                >
+                  <WidgetFrame
+                    {...getWidgetTitleBarProps('学习面', <Layers size={13} className="text-primary-theme" />, 'indigo')}
+                    contentClassName="wb-widget-container flex-1 bg-white overflow-hidden relative min-h-0"
+                  >
+                    {surfaceId ? (
+                      <LearningSurfaceHost
+                        surfaceId={surfaceId}
+                        lessonId={lessonId}
+                        hostId={el.id}
+                        title={typeof data.title === 'string' ? data.title : undefined}
+                        preview={userRole === 'teacher'}
+                        lazy={false}
+                        className="w-full h-full"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex flex-col items-center justify-center gap-1 p-4 text-center bg-slate-50">
+                        <p className="text-sm font-semibold text-gray-700">学习面未绑定内容</p>
+                        <p className="text-xs text-gray-400">在属性栏选择渲染器与资源后即可显示</p>
+                      </div>
+                    )}
                   </WidgetFrame>
                   {readOnly && <ReadOnlyLockCover />}
                   {!data.isMinimized && renderResizeHandles()}
@@ -2472,8 +2637,11 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                   {!data.isMinimized && (
                     <div className="p-4 text-center flex-1 overflow-y-auto flex flex-col justify-between min-h-0">
                       <div className="text-left space-y-2">
-                        <p className="font-semibold text-gray-800 text-xs line-clamp-2" title={data.question}>
-                          {data.question || '随堂测验题目'}
+                        <p
+                          className="font-semibold text-gray-800 text-xs line-clamp-2"
+                          title={resolveElementText(data.question)}
+                        >
+                          {resolveElementTitle(data.question, '随堂测验题目')}
                         </p>
                         {quizOptions.length > 0 && (
                           <div className="space-y-1">
@@ -2567,8 +2735,8 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                   />
                   {!data.isMinimized && (
                     <div className="p-4 text-center flex-1 overflow-y-auto flex flex-col justify-center min-h-0">
-                      <p className="font-semibold text-gray-800 mb-1 text-xs">{data.title}</p>
-                      <p className="text-xs text-gray-500 mb-3 line-clamp-3">{data.description}</p>
+                      <p className="font-semibold text-gray-800 mb-1 text-xs">{resolveElementText(data.title)}</p>
+                      <p className="text-xs text-gray-500 mb-3 line-clamp-3">{resolveElementText(data.description)}</p>
                       <button
                         data-testid="assignment-submit-button"
                         className="w-full bg-orange-600 hover:bg-orange-700 text-white font-medium py-1.5 rounded transition-colors text-xs shadow-sm cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
@@ -3330,6 +3498,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
         const pluginPaletteItem = paletteItemRegistry.get(el.type);
         if (pluginPaletteItem) {
           const PluginComponent = pluginPaletteItem.component;
+          const paletteTitle = resolveElementText(data.title);
           return (
             <Group key={el.id}>
               <Html
@@ -3410,7 +3579,9 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                         <div className="w-full h-full flex flex-col items-center justify-center p-4 text-center text-gray-500 select-none">
                           <div className="font-semibold text-gray-700">{pluginPaletteItem.labelZh}</div>
                           <div className="text-xs mt-1 text-gray-400">{pluginPaletteItem.descriptionZh}</div>
-                          {data.title && <div className="mt-2 text-xs bg-gray-100 px-2 py-1 rounded">{data.title}</div>}
+                          {paletteTitle && (
+                            <div className="mt-2 text-xs bg-gray-100 px-2 py-1 rounded">{paletteTitle}</div>
+                          )}
                         </div>
                       )}
                     </div>
@@ -3609,10 +3780,11 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
       });
     }, [handleToggleAutoTile]);
 
-    const isFullscreenActive = Boolean(effectiveFullscreenElementId || browserFullscreenElementId);
+    const canvasReadOnlyPolicy = resolveCanvasReadOnlyPolicy(readOnly);
+    const isFullscreenActive = fullscreenView.active;
 
     const selectedToolbarEl =
-      !readOnly && selectedShapeId && !contextMenu && !isFullscreenActive
+      canvasReadOnlyPolicy.selectionEnabled && selectedShapeId && !contextMenu && !isFullscreenActive
         ? safeElements.find((e) => e.id === selectedShapeId)
         : undefined;
     const selectedToolbarData = selectedToolbarEl ? parseElementData(selectedToolbarEl) : null;
@@ -3660,7 +3832,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
           onDragEnter={handleWhiteboardDragEnter}
           onDrop={handleWhiteboardDrop}
         >
-          {!readOnly && (
+          {canvasReadOnlyPolicy.toolbarVisible && (
             <WhiteboardToolbar
               tool={tool}
               setTool={setTool}
@@ -3743,7 +3915,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
             <WhiteboardEmptyState
               isVisible={
                 safeElements.filter((el) => {
-                  if (el.type === 'page_meta') return false;
+                  if (!isVisibleElementType(el.type)) return false;
                   try {
                     const d = JSON.parse(el.data);
                     const elPage = d.page ?? 0;
@@ -3769,7 +3941,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
               // 裁掉溢出就等于把画在下部的组件永久藏起来。裁剪交给外层画布容器
               // （overflow-auto）负责 —— 它才是滚动容器。
               className="absolute inset-0 w-full h-full"
-              style={{ pointerEvents: isDragOverBoard || readOnly ? 'none' : 'auto' }}
+              style={{ pointerEvents: isDragOverBoard ? 'none' : canvasReadOnlyPolicy.pointerEvents }}
             >
               <WhiteboardFullscreenOverlay
                 containerSize={containerSize}
@@ -3878,7 +4050,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
               )}
 
               {/* Elegant Right-Click Context Menu */}
-              {!readOnly && contextMenu && clampedContextMenuPos && (
+              {canvasReadOnlyPolicy.contextMenuEnabled && contextMenu && clampedContextMenuPos && (
                 <div
                   style={{
                     left: `${clampedContextMenuPos.left}px`,
@@ -4036,7 +4208,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                 />
               </div>
             </div>
-            {!readOnly && !hidePageBar && (
+            {canvasReadOnlyPolicy.pageBarVisible && !hidePageBar && (
               <div inert={isFullscreenActive ? true : undefined}>
                 <WhiteboardPageBar
                   pages={pages}

@@ -12,6 +12,7 @@ import { StudentIcebreakerModal } from './StudentIcebreakerModal';
 import { useStudentActiveSession } from './useStudentActiveSession';
 import type { StudentFullscreenPanel } from './studentFullscreenLayout';
 import { useOptionalPluginHost } from '../../plugin-host/plugin-host-context';
+import { buildStudentWhiteboardHostProps } from '../whiteboard/host/whiteboard-host-contract';
 import { extensionCoversSegmentType, normalizeSegmentType } from '../../../packages/core/plugin-host/mode-pack';
 import {
   isModePacksEnabled,
@@ -153,7 +154,7 @@ export function StudentLessonView(props: StudentLessonViewProps) {
   // 与 StudentLessonInteractionPanel 白板 tab 同一 props 契约，供 Mode Pack primary 工作区挂载。
   const studentWhiteboardBridge = useMemo<WhiteboardHostBridgeValue>(
     () => ({
-      canvasProps: {
+      canvasProps: buildStudentWhiteboardHostProps({
         lessonId: selectedLesson,
         classId: effectiveClassId ?? null,
         studentId: activeStudentId,
@@ -161,7 +162,6 @@ export function StudentLessonView(props: StudentLessonViewProps) {
         elements,
         userRole: activeRole,
         readOnly: interactionLocked,
-        followRemoteFullscreen: true,
         activeSegmentId: boardSegmentId,
         onSegmentSync: (segId: string) => {
           if (contentSegmentId !== undefined && contentSegmentId !== activeSegmentId) return;
@@ -189,7 +189,7 @@ export function StudentLessonView(props: StudentLessonViewProps) {
           if (!selectedLesson) return;
           fetchElements(selectedLesson);
         },
-      },
+      }),
     }),
     [
       selectedLesson,
